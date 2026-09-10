@@ -15,8 +15,8 @@ pub use billing::{
     BillingGenerationReport, RejectedSeedRecord,
 };
 pub use manifest::{
-    build_manifest, compute_sha256, manifest_to_deterministic_json, Manifest, ManifestArtifact,
-    ManifestConfig, ManifestCoverage,
+    build_manifest, compute_sha256, manifest_to_deterministic_json, BillingPairProvenance,
+    Manifest, ManifestArtifact, ManifestConfig, ManifestCoverage,
 };
 pub use model::{
     BillingPair, Edge, EdgeKind, Graph, Node, Price, SnapIndex, SnapNode, VerificationStatus,
@@ -24,11 +24,12 @@ pub use model::{
 pub use osm::{OsmElement, OsmMember, OverpassResponse};
 pub use seed::{BillingPairSeed, BillingPairsSeedFile, SeedPrice, SeedProvenance};
 pub use topology::{
-    build_topology, duration_seconds, haversine_distance_meters, is_local_highway,
-    is_shutoko_motorway, parse_oneway, snap_index_to_deterministic_json, to_deterministic_json,
-    OnewayDirection, TopologyConfig, LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
+    build_topology, build_topology_with_report, duration_seconds, haversine_distance_meters,
+    is_local_highway, is_shutoko_motorway, parse_oneway, snap_index_to_deterministic_json,
+    to_deterministic_json, OnewayDirection, RestrictionReport, TopologyConfig, LOCAL_SPEED_KMH,
+    RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
 };
 pub use validate::{
-    contains_forbidden_transition, has_non_empty_shutoko_loop, parse_utc_timestamp,
-    validate_billing_pair, ValidationError,
+    contains_forbidden_transition, find_first_exits_from_anchor, has_non_empty_shutoko_loop,
+    parse_iso_date, parse_utc_timestamp, validate_billing_pair, validate_url, ValidationError,
 };

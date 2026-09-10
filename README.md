@@ -16,7 +16,7 @@
 
 ## 実データ生成パイプラインと graph-builder
 
-`crates/graph-builder`（`shutoko-graph-builder`）は、OpenStreetMap（OSM）実データと宣言的課金シードから、方向付きの探索用道路グラフ（`graph.json`）、一般道スナップインデックス（`snap-index.json`）、および各成果物の SHA-256 チェックサムを含むマニフェスト（`manifest.json`）を決定論的に生成するオフライン CLI ツールです。
+`crates/graph-builder`（`shutoko-graph-builder`）は、OpenStreetMap（OSM）実データと宣言的課金シードから、方向付きの探索用道路グラフ（`graph.json`）、一般道スナップインデックス（`snap-index.json`）、および各成果物の SHA-256 チェックサムを含むマニフェスト（`manifest.json`）を決定論的に生成するオフライン CLI ツールです。通行規制（`no_*`、`only_*`、`via=way`）の抽出、本線からの最初の出口（First Exit）検証、および出典情報（`provenance`）の記録をビルド時に自動検証します。
 
 ### 再現手順
 
@@ -43,9 +43,9 @@
 
 - **対象範囲**: 首都高速道路 都心環状線（C1）および接続ランプ（進入・退出）、ならびに周辺主要一般道（神田橋〜宝町周辺）。
 - **対応車両**: 普通乗用車・ETC（`passenger-car-etc`）。
-- **検証済み課金区間**: 神田橋入口 〜 C1外回り 〜 宝町出口（`bp:c1-outer:kandabashi-takaracho`、公式路線図に基づき検証済み）。
+- **検証済み課金区間**: 神田橋入口 〜 C1外回り 〜 宝町出口（`bp:c1-outer:kandabashi-takaracho`、公式路線図に基づき検証済み。出典情報は `manifest.json` に記録）。
 - **未検証事項**:
-  - C1 の他ランプ区間（芝公園、霞が関、銀座、飯倉等）や他の首都高速路線（湾岸線・羽田線等）は未検証であり、初期リリース成果物の探索対象外です。
+  - C1 の他ランプ区間（芝公園、霞が関、銀座、飯倉等）や他の首都高速路線（湾岸線・羽田線等）は未検証であり、`manifest.json` の `unverifiedSections` に未検証エッジおよび除外路線注記として自動列挙されます。
   - Google マップへの経由地引き継ぎ（経由地3点による周回再現）の実機検証は未完了です。
   - リアルタイム渋滞情報、交通規制、天候による所要時間変動、中型・大型車等の料金区分は対象外です。
 

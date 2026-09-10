@@ -10,9 +10,12 @@
 
 use crate::model::{BillingPair, Edge, EdgeKind, Graph, Price, VerificationStatus};
 use crate::seed::{BillingPairSeed, BillingPairsSeedFile};
-use crate::validate::{contains_forbidden_transition, validate_billing_pair, ValidationError};
+use crate::validate::{
+    contains_forbidden_transition, parse_iso_date, validate_billing_pair, validate_url,
+    ValidationError,
+};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BinaryHeap, HashSet};
+use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
 
 /// Error encountered during billing pair generation from a seed entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,6 +26,7 @@ pub enum BillingError {
     NoPathEntryToAnchor(String),
     NoPathAnchorToExit(String),
     UnverifiedSectionMarkedAsVerified(String),
+    InvalidProvenance(String),
     ValidationFailed(ValidationError),
 }
 
@@ -58,6 +62,9 @@ impl std::fmt::Display for BillingError {
                     "seed \"{}\" marked status=verified but oneSectionAheadVerified is false",
                     id
                 )
+            }
+            Self::InvalidProvenance(msg) => {
+                write!(f, "invalid seed provenance: {}", msg)
             }
             Self::ValidationFailed(ve) => write!(f, "{}", ve),
         }
@@ -129,6 +136,8 @@ fn find_shutoko_path(
     }
 
     let mut outgoing: BTreeMap<&str, Vec<&Edge>> = BTreeMap::new();
+    let edge_map: HashMap<&str, &Edge> = graph.edges.iter().map(|e| (e.id.as_str(), e)).collect();
+
     for e in &graph.edges {
         if e.kind == EdgeKind::Shutoko {
             outgoing.entry(e.from.as_str()).or_default().push(e);
@@ -180,10 +189,8 @@ fn find_shutoko_path(
                     continue;
                 }
                 if path.iter().any(|id| {
-                    graph
-                        .edges
-                        .iter()
-                        .find(|edge| &edge.id == id)
+                    edge_map
+                        .get(id.as_str())
                         .is_some_and(|edge| edge.from == next_node || edge.to == next_node)
                 }) {
                     continue;
@@ -235,6 +242,20 @@ pub fn generate_billing_pair(
             seed.id.clone(),
         ));
     }
+
+    // 2. Provenance format validation
+    validate_url(&seed.provenance.source).map_err(|e| {
+        BillingError::InvalidProvenance(format!(
+            "invalid source URL \"{}\" for seed \"{}\": {}",
+            seed.provenance.source, seed.id, e
+        ))
+    })?;
+    parse_iso_date(&seed.provenance.source_date).map_err(|e| {
+        BillingError::InvalidProvenance(format!(
+            "invalid sourceDate \"{}\" for seed \"{}\": {}",
+            seed.provenance.source_date, seed.id, e
+        ))
+    })?;
 
     // 2. Resolve entry edge
     let entry_prefix = format!("e:w{}:", seed.entry_osm_way_id);

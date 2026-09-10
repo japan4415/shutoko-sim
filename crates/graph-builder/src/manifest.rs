@@ -51,8 +51,30 @@ pub struct Manifest {
     #[serde(default)]
     pub unverified_sections: Vec<String>,
 
+    /// Provenance records for verified billing pairs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub provenance: Vec<BillingPairProvenance>,
+
     /// Cryptographic checksums and byte counts for release artifacts.
     pub artifacts: Vec<ManifestArtifact>,
+}
+
+/// Provenance citation record for a verified billing pair included in the release manifest.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BillingPairProvenance {
+    /// Billing pair identifier.
+    pub id: String,
+
+    /// Source reference URL.
+    pub source: String,
+
+    /// Inspection or tariff verification date (YYYY-MM-DD).
+    pub source_date: String,
+
+    /// Optional verification notes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 
 /// Coverage scope and list of verified entry/exit points.
@@ -103,6 +125,7 @@ pub struct ManifestConfig {
     pub time_model_version: String,
     pub billing_pairs_version: String,
     pub unverified_sections: Vec<String>,
+    pub provenance: Vec<BillingPairProvenance>,
 }
 
 impl Default for ManifestConfig {
@@ -118,6 +141,7 @@ impl Default for ManifestConfig {
             time_model_version: "v1-static-speeds".into(),
             billing_pairs_version: "v1".into(),
             unverified_sections: Vec::new(),
+            provenance: Vec::new(),
         }
     }
 }
@@ -151,6 +175,9 @@ pub fn build_manifest(
     sorted_unverified.sort();
     sorted_unverified.dedup();
 
+    let mut sorted_provenance = config.provenance.clone();
+    sorted_provenance.sort_by(|a, b| a.id.cmp(&b.id));
+
     Manifest {
         schema_version: 1,
         release_id: config.release_id.clone(),
@@ -169,6 +196,7 @@ pub fn build_manifest(
         attribution: "© OpenStreetMap contributors".into(),
         odbl_license_url: "https://www.openstreetmap.org/copyright".into(),
         unverified_sections: sorted_unverified,
+        provenance: sorted_provenance,
         artifacts: artifact_records,
     }
 }

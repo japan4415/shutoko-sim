@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "c1-real-v1",
+  "engineVersion": "0.1.0",
+  "graphVersion": "1.0.0",
+  "builtAt": "2026-09-10T00:00:00Z",
+  "sourceDate": "2026-09-10",
+  "coverage": {
+    "area": "Tokyo Inner Circular Route (C1) and connecting ramps",
+    "verifiedEntries": [
+      "e:w92243921:0:f"
+    ],
+    "verifiedExits": [
+      "e:w297864314:11:f"
+    ]
+  },
+  "vehicleProfile": "passenger-car-etc",
+  "timeModelVersion": "v1-static-speeds",
+  "billingPairsVersion": "v1",
+  "attribution": "© OpenStreetMap contributors",
+  "odblLicenseUrl": "https://www.openstreetmap.org/copyright",
+  "unverifiedSections": [
+    "entry:e:w46151740:0:f",
+    "entry:e:w4848922:0:f (銀座入口)",
+    "entry:e:w916571610:0:f (霞が関入口)",
+    "entry:e:w916571615:0:f (霞が関入口)",
+    "excluded-route: Metropolitan Expressway lines other than C1 (e.g. B, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, K, S, Y)",
+    "exit:e:w203035343:1:f (神田橋出口)",
+    "exit:e:w276920911:6:f (首都高速都心環状線)",
+    "exit:e:w390441534:2:f (神田橋出口)",
+    "exit:e:w44779775:16:f",
+    "exit:e:w4849052:8:f",
+    "exit:e:w760748024:7:f",
+    "exit:e:w760760233:11:f (新富町出口)",
+    "unsupported-restriction: 1 disconnected via-way turn restrictions (disconnected) excluded from static graph",
+    "unsupported-restriction: 5 turn restrictions missing via member (no via) excluded from static graph",
+    "unsupported-restriction: 67 turn restrictions referencing elements outside graph (outside graph) excluded from static graph",
+    "unsupported-restriction: 8 conditional turn restrictions (conditional) excluded from static graph"
+  ],
+  "provenance": [
+    {
+      "id": "bp:c1-outer:kandabashi-takaracho",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-10",
+      "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kandabashi entry to Takaracho exit (Gofukubashi and Edobashi exits decommissioned in 2021)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "graph.json",
+      "sha256": "5167046cc49a533ee31a1e072fce92f6945ede9d18cb33dec1613782508a9288",
+      "byteLength": 1620224
+    },
+    {
+      "path": "snap-index.json",
+      "sha256": "a3aea1c5799026926d5bf536c887f012e131f971e4999165f6e74b4f2dcbce8c",
+      "byteLength": 495332
+    }
+  ]
+}

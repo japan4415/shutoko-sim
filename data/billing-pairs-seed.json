@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "description": "Declarative billing pair seed definitions for Shutoko C1 real fixture",
+  "billingPairs": [
+    {
+      "id": "bp:c1-outer:kandabashi-takaracho",
+      "entryOsmWayId": 92243921,
+      "exitOsmWayId": 297864314,
+      "anchorOsmNodeId": 499831338,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-10",
+        "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kandabashi entry to Takaracho exit (Gofukubashi and Edobashi exits decommissioned in 2021)."
+      },
+      "prices": []
+    }
+  ]
+}

@@ -1,10 +1,10 @@
 # データ・インターフェース設計
 
-以下は完成版に向けた契約案。初期 Rust/WASM コアは座標入力や外部連携を含まないため、現時点で呼べる契約は [Rust / WASM 開発](wasm-development.md)を参照する。JSON の座標オブジェクトは `lat` / `lon`、GeoJSON の座標配列は `[経度, 緯度]`、距離は m、時間は秒、時刻は UTC の ISO 8601 を使う。
+以下は完成版に向けた契約案。初期 Rust/WASM コアは座標入力や外部連携を含まないため、現時点で呼べる契約は [Rust / WASM 開発](wasm-development.md)を参照する。実データ生成パイプラインの仕様と手順については [実データ生成パイプライン](data-pipeline.md) を参照。JSON の座標オブジェクトは `lat` / `lon`、GeoJSON の座標配列は `[経度, 緯度]`、距離は m、時間は秒、時刻は UTC の ISO 8601 を使う。
 
 ## 公開成果物
 
-マニフェストは `schemaVersion`、`releaseId`、`engineVersion`、`graphVersion`、`builtAt`、`sourceDate`、`coverage`、`vehicleProfile`、`timeModelVersion`、`billingPairsVersion`、`artifacts` を持つ。`artifacts` は WASM・glue・グラフ・入出口課金ペアそれぞれの相対パス、SHA-256、バイト数を持つ。`coverage` は対応領域と検証済み入出口一覧。対応領域内でも経路接続の存在は別途確認する。
+マニフェスト（`manifest.json`）は `schemaVersion`、`releaseId`、`engineVersion`、`graphVersion`、`builtAt`、`sourceDate`、`coverage`、`vehicleProfile`、`timeModelVersion`、`billingPairsVersion`、`attribution`（`© OpenStreetMap contributors`）、`odblLicenseUrl`、`unverifiedSections`、`provenance`、`artifacts` を持つ。`artifacts` は生成成果物（`graph.json`、`snap-index.json` 等）それぞれの相対パス、SHA-256、バイト数を持つ。`builtAt` は再現性を担保するため外部から与えられた固定値を用いる。`coverage` は対応領域（`area`）と検証済み入出口一覧（`verifiedEntries`、`verifiedExits`）。対応領域内でも経路接続の存在は別途確認する。
 
 グラフにはノード座標、エッジ ID、始終点、距離、時間、道路種別、路線名、形状、車両制限、遷移制限、入口/出口区分、引き継ぎ検証済み経由地点を格納する。生成元 OSM スナップショット、追加の人手検証情報とその出典・日付を追跡できるようにする。
 
@@ -12,9 +12,21 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 
 ## 課金対象1区間のデータ
 
-`billingPairs` に `id`、`entryId`、`exitId`、`direction`、`directSectionEdgeIds`、`loopAnchor`、`vehicleProfile`、`paymentCondition`、`amountYen`（未確認なら null）、`sourceUrl`、`verifiedAt`、`status` を持つ。`status=verified` のペアのみ候補に利用する。「1区間先」は地図上で最も近い出口ではなく、この対応表が指定する方向付き出口である。金額未確認でもペアの成立条件が確認済みなら候補を提示できる。
+課金ペアは OSM から自動判別せず、人手で検証した宣言的シード入力（`data/billing-pairs-seed.json`）からビルダーによって生成される。シードの各要素は以下を持つ:
 
-`loopAnchor` は入口の合流後から直接区間へ進む本線上の基準状態（ノードと進行方向）。ここへ一周後に戻り、出口へ進む道路列を定義できるペアを登録する。料金規則の前提は原案に従い、個別ペアの登録ではその適用条件とデータ根拠を確認する。
+- `id`: 課金ペアの一意識別子（例: `bp:c1-inner:shibakoen-kasumigaseki`）
+- `entryOsmWayId`: 入口ランプの OSM ウェイ ID
+- `exitOsmWayId`: 出口ランプの OSM ウェイ ID
+- `anchorOsmNodeId`: 本線上の周回基準点となる OSM ノード ID
+- `vehicleProfile`: 対象車種プロファイル（例: `passenger-car-etc`）
+- `status`: 検証状態（`verified` / `unverified`）
+- `oneSectionAheadVerified`: 「1区間先の出口」であることが人手検証済みであるフラグ（boolean）
+- `provenance`: 出典情報（`source`、`sourceDate`、`notes`）
+- `prices[]`: 料金レコード配列（`amountYen`、`effectiveFrom`、`effectiveTo`）
+
+生成された `Graph.billingPairs` は `id`、`entryId`、`exitId`、`anchorNodeId`、実経路探索により導出された `entryToAnchorEdgeIds` と `anchorToExitEdgeIds`、`status`、`vehicleProfile`、`prices` を持つ。`status=verified` のペアのみ候補に利用する。「1区間先」は地図上で最も近い出口ではなく、この対応表が指定する方向付き出口である。金額未確認でもペアの成立条件が確認済みなら候補を提示できる。
+
+`anchorNodeId` は入口の合流後から直接区間へ進む本線上の基準状態（ノード）。ここへ一周後に戻り、出口へ進む道路列を定義できるペアを登録する。料金規則の前提は原案に従い、個別ペアの登録ではその適用条件とデータ根拠を確認する。
 
 ## Workers の HTTP 境界
 

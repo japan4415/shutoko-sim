@@ -20,6 +20,15 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      - name: Verify fixture regeneration determinism
+        run: |
+          bash scripts/generate-fixtures.sh
+          git diff --exit-code
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Working tree is dirty after fixture regeneration:"
+            git status --porcelain
+            exit 1
+          fi
       - run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
       - run: bash scripts/build-wasm.sh
       - run: node scripts/test-wasm.mjs

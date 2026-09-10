@@ -172,24 +172,37 @@ impl<'a> PartialOrd for ExitSearchState<'a> {
 /// respecting forbidden transitions.
 /// Returns `(min_distance_meters, exit_edge_ids)`.
 ///
-/// # Pruning and Soundness
+/// # Pruning and Soundness (Proposal (b): Walk Semantics)
 ///
-/// Path validity with respect to forbidden transitions depends on edge sequence history.
-/// Pruning states are tracked at the granularity of `(node, suffix)`, where `suffix` is
-/// the sequence of the last `L - 1` edge IDs traversed (with `L` being the maximum length
-/// of any sequence in `graph.forbidden_transitions`, or 0 if empty).
+/// ## Soundness Rationale
 ///
-/// Soundness rationale:
-/// - Any forbidden transition sequence in the graph has length at most `L`.
-/// - Any forbidden sequence that could be formed by continuing a path from `node` can inspect
-///   at most the last `L - 1` edges traversed prior to reaching `node`.
-/// - Two paths reaching `node` with the exact same suffix of length `L - 1` have identical
-///   legality for all future edge choices.
-/// - Edge distances are non-negative. Therefore, if a path reaches `(node, suffix)` with cost `c1`,
-///   any later path reaching `(node, suffix)` with `c2 > c1` cannot achieve a strictly smaller exit
-///   distance than what was reachable from `c1`.
-/// - Furthermore, when an exit edge is found, if `total_dist < cur_min`, `min_exit_dist` is updated
-///   to the smaller distance and `first_exit_ids` is cleared and replaced (fixing premature exit lock-in).
+/// In previous iterations, pruning states were tracked at `(node, suffix)` granularity where
+/// `suffix` is the last `L - 1` edges traversed (with `L` being the maximum forbidden transition length).
+/// However, an internal simple path constraint (visited node prohibition) was also enforced.
+/// Because simple path validity depends on the *entire history of visited nodes*, two paths reaching
+/// `(node, suffix)` did NOT have identical future continuation feasibility: a cheaper path with a
+/// larger visited-node set could dead-end, while having pruned a more expensive path that had the
+/// necessary unvisited nodes to reach an exit (as demonstrated by Counterexamples A, B, and C).
+///
+/// Under Proposal (b), the node-revisiting prohibition (simple path constraint) is **removed**
+/// from this first-exit search, allowing walks over `Shutoko` edges:
+/// 1. **Exact State Equivalence**: With no node-visiting constraints, edge traversal validity
+///    depends *strictly and solely* on the current node and the last `L - 1` edge transitions
+///    checked against `graph.forbidden_transitions`. Any two paths arriving at `(node, suffix)`
+///    have strictly identical legal future transitions. Therefore, pruning an arrival with cost `c2`
+///    when a path has already arrived at `(node, suffix)` with `c1 <= c2` is **provably sound**.
+/// 2. **Termination**: The state space `node × suffix` is finite (since $|V|$, $|E|$, and `L`
+///    are finite). Every edge has strictly positive distance (`distance_meters >= 1`).
+///    Because state visits require strictly smaller costs (`next_cost < best_cost_by_state`),
+///    no zero/negative cycles exist, and Dijkstra's algorithm is guaranteed to terminate.
+/// 3. **Semantics & Fail-Safe Guard**: Finding the earliest reachable exit edge via a walk
+///    expands the reachable candidate path set compared to simple paths ($D_{\text{walk}} \le D_{\text{simple}}$).
+///    This guarantees that any reachable exit cannot be overlooked due to historical node visits,
+///    shifting the verification guard strictly to the **fail-safe direction** (making it harder
+///    for downstream or incorrect billing pairs to slip past verification).
+/// 4. **Preservation of Billing Pair Contract**: Note that the direct path of any verified
+///    billing pair (`entry_to_anchor_edge_ids` + `anchor_to_exit_edge_ids`) must still be a strictly
+///    simple path, which is independently enforced by `validate_billing_pair` (rule 8).
 pub fn find_first_exits_from_anchor(
     graph: &Graph,
     anchor_node_id: &str,
@@ -223,9 +236,6 @@ pub fn find_first_exits_from_anchor(
     let mut best_cost_by_state: BTreeMap<(&str, Vec<String>), u64> = BTreeMap::new();
     let mut min_exit_dist: Option<u64> = None;
     let mut first_exit_ids: Vec<String> = Vec::new();
-
-    let edge_map: std::collections::HashMap<&str, &Edge> =
-        graph.edges.iter().map(|e| (e.id.as_str(), e)).collect();
 
     while let Some(ExitSearchState { cost, node, path }) = heap.pop() {
         if let Some(min_dist) = min_exit_dist {
@@ -274,19 +284,10 @@ pub fn find_first_exits_from_anchor(
             }
         }
 
-        // Expand Shutoko outgoing edges
+        // Expand Shutoko outgoing edges (walk allowed: no node-revisit constraint)
         if let Some(next_edges) = shutoko_outgoing.get(node) {
             for e in next_edges {
                 let next_node = e.to.as_str();
-
-                // Simple path constraint: avoid revisiting nodes
-                if path.iter().any(|id| {
-                    edge_map
-                        .get(id.as_str())
-                        .is_some_and(|edge| edge.from == next_node || edge.to == next_node)
-                }) {
-                    continue;
-                }
 
                 let mut candidate_path = path.clone();
                 candidate_path.push(e.id.clone());

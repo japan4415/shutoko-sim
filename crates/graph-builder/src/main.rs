@@ -395,6 +395,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             top_report.skipped_only_via_way
         ));
     }
+    if top_report.skipped_unrecognized > 0 {
+        all_unverified.push(format!(
+            "unsupported-restriction: {} unrecognized turn restrictions (unrecognized) excluded from static graph",
+            top_report.skipped_unrecognized
+        ));
+    }
 
     all_unverified.sort();
     all_unverified.dedup();

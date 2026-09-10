@@ -34,6 +34,8 @@ pub struct RestrictionReport {
     pub skipped_missing_elements: usize,
     /// Number of via=way restrictions where ways do not connect into a continuous path.
     pub skipped_disconnected: usize,
+    /// Number of only_* restrictions with via=way skipped (unsupported for static graph).
+    pub skipped_only_via_way: usize,
     /// Internal motorway_link edges dropped (not connecting local streets and Shutoko).
     pub dropped_link_edges: usize,
     /// Human-readable diagnostic messages detailing skipped or notable relations.
@@ -619,8 +621,8 @@ pub fn build_topology_with_report(
                     }
                 }
 
+                report.only_turn_via_node += 1;
                 if added_pairs > 0 {
-                    report.only_turn_via_node += 1;
                     report.only_turn_edge_pairs += added_pairs;
                 }
             }
@@ -686,6 +688,15 @@ pub fn build_topology_with_report(
 
             if to_edge_set.is_empty() {
                 report.skipped_missing_elements += 1;
+                continue;
+            }
+
+            if is_only_turn {
+                report.skipped_only_via_way += 1;
+                report.notes.push(format!(
+                    "relation {}: only_* turn restriction with via=way is unsupported (omitted from static graph)",
+                    elem.id
+                ));
                 continue;
             }
 
@@ -763,7 +774,7 @@ pub fn build_topology_with_report(
         );
     }
     eprintln!(
-        "Turn restrictions: {} total relations -> {} no_turn (via=node), {} only_turn (via=node, {} forbidden pairs), {} via_way | skipped: {} conditional, {} no via, {} outside graph, {} disconnected",
+        "Turn restrictions: {} total relations -> {} no_turn (via=node), {} only_turn (via=node, {} forbidden pairs), {} via_way | skipped: {} conditional, {} no via, {} outside graph, {} disconnected{}",
         report.total_relations,
         report.no_turn_via_node,
         report.only_turn_via_node,
@@ -772,7 +783,12 @@ pub fn build_topology_with_report(
         report.skipped_conditional,
         report.skipped_no_via,
         report.skipped_missing_elements,
-        report.skipped_disconnected
+        report.skipped_disconnected,
+        if report.skipped_only_via_way > 0 {
+            format!(", {} only via-way", report.skipped_only_via_way)
+        } else {
+            String::new()
+        }
     );
 
     let mut forbidden_transitions: Vec<Vec<String>> =

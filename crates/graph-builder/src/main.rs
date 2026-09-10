@@ -361,14 +361,38 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     all_unverified.extend(unverified_from_seeds);
     all_unverified.extend(unverified_edge_sections);
 
-    // Note excluded routes and conditional restrictions
+    // Note excluded routes and skipped/unsupported restrictions
     all_unverified.push(
         "excluded-route: Metropolitan Expressway lines other than C1 (e.g. B, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, K, S, Y)".to_string(),
     );
     if top_report.skipped_conditional > 0 {
         all_unverified.push(format!(
-            "unsupported-restriction: {} conditional turn restrictions (restriction:conditional) excluded from static graph",
+            "unsupported-restriction: {} conditional turn restrictions (conditional) excluded from static graph",
             top_report.skipped_conditional
+        ));
+    }
+    if top_report.skipped_no_via > 0 {
+        all_unverified.push(format!(
+            "unsupported-restriction: {} turn restrictions missing via member (no via) excluded from static graph",
+            top_report.skipped_no_via
+        ));
+    }
+    if top_report.skipped_missing_elements > 0 {
+        all_unverified.push(format!(
+            "unsupported-restriction: {} turn restrictions referencing elements outside graph (outside graph) excluded from static graph",
+            top_report.skipped_missing_elements
+        ));
+    }
+    if top_report.skipped_disconnected > 0 {
+        all_unverified.push(format!(
+            "unsupported-restriction: {} disconnected via-way turn restrictions (disconnected) excluded from static graph",
+            top_report.skipped_disconnected
+        ));
+    }
+    if top_report.skipped_only_via_way > 0 {
+        all_unverified.push(format!(
+            "unsupported-restriction: {} only_* turn restrictions with via=way (only via-way) excluded from static graph",
+            top_report.skipped_only_via_way
         ));
     }
 

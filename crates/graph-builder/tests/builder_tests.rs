@@ -1981,24 +1981,24 @@ fn test_refutation_counterexample_a_opus5() {
     //   e8: X -> OUT (dist: 1)
     // Forbidden transitions: [["e3", "e7"]] (L=2, history_len=1)
     //
-    // Calculation under Proposal (b) (walk allowed in first-exit search):
-    // The candidate walk from A to OUT:
-    //   A -(e3:1)-> W -(e4:1)-> C -(e5:1)-> V -(e6:1)-> W -(e7:1)-> X -(e8:1)-> OUT
+    // Calculation under simple-path semantics with visited-set state keys (issue #6 item 2):
+    // The 6m walk A -e3-> W -e4-> C -e5-> V -e6-> W revisits W, so it is not a simple path.
+    // The shortest legal simple path to OUT is:
+    //   A -(e1:10)-> B -(e2:1)-> C -(e5:1)-> V -(e6:1)-> W -(e7:1)-> X -(e8:1)-> OUT
     // Cost calculation:
-    //   e3 (1) + e4 (1) + e5 (1) + e6 (1) + e7 (1) + e8 (1) = 6m.
+    //   e1 (10) + e2 (1) + e5 (1) + e6 (1) + e7 (1) + e8 (1) = 15m.
     // Forbidden transition verification:
-    //   Sequence of edges: [e3, e4, e5, e6, e7, e8]
-    //   The forbidden transition ["e3", "e7"] requires e3 and e7 to be traversed consecutively.
-    //   In this walk, e3 and e7 are separated by [e4, e5, e6], so no window matches ["e3", "e7"].
-    //   Hence, this walk is fully legal under forbidden transitions.
-    //   Proposal (b) drops the simple path constraint from first-exit search, so this 6m walk is valid.
+    //   Sequence of edges: [e1, e2, e5, e6, e7, e8]
+    //   The forbidden transition ["e3", "e7"] never appears as a consecutive window.
+    //   The alternative simple path A -e3-> W -e7-> X matches the forbidden window
+    //   [e3, e7] and is rejected.
     //
-    // Failure in prior implementation (with simple path constraint):
-    //   Path A->e3->W->e4->C->e5->V reached state (V, [e5]) at cost 3,
-    //   which pruned the path A->e1->B->e2->C->e5->V (cost 12, suffix [e5]).
-    //   From (V, [e5]), next edge e6 leads to node W, which was already visited in the prefix (via e3).
-    //   The simple path constraint (visited nodes) rejected e6, dead-ending the search
-    //   and causing find_first_exits_from_anchor to return Err("no exit edge reachable...").
+    // History of this fixture:
+    //   The old (node, suffix)-only key reported 6m: the cheap walk reached (V, [e5]) at
+    //   cost 3 and pruned the simple alternative A->e1->B->e2->C->e5->V (cost 12, same
+    //   key), but the two arrivals have different futures under the simple-path rule.
+    //   With the visited-node set included in the state key the 6m looping walk is no
+    //   longer legal and the answer is the 15m simple path.
     let graph = Graph {
         schema_version: 1,
         release_id: "test-counterexample-a".into(),
@@ -2090,8 +2090,8 @@ fn test_refutation_counterexample_a_opus5() {
     );
     let (min_dist, first_exits) = result.unwrap();
     assert_eq!(
-        min_dist, 6,
-        "first exit distance under walk semantics must be 6m"
+        min_dist, 15,
+        "first exit distance under simple-path semantics must be 15m"
     );
     assert_eq!(first_exits, vec!["e8".to_string()], "first exit must be e8");
 }
@@ -2109,16 +2109,16 @@ fn test_refutation_counterexample_b_opus5() {
     //   e10: Z -> OUT2 (dist: 1, Exit)
     //   e_loop: X -> A (dist: 10, Shutoko) -- to provide a valid Shutoko loop from anchor A
     //
-    // Under Proposal (b):
-    //   True first exit is e8 at distance 6m via walk A-e3-W-e4-C-e5-V-e6-W-e7-X-e8.
+    // Under simple-path semantics with visited-set state keys (issue #6 item 2):
+    //   True first exit is e8 at distance 15m via simple path
+    //   A-e1-B-e2-C-e5-V-e6-W-e7-X-e8 (the 6m walk A-e3-W-e4-C-e5-V-e6-W revisits W).
     //   A verified billing pair targeting downstream/alternative exit e10 must be REJECTED
     //   with FIRST_EXIT_MISMATCH.
     //   A verified billing pair targeting true exit e8 along simple path
     //   A-e1-B-e2-C-e5-V-e6-W-e7-X-e8 must be ACCEPTED (simple path contract on billing pair is satisfied).
     //
-    // Prior buggy behavior:
-    //   e8 was pruned away due to simple path constraint causing dead-end, so the search returned (41, ["e10"]).
-    //   As a result, exit_id=e10 was incorrectly accepted as verified, and exit_id=e8 was incorrectly rejected!
+    // Prior walk-semantics behavior: the same topology returned (6, ["e8"]) because the
+    // looping 6m walk was allowed.
     let graph = Graph {
         schema_version: 1,
         release_id: "test-counterexample-b".into(),
@@ -2240,7 +2240,7 @@ fn test_refutation_counterexample_b_opus5() {
     };
 
     let (min_dist, first_exits) = find_first_exits_from_anchor(&graph, "A").unwrap();
-    assert_eq!(min_dist, 6);
+    assert_eq!(min_dist, 15);
     assert_eq!(first_exits, vec!["e8".to_string()]);
 
     // 1. Target incorrect downstream exit e10 -> MUST FAIL with FIRST_EXIT_MISMATCH
@@ -2323,24 +2323,24 @@ fn test_refutation_counterexample_c_codex() {
     //   loop_e: z -> a (dist: 10, Shutoko)
     // Forbidden transitions: [["ax", "exit1"]] (L=2)
     //
-    // Calculation under Proposal (b) (walk allowed):
-    // Walk to exit1:
-    //   a -(ax:1)-> x -(xc:1)-> c -(cn:1)-> n -(nx:1)-> x -(exit1:2)-> out1
+    // Calculation under simple-path semantics with visited-set state keys (issue #6 item 2):
+    // The 6m walk a -(ax)-> x -(xc)-> c -(cn)-> n -(nx)-> x revisits x and is not simple.
+    // Shortest legal simple path to exit1:
+    //   a -(ay:2)-> y -(yc:1)-> c -(cn:1)-> n -(nx:1)-> x -(exit1:2)-> out1
     // Cost calculation:
-    //   ax(1) + xc(1) + cn(1) + nx(1) + exit1(2) = 6m.
+    //   ay(2) + yc(1) + cn(1) + nx(1) + exit1(2) = 7m.
     // Forbidden transition check:
-    //   Path edges: [ax, xc, cn, nx, exit1].
-    //   Contiguous 2-edge sequences: (ax,xc), (xc,cn), (cn,nx), (nx,exit1).
+    //   Path edges: [ay, yc, cn, nx, exit1].
+    //   Contiguous 2-edge windows: (ay,yc), (yc,cn), (cn,nx), (nx,exit1).
     //   None match ["ax", "exit1"]. Legal!
-    //   (Note: simple path a->y->c->n->x->exit1 is 2+1+1+1+2 = 7m, which is also legal).
-    //   The shortest walk yields exit1 at distance 6m.
+    //   Alternative simple path a->x->c->n->z->exit2 costs 1+1+1+4+6 = 13m.
+    //   The shortest simple path yields exit1 at distance 7m.
     //
-    // Failure in prior implementation:
-    //   Cheap path a->x->c->n (cost 3, suffix [cn]) prunes expensive path a->y->c->n (cost 4, suffix [cn]).
-    //   From (n, [cn]), cheap path cannot expand nx because x is already visited.
-    //   High-cost path could expand nx because x is unvisited, but was pruned.
-    //   Search fell back to nz->exit2 (cost 3 + 4 + 6 = 13m).
-    //   The prior function returned (13, ["exit2"]), incorrectly missing exit1!
+    // History of this fixture:
+    //   With the old (node, suffix)-only key the cheap walk a->x->c->n (cost 3, suffix
+    //   [cn]) pruned a->y->c->n (cost 4, same key) and the answer depended on which
+    //   arrival's future was kept. Including the visited-node set in the key gives the
+    //   distinct keys (x, [nx], {a,y,c,n,x}) etc. and yields the simple-path 7m.
     let graph = Graph {
         schema_version: 1,
         release_id: "test-counterexample-c".into(),
@@ -2452,8 +2452,8 @@ fn test_refutation_counterexample_c_codex() {
 
     let (min_dist, first_exits) = find_first_exits_from_anchor(&graph, "a").unwrap();
     assert_eq!(
-        min_dist, 6,
-        "first exit must be exit1 at distance 6m, not exit2 at 13m"
+        min_dist, 7,
+        "first exit must be exit1 at distance 7m (simple path), not exit2 at 13m"
     );
     assert_eq!(first_exits, vec!["exit1".to_string()]);
 
@@ -2486,4 +2486,318 @@ fn test_refutation_counterexample_c_codex() {
         "error message must point to true first exit exit1: {}",
         err.message
     );
+}
+
+#[test]
+fn test_issue6_item1_walk_semantics_node_revisit() {
+    use shutoko_graph_builder::{has_non_empty_shutoko_loop, Edge, EdgeKind, Graph, Node};
+
+    let mk = |id: &str, from: &str, to: &str| Edge {
+        id: id.into(),
+        from: from.into(),
+        to: to.into(),
+        distance_meters: 1,
+        duration_seconds: 1,
+        kind: EdgeKind::Shutoko,
+    };
+
+    // (a) Scout minimal counterexample (issue #6 item 1).
+    // The cheap 3-hop prefix registers (N2, e6); the legitimate 7-hop closed walk
+    // Anchor->B1->B2->M->N2->A->Anchor is then pruned by the old (node, last_edge)
+    // key with a per-node no-revisit rule, while the new (node, suffix) walk
+    // semantics finds the closed walk.
+    let graph = Graph {
+        schema_version: 1,
+        release_id: "test-issue6-item1-a".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node {
+                id: "Anchor".into(),
+            },
+            Node { id: "A".into() },
+            Node { id: "B1".into() },
+            Node { id: "B2".into() },
+            Node { id: "M".into() },
+            Node { id: "N2".into() },
+        ],
+        edges: vec![
+            mk("e1", "Anchor", "A"),
+            mk("e2", "A", "M"),
+            mk("e3", "Anchor", "B1"),
+            mk("e4", "B1", "B2"),
+            mk("e5", "B2", "M"),
+            mk("e6", "M", "N2"),
+            mk("e7", "N2", "A"),
+            mk("e8", "A", "Anchor"),
+        ],
+        billing_pairs: Vec::new(),
+        forbidden_transitions: Vec::new(),
+    };
+    assert!(
+        has_non_empty_shutoko_loop(&graph, "Anchor"),
+        "closed walk Anchor->B1->B2->M->N2->A->Anchor must be detected"
+    );
+
+    // (b) Same last edge, different penultimate edge: the old key (node, last_edge)
+    // collapses two arrivals at R whose futures differ because the length-3
+    // forbidden transition [u, z, w1] depends on the penultimate edge.
+    // Old code: false (second arrival at (R, "z") pruned, first arrival dead-ends).
+    // New (node, suffix=[u|v, z]) keys keep them apart: the second arrival closes.
+    let graph_b = Graph {
+        schema_version: 1,
+        release_id: "test-issue6-item1-b".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node {
+                id: "Anchor".into(),
+            },
+            Node { id: "N1".into() },
+            Node { id: "N2".into() },
+            Node { id: "X".into() },
+            Node { id: "R".into() },
+            Node { id: "S".into() },
+        ],
+        edges: vec![
+            mk("a", "Anchor", "N1"),
+            mk("u", "N1", "X"),
+            mk("z", "X", "R"),
+            mk("b", "Anchor", "N2"),
+            mk("v", "N2", "X"),
+            mk("w1", "R", "S"),
+            mk("s", "S", "Anchor"),
+        ],
+        billing_pairs: Vec::new(),
+        forbidden_transitions: vec![vec!["u".into(), "z".into(), "w1".into()]],
+    };
+    assert!(
+        has_non_empty_shutoko_loop(&graph_b, "Anchor"),
+        "closed walk via the suffix-distinguished arrival at R must be detected"
+    );
+
+    // (c) Walk semantics: a closed walk that revisits A (N2-style revisit is legal
+    // for a closed walk) must be detected even though the per-node no-revisit rule
+    // blocks it in the old code (old: false because e1 already touches node A).
+    let graph_c = Graph {
+        schema_version: 1,
+        release_id: "test-issue6-item1-c".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node {
+                id: "Anchor".into(),
+            },
+            Node { id: "A".into() },
+            Node { id: "B".into() },
+        ],
+        edges: vec![
+            mk("e1", "Anchor", "A"),
+            mk("e2", "A", "B"),
+            mk("e3", "B", "A"),
+            mk("e4", "A", "Anchor"),
+        ],
+        billing_pairs: Vec::new(),
+        forbidden_transitions: vec![vec!["e1".into(), "e4".into()]],
+    };
+    assert!(
+        has_non_empty_shutoko_loop(&graph_c, "Anchor"),
+        "closed walk Anchor->A->B->A->Anchor (revisit of A) must be detected"
+    );
+}
+
+#[test]
+fn test_issue6_item2_simple_path_first_exit() {
+    use shutoko_graph_builder::{
+        find_first_exits_from_anchor, validate_billing_pair, BillingPair, Edge, EdgeKind, Graph,
+        Node, VerificationStatus,
+    };
+
+    // Issue #6 item 2 counterexample:
+    //   walk  A -e1-> B -e2-> C -e3-> B -exit_walk->  = 4m (loops through B)
+    //   simple A -e4-> D -exit_simple->               = 11m
+    // Under the old walk semantics the search returned (4, ["exit_walk"]) and the
+    // correct simple-path pair for exit_simple was rejected with FIRST_EXIT_MISMATCH.
+    // Under simple-path semantics the result is (11, ["exit_simple"]).
+    let mk = |id: &str, from: &str, to: &str, kind: EdgeKind| Edge {
+        id: id.into(),
+        from: from.into(),
+        to: to.into(),
+        distance_meters: if id == "e4" { 10 } else { 1 },
+        duration_seconds: 1,
+        kind,
+    };
+    let graph = Graph {
+        schema_version: 1,
+        release_id: "test-issue6-item2".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node { id: "entry".into() },
+            Node { id: "A".into() },
+            Node { id: "B".into() },
+            Node { id: "C".into() },
+            Node { id: "D".into() },
+            Node {
+                id: "out_walk".into(),
+            },
+            Node {
+                id: "out_simple".into(),
+            },
+        ],
+        edges: vec![
+            mk("entry_e", "entry", "A", EdgeKind::Entry),
+            mk("e1", "A", "B", EdgeKind::Shutoko),
+            mk("e2", "B", "C", EdgeKind::Shutoko),
+            mk("e3", "C", "B", EdgeKind::Shutoko),
+            mk("exit_walk", "B", "out_walk", EdgeKind::Exit),
+            mk("e4", "A", "D", EdgeKind::Shutoko),
+            mk("exit_simple", "D", "out_simple", EdgeKind::Exit),
+            mk("loop_back", "D", "A", EdgeKind::Shutoko),
+        ],
+        billing_pairs: Vec::new(),
+        forbidden_transitions: vec![vec!["e1".into(), "exit_walk".into()]],
+    };
+
+    let (min_dist, first_exits) = find_first_exits_from_anchor(&graph, "A").unwrap();
+    assert_eq!(
+        min_dist, 11,
+        "simple-path first exit must be exit_simple at 11m"
+    );
+    assert_eq!(first_exits, vec!["exit_simple".to_string()]);
+
+    let pair = BillingPair {
+        id: "bp-issue6-item2".into(),
+        entry_id: "entry_e".into(),
+        exit_id: "exit_simple".into(),
+        anchor_node_id: "A".into(),
+        entry_to_anchor_edge_ids: vec!["entry_e".into()],
+        anchor_to_exit_edge_ids: vec!["e4".into(), "exit_simple".into()],
+        vehicle_profile: "passenger-car-etc".into(),
+        status: VerificationStatus::Verified,
+        prices: Vec::new(),
+    };
+    let ok = validate_billing_pair(&graph, &pair);
+    assert!(
+        ok.is_ok(),
+        "correct simple-path pair must be accepted under simple-path first-exit semantics: {:?}",
+        ok.err()
+    );
+}
+
+#[test]
+fn test_issue6_item2_first_exit_search_budget_exceeded() {
+    use shutoko_graph_builder::{
+        find_first_exits_from_anchor_with_budget, Edge, EdgeKind, Graph, Node,
+    };
+
+    let mk = |id: &str, from: &str, to: &str, dist: u64, kind: EdgeKind| Edge {
+        id: id.into(),
+        from: from.into(),
+        to: to.into(),
+        distance_meters: dist,
+        duration_seconds: 1,
+        kind,
+    };
+    // Counterexample A topology (see test_refutation_counterexample_a_opus5).
+    let graph = Graph {
+        schema_version: 1,
+        release_id: "test-issue6-item2-budget".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node { id: "A".into() },
+            Node { id: "B".into() },
+            Node { id: "C".into() },
+            Node { id: "W".into() },
+            Node { id: "V".into() },
+            Node { id: "X".into() },
+            Node { id: "OUT".into() },
+        ],
+        edges: vec![
+            mk("e1", "A", "B", 10, EdgeKind::Shutoko),
+            mk("e2", "B", "C", 1, EdgeKind::Shutoko),
+            mk("e3", "A", "W", 1, EdgeKind::Shutoko),
+            mk("e4", "W", "C", 1, EdgeKind::Shutoko),
+            mk("e5", "C", "V", 1, EdgeKind::Shutoko),
+            mk("e6", "V", "W", 1, EdgeKind::Shutoko),
+            mk("e7", "W", "X", 1, EdgeKind::Shutoko),
+            mk("e8", "X", "OUT", 1, EdgeKind::Exit),
+        ],
+        billing_pairs: Vec::new(),
+        forbidden_transitions: vec![vec!["e3".into(), "e7".into()]],
+    };
+
+    // Full budget: succeeds with the simple-path answer.
+    let (min_dist, first_exits) =
+        find_first_exits_from_anchor_with_budget(&graph, "A", 200_000).unwrap();
+    assert_eq!(min_dist, 15);
+    assert_eq!(first_exits, vec!["e8".to_string()]);
+
+    // Tiny budget: the search must stop with a reported error, never a silent cut.
+    let err = find_first_exits_from_anchor_with_budget(&graph, "A", 2)
+        .expect_err("budget of 2 must stop the search with Err");
+    assert!(
+        err.contains("探索予算超過"),
+        "budget error must record 探索予算超過: {}",
+        err
+    );
+    assert!(
+        err.contains("expanded 2 states"),
+        "budget error must record the expanded state count: {}",
+        err
+    );
+}
+
+#[test]
+fn test_issue6_item3_silent_cap_2001_hop_loop_detected() {
+    use shutoko_graph_builder::{has_non_empty_shutoko_loop, Edge, EdgeKind, Graph, Node};
+
+    // Serial simple cycle with 2002 Shutoko edges (2002 nodes).
+    // Old code: silent `path.len() > 2000` cut -> false.
+    // New code: finite (node, suffix) state space, no cap -> true.
+    let n = 2002usize;
+    let nodes: Vec<Node> = (0..n)
+        .map(|i| Node {
+            id: format!("n{}", i),
+        })
+        .collect();
+    let edges: Vec<Edge> = (0..n)
+        .map(|i| Edge {
+            id: format!("e{}", i),
+            from: format!("n{}", i),
+            to: format!("n{}", (i + 1) % n),
+            distance_meters: 1,
+            duration_seconds: 1,
+            kind: EdgeKind::Shutoko,
+        })
+        .collect();
+    let graph = Graph {
+        schema_version: 1,
+        release_id: "test-issue6-item3-silent-cap".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes,
+        edges,
+        billing_pairs: Vec::new(),
+        forbidden_transitions: Vec::new(),
+    };
+    assert!(
+        has_non_empty_shutoko_loop(&graph, "n0"),
+        "2002-edge closed walk must be detected without the old 2000-hop silent cap"
+    );
+}
+
+#[test]
+fn test_issue6_item4_invalid_dates_and_engine_version() {
+    use shutoko_graph_builder::manifest::ManifestConfig;
+    use shutoko_graph_builder::{parse_iso_date, parse_utc_timestamp};
+
+    // Non-existent calendar dates must be rejected (time crate semantics).
+    assert!(parse_utc_timestamp("2026-02-31T00:00:00Z").is_err());
+    assert!(parse_iso_date("2026-02-31").is_err());
+    // Sanity: valid dates still parse.
+    assert!(parse_utc_timestamp("2026-02-28T00:00:00Z").is_ok());
+    assert!(parse_iso_date("2026-02-28").is_ok());
+
+    // manifest.engineVersion must carry the routing-core engine version constant.
+    assert_eq!(
+        ManifestConfig::default().engine_version,
+        shutoko_routing_core::VERSION
+    );
+    assert_eq!(shutoko_routing_core::VERSION, "0.1.0");
 }

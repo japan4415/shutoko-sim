@@ -132,7 +132,7 @@ impl Default for ManifestConfig {
     fn default() -> Self {
         Self {
             release_id: "default-release".into(),
-            engine_version: env!("CARGO_PKG_VERSION").into(),
+            engine_version: shutoko_routing_core::VERSION.into(),
             graph_version: "1.0.0".into(),
             built_at: "2026-09-10T00:00:00Z".into(),
             source_date: "2026-09-10".into(),

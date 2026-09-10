@@ -408,7 +408,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // 6. Build manifest
     let manifest_config = ManifestConfig {
         release_id: args.release_id.clone(),
-        engine_version: env!("CARGO_PKG_VERSION").into(),
+        engine_version: shutoko_routing_core::VERSION.into(),
         graph_version: args.graph_version,
         built_at: args.built_at,
         source_date: args.source_date,

@@ -260,7 +260,7 @@ pub fn generate_billing_pair(
     exit_candidates.sort_by(|a, b| a.id.cmp(&b.id));
 
     let exit_edge = exit_candidates
-        .first()
+        .last()
         .copied()
         .ok_or(BillingError::NoExitEdgeForOsmWay(seed.exit_osm_way_id))?;
 

@@ -33,6 +33,10 @@ assert.ok(
   candidate.warnings.includes('HANDOFF_WAYPOINTS_UNVERIFIED'),
   'warnings must include HANDOFF_WAYPOINTS_UNVERIFIED',
 );
+assert.ok(
+  !candidate.warnings.includes('EXPERIMENTAL_NO_HANDOFF'),
+  'warnings must not include deprecated EXPERIMENTAL_NO_HANDOFF',
+);
 
 // Coordinate-based search case
 const coordReq = JSON.parse(request);
@@ -59,10 +63,10 @@ assert.equal(search(graph, request, '{}'), first, 'WASM search must be determini
 assert.throws(() => search('{', request, '{}'), 'invalid graph JSON must throw');
 const changed = JSON.parse(request);
 changed.maxMinutes = 0;
-assert.throws(() => search(graph, JSON.stringify(changed), '{}'), (err) => {
-  const parsed = JSON.parse(typeof err === 'string' ? err : err.message);
-  return parsed.code === 'INVALID_INPUT';
-});
+assert.throws(
+  () => search(graph, JSON.stringify(changed), '{}'),
+  (e) => e instanceof Error && JSON.parse(e.message).code === 'INVALID_INPUT',
+);
 const oversizedTimestamp = JSON.parse(graph);
 oversizedTimestamp.billingPairs[0].prices[0].effectiveFrom =
   `2026-01-01T00:00:00.${'0'.repeat(100_000)}Z`;

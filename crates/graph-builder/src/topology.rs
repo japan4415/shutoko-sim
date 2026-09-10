@@ -852,7 +852,7 @@ pub fn build_topology_with_report(
     final_edges.sort_by(|a, b| a.id.cmp(&b.id));
 
     let graph = Graph {
-        schema_version: 1,
+        schema_version: 2,
         release_id: config.release_id.clone(),
         vehicle_profile: config.vehicle_profile.clone(),
         nodes,

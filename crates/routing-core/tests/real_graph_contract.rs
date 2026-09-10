@@ -13,7 +13,7 @@ fn real_graph() -> Graph {
 #[test]
 fn real_graph_deserialization_and_schema_validation() {
     let g = real_graph();
-    assert_eq!(g.schema_version, 1);
+    assert_eq!(g.schema_version, 2);
     assert_eq!(g.release_id, "c1-real-v1");
     assert_eq!(g.vehicle_profile, "passenger-car-etc");
     assert!(!g.nodes.is_empty(), "nodes must not be empty");
@@ -590,6 +590,7 @@ fn real_graph_coordinate_beyond_snap_radius_is_no_connection() {
 }
 
 #[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn test_eight_pairs_determinism_and_performance_table() {
     let g = real_graph();
     let graph_json = include_str!("../../../fixtures/generated/graph.json");

@@ -117,7 +117,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 - **Node の地理座標 (`lat`, `lon`)**: `graph.json` 内の全 8,803 ノードに f64 の `lat` および `lon` を必須フィールドとして出力。WASM 内部での空間スナップおよび GeoJSON LineString 幾何データ合成に使用される。
 - **Edge の日本語道路名 (`name`)**: OSM ウェイの `name`（存在しない場合は `name:ja`）を `Edge.name: Option<String>` として伝播。名前のないエッジは `serde(skip_serializing_if = "Option::is_none")` により JSON 出力からキーが省略される。
 - **課金ペアの公式ランプ名 (`entryName`, `exitName`)**: `data/billing-pairs-seed.json` の各ペアに公式ランプ名（例: `"神田橋入口"`, `"宝町出口"`）が定義され、グラフビルダーにより `graph.json` の `billingPairs[]` へそのまま伝播される。
-- **ファイルサイズと転送量予算**: ノード座標とエッジ名称の追加により、`fixtures/generated/graph.json` のファイルサイズは約 2.0MB から約 2.5MB（実測: 2,475KB）に増加したが、プロジェクトのネットワーク転送量上限である 10MiB に対して十分に安全な範囲に収まっている。
+- **ファイルサイズと転送量予算**: ノード座標とエッジ名称の追加により、`fixtures/generated/graph.json` のファイルサイズは旧 2,144,366 bytes から実測 2,907,908 bytes（≈ 2.77MiB）に増加したが、プロジェクトのネットワーク転送量上限である 10MiB に対して十分に安全な範囲に収まっている。
 
 ### 再現性・決定論的検証
 同一入力から 2 回実行し、`diff -r` によりバイト完全一致（SHA-256 一致）が確認されている。

@@ -9,12 +9,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust and WASM target
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
           rustup default stable
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - run: cargo fmt --all -- --check
@@ -23,7 +23,7 @@ jobs:
       - run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
       - run: bash scripts/build-wasm.sh
       - run: node scripts/test-wasm.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: routing-wasm
           path: dist/wasm/

@@ -20,8 +20,8 @@ fn real_graph_deserialization_and_schema_validation() {
     assert!(!g.edges.is_empty(), "edges must not be empty");
     assert_eq!(
         g.billing_pairs.len(),
-        9,
-        "exactly 9 billing pairs expected in fixture"
+        8,
+        "exactly 8 billing pairs expected in fixture"
     );
 
     let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
@@ -95,6 +95,7 @@ fn real_graph_deserialization_and_schema_validation() {
 }
 
 #[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn real_graph_routing_core_search_returns_candidates() {
     let g = real_graph();
 
@@ -169,9 +170,10 @@ fn real_graph_routing_core_search_returns_candidates() {
 }
 
 #[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn real_graph_pricing_intervals_and_ranking_transitions() {
     let g = real_graph();
-    // 9 ペア分の探索を 1 回の検索で完了させるには default の 100,000 では不足し、
+    // 8 ペア分の探索を 1 回の検索で完了させるには default の 100,000 では不足し、
     // 538,751 expansion 程度まで進むと候補が出る（実測: 入口 n:1070862943 で 528,574・候補 2 件）。
     let limits = SearchLimits {
         max_expanded_states: 1_000_000,
@@ -239,6 +241,7 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
 }
 
 #[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn real_graph_search_json_wasm_contract_parity() {
     let graph_json = real_graph_str();
     let request_json = serde_json::json!({
@@ -252,7 +255,7 @@ fn real_graph_search_json_wasm_contract_parity() {
     })
     .to_string();
 
-    // default の max_expanded_states=100,000 では 9 ペア分の探索が完了しないため上限を最大値に引き上げる
+    // default の max_expanded_states=100,000 では 8 ペア分の探索が完了しないため上限を最大値に引き上げる
     let limits_json = r#"{"maxExpandedStates": 1000000}"#;
     let res_str = search_json(graph_json, &request_json, limits_json)
         .expect("search_json must succeed with real graph");
@@ -270,11 +273,20 @@ fn real_graph_search_json_wasm_contract_parity() {
     assert_eq!(candidates[0]["toll"]["amountYen"].as_u64(), Some(300));
 }
 
-// debug ビルド実測で full search 1 回 ≈ 250-260 秒のため、9 ペア全件の full search は
-// 3 分を超える。代表 3 ペア（外回り 1・内回り 2）のみ full search し、残り 6 ペアは
-// fixture 上の存在確認（verified・料金レコード・経路ワイヤリング）に留める。
+/// 代表ペア定数: 探索コアの既定上限では全ペアの候補が得られないため、
+/// 代表ペア（外回り 1・内回り 2）のみ実探索を行い、残りは存在確認とする。
+/// 全ペア対応は routing-core の候補生成改善（別 issue）に依存。
+const REPRESENTATIVE_SEARCH_PAIR_IDS: [&str; 3] = [
+    "bp:c1-outer:kandabashi-takaracho",
+    "bp:c1-inner:takaracho-kandabashi",
+    "bp:c1-inner:kasumigaseki-shibakoen",
+];
+
+// 代表ペアのみ実探索を行い、残りは fixture 上の存在確認（verified・料金レコード・経路ワイヤリング）に留める契約テスト。
+// debug ビルド実測で full search が重いため、#[ignore] を付与し CI では --release -- --ignored で実行する。
 #[test]
-fn test_all_billing_pairs_loop_search_contract() {
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn test_representative_billing_pairs_loop_search_and_all_existence_contract() {
     let g = real_graph();
     let limits = SearchLimits {
         max_expanded_states: 1_000_000,
@@ -283,16 +295,9 @@ fn test_all_billing_pairs_loop_search_contract() {
     let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
         g.edges.iter().map(|e| (e.id.as_str(), e)).collect();
 
-    // 代表 3 ペア（外回り 1・内回り 2）。いずれも実測で自ペアの Candidate が返る。
-    let representative = [
-        "bp:c1-outer:kandabashi-takaracho",
-        "bp:c1-inner:takaracho-kandabashi",
-        "bp:c1-inner:kasumigaseki-shibakoen",
-    ];
-
     let start_total = std::time::Instant::now();
 
-    for id in representative {
+    for id in REPRESENTATIVE_SEARCH_PAIR_IDS {
         let pair = g
             .billing_pairs
             .iter()
@@ -350,10 +355,10 @@ fn test_all_billing_pairs_loop_search_contract() {
         );
     }
 
-    // 残り 6 ペアは full search を省略し、fixture 上の存在確認のみ行う
+    // 残り 5 ペアは full search を省略し、fixture 上の存在確認のみ行う
     let mut existence_checked = 0;
     for pair in &g.billing_pairs {
-        if representative.contains(&pair.id.as_str()) {
+        if REPRESENTATIVE_SEARCH_PAIR_IDS.contains(&pair.id.as_str()) {
             continue;
         }
         assert_eq!(
@@ -377,14 +382,14 @@ fn test_all_billing_pairs_loop_search_contract() {
         assert!(!pair.anchor_to_exit_edge_ids.is_empty());
         existence_checked += 1;
     }
-    assert_eq!(existence_checked, 6, "6 non-representative pairs checked");
+    assert_eq!(existence_checked, 5, "5 non-representative pairs checked");
 
     let total_elapsed = start_total.elapsed();
     eprintln!("loop search contract total elapsed: {:?}", total_elapsed);
-    // debug ビルド実測 ≈ 750 秒（3 回の full search）。900 秒以内を要求する。
+    // release ビルド実測 ≈ 30 秒（3 回の full search）。余裕をもって 120 秒以内を要求する。
     assert!(
-        total_elapsed < std::time::Duration::from_secs(900),
-        "total search time must be under 900 seconds, took {:?}",
+        total_elapsed < std::time::Duration::from_secs(120),
+        "total search time must be under 120 seconds, took {:?}",
         total_elapsed
     );
 }

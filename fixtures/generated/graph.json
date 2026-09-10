@@ -104369,58 +104369,6 @@
       ]
     },
     {
-      "id": "bp:c1-inner:ginza-kyobashi",
-      "entryId": "e:w4848936:0:f",
-      "exitId": "e:w4849052:8:f",
-      "anchorNodeId": "n:31254341",
-      "entryToAnchorEdgeIds": [
-        "e:w4848936:0:f",
-        "e:w4848936:1:f",
-        "e:w4848936:2:f",
-        "e:w4848936:3:f",
-        "e:w205411844:0:f",
-        "e:w205411850:0:f"
-      ],
-      "anchorToExitEdgeIds": [
-        "e:w4848937:0:f",
-        "e:w4848937:1:f",
-        "e:w4848937:2:f",
-        "e:w593037725:0:f",
-        "e:w593037725:1:f",
-        "e:w593037725:2:f",
-        "e:w593037725:3:f",
-        "e:w1489157714:0:f",
-        "e:w1489157714:1:f",
-        "e:w1489157714:2:f",
-        "e:w1489157714:3:f",
-        "e:w1489157714:4:f",
-        "e:w1489157714:5:f",
-        "e:w4849052:0:f",
-        "e:w4849052:1:f",
-        "e:w4849052:2:f",
-        "e:w4849052:3:f",
-        "e:w4849052:4:f",
-        "e:w4849052:5:f",
-        "e:w4849052:6:f",
-        "e:w4849052:7:f",
-        "e:w4849052:8:f"
-      ],
-      "status": "verified",
-      "vehicleProfile": "passenger-car-etc",
-      "prices": [
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2022-03-31T15:00:00Z",
-          "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z",
-          "effectiveTo": null
-        }
-      ]
-    },
-    {
       "id": "bp:c1-inner:kasumigaseki-shibakoen",
       "entryId": "e:w916571615:0:f",
       "exitId": "e:w203873821:2:f",

@@ -572,3 +572,266 @@ fn timestamp_length_cap_rejects_oversized_fractional_seconds() {
         assert!(search_json(&graph().to_string(), &r.to_string(), "{}").is_err());
     }
 }
+
+fn edge_json(
+    id: &str,
+    from: &str,
+    to: &str,
+    kind: &str,
+    duration_seconds: u64,
+    distance_meters: u64,
+) -> Value {
+    json!({
+        "id": id,
+        "from": from,
+        "to": to,
+        "kind": kind,
+        "durationSeconds": duration_seconds,
+        "distanceMeters": distance_meters,
+    })
+}
+
+fn standard_highway_edges() -> Vec<Value> {
+    vec![
+        edge_json("entry", "i", "a", "entry", 30, 200),
+        edge_json("ab", "a", "b", "shutoko", 600, 10000),
+        edge_json("bc", "b", "c", "shutoko", 600, 10000),
+        edge_json("ca", "c", "a", "shutoko", 600, 10000),
+        edge_json("exit", "a", "o", "exit", 30, 200),
+        edge_json("return", "o", "s", "local", 60, 500),
+    ]
+}
+
+fn build_test_graph(nodes: &[&str], edges: Vec<Value>, forbidden_transitions: Value) -> Value {
+    json!({
+        "schemaVersion": 1,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": nodes.iter().map(|n| json!({"id": n})).collect::<Vec<_>>(),
+        "edges": edges,
+        "billingPairs": [{
+            "id": "one-section",
+            "entryId": "entry",
+            "exitId": "exit",
+            "anchorNodeId": "a",
+            "entryToAnchorEdgeIds": ["entry"],
+            "anchorToExitEdgeIds": ["exit"],
+            "status": "verified",
+            "vehicleProfile": "passenger-car-etc",
+            "prices": [{
+                "amountYen": 300,
+                "effectiveFrom": "2026-01-01T00:00:00Z",
+                "effectiveTo": "2026-10-01T00:00:00Z"
+            }]
+        }],
+        "forbiddenTransitions": forbidden_transitions
+    })
+}
+
+fn standard_test_request(origin: &str) -> Value {
+    json!({
+        "requestId": "test-req",
+        "releaseId": "synthetic-v1",
+        "originNodeId": origin,
+        "minMinutes": 30,
+        "maxMinutes": 45,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    })
+}
+
+/// (a) forward: forbiddenTransitions=[["l2","entry"]] で合法迂回 l3,l4 があるとき status: ok で迂回路が選ばれる
+#[test]
+fn forbidden_transitions_forward_junction_detour_selected() {
+    let mut edges = vec![
+        edge_json("l1", "s", "p", "local", 60, 500),
+        edge_json("l2", "p", "i", "local", 60, 500),
+        edge_json("l3", "s", "q", "local", 90, 700),
+        edge_json("l4", "q", "i", "local", 90, 700),
+    ];
+    edges.extend(standard_highway_edges());
+    let g = build_test_graph(
+        &["s", "p", "q", "i", "a", "b", "c", "o"],
+        edges,
+        json!([["l2", "entry"]]),
+    );
+    let result = run(&g, &standard_test_request("s"), json!({}));
+    assert_eq!(result["status"], "ok");
+    let c = candidates(&result);
+    assert_eq!(c.len(), 1);
+    let ids: Vec<&str> = c[0]["edgeIds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(
+        ids.starts_with(&["l3", "l4", "entry"]),
+        "must select detour l3,l4, got: {:?}",
+        ids
+    );
+}
+
+/// (b) backward: [["exit","r1"]]（または [["exit","l9"]] 相当）で合法迂回 r3,r4 があるとき選ばれる
+#[test]
+fn forbidden_transitions_backward_junction_detour_selected() {
+    let nodes = ["s", "p", "i", "a", "b", "c", "o", "o2", "q"];
+    let edges = vec![
+        edge_json("l1", "s", "p", "local", 60, 500),
+        edge_json("l2", "p", "i", "local", 60, 500),
+        edge_json("entry", "i", "a", "entry", 30, 200),
+        edge_json("ab", "a", "b", "shutoko", 600, 10000),
+        edge_json("bc", "b", "c", "shutoko", 600, 10000),
+        edge_json("ca", "c", "a", "shutoko", 600, 10000),
+        edge_json("exit", "a", "o", "exit", 30, 200),
+        edge_json("r1", "o", "o2", "local", 60, 500),
+        edge_json("r2", "o2", "s", "local", 60, 500),
+        edge_json("r3", "o", "q", "local", 90, 700),
+        edge_json("r4", "q", "s", "local", 90, 700),
+    ];
+    let g = build_test_graph(&nodes, edges, json!([["exit", "r1"]]));
+    let result = run(&g, &standard_test_request("s"), json!({}));
+    assert_eq!(result["status"], "ok");
+    let c = candidates(&result);
+    assert_eq!(c.len(), 1);
+    let ids: Vec<&str> = c[0]["edgeIds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(
+        ids.ends_with(&["exit", "r3", "r4"]),
+        "must select return detour r3,r4, got: {:?}",
+        ids
+    );
+}
+
+/// (c) 長さ 3: s→p が l1(60s) / l1b(70s) の 2 本、p→m=l2、m→i=l5、[["l1","l2","l5"]] で唯一の合法路 l1b,l2,l5 が選ばれる
+#[test]
+fn forbidden_transitions_length_3_purely_local_preserves_legal_history() {
+    let mut edges = vec![
+        edge_json("l1", "s", "p", "local", 60, 500),
+        edge_json("l1b", "s", "p", "local", 70, 600),
+        edge_json("l2", "p", "m", "local", 60, 500),
+        edge_json("l5", "m", "i", "local", 60, 500),
+    ];
+    edges.extend(standard_highway_edges());
+    let g = build_test_graph(
+        &["s", "p", "m", "i", "a", "b", "c", "o"],
+        edges,
+        json!([["l1", "l2", "l5"]]),
+    );
+    let result = run(&g, &standard_test_request("s"), json!({}));
+    assert_eq!(result["status"], "ok");
+    let c = candidates(&result);
+    assert_eq!(c.len(), 1);
+    let ids: Vec<&str> = c[0]["edgeIds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(
+        ids.starts_with(&["l1b", "l2", "l5", "entry"]),
+        "must select legal history l1b,l2,l5, got: {:?}",
+        ids
+    );
+}
+
+/// (d) 対照として長さ 2 [["l1","l2"]] でも同じ結果
+#[test]
+fn forbidden_transitions_length_2_control_matches_length_3_result() {
+    let mut edges = vec![
+        edge_json("l1", "s", "p", "local", 60, 500),
+        edge_json("l1b", "s", "p", "local", 70, 600),
+        edge_json("l2", "p", "m", "local", 60, 500),
+        edge_json("l5", "m", "i", "local", 60, 500),
+    ];
+    edges.extend(standard_highway_edges());
+    let g = build_test_graph(
+        &["s", "p", "m", "i", "a", "b", "c", "o"],
+        edges,
+        json!([["l1", "l2"]]),
+    );
+    let result = run(&g, &standard_test_request("s"), json!({}));
+    assert_eq!(result["status"], "ok");
+    let c = candidates(&result);
+    assert_eq!(c.len(), 1);
+    let ids: Vec<&str> = c[0]["edgeIds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(
+        ids.starts_with(&["l1b", "l2", "l5", "entry"]),
+        "must select legal history l1b,l2,l5, got: {:?}",
+        ids
+    );
+}
+
+/// (e) local→local 長さ 2 の forward / backward 迂回
+#[test]
+fn forbidden_transitions_local_to_local_len_2_forward_and_backward_detours() {
+    // (e1) Forward local->local detour
+    let mut edges_fwd = vec![
+        edge_json("l1", "s", "p", "local", 60, 500),
+        edge_json("l2", "p", "i", "local", 60, 500),
+        edge_json("l3", "s", "q", "local", 90, 700),
+        edge_json("l4", "q", "i", "local", 90, 700),
+    ];
+    edges_fwd.extend(standard_highway_edges());
+    let g_fwd = build_test_graph(
+        &["s", "p", "q", "i", "a", "b", "c", "o"],
+        edges_fwd,
+        json!([["l1", "l2"]]),
+    );
+    let result_fwd = run(&g_fwd, &standard_test_request("s"), json!({}));
+    assert_eq!(result_fwd["status"], "ok");
+    let c_fwd = candidates(&result_fwd);
+    assert_eq!(c_fwd.len(), 1);
+    let ids_fwd: Vec<&str> = c_fwd[0]["edgeIds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(
+        ids_fwd.starts_with(&["l3", "l4", "entry"]),
+        "forward detour must be l3,l4, got: {:?}",
+        ids_fwd
+    );
+
+    // (e2) Backward local->local detour
+    let nodes_bwd = ["s", "p", "i", "a", "b", "c", "o", "o2", "q"];
+    let edges_bwd = vec![
+        edge_json("l1", "s", "p", "local", 60, 500),
+        edge_json("l2", "p", "i", "local", 60, 500),
+        edge_json("entry", "i", "a", "entry", 30, 200),
+        edge_json("ab", "a", "b", "shutoko", 600, 10000),
+        edge_json("bc", "b", "c", "shutoko", 600, 10000),
+        edge_json("ca", "c", "a", "shutoko", 600, 10000),
+        edge_json("exit", "a", "o", "exit", 30, 200),
+        edge_json("r1", "o", "o2", "local", 60, 500),
+        edge_json("r2", "o2", "s", "local", 60, 500),
+        edge_json("r3", "o", "q", "local", 90, 700),
+        edge_json("r4", "q", "s", "local", 90, 700),
+    ];
+    let g_bwd = build_test_graph(&nodes_bwd, edges_bwd, json!([["r1", "r2"]]));
+    let result_bwd = run(&g_bwd, &standard_test_request("s"), json!({}));
+    assert_eq!(result_bwd["status"], "ok");
+    let c_bwd = candidates(&result_bwd);
+    assert_eq!(c_bwd.len(), 1);
+    let ids_bwd: Vec<&str> = c_bwd[0]["edgeIds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(
+        ids_bwd.ends_with(&["exit", "r3", "r4"]),
+        "backward detour must be r3,r4, got: {:?}",
+        ids_bwd
+    );
+}

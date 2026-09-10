@@ -2891,7 +2891,3 @@ fn test_all_billing_pairs_seed_prices_verified_and_output_to_graph() {
         assert_eq!(graph_pair.prices[1].effective_to, None);
     }
 }
-
-
-
-

@@ -29,6 +29,20 @@ fn real_graph_deserialization_and_schema_validation() {
     assert_eq!(pair.entry_id, "e:w92243921:0:f");
     assert_eq!(pair.exit_id, "e:w297864314:11:f");
     assert_eq!(pair.anchor_node_id, "n:499831338");
+    assert_eq!(
+        pair.prices.len(),
+        2,
+        "billingPairs[0].prices must have 2 records"
+    );
+    assert_eq!(pair.prices[0].amount_yen, 300);
+    assert_eq!(pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
+    assert_eq!(
+        pair.prices[0].effective_to.as_deref(),
+        Some("2026-09-30T15:00:00Z")
+    );
+    assert_eq!(pair.prices[1].amount_yen, 300);
+    assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+    assert_eq!(pair.prices[1].effective_to, None);
 
     // Verify billing pair is a simple path (no node revisited on the direct entry-to-exit path)
     let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
@@ -107,12 +121,83 @@ fn real_graph_routing_core_search_returns_candidates() {
     assert!(c.duration.shutoko_seconds > 0);
     assert!(c.duration.return_seconds > 0);
     assert!(c.distance_meters > 0);
+    assert_eq!(result.ranking_mode, "time_per_yen");
     assert!(c.shutoko_distance_meters > 0);
 
-    // Verify toll record (unspecified tariff with verified billing pair -> amountYen: null)
+    // Verify toll record for pre-revision date (amount_yen: 300, valid interval, time_per_yen ranking)
     assert_eq!(c.toll.billing_pair_id, "bp:c1-outer:kandabashi-takaracho");
     assert_eq!(c.toll.charged_section_count, 1);
+    assert_eq!(c.toll.amount_yen, Some(300));
+    assert_eq!(
+        c.toll.effective_from.as_deref(),
+        Some("2022-03-31T15:00:00Z")
+    );
+    assert_eq!(c.toll.effective_to.as_deref(), Some("2026-09-30T15:00:00Z"));
+}
+
+#[test]
+fn real_graph_pricing_intervals_and_ranking_transitions() {
+    let g = real_graph();
+    let limits = SearchLimits::default();
+
+    let make_request = |pricing_at: &str| SearchRequest {
+        request_id: format!("req-{}", pricing_at),
+        release_id: "c1-real-v1".into(),
+        origin_node_id: "n:1070862943".into(),
+        min_minutes: 15,
+        max_minutes: 60,
+        vehicle_profile: "passenger-car-etc".into(),
+        pricing_at: pricing_at.into(),
+    };
+
+    // 1. Boundary: 1 second before 2026-10-01 revision (2026-09-30T14:59:59Z) -> pre-revision record
+    let res_before_boundary = search(&g, &make_request("2026-09-30T14:59:59Z"), &limits)
+        .expect("search must succeed at boundary-1s");
+    assert!(res_before_boundary.status == "ok" || res_before_boundary.status == "truncated");
+    assert_eq!(res_before_boundary.ranking_mode, "time_per_yen");
+    let c = &res_before_boundary.candidates[0];
+    assert_eq!(c.toll.amount_yen, Some(300));
+    assert_eq!(
+        c.toll.effective_from.as_deref(),
+        Some("2022-03-31T15:00:00Z")
+    );
+    assert_eq!(c.toll.effective_to.as_deref(), Some("2026-09-30T15:00:00Z"));
+
+    // 2. Exactly at revision boundary (2026-09-30T15:00:00Z) -> post-revision record
+    let res_at_boundary = search(&g, &make_request("2026-09-30T15:00:00Z"), &limits)
+        .expect("search must succeed at boundary");
+    assert!(res_at_boundary.status == "ok" || res_at_boundary.status == "truncated");
+    assert_eq!(res_at_boundary.ranking_mode, "time_per_yen");
+    let c = &res_at_boundary.candidates[0];
+    assert_eq!(c.toll.amount_yen, Some(300));
+    assert_eq!(
+        c.toll.effective_from.as_deref(),
+        Some("2026-09-30T15:00:00Z")
+    );
+    assert_eq!(c.toll.effective_to, None);
+
+    // 3. Post-revision (e.g. 2026-10-01T00:00:00Z) -> post-revision record
+    let res_post = search(&g, &make_request("2026-10-01T00:00:00Z"), &limits)
+        .expect("search must succeed post-revision");
+    assert!(res_post.status == "ok" || res_post.status == "truncated");
+    assert_eq!(res_post.ranking_mode, "time_per_yen");
+    let c = &res_post.candidates[0];
+    assert_eq!(c.toll.amount_yen, Some(300));
+    assert_eq!(
+        c.toll.effective_from.as_deref(),
+        Some("2026-09-30T15:00:00Z")
+    );
+    assert_eq!(c.toll.effective_to, None);
+
+    // 4. Prior to 2022-03-31T15:00:00Z (e.g. 2022-01-01T00:00:00Z) -> unknown toll, fall back to shutoko_time
+    let res_prior = search(&g, &make_request("2022-01-01T00:00:00Z"), &limits)
+        .expect("search must succeed prior to tariff start");
+    assert!(res_prior.status == "ok" || res_prior.status == "truncated");
+    assert_eq!(res_prior.ranking_mode, "shutoko_time");
+    let c = &res_prior.candidates[0];
     assert_eq!(c.toll.amount_yen, None);
+    assert_eq!(c.toll.effective_from, None);
+    assert_eq!(c.toll.effective_to, None);
 }
 
 #[test]
@@ -140,5 +225,8 @@ fn real_graph_search_json_wasm_contract_parity() {
         "JSON search status must be ok or truncated, got: {}",
         st
     );
-    assert!(!val["candidates"].as_array().unwrap().is_empty());
+    assert_eq!(val["rankingMode"].as_str().unwrap(), "time_per_yen");
+    let candidates = val["candidates"].as_array().unwrap();
+    assert!(!candidates.is_empty());
+    assert_eq!(candidates[0]["toll"]["amountYen"].as_u64(), Some(300));
 }

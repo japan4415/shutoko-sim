@@ -2803,3 +2803,52 @@ fn test_issue6_item4_invalid_dates_and_engine_version() {
         shutoko_routing_core::VERSION
     );
 }
+
+#[test]
+fn test_issue9_billing_pairs_seed_prices_verified_and_output_to_graph() {
+    use shutoko_graph_builder::{BillingPairsSeedFile, Graph};
+
+    // 1. Verify that the declarative seed parses and contains the two expected price records
+    let seed_str = include_str!("../../../data/billing-pairs-seed.json");
+    let seed_file: BillingPairsSeedFile =
+        serde_json::from_str(seed_str).expect("data/billing-pairs-seed.json must deserialize");
+    assert_eq!(seed_file.billing_pairs.len(), 1);
+    let seed_pair = &seed_file.billing_pairs[0];
+    assert_eq!(seed_pair.id, "bp:c1-outer:kandabashi-takaracho");
+    assert_eq!(
+        seed_pair.prices.len(),
+        2,
+        "seed must have exactly 2 price records"
+    );
+    assert_eq!(seed_pair.prices[0].amount_yen, 300);
+    assert_eq!(seed_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
+    assert_eq!(
+        seed_pair.prices[0].effective_to.as_deref(),
+        Some("2026-09-30T15:00:00Z")
+    );
+    assert_eq!(seed_pair.prices[1].amount_yen, 300);
+    assert_eq!(seed_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+    assert_eq!(seed_pair.prices[1].effective_to, None);
+
+    // 2. Verify that the generated graph.json fixture retains both price records
+    let graph_str = include_str!("../../../fixtures/generated/graph.json");
+    let graph: Graph =
+        serde_json::from_str(graph_str).expect("fixtures/generated/graph.json must deserialize");
+    assert_eq!(graph.billing_pairs.len(), 1);
+    let graph_pair = &graph.billing_pairs[0];
+    assert_eq!(graph_pair.id, "bp:c1-outer:kandabashi-takaracho");
+    assert_eq!(
+        graph_pair.prices.len(),
+        2,
+        "graph.json billingPairs[0].prices must contain 2 records"
+    );
+    assert_eq!(graph_pair.prices[0].amount_yen, 300);
+    assert_eq!(graph_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
+    assert_eq!(
+        graph_pair.prices[0].effective_to.as_deref(),
+        Some("2026-09-30T15:00:00Z")
+    );
+    assert_eq!(graph_pair.prices[1].amount_yen, 300);
+    assert_eq!(graph_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+    assert_eq!(graph_pair.prices[1].effective_to, None);
+}

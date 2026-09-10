@@ -79818,7 +79818,18 @@
       ],
       "status": "verified",
       "vehicleProfile": "passenger-car-etc",
-      "prices": []
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z",
+          "effectiveTo": null
+        }
+      ]
     }
   ],
   "forbiddenTransitions": [

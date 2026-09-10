@@ -8,10 +8,26 @@
   "coverage": {
     "area": "Tokyo Inner Circular Route (C1) and connecting ramps",
     "verifiedEntries": [
+      "e:w1091280541:0:f",
+      "e:w378284514:0:f",
+      "e:w4848922:0:f",
+      "e:w4848936:0:f",
+      "e:w4853797:0:f",
+      "e:w4853801:0:f",
+      "e:w916571610:0:f",
+      "e:w916571615:0:f",
       "e:w92243921:0:f"
     ],
     "verifiedExits": [
-      "e:w297864314:11:f"
+      "e:w1232166619:0:f",
+      "e:w203832842:4:f",
+      "e:w203873821:2:f",
+      "e:w276920911:6:f",
+      "e:w297864314:11:f",
+      "e:w390441534:2:f",
+      "e:w45068171:1:f",
+      "e:w4849052:8:f",
+      "e:w944671542:0:f"
     ]
   },
   "vehicleProfile": "passenger-car-etc",
@@ -20,38 +36,22 @@
   "attribution": "© OpenStreetMap contributors",
   "odblLicenseUrl": "https://www.openstreetmap.org/copyright",
   "unverifiedSections": [
-    "entry:e:w1091280541:0:f (首都高速道路)",
     "entry:e:w176046280:0:f (首都高速道路)",
     "entry:e:w23705286:0:f (汐留入口)",
     "entry:e:w24402014:0:f (飯倉入口)",
     "entry:e:w27155742:0:f (神田橋入口)",
-    "entry:e:w378284514:0:f (宝町入口)",
     "entry:e:w46151740:0:f",
-    "entry:e:w4848922:0:f (銀座入口)",
-    "entry:e:w4848936:0:f (銀座入口)",
-    "entry:e:w4853797:0:f",
-    "entry:e:w4853801:0:f (芝公園入口)",
     "entry:e:w861095931:0:f",
     "entry:e:w861095931:1:f",
-    "entry:e:w916571610:0:f (霞が関入口)",
-    "entry:e:w916571615:0:f (霞が関入口)",
     "excluded-route: Metropolitan Expressway lines other than C1 (e.g. B, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, K, S, Y)",
     "exit:e:w1232083939:0:f",
-    "exit:e:w1232166619:0:f",
     "exit:e:w203035343:1:f (神田橋出口)",
     "exit:e:w203301443:0:f (首都高速8号線)",
-    "exit:e:w203832842:4:f (飯倉出口)",
-    "exit:e:w203873821:2:f (芝公園出口)",
     "exit:e:w205411855:4:f (銀座出口)",
-    "exit:e:w276920911:6:f (首都高速都心環状線)",
-    "exit:e:w390441534:2:f (神田橋出口)",
     "exit:e:w44779775:16:f",
-    "exit:e:w45068171:1:f (汐留出口)",
-    "exit:e:w4849052:8:f",
     "exit:e:w760748024:7:f",
     "exit:e:w760760233:11:f (新富町出口)",
     "exit:e:w944138315:0:f (芝公園出口)",
-    "exit:e:w944671542:0:f (芝公園出口)",
     "unsupported-restriction: 1 disconnected via-way turn restrictions (disconnected) excluded from static graph",
     "unsupported-restriction: 14 conditional turn restrictions (conditional) excluded from static graph",
     "unsupported-restriction: 5 turn restrictions missing via member (no via) excluded from static graph",
@@ -59,17 +59,65 @@
   ],
   "provenance": [
     {
+      "id": "bp:c1-inner:daikancho-kasumigaseki",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-10",
+      "notes": "Verified 1-section-ahead adjacency on C1 inner loop from Daikancho entry to Kasumigaseki exit. Entry way 1091280541 is Daikancho entry ramp connecting from Daikancho-dori (Way 144967546); exit way 1232166619 is Kasumigaseki exit ramp connecting to Roppongi-dori (Way 23581608) and Kokkai-dori (Way 233086397). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Daikancho to Kasumigaseki toll distance 2.3km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+    },
+    {
+      "id": "bp:c1-inner:ginza-kyobashi",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-10",
+      "notes": "Verified 1-section-ahead adjacency on C1 inner loop from Ginza entry to Kyobashi exit. Exit way 4849052 is Kyobashi inner loop exit ramp connecting to Kajibashi-dori (Way 178988162). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Ginza to Kyobashi toll distance 0.6km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+    },
+    {
+      "id": "bp:c1-inner:kasumigaseki-shibakoen",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-10",
+      "notes": "Verified 1-section-ahead adjacency on C1 inner loop from Kasumigaseki entry to Shibakoen exit (Iikura exit exists only on outer loop). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Kasumigaseki to Shibakoen toll distance 3.7km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+    },
+    {
+      "id": "bp:c1-inner:shibakoen-shiodome",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-10",
+      "notes": "Verified 1-section-ahead adjacency on C1 inner loop from Shibakoen entry to Shiodome exit. Entry way 4853797 is Shibakoen inner loop entry ramp connecting from Hibiya-dori (Way 1352273264); exit way 45068171 is Shiodome exit. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Shibakoen to Shiodome toll distance 2.4km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+    },
+    {
+      "id": "bp:c1-inner:takaracho-kandabashi",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-10",
+      "notes": "Verified 1-section-ahead adjacency on C1 inner loop from Takaracho entry to Kandabashi exit (Edobashi and Gofukubashi entries/exits decommissioned in 2021). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Takaracho to Kandabashi toll distance 1.7km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+    },
+    {
+      "id": "bp:c1-outer:ginza-shibakoen",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-10",
+      "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Ginza entry to Shibakoen exit. Exit way 944671542 is Shibakoen exit ramp. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Ginza to Shibakoen toll distance 3.4km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+    },
+    {
       "id": "bp:c1-outer:kandabashi-takaracho",
       "source": "https://www.shutoko.jp/use/network/map/",
       "sourceDate": "2026-09-10",
       "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kandabashi entry to Takaracho exit (Gofukubashi and Edobashi exits decommissioned in 2021). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Kandabashi to Takaracho toll distance 1.7km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+    },
+    {
+      "id": "bp:c1-outer:kasumigaseki-daikancho",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-10",
+      "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Kasumigaseki to Daikancho toll distance 2.3km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+    },
+    {
+      "id": "bp:c1-outer:shibakoen-iikura",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-10",
+      "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Shibakoen entry to Iikura exit. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Shibakoen to Iikura toll distance 1.6km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
     }
   ],
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "1fdb2124e2d11bfc49d95c2db6d9fdc50ed7e89a527cb57f0138f3e3055927d6",
-      "byteLength": 2119520
+      "sha256": "4c73e3a6f2fb9d6ea79ddd96eb26e2676f9e68567f988be953d04587aa56da37",
+      "byteLength": 2145739
     },
     {
       "path": "snap-index.json",

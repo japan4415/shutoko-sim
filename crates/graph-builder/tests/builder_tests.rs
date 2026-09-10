@@ -2805,50 +2805,93 @@ fn test_issue6_item4_invalid_dates_and_engine_version() {
 }
 
 #[test]
-fn test_issue9_billing_pairs_seed_prices_verified_and_output_to_graph() {
-    use shutoko_graph_builder::{BillingPairsSeedFile, Graph};
+fn test_all_billing_pairs_seed_prices_verified_and_output_to_graph() {
+    use shutoko_graph_builder::{BillingPairsSeedFile, Graph, VerificationStatus};
 
-    // 1. Verify that the declarative seed parses and contains the two expected price records
+    // 1. Verify that the declarative seed parses and contains all 9 expected billing pairs
     let seed_str = include_str!("../../../data/billing-pairs-seed.json");
     let seed_file: BillingPairsSeedFile =
         serde_json::from_str(seed_str).expect("data/billing-pairs-seed.json must deserialize");
-    assert_eq!(seed_file.billing_pairs.len(), 1);
-    let seed_pair = &seed_file.billing_pairs[0];
-    assert_eq!(seed_pair.id, "bp:c1-outer:kandabashi-takaracho");
     assert_eq!(
-        seed_pair.prices.len(),
-        2,
-        "seed must have exactly 2 price records"
+        seed_file.billing_pairs.len(),
+        9,
+        "seed must have exactly 9 billing pairs"
     );
-    assert_eq!(seed_pair.prices[0].amount_yen, 300);
-    assert_eq!(seed_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
-    assert_eq!(
-        seed_pair.prices[0].effective_to.as_deref(),
-        Some("2026-09-30T15:00:00Z")
-    );
-    assert_eq!(seed_pair.prices[1].amount_yen, 300);
-    assert_eq!(seed_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-    assert_eq!(seed_pair.prices[1].effective_to, None);
 
-    // 2. Verify that the generated graph.json fixture retains both price records
+    let expected_pair_ids = [
+        "bp:c1-outer:kandabashi-takaracho",
+        "bp:c1-outer:kasumigaseki-daikancho",
+        "bp:c1-outer:ginza-shibakoen",
+        "bp:c1-outer:shibakoen-iikura",
+        "bp:c1-inner:kasumigaseki-shibakoen",
+        "bp:c1-inner:daikancho-kasumigaseki",
+        "bp:c1-inner:shibakoen-shiodome",
+        "bp:c1-inner:ginza-kyobashi",
+        "bp:c1-inner:takaracho-kandabashi",
+    ];
+
+    for expected_id in &expected_pair_ids {
+        let seed_pair = seed_file
+            .billing_pairs
+            .iter()
+            .find(|p| p.id == *expected_id)
+            .unwrap_or_else(|| panic!("seed pair {} not found in seed file", expected_id));
+
+        assert_eq!(seed_pair.status, VerificationStatus::Verified);
+        assert!(seed_pair.one_section_ahead_verified);
+        assert_eq!(
+            seed_pair.prices.len(),
+            2,
+            "seed pair {} must have exactly 2 price records",
+            expected_id
+        );
+        assert_eq!(seed_pair.prices[0].amount_yen, 300);
+        assert_eq!(seed_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
+        assert_eq!(
+            seed_pair.prices[0].effective_to.as_deref(),
+            Some("2026-09-30T15:00:00Z")
+        );
+        assert_eq!(seed_pair.prices[1].amount_yen, 300);
+        assert_eq!(seed_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+        assert_eq!(seed_pair.prices[1].effective_to, None);
+    }
+
+    // 2. Verify that the generated graph.json fixture retains all 9 billing pairs with prices
     let graph_str = include_str!("../../../fixtures/generated/graph.json");
     let graph: Graph =
         serde_json::from_str(graph_str).expect("fixtures/generated/graph.json must deserialize");
-    assert_eq!(graph.billing_pairs.len(), 1);
-    let graph_pair = &graph.billing_pairs[0];
-    assert_eq!(graph_pair.id, "bp:c1-outer:kandabashi-takaracho");
     assert_eq!(
-        graph_pair.prices.len(),
-        2,
-        "graph.json billingPairs[0].prices must contain 2 records"
+        graph.billing_pairs.len(),
+        9,
+        "graph.json must contain exactly 9 billing pairs"
     );
-    assert_eq!(graph_pair.prices[0].amount_yen, 300);
-    assert_eq!(graph_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
-    assert_eq!(
-        graph_pair.prices[0].effective_to.as_deref(),
-        Some("2026-09-30T15:00:00Z")
-    );
-    assert_eq!(graph_pair.prices[1].amount_yen, 300);
-    assert_eq!(graph_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-    assert_eq!(graph_pair.prices[1].effective_to, None);
+
+    for expected_id in &expected_pair_ids {
+        let graph_pair = graph
+            .billing_pairs
+            .iter()
+            .find(|p| p.id == *expected_id)
+            .unwrap_or_else(|| panic!("graph pair {} not found in graph.json", expected_id));
+
+        assert_eq!(graph_pair.status, VerificationStatus::Verified);
+        assert_eq!(
+            graph_pair.prices.len(),
+            2,
+            "graph.json billing pair {} prices must contain 2 records",
+            expected_id
+        );
+        assert_eq!(graph_pair.prices[0].amount_yen, 300);
+        assert_eq!(graph_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
+        assert_eq!(
+            graph_pair.prices[0].effective_to.as_deref(),
+            Some("2026-09-30T15:00:00Z")
+        );
+        assert_eq!(graph_pair.prices[1].amount_yen, 300);
+        assert_eq!(graph_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+        assert_eq!(graph_pair.prices[1].effective_to, None);
+    }
 }
+
+
+
+

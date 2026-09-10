@@ -26,6 +26,206 @@
           "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
+    },
+    {
+      "id": "bp:c1-outer:kasumigaseki-daikancho",
+      "entryOsmWayId": 916571610,
+      "exitOsmWayId": 276920911,
+      "anchorOsmNodeId": 577255571,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-10",
+        "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Kasumigaseki to Daikancho toll distance 2.3km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+      },
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bp:c1-outer:ginza-shibakoen",
+      "entryOsmWayId": 4848922,
+      "exitOsmWayId": 944671542,
+      "anchorOsmNodeId": 31254160,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-10",
+        "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Ginza entry to Shibakoen exit. Exit way 944671542 is Shibakoen exit ramp. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Ginza to Shibakoen toll distance 3.4km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+      },
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bp:c1-outer:shibakoen-iikura",
+      "entryOsmWayId": 4853801,
+      "exitOsmWayId": 203832842,
+      "anchorOsmNodeId": 31296971,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-10",
+        "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Shibakoen entry to Iikura exit. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Shibakoen to Iikura toll distance 1.6km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+      },
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bp:c1-inner:kasumigaseki-shibakoen",
+      "entryOsmWayId": 916571615,
+      "exitOsmWayId": 203873821,
+      "anchorOsmNodeId": 264877748,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-10",
+        "notes": "Verified 1-section-ahead adjacency on C1 inner loop from Kasumigaseki entry to Shibakoen exit (Iikura exit exists only on outer loop). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Kasumigaseki to Shibakoen toll distance 3.7km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+      },
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bp:c1-inner:daikancho-kasumigaseki",
+      "entryOsmWayId": 1091280541,
+      "exitOsmWayId": 1232166619,
+      "anchorOsmNodeId": 297945194,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-10",
+        "notes": "Verified 1-section-ahead adjacency on C1 inner loop from Daikancho entry to Kasumigaseki exit. Entry way 1091280541 is Daikancho entry ramp connecting from Daikancho-dori (Way 144967546); exit way 1232166619 is Kasumigaseki exit ramp connecting to Roppongi-dori (Way 23581608) and Kokkai-dori (Way 233086397). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Daikancho to Kasumigaseki toll distance 2.3km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+      },
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bp:c1-inner:shibakoen-shiodome",
+      "entryOsmWayId": 4853797,
+      "exitOsmWayId": 45068171,
+      "anchorOsmNodeId": 31295430,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-10",
+        "notes": "Verified 1-section-ahead adjacency on C1 inner loop from Shibakoen entry to Shiodome exit. Entry way 4853797 is Shibakoen inner loop entry ramp connecting from Hibiya-dori (Way 1352273264); exit way 45068171 is Shiodome exit. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Shibakoen to Shiodome toll distance 2.4km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+      },
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bp:c1-inner:ginza-kyobashi",
+      "entryOsmWayId": 4848936,
+      "exitOsmWayId": 4849052,
+      "anchorOsmNodeId": 31254341,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-10",
+        "notes": "Verified 1-section-ahead adjacency on C1 inner loop from Ginza entry to Kyobashi exit. Exit way 4849052 is Kyobashi inner loop exit ramp connecting to Kajibashi-dori (Way 178988162). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Ginza to Kyobashi toll distance 0.6km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+      },
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bp:c1-inner:takaracho-kandabashi",
+      "entryOsmWayId": 378284514,
+      "exitOsmWayId": 390441534,
+      "anchorOsmNodeId": 1891818143,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-10",
+        "notes": "Verified 1-section-ahead adjacency on C1 inner loop from Takaracho entry to Kandabashi exit (Edobashi and Gofukubashi entries/exits decommissioned in 2021). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Takaracho to Kandabashi toll distance 1.7km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+      },
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
+        }
+      ]
     }
   ]
 }

@@ -20,52 +20,74 @@ fn real_graph_deserialization_and_schema_validation() {
     assert!(!g.edges.is_empty(), "edges must not be empty");
     assert_eq!(
         g.billing_pairs.len(),
-        1,
-        "exactly 1 billing pair expected in fixture"
+        9,
+        "exactly 9 billing pairs expected in fixture"
     );
 
-    let pair = &g.billing_pairs[0];
-    assert_eq!(pair.id, "bp:c1-outer:kandabashi-takaracho");
-    assert_eq!(pair.entry_id, "e:w92243921:0:f");
-    assert_eq!(pair.exit_id, "e:w297864314:11:f");
-    assert_eq!(pair.anchor_node_id, "n:499831338");
-    assert_eq!(
-        pair.prices.len(),
-        2,
-        "billingPairs[0].prices must have 2 records"
-    );
-    assert_eq!(pair.prices[0].amount_yen, 300);
-    assert_eq!(pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
-    assert_eq!(
-        pair.prices[0].effective_to.as_deref(),
-        Some("2026-09-30T15:00:00Z")
-    );
-    assert_eq!(pair.prices[1].amount_yen, 300);
-    assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-    assert_eq!(pair.prices[1].effective_to, None);
-
-    // Verify billing pair is a simple path (no node revisited on the direct entry-to-exit path)
     let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
         g.edges.iter().map(|e| (e.id.as_str(), e)).collect();
 
-    let mut seen_nodes = BTreeSet::new();
-    let first_entry = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()];
-    seen_nodes.insert(first_entry.from.as_str());
-
-    for eid in &pair.entry_to_anchor_edge_ids {
-        let e = edge_map[eid.as_str()];
-        assert!(
-            seen_nodes.insert(e.to.as_str()),
-            "node {} revisited in entry_to_anchor",
-            e.to
+    for pair in &g.billing_pairs {
+        assert_eq!(
+            pair.status,
+            shutoko_routing_core::VerificationStatus::Verified,
+            "billing pair {} must be verified",
+            pair.id
         );
+        assert_eq!(
+            pair.prices.len(),
+            2,
+            "billing pair {} prices must have 2 records",
+            pair.id
+        );
+        assert_eq!(pair.prices[0].amount_yen, 300);
+        assert_eq!(pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
+        assert_eq!(
+            pair.prices[0].effective_to.as_deref(),
+            Some("2026-09-30T15:00:00Z")
+        );
+        assert_eq!(pair.prices[1].amount_yen, 300);
+        assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+        assert_eq!(pair.prices[1].effective_to, None);
+
+        // Verify billing pair is a simple path (no node revisited on direct entry-to-exit path)
+        let mut seen_nodes = BTreeSet::new();
+        let first_entry = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()];
+        seen_nodes.insert(first_entry.from.as_str());
+
+        for eid in &pair.entry_to_anchor_edge_ids {
+            let e = edge_map[eid.as_str()];
+            assert!(
+                seen_nodes.insert(e.to.as_str()),
+                "pair {}: node {} revisited in entry_to_anchor",
+                pair.id,
+                e.to
+            );
+        }
+        for eid in &pair.anchor_to_exit_edge_ids {
+            let e = edge_map[eid.as_str()];
+            assert!(
+                seen_nodes.insert(e.to.as_str()),
+                "pair {}: node {} revisited in anchor_to_exit",
+                pair.id,
+                e.to
+            );
+        }
     }
-    for eid in &pair.anchor_to_exit_edge_ids {
-        let e = edge_map[eid.as_str()];
+
+    // Verify manifest unverifiedSections has no rejected elements
+    let manifest_str = include_str!("../../../fixtures/generated/manifest.json");
+    let manifest: serde_json::Value =
+        serde_json::from_str(manifest_str).expect("manifest.json must deserialize");
+    let unverified = manifest["unverifiedSections"]
+        .as_array()
+        .expect("manifest.unverifiedSections must be array");
+    for item in unverified {
+        let s = item.as_str().expect("unverifiedSections item must be string");
         assert!(
-            seen_nodes.insert(e.to.as_str()),
-            "node {} revisited in anchor_to_exit",
-            e.to
+            !s.contains("rejected:"),
+            "manifest.unverifiedSections must not contain rejected elements, got: {}",
+            s
         );
     }
 }
@@ -84,8 +106,11 @@ fn real_graph_routing_core_search_returns_candidates() {
         pricing_at: "2026-09-10T00:00:00Z".into(),
     };
 
-    let limits = SearchLimits::default();
+    let mut limits = SearchLimits::default();
+    limits.max_expanded_states = 1_000_000;
+    let start = std::time::Instant::now();
     let result = search(&g, &request, &limits).expect("search must succeed on real graph");
+    eprintln!("Kandabashi search took {:?}, candidates: {}", start.elapsed(), result.candidates.len());
 
     assert!(
         result.status == "ok" || result.status == "truncated",
@@ -230,3 +255,89 @@ fn real_graph_search_json_wasm_contract_parity() {
     assert!(!candidates.is_empty());
     assert_eq!(candidates[0]["toll"]["amountYen"].as_u64(), Some(300));
 }
+
+#[test]
+fn test_all_billing_pairs_loop_search_contract() {
+    let g = real_graph();
+    let limits = SearchLimits::default();
+    let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
+        g.edges.iter().map(|e| (e.id.as_str(), e)).collect();
+
+    let start_total = std::time::Instant::now();
+
+    for pair in &g.billing_pairs {
+        let entry_edge = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()];
+        let origin_node_id = entry_edge.from.clone();
+
+        let req_start = std::time::Instant::now();
+        let request = SearchRequest {
+            request_id: format!("req-loop-{}", pair.id),
+            release_id: g.release_id.clone(),
+            origin_node_id: origin_node_id.clone(),
+            min_minutes: 15,
+            max_minutes: 60,
+            vehicle_profile: "passenger-car-etc".into(),
+            pricing_at: "2026-09-10T00:00:00Z".into(),
+        };
+
+        let result = search(&g, &request, &limits)
+            .unwrap_or_else(|e| panic!("search must succeed for pair {}: {}", pair.id, e));
+
+        eprintln!(
+            "SEARCH for pair {} (origin={}): status={}, candidates_count={}",
+            pair.id, origin_node_id, result.status, result.candidates.len()
+        );
+        for (ci, c) in result.candidates.iter().enumerate() {
+            eprintln!(
+                "  candidate[{}]: pair_id={}, loop_dist={}, total_dist={}, dur={}s, toll={:?}",
+                ci, c.toll.billing_pair_id, c.r#loop.distance_meters, c.distance_meters, c.duration.plan_seconds, c.toll.amount_yen
+            );
+        }
+
+        let candidate = result
+            .candidates
+            .iter()
+            .find(|c| c.toll.billing_pair_id == pair.id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "candidate with billing_pair_id {} must be found from origin {}",
+                    pair.id, origin_node_id
+                )
+            });
+
+        assert_eq!(
+            candidate.toll.amount_yen,
+            Some(300),
+            "toll amount for pair {} must be 300 yen",
+            pair.id
+        );
+        assert!(
+            candidate.r#loop.distance_meters > 10000,
+            "pair {}: C1 loop distance must be > 10km, got {}m",
+            pair.id,
+            candidate.r#loop.distance_meters
+        );
+
+        eprintln!(
+            "Pair {} verified in {:?}: loop_dist={}m, total_dist={}m, dur={}s",
+            pair.id,
+            req_start.elapsed(),
+            candidate.r#loop.distance_meters,
+            candidate.distance_meters,
+            candidate.duration.plan_seconds
+        );
+    }
+
+    let total_elapsed = start_total.elapsed();
+    eprintln!(
+        "All {} billing pairs loop search verified in {:?}",
+        g.billing_pairs.len(),
+        total_elapsed
+    );
+    assert!(
+        total_elapsed < std::time::Duration::from_secs(180),
+        "total search time must be under 3 minutes, took {:?}",
+        total_elapsed
+    );
+}
+

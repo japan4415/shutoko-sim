@@ -1476,22 +1476,22 @@ fn test_real_c1_turn_restriction_balance() {
     let (_graph, _snap, report) = build_topology_with_report(&resp, &config).unwrap();
 
     assert_eq!(
-        report.total_relations, 151,
-        "C1 real dataset contains exactly 151 turn restriction relations"
+        report.total_relations, 195,
+        "C1 real dataset contains exactly 195 turn restriction relations"
     );
     assert!(
         report.is_balanced(),
-        "all 151 relations must be accounted for without leakage: accounted={}, total={}",
+        "all 195 relations must be accounted for without leakage: accounted={}, total={}",
         report.total_accounted(),
         report.total_relations
     );
-    assert_eq!(report.no_turn_via_node, 35);
-    assert_eq!(report.only_turn_via_node, 28);
-    assert_eq!(report.only_turn_edge_pairs, 23);
-    assert_eq!(report.via_way, 7);
-    assert_eq!(report.skipped_conditional, 8);
+    assert_eq!(report.no_turn_via_node, 47);
+    assert_eq!(report.only_turn_via_node, 37);
+    assert_eq!(report.only_turn_edge_pairs, 29);
+    assert_eq!(report.via_way, 9);
+    assert_eq!(report.skipped_conditional, 14);
     assert_eq!(report.skipped_no_via, 5);
-    assert_eq!(report.skipped_missing_elements, 67);
+    assert_eq!(report.skipped_missing_elements, 82);
     assert_eq!(report.skipped_disconnected, 1);
     assert_eq!(report.skipped_only_via_way, 0);
     assert_eq!(report.skipped_unrecognized, 0);
@@ -1512,7 +1512,7 @@ fn test_real_c1_first_exit_and_benchmark() {
 
     let config = TopologyConfig::default();
     let (graph, _snap) = build_topology(&resp, &config).unwrap();
-    assert_eq!(graph.edges.len(), 7422, "C1 graph must have 7,422 edges");
+    assert_eq!(graph.edges.len(), 9726, "C1 graph must have 9,726 edges");
 
     // Anchor node for Kandabashi entry is n:499831338
     let anchor = "n:499831338";
@@ -1524,7 +1524,7 @@ fn test_real_c1_first_exit_and_benchmark() {
     let elapsed = start.elapsed();
 
     eprintln!(
-        "Real C1 (7422 edges) find_first_exits_from_anchor elapsed: {:?}, dist: {}m, exits: {:?}",
+        "Real C1 (9726 edges) find_first_exits_from_anchor elapsed: {:?}, dist: {}m, exits: {:?}",
         elapsed, min_dist, first_exits
     );
 

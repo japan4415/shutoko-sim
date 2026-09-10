@@ -109,22 +109,21 @@ fn real_graph_routing_core_search_returns_candidates() {
         pricing_at: "2026-09-10T00:00:00Z".into(),
     };
 
-    let limits = SearchLimits {
-        max_expanded_states: 1_000_000,
-        ..SearchLimits::default()
-    };
+    let limits = SearchLimits::default();
     let start = std::time::Instant::now();
     let result = search(&g, &request, &limits).expect("search must succeed on real graph");
     eprintln!(
-        "Kandabashi search took {:?}, candidates: {}",
+        "Kandabashi search took {:?}, expanded: {}, candidates: {}",
         start.elapsed(),
+        result.expanded_states,
         result.candidates.len()
     );
 
+    assert_eq!(result.status, "ok", "search status must be ok");
     assert!(
-        result.status == "ok" || result.status == "truncated",
-        "search status must be ok or truncated, got: {}",
-        result.status
+        result.expanded_states < 50_000,
+        "expanded states must be well below 100,000, got: {}",
+        result.expanded_states
     );
     assert_eq!(result.request_id, "req-c1-kandabashi-1");
     assert_eq!(result.release_id, "c1-real-v1");
@@ -173,12 +172,7 @@ fn real_graph_routing_core_search_returns_candidates() {
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn real_graph_pricing_intervals_and_ranking_transitions() {
     let g = real_graph();
-    // 8 ペア分の探索を 1 回の検索で完了させるには default の 100,000 では不足し、
-    // 538,751 expansion 程度まで進むと候補が出る（実測: 入口 n:1070862943 で 528,574・候補 2 件）。
-    let limits = SearchLimits {
-        max_expanded_states: 1_000_000,
-        ..SearchLimits::default()
-    };
+    let limits = SearchLimits::default();
 
     let make_request = |pricing_at: &str| SearchRequest {
         request_id: format!("req-{}", pricing_at),
@@ -193,7 +187,7 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
     // 1. Boundary: 1 second before 2026-10-01 revision (2026-09-30T14:59:59Z) -> pre-revision record
     let res_before_boundary = search(&g, &make_request("2026-09-30T14:59:59Z"), &limits)
         .expect("search must succeed at boundary-1s");
-    assert!(res_before_boundary.status == "ok" || res_before_boundary.status == "truncated");
+    assert_eq!(res_before_boundary.status, "ok");
     assert_eq!(res_before_boundary.ranking_mode, "time_per_yen");
     let c = &res_before_boundary.candidates[0];
     assert_eq!(c.toll.amount_yen, Some(300));
@@ -206,7 +200,7 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
     // 2. Exactly at revision boundary (2026-09-30T15:00:00Z) -> post-revision record
     let res_at_boundary = search(&g, &make_request("2026-09-30T15:00:00Z"), &limits)
         .expect("search must succeed at boundary");
-    assert!(res_at_boundary.status == "ok" || res_at_boundary.status == "truncated");
+    assert_eq!(res_at_boundary.status, "ok");
     assert_eq!(res_at_boundary.ranking_mode, "time_per_yen");
     let c = &res_at_boundary.candidates[0];
     assert_eq!(c.toll.amount_yen, Some(300));
@@ -219,7 +213,7 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
     // 3. Post-revision (e.g. 2026-10-01T00:00:00Z) -> post-revision record
     let res_post = search(&g, &make_request("2026-10-01T00:00:00Z"), &limits)
         .expect("search must succeed post-revision");
-    assert!(res_post.status == "ok" || res_post.status == "truncated");
+    assert_eq!(res_post.status, "ok");
     assert_eq!(res_post.ranking_mode, "time_per_yen");
     let c = &res_post.candidates[0];
     assert_eq!(c.toll.amount_yen, Some(300));
@@ -232,7 +226,7 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
     // 4. Prior to 2022-03-31T15:00:00Z (e.g. 2022-01-01T00:00:00Z) -> unknown toll, fall back to shutoko_time
     let res_prior = search(&g, &make_request("2022-01-01T00:00:00Z"), &limits)
         .expect("search must succeed prior to tariff start");
-    assert!(res_prior.status == "ok" || res_prior.status == "truncated");
+    assert_eq!(res_prior.status, "ok");
     assert_eq!(res_prior.ranking_mode, "shutoko_time");
     let c = &res_prior.candidates[0];
     assert_eq!(c.toll.amount_yen, None);
@@ -255,18 +249,13 @@ fn real_graph_search_json_wasm_contract_parity() {
     })
     .to_string();
 
-    // default の max_expanded_states=100,000 では 8 ペア分の探索が完了しないため上限を最大値に引き上げる
-    let limits_json = r#"{"maxExpandedStates": 1000000}"#;
+    let limits_json = "{}";
     let res_str = search_json(graph_json, &request_json, limits_json)
         .expect("search_json must succeed with real graph");
 
     let val: serde_json::Value = serde_json::from_str(&res_str).unwrap();
     let st = val["status"].as_str().unwrap();
-    assert!(
-        st == "ok" || st == "truncated",
-        "JSON search status must be ok or truncated, got: {}",
-        st
-    );
+    assert_eq!(st, "ok", "JSON search status must be ok, got: {}", st);
     assert_eq!(val["rankingMode"].as_str().unwrap(), "time_per_yen");
     let candidates = val["candidates"].as_array().unwrap();
     assert!(!candidates.is_empty());
@@ -274,30 +263,41 @@ fn real_graph_search_json_wasm_contract_parity() {
 }
 
 /// 代表ペア定数: 探索コアの既定上限では全ペアの候補が得られないため、
-/// 代表ペア（外回り 1・内回り 2）のみ実探索を行い、残りは存在確認とする。
-/// 全ペア対応は routing-core の候補生成改善（別 issue）に依存。
-const REPRESENTATIVE_SEARCH_PAIR_IDS: [&str; 3] = [
+/// 一般道網が連結している課金ペア（5ペア）:
+/// 既定 SearchLimits::default()（max_expanded_states: 100,000）で
+/// 入口エッジ from ノードを起点とする探索により自ペア Candidate（300円・10km以上・status == "ok"）が得られる。
+const CONNECTED_SEARCH_PAIR_IDS: [&str; 5] = [
     "bp:c1-outer:kandabashi-takaracho",
     "bp:c1-inner:takaracho-kandabashi",
     "bp:c1-inner:kasumigaseki-shibakoen",
+    "bp:c1-inner:shibakoen-shiodome",
+    "bp:c1-outer:shibakoen-iikura",
 ];
 
-// 代表ペアのみ実探索を行い、残りは fixture 上の存在確認（verified・料金レコード・経路ワイヤリング）に留める契約テスト。
-// debug ビルド実測で full search が重いため、#[ignore] を付与し CI では --release -- --ignored で実行する。
+/// 一般道網が OSM 取得境界により切断されている課金ペア（3ペア、analyze-002 F7）:
+/// Shibakoen 出口（外回り n:254360532、13ノード孤立成分）や
+/// Daikancho 出口/入口（61ノード/16ノード孤立成分）など、
+/// OSM 取得範囲（fetch-osm.sh の bbox / リンク走査境界）に起因して一般道側が物理的に切断されているため、
+/// 候補なし（status == "no_candidates"）となる。
+/// 既定 limits で truncated にならず、expanded_states も上限を大きく下回ることを固定する。
+const DISCONNECTED_SEARCH_PAIR_IDS: [&str; 3] = [
+    "bp:c1-outer:ginza-shibakoen",
+    "bp:c1-outer:kasumigaseki-daikancho",
+    "bp:c1-inner:daikancho-kasumigaseki",
+];
+
 #[test]
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
-fn test_representative_billing_pairs_loop_search_and_all_existence_contract() {
+fn test_all_billing_pairs_search_and_connectivity_contract() {
     let g = real_graph();
-    let limits = SearchLimits {
-        max_expanded_states: 1_000_000,
-        ..SearchLimits::default()
-    };
+    let limits = SearchLimits::default();
     let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
         g.edges.iter().map(|e| (e.id.as_str(), e)).collect();
 
     let start_total = std::time::Instant::now();
 
-    for id in REPRESENTATIVE_SEARCH_PAIR_IDS {
+    // 1. 一般道が連結している 5 ペアの探索契約
+    for id in CONNECTED_SEARCH_PAIR_IDS {
         let pair = g
             .billing_pairs
             .iter()
@@ -306,13 +306,24 @@ fn test_representative_billing_pairs_loop_search_and_all_existence_contract() {
         let entry_edge = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()];
         let origin_node_id = entry_edge.from.clone();
 
+        let max_minutes = if id == "bp:c1-inner:shibakoen-shiodome" {
+            // Shibakoen-Shiodome の実走行計画時間は約28.8分（base=1431s, buffer=300s）。
+            // maxMinutes=60 の場合、一般道で約14分（848s）離れた霞が関入口（kasumigaseki-shibakoen, 首都高1205s/300円）が
+            // time_per_yen 比率（1205/300 > 1136/300）により上位にランクインし、同一の内回り C1 ループであるため
+            // 80% Jaccard 類似度除外により芝公園入口側の候補が除外される。
+            // 計画時間30分枠では遠隔の霞が関（plan=2464s ≈ 41分）が時間窓外となり、自ペア候補が採択される。
+            30
+        } else {
+            60
+        };
+
         let req_start = std::time::Instant::now();
         let request = SearchRequest {
             request_id: format!("req-loop-{}", pair.id),
             release_id: g.release_id.clone(),
             origin_node_id: origin_node_id.clone(),
             min_minutes: 15,
-            max_minutes: 60,
+            max_minutes,
             vehicle_profile: "passenger-car-etc".into(),
             pricing_at: "2026-09-10T00:00:00Z".into(),
         };
@@ -328,6 +339,18 @@ fn test_representative_billing_pairs_loop_search_and_all_existence_contract() {
             result.expanded_states,
             result.candidates.len(),
             req_start.elapsed()
+        );
+
+        assert_eq!(
+            result.status, "ok",
+            "search for connected pair {} must have status 'ok', got {}",
+            pair.id, result.status
+        );
+        assert!(
+            result.expanded_states < 50_000,
+            "pair {}: expanded states must be well below 100,000, got: {}",
+            pair.id,
+            result.expanded_states
         );
 
         let candidate = result
@@ -355,12 +378,67 @@ fn test_representative_billing_pairs_loop_search_and_all_existence_contract() {
         );
     }
 
-    // 残り 5 ペアは full search を省略し、fixture 上の存在確認のみ行う
-    let mut existence_checked = 0;
+    // 2. OSM データ境界により一般道が切断されている 3 ペアの契約
+    // 既定 limits で truncated にならず（expanded_states が上限を大きく下回る）、
+    // 自ペアの Candidate は生成されないことを固定。
+    // 起点周辺に他の連結入口が存在する場合は他ペア候補により status == "ok" となり得るが、
+    // 孤立成分内（Ginza 外回り等）では status == "no_candidates" となる。
+    for id in DISCONNECTED_SEARCH_PAIR_IDS {
+        let pair = g
+            .billing_pairs
+            .iter()
+            .find(|p| p.id == id)
+            .unwrap_or_else(|| panic!("billing pair {} must exist in fixture", id));
+        let entry_edge = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()];
+        let origin_node_id = entry_edge.from.clone();
+
+        let req_start = std::time::Instant::now();
+        let request = SearchRequest {
+            request_id: format!("req-loop-{}", pair.id),
+            release_id: g.release_id.clone(),
+            origin_node_id: origin_node_id.clone(),
+            min_minutes: 15,
+            max_minutes: 60,
+            vehicle_profile: "passenger-car-etc".into(),
+            pricing_at: "2026-09-10T00:00:00Z".into(),
+        };
+
+        let result = search(&g, &request, &limits)
+            .unwrap_or_else(|e| panic!("search must succeed for pair {}: {}", pair.id, e));
+
+        eprintln!(
+            "DISCONNECTED SEARCH for pair {} (origin={}): status={}, expanded={}, candidates_count={}, elapsed={:?}",
+            pair.id,
+            origin_node_id,
+            result.status,
+            result.expanded_states,
+            result.candidates.len(),
+            req_start.elapsed()
+        );
+
+        assert_ne!(
+            result.status, "truncated",
+            "disconnected pair {} must not be truncated, got: {}",
+            pair.id, result.status
+        );
+        assert!(
+            result.expanded_states < 50_000,
+            "pair {}: expanded states must be well below 100,000, got: {}",
+            pair.id,
+            result.expanded_states
+        );
+        assert!(
+            !result
+                .candidates
+                .iter()
+                .any(|c| c.toll.billing_pair_id == pair.id),
+            "pair {} must not produce candidate due to isolated component in OSM data",
+            pair.id
+        );
+    }
+
+    // 全 8 ペアの fixture 上のメタデータ整合性（verified・料金レコード・経路ワイヤリング）を確認
     for pair in &g.billing_pairs {
-        if REPRESENTATIVE_SEARCH_PAIR_IDS.contains(&pair.id.as_str()) {
-            continue;
-        }
         assert_eq!(
             pair.status,
             shutoko_routing_core::VerificationStatus::Verified,
@@ -380,16 +458,16 @@ fn test_representative_billing_pairs_loop_search_and_all_existence_contract() {
         );
         assert!(!pair.entry_to_anchor_edge_ids.is_empty());
         assert!(!pair.anchor_to_exit_edge_ids.is_empty());
-        existence_checked += 1;
     }
-    assert_eq!(existence_checked, 5, "5 non-representative pairs checked");
 
     let total_elapsed = start_total.elapsed();
-    eprintln!("loop search contract total elapsed: {:?}", total_elapsed);
-    // release ビルド実測: ローカル 10 コアで約 40 秒（4 件並列時、単独 ≈ 30 秒）、CI 4 vCPU の余裕を見て 600 秒とする。
+    eprintln!(
+        "all 8 billing pairs search contract total elapsed: {:?}",
+        total_elapsed
+    );
     assert!(
-        total_elapsed < std::time::Duration::from_secs(600),
-        "total search time must be under 600 seconds, took {:?}",
+        total_elapsed < std::time::Duration::from_secs(60),
+        "total search time for all 8 pairs must be under 60 seconds, took {:?}",
         total_elapsed
     );
 }

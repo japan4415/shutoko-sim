@@ -110,8 +110,8 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "1a196e01152021d971812e1da5bdb1feee89d9821d4d1d7036d0bbb7a7d9c509",
-      "byteLength": 2144366
+      "sha256": "471b4f2badca118d7f592c1b78092bcd93f662e856ff5a057884f26ac4d1d095",
+      "byteLength": 2907908
     },
     {
       "path": "snap-index.json",

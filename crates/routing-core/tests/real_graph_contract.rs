@@ -102,7 +102,8 @@ fn real_graph_routing_core_search_returns_candidates() {
     let request = SearchRequest {
         request_id: "req-c1-kandabashi-1".into(),
         release_id: "c1-real-v1".into(),
-        origin_node_id: "n:1070862943".into(), // Kandabashi surface street node
+        origin_node_id: Some("n:1070862943".into()),
+        origin: None, // Kandabashi surface street node
         min_minutes: 15,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -177,7 +178,8 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
     let make_request = |pricing_at: &str| SearchRequest {
         request_id: format!("req-{}", pricing_at),
         release_id: "c1-real-v1".into(),
-        origin_node_id: "n:1070862943".into(),
+        origin_node_id: Some("n:1070862943".into()),
+        origin: None,
         min_minutes: 15,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -322,7 +324,8 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         let request = SearchRequest {
             request_id: format!("req-loop-{}", pair.id),
             release_id: g.release_id.clone(),
-            origin_node_id: origin_node_id.clone(),
+            origin_node_id: Some(origin_node_id.clone()),
+            origin: None,
             min_minutes: 15,
             max_minutes: contract.max_minutes,
             vehicle_profile: "passenger-car-etc".into(),
@@ -395,7 +398,8 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         let request = SearchRequest {
             request_id: format!("req-loop-{}", pair_id),
             release_id: g.release_id.clone(),
-            origin_node_id: origin_node_id.clone(),
+            origin_node_id: Some(origin_node_id.clone()),
+            origin: None,
             min_minutes: 15,
             max_minutes: 60,
             vehicle_profile: "passenger-car-etc".into(),
@@ -422,7 +426,8 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         let request = SearchRequest {
             request_id: format!("req-loop-{}", pair_id),
             release_id: g.release_id.clone(),
-            origin_node_id: origin_node_id.clone(),
+            origin_node_id: Some(origin_node_id.clone()),
+            origin: None,
             min_minutes: 15,
             max_minutes: 60,
             vehicle_profile: "passenger-car-etc".into(),
@@ -449,7 +454,8 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         let request = SearchRequest {
             request_id: format!("req-loop-{}", pair_id),
             release_id: g.release_id.clone(),
-            origin_node_id: origin_node_id.clone(),
+            origin_node_id: Some(origin_node_id.clone()),
+            origin: None,
             min_minutes: 15,
             max_minutes: 60,
             vehicle_profile: "passenger-car-etc".into(),
@@ -508,6 +514,82 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
 
 #[test]
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn real_graph_coordinate_input_snap_and_candidate_enrichment() {
+    let g = real_graph();
+    let limits = SearchLimits::default();
+    // 神田橋入口の一般道側始点 n:1070862943 の実座標をそのまま使う。
+    let request = SearchRequest {
+        request_id: "req-c1-coord".into(),
+        release_id: "c1-real-v1".into(),
+        origin_node_id: None,
+        origin: Some(shutoko_routing_core::LatLng {
+            lat: 35.6896727,
+            lon: 139.7644248,
+        }),
+        min_minutes: 15,
+        max_minutes: 60,
+        vehicle_profile: "passenger-car-etc".into(),
+        pricing_at: "2026-09-10T00:00:00Z".into(),
+    };
+    let result = search(&g, &request, &limits).expect("coordinate search must succeed");
+    assert_eq!(result.status, "ok");
+    let candidate = result
+        .candidates
+        .iter()
+        .find(|c| c.toll.billing_pair_id == "bp:c1-outer:kandabashi-takaracho")
+        .expect("kandabashi-takaracho candidate must exist for coordinate origin");
+    assert_eq!(candidate.entry.name.as_deref(), Some("神田橋入口"));
+    assert_eq!(candidate.exit.name.as_deref(), Some("宝町出口"));
+    assert_eq!(candidate.entry_id, candidate.entry.edge_id);
+    assert_eq!(candidate.exit_id, candidate.exit.edge_id);
+    assert_eq!(
+        candidate.geometry.coordinates.len(),
+        candidate.edge_ids.len() + 1,
+        "geometry points must equal edge count + 1"
+    );
+    assert!(
+        candidate.handoff.waypoints.len() <= 3,
+        "waypoints must be at most 3, got {}",
+        candidate.handoff.waypoints.len()
+    );
+    assert!(candidate
+        .handoff
+        .maps_url
+        .starts_with("https://www.google.com/maps/dir/?api=1&"));
+    assert!(candidate.handoff.maps_url.len() <= 2048);
+    assert!(candidate.handoff.verification_set_version.is_none());
+    assert!(candidate
+        .warnings
+        .iter()
+        .any(|w| w == "HANDOFF_WAYPOINTS_UNVERIFIED"));
+    assert!(!candidate.road_names.is_empty());
+}
+
+#[test]
+fn real_graph_coordinate_beyond_snap_radius_is_no_connection() {
+    // 海上座標（200m 以内に一般道ノードなし。最近傍一般道ノードまで約 2,675m は実測済み）。
+    let g = real_graph();
+    let limits = SearchLimits::default();
+    let request = SearchRequest {
+        request_id: "req-c1-sea".into(),
+        release_id: "c1-real-v1".into(),
+        origin_node_id: None,
+        origin: Some(shutoko_routing_core::LatLng {
+            lat: 35.62,
+            lon: 139.79,
+        }),
+        min_minutes: 15,
+        max_minutes: 60,
+        vehicle_profile: "passenger-car-etc".into(),
+        pricing_at: "2026-09-10T00:00:00Z".into(),
+    };
+    let result = search(&g, &request, &limits).expect("snap miss must be Ok, not Err");
+    assert_eq!(result.status, "no_candidates");
+    assert_eq!(result.reason.as_deref(), Some("NO_CONNECTION"));
+    assert!(result.candidates.is_empty());
+}
+
+#[test]
 fn test_eight_pairs_determinism_and_performance_table() {
     let g = real_graph();
     let graph_json = include_str!("../../../fixtures/generated/graph.json");
@@ -535,7 +617,8 @@ fn test_eight_pairs_determinism_and_performance_table() {
         let req = SearchRequest {
             request_id: format!("det-req-{}", p.id),
             release_id: g.release_id.clone(),
-            origin_node_id: origin.clone(),
+            origin_node_id: Some(origin.clone()),
+            origin: None,
             min_minutes: 15,
             max_minutes,
             vehicle_profile: "passenger-car-etc".into(),

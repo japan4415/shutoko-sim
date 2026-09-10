@@ -124,6 +124,7 @@ pub fn duration_seconds(distance_meters: u64, speed_kmh: f64) -> u64 {
 /// Helper representing an intermediate directed edge candidate before final link classification.
 #[derive(Debug, Clone)]
 struct IntermediateEdge {
+    name: Option<String>,
     id: String,
     from: String,
     to: String,
@@ -253,6 +254,13 @@ pub fn build_topology_with_report(
 
         let oneway = parse_oneway(elem);
 
+        // OSM way name (prefer `name`, fall back to `name:ja`) becomes the
+        // edge's `name` tag in the output graph.
+        let way_name: Option<String> = elem
+            .get_tag("name")
+            .or_else(|| elem.get_tag("name:ja"))
+            .map(str::to_string);
+
         for i in 0..(nodes.len() - 1) {
             let u_id = nodes[i];
             let v_id = nodes[i + 1];
@@ -274,6 +282,7 @@ pub fn build_topology_with_report(
             if oneway == OnewayDirection::ForwardOnly || oneway == OnewayDirection::Bidirectional {
                 let edge_id = format!("e:w{}:{}:f", elem.id, i);
                 intermediate_edges.push(IntermediateEdge {
+                    name: way_name.clone(),
                     id: edge_id.clone(),
                     from: u_node_str.clone(),
                     to: v_node_str.clone(),
@@ -288,6 +297,7 @@ pub fn build_topology_with_report(
             if oneway == OnewayDirection::ReverseOnly || oneway == OnewayDirection::Bidirectional {
                 let edge_id = format!("e:w{}:{}:r", elem.id, i);
                 intermediate_edges.push(IntermediateEdge {
+                    name: way_name.clone(),
                     id: edge_id.clone(),
                     from: v_node_str,
                     to: u_node_str,
@@ -436,6 +446,7 @@ pub fn build_topology_with_report(
             kind,
             duration_seconds: duration,
             distance_meters: edge.distance_meters,
+            name: edge.name,
         });
     }
 
@@ -446,9 +457,24 @@ pub fn build_topology_with_report(
         active_node_ids.insert(edge.to.clone());
     }
 
+    // Node IDs are always built as "n:<osm node id>", so coordinates can be
+    // recovered from the index. Edges only exist when both endpoints had coords.
     let mut nodes: Vec<Node> = active_node_ids
         .iter()
-        .map(|id| Node { id: id.clone() })
+        .map(|id| {
+            let osm_id: i64 = id
+                .strip_prefix("n:")
+                .and_then(|s| s.parse().ok())
+                .expect("node id must be n:<osm node id>");
+            let (lat, lon) = *node_coords
+                .get(&osm_id)
+                .expect("node coordinate must exist for edge endpoint");
+            Node {
+                id: id.clone(),
+                lat,
+                lon,
+            }
+        })
         .collect();
     nodes.sort_by(|a, b| a.id.cmp(&b.id));
 

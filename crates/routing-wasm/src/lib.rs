@@ -9,5 +9,5 @@ pub fn search_json(
     limits_json: &str,
 ) -> Result<String, JsValue> {
     shutoko_routing_core::search_json(graph_json, request_json, limits_json)
-        .map_err(|error| JsValue::from_str(&error.to_string()))
+        .map_err(|error| JsValue::from_str(&error.to_json_string()))
 }

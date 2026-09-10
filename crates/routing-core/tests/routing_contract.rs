@@ -363,10 +363,11 @@ fn add_independent_pair(g: &mut Value, loop_edge_seconds: u64, amount: Option<u6
         .iter()
         .filter(|n| n["id"] != "s")
     {
-        g["nodes"]
-            .as_array_mut()
-            .unwrap()
-            .push(json!({"id":rename(node["id"].as_str().unwrap())}));
+        g["nodes"].as_array_mut().unwrap().push(json!({
+            "id": rename(node["id"].as_str().unwrap()),
+            "lat": node["lat"],
+            "lon": node["lon"],
+        }));
     }
     for edge in original["edges"].as_array().unwrap() {
         let mut edge = edge.clone();
@@ -510,7 +511,11 @@ fn identifiers_enforce_the_256_byte_boundary() {
             length == 256
         );
         let mut g = graph();
-        g["nodes"].as_array_mut().unwrap().push(json!({"id":id}));
+        g["nodes"].as_array_mut().unwrap().push(json!({
+            "id": id,
+            "lat": 35.68,
+            "lon": 139.76,
+        }));
         assert_eq!(
             search_json(&g.to_string(), &request().to_string(), "{}").is_ok(),
             length == 256
@@ -607,7 +612,7 @@ fn build_test_graph(nodes: &[&str], edges: Vec<Value>, forbidden_transitions: Va
         "schemaVersion": 1,
         "releaseId": "synthetic-v1",
         "vehicleProfile": "passenger-car-etc",
-        "nodes": nodes.iter().map(|n| json!({"id": n})).collect::<Vec<_>>(),
+        "nodes": nodes.iter().map(|n| json!({"id": n, "lat": 35.68, "lon": 139.76})).collect::<Vec<_>>(),
         "edges": edges,
         "billingPairs": [{
             "id": "one-section",
@@ -834,4 +839,129 @@ fn forbidden_transitions_local_to_local_len_2_forward_and_backward_detours() {
         "backward detour must be r3,r4, got: {:?}",
         ids_bwd
     );
+}
+
+#[test]
+fn coordinate_input_snaps_to_nearest_local_node() {
+    let mut r = request();
+    r.as_object_mut().unwrap().remove("originNodeId");
+    r["origin"] = json!({ "lat": 35.681, "lon": 139.7671 });
+    let result = run(&graph(), &r, json!({}));
+    assert_eq!(result["status"], "ok");
+    let c = candidates(&result);
+    assert_eq!(c.len(), 1);
+    assert_eq!(c[0]["snappedOrigin"]["nodeId"], "s");
+    assert!(c[0]["snappedOrigin"]["distanceMeters"].as_f64().unwrap() < 1.0);
+    assert_eq!(c[0]["origin"], json!({ "lat": 35.681, "lon": 139.7671 }));
+}
+
+#[test]
+fn coordinate_input_beyond_200m_returns_no_connection() {
+    let mut r = request();
+    r.as_object_mut().unwrap().remove("originNodeId");
+    r["origin"] = json!({ "lat": 35.0, "lon": 139.0 });
+    let result = run(&graph(), &r, json!({}));
+    assert_eq!(result["status"], "no_candidates");
+    assert_eq!(result["reason"], "NO_CONNECTION");
+    assert!(candidates(&result).is_empty());
+}
+
+#[test]
+fn search_request_both_origins_or_neither_returns_invalid_input() {
+    // Both specified
+    let mut r_both = request();
+    r_both["origin"] = json!({ "lat": 35.681, "lon": 139.7671 });
+    let err_both = search_json(&graph().to_string(), &r_both.to_string(), "{}").unwrap_err();
+    assert_eq!(err_both.code, "INVALID_INPUT");
+
+    // Neither specified
+    let mut r_neither = request();
+    r_neither.as_object_mut().unwrap().remove("originNodeId");
+    let err_neither = search_json(&graph().to_string(), &r_neither.to_string(), "{}").unwrap_err();
+    assert_eq!(err_neither.code, "INVALID_INPUT");
+}
+
+#[test]
+fn coordinate_input_out_of_bounds_or_non_finite_returns_invalid_input() {
+    for (lat, lon) in [(91.0, 139.0), (-91.0, 139.0), (35.0, 181.0), (35.0, -181.0)] {
+        let mut r = request();
+        r.as_object_mut().unwrap().remove("originNodeId");
+        r["origin"] = json!({ "lat": lat, "lon": lon });
+        let err = search_json(&graph().to_string(), &r.to_string(), "{}").unwrap_err();
+        assert_eq!(err.code, "INVALID_INPUT");
+    }
+
+    let mut r_nan = request();
+    r_nan.as_object_mut().unwrap().remove("originNodeId");
+    let invalid_json = r_nan.to_string().replace(
+        "\"pricingAt\"",
+        "\"origin\":{\"lat\":\"NaN\",\"lon\":139.0},\"pricingAt\"",
+    );
+    assert!(search_json(&graph().to_string(), &invalid_json, "{}").is_err());
+}
+
+#[test]
+fn candidate_geometry_and_handoff_and_warnings_contract() {
+    let result = run(&graph(), &request(), json!({}));
+    assert_eq!(result["status"], "ok");
+    let c = &candidates(&result)[0];
+
+    // Geometry validation
+    assert_eq!(c["geometry"]["type"], "LineString");
+    let coords = c["geometry"]["coordinates"].as_array().unwrap();
+    let edge_ids = c["edgeIds"].as_array().unwrap();
+    assert_eq!(coords.len(), edge_ids.len() + 1);
+    // First coordinate corresponds to node "s" [lon, lat]
+    assert_eq!(coords.first().unwrap(), &json!([139.7671, 35.681]));
+    // Last coordinate corresponds to node "s" [lon, lat]
+    assert_eq!(coords.last().unwrap(), &json!([139.7671, 35.681]));
+
+    // Handoff Maps URL validation
+    let maps_url = c["handoff"]["mapsUrl"].as_str().unwrap();
+    assert!(
+        maps_url.starts_with("https://www.google.com/maps/dir/?api=1&origin="),
+        "Maps URL must begin with Google Maps directions API base"
+    );
+    assert!(
+        maps_url.len() <= 2048,
+        "Maps URL must not exceed 2048 chars, got {}",
+        maps_url.len()
+    );
+    let waypoints = c["handoff"]["waypoints"].as_array().unwrap();
+    assert!(waypoints.len() <= 3, "Waypoints must be <= 3");
+
+    // Warnings validation
+    let warnings: Vec<&str> = c["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(
+        warnings.contains(&"HANDOFF_WAYPOINTS_UNVERIFIED"),
+        "warnings must contain HANDOFF_WAYPOINTS_UNVERIFIED"
+    );
+}
+
+#[test]
+fn road_names_ordered_and_deduplicated() {
+    let mut g = graph();
+    for edge in g["edges"].as_array_mut().unwrap() {
+        let id = edge["id"].as_str().unwrap();
+        match id {
+            "ab" | "bc" => edge["name"] = json!("都心環状線"),
+            "ca" => edge["name"] = json!("八重洲線"),
+            _ => {}
+        }
+    }
+    let result = run(&g, &request(), json!({}));
+    assert_eq!(result["status"], "ok");
+    let c = &candidates(&result)[0];
+    let road_names: Vec<&str> = c["roadNames"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert_eq!(road_names, vec!["都心環状線", "八重洲線"]);
 }

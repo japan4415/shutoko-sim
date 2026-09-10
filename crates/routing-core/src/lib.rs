@@ -9,6 +9,22 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 /// manifest always records the search-engine version (not the builder's own).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Snap search radius threshold in meters.
+pub const SNAP_RADIUS_METERS: f64 = 200.0;
+
+pub mod handoff;
+
+/// Google Maps handoff payload for a candidate route.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Handoff {
+    pub origin: LatLng,
+    pub destination: LatLng,
+    pub waypoints: Vec<LatLng>,
+    pub maps_url: String,
+    pub verification_set_version: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Graph {
@@ -21,10 +37,12 @@ pub struct Graph {
     #[serde(default)]
     pub forbidden_transitions: Vec<Vec<String>>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Node {
     pub id: String,
+    pub lat: f64,
+    pub lon: f64,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,6 +61,8 @@ pub struct Edge {
     pub kind: EdgeKind,
     pub duration_seconds: u64,
     pub distance_meters: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -63,6 +83,10 @@ pub struct BillingPair {
     pub vehicle_profile: String,
     #[serde(default)]
     pub prices: Vec<Price>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_name: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -71,12 +95,21 @@ pub struct Price {
     pub effective_from: String,
     pub effective_to: Option<String>,
 }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LatLng {
+    pub lat: f64,
+    pub lon: f64,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SearchRequest {
     pub request_id: String,
     pub release_id: String,
-    pub origin_node_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_node_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<LatLng>,
     pub min_minutes: u64,
     pub max_minutes: u64,
     pub vehicle_profile: String,
@@ -135,19 +168,47 @@ pub struct Loop {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SnappedOrigin {
+    pub node_id: String,
+    pub lat: f64,
+    pub lon: f64,
+    pub distance_meters: f64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RampInfo {
+    pub edge_id: String,
+    pub name: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeoJsonLineString {
+    pub r#type: String,
+    pub coordinates: Vec<[f64; 2]>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Candidate {
     pub id: String,
     pub release_id: String,
+    pub origin: Option<LatLng>,
     pub origin_node_id: String,
+    pub snapped_origin: SnappedOrigin,
+    pub entry: RampInfo,
+    pub exit: RampInfo,
     pub entry_id: String,
     pub exit_id: String,
+    pub road_names: Vec<String>,
     pub edge_ids: Vec<String>,
+    pub geometry: GeoJsonLineString,
     pub duration: Duration,
     pub distance_meters: u64,
     pub shutoko_distance_meters: u64,
     pub toll: Toll,
     pub r#loop: Loop,
+    pub reasons: Vec<String>,
     pub warnings: Vec<String>,
+    pub handoff: Handoff,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -160,10 +221,21 @@ pub struct SearchResult {
     pub expanded_states: usize,
     pub candidates: Vec<Candidate>,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RoutingError {
     pub code: String,
     pub message: String,
+}
+impl RoutingError {
+    /// Format error as JSON string conforming to RoutingErrorPayload schema.
+    pub fn to_json_string(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|_| {
+            format!(
+                "{{\"code\":\"{}\",\"message\":\"{}\"}}",
+                self.code, self.message
+            )
+        })
+    }
 }
 impl fmt::Display for RoutingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -188,10 +260,21 @@ fn utc(s: &str) -> Result<OffsetDateTime, RoutingError> {
     }
     Ok(t)
 }
+/// Compute distance between two lat/lon coordinates using equirectangular approximation.
+pub fn distance_meters(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    const R: f64 = 6_371_000.0;
+    let phi = (lat1 + lat2) * 0.5 * std::f64::consts::PI / 180.0;
+    let dx = (lon2 - lon1) * std::f64::consts::PI / 180.0 * phi.cos() * R;
+    let dy = (lat2 - lat1) * std::f64::consts::PI / 180.0 * R;
+    dx.hypot(dy)
+}
+
 struct Index<'a> {
+    nodes: BTreeMap<&'a str, &'a Node>,
     edges: BTreeMap<&'a str, &'a Edge>,
     outgoing: BTreeMap<&'a str, Vec<&'a Edge>>,
     incoming: BTreeMap<&'a str, Vec<&'a Edge>>,
+    local_nodes: BTreeSet<&'a str>,
 }
 fn validate<'a>(
     g: &'a Graph,
@@ -207,6 +290,25 @@ fn validate<'a>(
         || g.vehicle_profile != r.vehicle_profile
     {
         return Err(invalid("incompatible schema, release, or vehicle profile"));
+    }
+    match (&r.origin_node_id, &r.origin) {
+        (Some(_), Some(_)) | (None, None) => {
+            return Err(invalid("either origin or originNodeId must be provided"));
+        }
+        (Some(node_id), None) => {
+            if node_id.is_empty() || node_id.len() > 256 {
+                return Err(invalid("invalid origin node id"));
+            }
+        }
+        (None, Some(origin)) => {
+            if !origin.lat.is_finite()
+                || !origin.lon.is_finite()
+                || !(-90.0..=90.0).contains(&origin.lat)
+                || !(-180.0..=180.0).contains(&origin.lon)
+            {
+                return Err(invalid("coordinates out of range or non-finite"));
+            }
+        }
     }
     if r.request_id.is_empty()
         || r.request_id.len() > 256
@@ -241,25 +343,36 @@ fn validate<'a>(
     {
         return Err(invalid("graph exceeds prototype size limits"));
     }
-    let mut nodes = BTreeSet::new();
+    let mut node_map = BTreeMap::new();
     for n in &g.nodes {
-        if n.id.is_empty() || n.id.len() > 256 || !nodes.insert(n.id.as_str()) {
+        if n.id.is_empty() || n.id.len() > 256 || node_map.insert(n.id.as_str(), n).is_some() {
             return Err(invalid("duplicate, oversized, or empty node id"));
         }
+        if !n.lat.is_finite()
+            || !n.lon.is_finite()
+            || !(-90.0..=90.0).contains(&n.lat)
+            || !(-180.0..=180.0).contains(&n.lon)
+        {
+            return Err(invalid("node coordinates out of range or non-finite"));
+        }
     }
-    if !nodes.contains(r.origin_node_id.as_str()) {
-        return Err(invalid("unknown origin node"));
+    if let Some(ref origin_node_id) = r.origin_node_id {
+        if !node_map.contains_key(origin_node_id.as_str()) {
+            return Err(invalid("unknown origin node"));
+        }
     }
     let mut ix = Index {
+        nodes: node_map,
         edges: BTreeMap::new(),
         outgoing: BTreeMap::new(),
         incoming: BTreeMap::new(),
+        local_nodes: BTreeSet::new(),
     };
     for e in &g.edges {
         if e.id.is_empty()
             || e.id.len() > 256
-            || !nodes.contains(e.from.as_str())
-            || !nodes.contains(e.to.as_str())
+            || !ix.nodes.contains_key(e.from.as_str())
+            || !ix.nodes.contains_key(e.to.as_str())
             || e.duration_seconds == 0
             || e.duration_seconds > 86400
             || e.distance_meters == 0
@@ -267,6 +380,10 @@ fn validate<'a>(
             || ix.edges.insert(&e.id, e).is_some()
         {
             return Err(invalid("invalid edge, endpoint, weight, or duplicate id"));
+        }
+        if e.kind == EdgeKind::Local {
+            ix.local_nodes.insert(e.from.as_str());
+            ix.local_nodes.insert(e.to.as_str());
         }
         ix.outgoing.entry(&e.from).or_default().push(e);
         ix.incoming.entry(&e.to).or_default().push(e);
@@ -315,7 +432,7 @@ fn validate<'a>(
             || p.exit_id.is_empty()
             || p.exit_id.len() > 256
             || p.vehicle_profile != g.vehicle_profile
-            || !nodes.contains(p.anchor_node_id.as_str())
+            || !ix.nodes.contains_key(p.anchor_node_id.as_str())
             || p.prices.len() > 1000
         {
             return Err(invalid("invalid billing pair identity or profile"));
@@ -864,6 +981,60 @@ pub fn search(
 ) -> Result<SearchResult, RoutingError> {
     let ix = validate(g, r, l)?;
     let now = utc(&r.pricing_at)?;
+
+    // Resolve the origin: either a direct node ID or a coordinate snapped onto
+    // the nearest local-road node within SNAP_RADIUS_METERS.
+    let (origin_label, snapped) = match (&r.origin_node_id, &r.origin) {
+        (Some(id), None) => {
+            let node = ix.nodes[id.as_str()];
+            (
+                id.clone(),
+                SnappedOrigin {
+                    node_id: id.clone(),
+                    lat: node.lat,
+                    lon: node.lon,
+                    distance_meters: 0.0,
+                },
+            )
+        }
+        (None, Some(ll)) => {
+            // Linear scan over nodes touching a Local edge. Deterministic:
+            // BTreeSet iteration by node ID, strict `<` keeps the first on ties.
+            let mut best: Option<(f64, &Node)> = None;
+            for id in &ix.local_nodes {
+                let node = ix.nodes[*id];
+                let d = distance_meters(ll.lat, ll.lon, node.lat, node.lon);
+                if best.is_none_or(|(bd, _)| d < bd) {
+                    best = Some((d, node));
+                }
+            }
+            match best {
+                Some((d, node)) if d <= SNAP_RADIUS_METERS => (
+                    node.id.clone(),
+                    SnappedOrigin {
+                        node_id: node.id.clone(),
+                        lat: node.lat,
+                        lon: node.lon,
+                        distance_meters: d,
+                    },
+                ),
+                _ => {
+                    return Ok(SearchResult {
+                        request_id: r.request_id.clone(),
+                        release_id: r.release_id.clone(),
+                        status: "no_candidates".into(),
+                        reason: Some("NO_CONNECTION".into()),
+                        ranking_mode: "shutoko_time".into(),
+                        expanded_states: 0,
+                        candidates: Vec::new(),
+                    })
+                }
+            }
+        }
+        _ => return Err(invalid("origin resolution state unreachable")),
+    };
+    let origin_node_id = origin_label.as_str();
+
     let mut budget = Budget::default();
     let mut candidates = Vec::new();
     let mut candidate_edges = 0;
@@ -881,6 +1052,8 @@ pub fn search(
     let mut connection = false;
     let mut found_loop = false;
     let mut legal_route = false;
+    let mut time_rejected = false;
+    let mut handoff_rejected = false;
 
     let mut verified_pairs = Vec::with_capacity(pairs.len());
     let mut entry_edges = Vec::with_capacity(pairs.len());
@@ -900,7 +1073,7 @@ pub fn search(
     let forward_map = dijkstra_local_forward(
         g,
         &ix,
-        &r.origin_node_id,
+        origin_node_id,
         &entry_edges,
         l.max_local_edges,
         r.max_minutes * 60,
@@ -921,7 +1094,7 @@ pub fn search(
         g,
         &ix,
         &active_exit_edges,
-        &r.origin_node_id,
+        origin_node_id,
         l.max_local_edges,
         r.max_minutes * 60,
         l,
@@ -970,6 +1143,7 @@ pub fn search(
             let base = seconds(&all);
             let buffer = 300.max(base.div_ceil(5));
             if base < r.min_minutes * 60 || base + buffer > r.max_minutes * 60 {
+                time_rejected = true;
                 continue;
             }
             if candidates.len() == l.beam_width || candidate_edges + all.len() > 20_000 {
@@ -989,13 +1163,74 @@ pub fn search(
                 .chain(ids.iter().map(String::as_str))
                 .map(|s| format!("{}:{}", s.len(), s))
                 .collect::<String>();
+
+            // GeoJSON LineString: from-node of the first edge, then the to-node
+            // of every edge, in access -> loop -> return order (no duplicated
+            // endpoints because consecutive edges are joined).
+            let mut coordinates: Vec<[f64; 2]> = Vec::with_capacity(all.len() + 1);
+            if let Some(first) = all.first() {
+                let n = ix.nodes[first.from.as_str()];
+                coordinates.push([n.lon, n.lat]);
+            }
+            for e in &all {
+                let n = ix.nodes[e.to.as_str()];
+                coordinates.push([n.lon, n.lat]);
+            }
+
+            // Road names: ordered, deduped names of the Shutoko-section edges.
+            let mut road_names: Vec<String> = Vec::new();
+            for e in &highway {
+                if let Some(name) = &e.name {
+                    if !road_names.iter().any(|n| n == name) {
+                        road_names.push(name.clone());
+                    }
+                }
+            }
+
+            // Google Maps handoff: round trip through the snapped departure.
+            let departure = r.origin.clone().unwrap_or(LatLng {
+                lat: snapped.lat,
+                lon: snapped.lon,
+            });
+            let waypoints =
+                handoff::select_waypoints(&p.anchor_node_id, cycle, exit_edge, &ix.nodes);
+            let maps_url = match handoff::format_maps_url(&departure, &waypoints) {
+                Ok(url) => url,
+                Err(()) => {
+                    handoff_rejected = true;
+                    continue;
+                }
+            };
+            let handoff_payload = Handoff {
+                origin: departure.clone(),
+                destination: departure,
+                waypoints,
+                maps_url,
+                verification_set_version: None,
+            };
+
             candidates.push(Candidate {
                 id,
                 release_id: r.release_id.clone(),
-                origin_node_id: r.origin_node_id.clone(),
+                origin: r.origin.clone(),
+                origin_node_id: origin_label.clone(),
+                snapped_origin: snapped.clone(),
+                entry: RampInfo {
+                    edge_id: p.entry_id.clone(),
+                    name: p.entry_name.clone(),
+                },
+                exit: RampInfo {
+                    edge_id: p.exit_id.clone(),
+                    name: p.exit_name.clone(),
+                },
                 entry_id: p.entry_id.clone(),
                 exit_id: p.exit_id.clone(),
+                road_names,
                 edge_ids: ids,
+                geometry: GeoJsonLineString {
+                    r#type: "LineString".into(),
+                    coordinates,
+                },
                 duration: Duration {
                     access_seconds: seconds(access),
                     shutoko_seconds: seconds(&highway),
@@ -1021,10 +1256,13 @@ pub fn search(
                     distance_meters: meters(cycle),
                     validated: true,
                 },
+                reasons: Vec::new(),
                 warnings: vec![
                     "EXPERIMENTAL_NO_HANDOFF".into(),
                     "STATIC_TRAVEL_TIME".into(),
+                    "HANDOFF_WAYPOINTS_UNVERIFIED".into(),
                 ],
+                handoff: handoff_payload,
             });
         }
     }
@@ -1055,6 +1293,22 @@ pub fn search(
             break;
         }
     }
+    // Machine-readable recommendation reasons. The top candidate carries the
+    // ranking-specific code first; every candidate is charged as one section.
+    for (i, c) in selected.iter_mut().enumerate() {
+        c.reasons = if i == 0 {
+            vec![
+                if time_ranking {
+                    "BEST_SHUTOKO_TIME".to_string()
+                } else {
+                    "BEST_TIME_PER_YEN".to_string()
+                },
+                "ONE_SECTION_TOLL".to_string(),
+            ]
+        } else {
+            vec!["ONE_SECTION_TOLL".to_string()]
+        };
+    }
     let reason = if budget.truncated {
         Some("SEARCH_LIMIT")
     } else if !selected.is_empty() {
@@ -1065,6 +1319,8 @@ pub fn search(
         Some("NO_CONNECTION")
     } else if !found_loop || !legal_route {
         Some("NO_LOOP")
+    } else if handoff_rejected && !time_rejected {
+        Some("NO_HANDOFF")
     } else {
         Some("TIME_WINDOW")
     };

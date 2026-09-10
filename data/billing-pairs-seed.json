@@ -5,7 +5,9 @@
     {
       "id": "bp:c1-outer:kandabashi-takaracho",
       "entryOsmWayId": 92243921,
+      "entryName": "神田橋入口",
       "exitOsmWayId": 297864314,
+      "exitName": "宝町出口",
       "anchorOsmNodeId": 499831338,
       "vehicleProfile": "passenger-car-etc",
       "status": "verified",
@@ -30,7 +32,9 @@
     {
       "id": "bp:c1-outer:kasumigaseki-daikancho",
       "entryOsmWayId": 916571610,
+      "entryName": "霞が関入口",
       "exitOsmWayId": 276920911,
+      "exitName": "代官町出口",
       "anchorOsmNodeId": 577255571,
       "vehicleProfile": "passenger-car-etc",
       "status": "verified",
@@ -55,7 +59,9 @@
     {
       "id": "bp:c1-outer:ginza-shibakoen",
       "entryOsmWayId": 4848922,
+      "entryName": "銀座入口",
       "exitOsmWayId": 944671542,
+      "exitName": "芝公園出口",
       "anchorOsmNodeId": 31254160,
       "vehicleProfile": "passenger-car-etc",
       "status": "verified",
@@ -80,7 +86,9 @@
     {
       "id": "bp:c1-outer:shibakoen-iikura",
       "entryOsmWayId": 4853801,
+      "entryName": "芝公園入口",
       "exitOsmWayId": 203832842,
+      "exitName": "飯倉出口",
       "anchorOsmNodeId": 31296971,
       "vehicleProfile": "passenger-car-etc",
       "status": "verified",
@@ -105,7 +113,9 @@
     {
       "id": "bp:c1-inner:kasumigaseki-shibakoen",
       "entryOsmWayId": 916571615,
+      "entryName": "霞が関入口",
       "exitOsmWayId": 203873821,
+      "exitName": "芝公園出口",
       "anchorOsmNodeId": 264877748,
       "vehicleProfile": "passenger-car-etc",
       "status": "verified",
@@ -130,7 +140,9 @@
     {
       "id": "bp:c1-inner:daikancho-kasumigaseki",
       "entryOsmWayId": 1091280541,
+      "entryName": "代官町入口",
       "exitOsmWayId": 1232166619,
+      "exitName": "霞が関出口",
       "anchorOsmNodeId": 297945194,
       "vehicleProfile": "passenger-car-etc",
       "status": "verified",
@@ -155,7 +167,9 @@
     {
       "id": "bp:c1-inner:shibakoen-shiodome",
       "entryOsmWayId": 4853797,
+      "entryName": "芝公園入口",
       "exitOsmWayId": 45068171,
+      "exitName": "汐留出口",
       "anchorOsmNodeId": 31295430,
       "vehicleProfile": "passenger-car-etc",
       "status": "verified",
@@ -180,7 +194,9 @@
     {
       "id": "bp:c1-inner:takaracho-kandabashi",
       "entryOsmWayId": 378284514,
+      "entryName": "宝町入口",
       "exitOsmWayId": 390441534,
+      "exitName": "神田橋出口",
       "anchorOsmNodeId": 1891818143,
       "vehicleProfile": "passenger-car-etc",
       "status": "verified",

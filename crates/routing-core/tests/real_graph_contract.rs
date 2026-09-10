@@ -386,10 +386,10 @@ fn test_representative_billing_pairs_loop_search_and_all_existence_contract() {
 
     let total_elapsed = start_total.elapsed();
     eprintln!("loop search contract total elapsed: {:?}", total_elapsed);
-    // release ビルド実測 ≈ 30 秒（3 回の full search）。余裕をもって 120 秒以内を要求する。
+    // release ビルド実測: ローカル 10 コアで約 40 秒（4 件並列時、単独 ≈ 30 秒）、CI 4 vCPU の余裕を見て 600 秒とする。
     assert!(
-        total_elapsed < std::time::Duration::from_secs(120),
-        "total search time must be under 120 seconds, took {:?}",
+        total_elapsed < std::time::Duration::from_secs(600),
+        "total search time must be under 600 seconds, took {:?}",
         total_elapsed
     );
 }

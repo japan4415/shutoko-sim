@@ -32,7 +32,10 @@
     "exit:e:w4849052:8:f",
     "exit:e:w760748024:7:f",
     "exit:e:w760760233:11:f (新富町出口)",
-    "unsupported-restriction: 8 conditional turn restrictions (restriction:conditional) excluded from static graph"
+    "unsupported-restriction: 1 disconnected via-way turn restrictions (disconnected) excluded from static graph",
+    "unsupported-restriction: 5 turn restrictions missing via member (no via) excluded from static graph",
+    "unsupported-restriction: 67 turn restrictions referencing elements outside graph (outside graph) excluded from static graph",
+    "unsupported-restriction: 8 conditional turn restrictions (conditional) excluded from static graph"
   ],
   "provenance": [
     {

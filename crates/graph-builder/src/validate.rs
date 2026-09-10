@@ -77,9 +77,16 @@ pub fn parse_iso_date(s: &str) -> Result<Date, String> {
 }
 
 /// Validate that a string conforms to HTTP/HTTPS URL format without whitespace.
+///
+/// Ensures valid scheme (http:// or https://), non-empty hostname with at least
+/// two labels, valid domain label characters (alphanumeric and hyphen, no leading/trailing
+/// hyphen or empty labels), no leading/trailing dot or consecutive dots, and optional valid port.
 pub fn validate_url(s: &str) -> Result<(), String> {
     if s.is_empty() || s.len() > 2048 {
         return Err("source URL empty or exceeds 2048 characters".into());
+    }
+    if s.contains(' ') {
+        return Err("source URL must not contain whitespace".into());
     }
     if !(s.starts_with("https://") || s.starts_with("http://")) {
         return Err("source URL must start with http:// or https://".into());
@@ -89,12 +96,37 @@ pub fn validate_url(s: &str) -> Result<(), String> {
     } else {
         s.strip_prefix("http://").unwrap()
     };
-    let host = rest.split('/').next().unwrap_or("");
-    if host.is_empty() || host.contains(' ') || !host.contains('.') {
-        return Err("source URL must contain a valid domain name".into());
+    let host_and_port = rest.split('/').next().unwrap_or("");
+    if host_and_port.is_empty() {
+        return Err("source URL must contain a non-empty host".into());
     }
-    if s.contains(' ') {
-        return Err("source URL must not contain whitespace".into());
+    let (host, port_opt) = if let Some((h, p)) = host_and_port.split_once(':') {
+        (h, Some(p))
+    } else {
+        (host_and_port, None)
+    };
+    if let Some(port_str) = port_opt {
+        if port_str.is_empty() || port_str.parse::<u16>().is_err() {
+            return Err("source URL contains invalid port number".into());
+        }
+    }
+    if host.is_empty() || host.starts_with('.') || host.ends_with('.') || host.contains("..") {
+        return Err("source URL must contain a valid domain name without leading, trailing, or consecutive dots".into());
+    }
+    let labels: Vec<&str> = host.split('.').collect();
+    if labels.len() < 2 {
+        return Err("source URL must contain a domain with at least two labels".into());
+    }
+    for label in &labels {
+        if label.is_empty() || label.len() > 63 {
+            return Err("source URL domain label must be between 1 and 63 characters".into());
+        }
+        if label.starts_with('-') || label.ends_with('-') {
+            return Err("source URL domain label must not start or end with a hyphen".into());
+        }
+        if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err("source URL domain label contains invalid characters".into());
+        }
     }
     Ok(())
 }
@@ -138,7 +170,26 @@ impl<'a> PartialOrd for ExitSearchState<'a> {
 
 /// Finds the first Exit edge(s) reachable from `anchor_node_id` using only `Shutoko` edges,
 /// respecting forbidden transitions.
-/// Returns (min_distance_meters, exit_edge_ids).
+/// Returns `(min_distance_meters, exit_edge_ids)`.
+///
+/// # Pruning and Soundness
+///
+/// Path validity with respect to forbidden transitions depends on edge sequence history.
+/// Pruning states are tracked at the granularity of `(node, suffix)`, where `suffix` is
+/// the sequence of the last `L - 1` edge IDs traversed (with `L` being the maximum length
+/// of any sequence in `graph.forbidden_transitions`, or 0 if empty).
+///
+/// Soundness rationale:
+/// - Any forbidden transition sequence in the graph has length at most `L`.
+/// - Any forbidden sequence that could be formed by continuing a path from `node` can inspect
+///   at most the last `L - 1` edges traversed prior to reaching `node`.
+/// - Two paths reaching `node` with the exact same suffix of length `L - 1` have identical
+///   legality for all future edge choices.
+/// - Edge distances are non-negative. Therefore, if a path reaches `(node, suffix)` with cost `c1`,
+///   any later path reaching `(node, suffix)` with `c2 > c1` cannot achieve a strictly smaller exit
+///   distance than what was reachable from `c1`.
+/// - Furthermore, when an exit edge is found, if `total_dist < cur_min`, `min_exit_dist` is updated
+///   to the smaller distance and `first_exit_ids` is cleared and replaced (fixing premature exit lock-in).
 pub fn find_first_exits_from_anchor(
     graph: &Graph,
     anchor_node_id: &str,
@@ -154,6 +205,14 @@ pub fn find_first_exits_from_anchor(
         }
     }
 
+    let max_forbidden_len = graph
+        .forbidden_transitions
+        .iter()
+        .map(|s| s.len())
+        .max()
+        .unwrap_or(0);
+    let history_len = max_forbidden_len.saturating_sub(1);
+
     let mut heap = std::collections::BinaryHeap::new();
     heap.push(ExitSearchState {
         cost: 0,
@@ -161,7 +220,7 @@ pub fn find_first_exits_from_anchor(
         path: Vec::new(),
     });
 
-    let mut best_cost_by_node: BTreeMap<&str, u64> = BTreeMap::new();
+    let mut best_cost_by_state: BTreeMap<(&str, Vec<String>), u64> = BTreeMap::new();
     let mut min_exit_dist: Option<u64> = None;
     let mut first_exit_ids: Vec<String> = Vec::new();
 
@@ -175,7 +234,14 @@ pub fn find_first_exits_from_anchor(
             }
         }
 
-        if let Some(&best) = best_cost_by_node.get(node) {
+        let suffix: Vec<String> = if history_len > 0 {
+            let start = path.len().saturating_sub(history_len);
+            path[start..].to_vec()
+        } else {
+            Vec::new()
+        };
+
+        if let Some(&best) = best_cost_by_state.get(&(node, suffix)) {
             if cost > best {
                 continue;
             }
@@ -193,6 +259,11 @@ pub fn find_first_exits_from_anchor(
                 match min_exit_dist {
                     None => {
                         min_exit_dist = Some(total_dist);
+                        first_exit_ids.push(exit_e.id.clone());
+                    }
+                    Some(cur_min) if total_dist < cur_min => {
+                        min_exit_dist = Some(total_dist);
+                        first_exit_ids.clear();
                         first_exit_ids.push(exit_e.id.clone());
                     }
                     Some(cur_min) if total_dist == cur_min => {
@@ -230,14 +301,20 @@ pub fn find_first_exits_from_anchor(
                     }
                 }
 
-                if next_cost < *best_cost_by_node.get(next_node).unwrap_or(&u64::MAX) {
-                    best_cost_by_node.insert(next_node, next_cost);
-                    let mut new_path = path.clone();
-                    new_path.push(e.id.clone());
+                let next_suffix: Vec<String> = if history_len > 0 {
+                    let start = candidate_path.len().saturating_sub(history_len);
+                    candidate_path[start..].to_vec()
+                } else {
+                    Vec::new()
+                };
+
+                let state_key = (next_node, next_suffix);
+                if next_cost < *best_cost_by_state.get(&state_key).unwrap_or(&u64::MAX) {
+                    best_cost_by_state.insert(state_key, next_cost);
                     heap.push(ExitSearchState {
                         cost: next_cost,
                         node: next_node,
-                        path: new_path,
+                        path: candidate_path,
                     });
                 }
             }

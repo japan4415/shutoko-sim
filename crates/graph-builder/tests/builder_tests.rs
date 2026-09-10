@@ -1326,6 +1326,51 @@ fn test_turn_restriction_conditional_skipped() {
 }
 
 #[test]
+fn test_turn_restriction_only_via_way_skipped() {
+    let json_data = json!({
+        "elements": [
+            {"type": "node", "id": 1, "lat": 35.6800, "lon": 139.7600},
+            {"type": "node", "id": 2, "lat": 35.6810, "lon": 139.7600},
+            {"type": "node", "id": 3, "lat": 35.6820, "lon": 139.7600},
+            {"type": "node", "id": 4, "lat": 35.6830, "lon": 139.7600},
+
+            {
+                "type": "way", "id": 10, "nodes": [1, 2],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+            {
+                "type": "way", "id": 20, "nodes": [2, 3],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+            {
+                "type": "way", "id": 30, "nodes": [3, 4],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+            {
+                "type": "relation",
+                "id": 5000,
+                "tags": {
+                    "type": "restriction",
+                    "restriction": "only_straight_on"
+                },
+                "members": [
+                    {"type": "way", "ref": 10, "role": "from"},
+                    {"type": "way", "ref": 20, "role": "via"},
+                    {"type": "way", "ref": 30, "role": "to"}
+                ]
+            }
+        ]
+    });
+
+    let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
+    let config = TopologyConfig::default();
+    let (graph, _snap, report) = build_topology_with_report(&resp, &config).unwrap();
+
+    assert_eq!(report.skipped_only_via_way, 1);
+    assert_eq!(graph.forbidden_transitions.len(), 0);
+}
+
+#[test]
 fn test_refutation_first_exit_mismatch_shintomicho() {
     let osm_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -1425,6 +1470,27 @@ fn test_provenance_url_and_date_validation() {
     seed_bad_fmt.provenance.source_date = "2026/09/10".into();
     let err = generate_billing_pair(&graph, &seed_bad_fmt).unwrap_err();
     assert!(matches!(err, BillingError::InvalidProvenance(_)));
+
+    // 5. Invalid domains (single dot, empty labels, trailing dot, invalid chars)
+    for bad_url in [
+        "https://.",
+        "https://..",
+        "https://.com",
+        "https://example.",
+        "https://example..com",
+        "https://-example.com",
+        "https://example-.com",
+        "https://exam ple.com",
+    ] {
+        let mut seed_bad_url = seed_ftp.clone();
+        seed_bad_url.provenance.source = bad_url.into();
+        let err = generate_billing_pair(&graph, &seed_bad_url).unwrap_err();
+        assert!(
+            matches!(err, BillingError::InvalidProvenance(_)),
+            "expected URL \"{}\" to be rejected as invalid provenance",
+            bad_url
+        );
+    }
 }
 
 #[test]
@@ -1524,7 +1590,7 @@ fn test_cli_strict_mode() {
         .expect("failed to execute binary (case 1)");
     assert!(
         status1.success(),
-        "expected --strict to succeed when all sections verified"
+        "expected --strict to succeed when verified billing pairs are generated"
     );
 
     // Case 2: Unverified seed without --strict succeeds
@@ -1547,7 +1613,7 @@ fn test_cli_strict_mode() {
         .expect("failed to execute binary (case 2)");
     assert!(
         status2.success(),
-        "expected non-strict mode to succeed with unverified sections"
+        "expected non-strict mode to succeed even when no verified pairs exist"
     );
 
     // Case 3: Unverified seed with --strict fails
@@ -1571,8 +1637,161 @@ fn test_cli_strict_mode() {
         .expect("failed to execute binary (case 3)");
     assert!(
         !status3.success(),
-        "expected --strict to fail when unverified sections exist"
+        "expected --strict to fail when no verified billing pairs are generated"
     );
 
     let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_refutation_unsound_pruning_codex_counterexample() {
+    use shutoko_graph_builder::validate_billing_pair;
+    use shutoko_graph_builder::{
+        BillingPair, Edge, EdgeKind, Graph, Node, Price, VerificationStatus,
+    };
+
+    // Codex counterexample topology:
+    // Anchor: n:1
+    // Node N: n:2
+    // Path 1 to n:2: e1 (dist: 1)
+    // Path 2 to n:2: e2 (dist: 2) -> n:3 -> e3 (dist: 2) (total dist: 4)
+    // Exit 1 from n:2: exit1 (dist: 1) -> n:4
+    // Forbidden transition: ["e1", "exit1"]
+    //   -> Path 1 to exit1 is forbidden.
+    //   -> Path 2 to exit1 is valid (total dist: 4 + 1 = 5).
+    // Later exit from n:2: e4 (dist: 5) -> n:5 -> exit2 (dist: 5) -> n:6
+    //   -> Path 1 to exit2 is valid (total dist: 1 + 5 + 5 = 11).
+    // Shutoko loop from n:1: n:1 -> n:2 -> n:5 -> n:1
+    let graph = Graph {
+        schema_version: 1,
+        release_id: "test-codex-counterexample".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node {
+                id: "n:entry".into(),
+            },
+            Node { id: "n:1".into() },
+            Node { id: "n:2".into() },
+            Node { id: "n:3".into() },
+            Node { id: "n:4".into() },
+            Node { id: "n:5".into() },
+            Node { id: "n:6".into() },
+        ],
+        edges: vec![
+            Edge {
+                id: "entry".into(),
+                from: "n:entry".into(),
+                to: "n:1".into(),
+                distance_meters: 10,
+                duration_seconds: 1,
+                kind: EdgeKind::Entry,
+            },
+            Edge {
+                id: "e1".into(),
+                from: "n:1".into(),
+                to: "n:2".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e2".into(),
+                from: "n:1".into(),
+                to: "n:3".into(),
+                distance_meters: 2,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e3".into(),
+                from: "n:3".into(),
+                to: "n:2".into(),
+                distance_meters: 2,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e4".into(),
+                from: "n:2".into(),
+                to: "n:5".into(),
+                distance_meters: 5,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e_loop".into(),
+                from: "n:5".into(),
+                to: "n:1".into(),
+                distance_meters: 10,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "exit1".into(),
+                from: "n:2".into(),
+                to: "n:4".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Exit,
+            },
+            Edge {
+                id: "exit2".into(),
+                from: "n:5".into(),
+                to: "n:6".into(),
+                distance_meters: 5,
+                duration_seconds: 1,
+                kind: EdgeKind::Exit,
+            },
+        ],
+        billing_pairs: Vec::new(),
+        forbidden_transitions: vec![vec!["e1".into(), "exit1".into()]],
+    };
+
+    // 1. find_first_exits_from_anchor must return the legitimate first exit (exit1 at distance 5),
+    // NOT the later exit (exit2 at distance 11) caused by unsound node-level pruning.
+    let (min_dist, first_exits) =
+        shutoko_graph_builder::find_first_exits_from_anchor(&graph, "n:1").unwrap();
+    assert_eq!(
+        min_dist, 5,
+        "first exit distance must be 5m via e2->e3->exit1, not 11m"
+    );
+    assert_eq!(
+        first_exits,
+        vec!["exit1".to_string()],
+        "first exit must be exit1"
+    );
+
+    // 2. A verified billing pair targeting later-exit (exit2) must be rejected with FIRST_EXIT_MISMATCH
+    let pair_later_exit = BillingPair {
+        id: "bp-codex-later-exit".into(),
+        entry_id: "entry".into(),
+        exit_id: "exit2".into(),
+        anchor_node_id: "n:1".into(),
+        entry_to_anchor_edge_ids: vec!["entry".into()],
+        anchor_to_exit_edge_ids: vec!["e1".into(), "e4".into(), "exit2".into()],
+        vehicle_profile: "passenger-car-etc".into(),
+        status: VerificationStatus::Verified,
+        prices: vec![Price {
+            amount_yen: 300,
+            effective_from: "2026-01-01T00:00:00Z".into(),
+            effective_to: None,
+        }],
+    };
+
+    let result = validate_billing_pair(&graph, &pair_later_exit);
+    assert!(
+        result.is_err(),
+        "verified seed targeting later exit must fail"
+    );
+    let err = result.unwrap_err();
+    assert_eq!(
+        err.rule, "FIRST_EXIT_MISMATCH",
+        "expected rule FIRST_EXIT_MISMATCH, got {}",
+        err.rule
+    );
+    assert!(
+        err.message.contains("exit1"),
+        "error message must mention true first exit exit1: {}",
+        err.message
+    );
 }

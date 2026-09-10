@@ -83,3 +83,11 @@ cargo run --bin shutoko-graph-builder --locked -- \
 現時点で登録・検証されていない入出口ランプ区間（未検証区間）はマニフェストおよびシードで追跡される。
 - 今回のリリース `c1-real-v1` では `bp:c1-outer:kandabashi-takaracho` を公式路線図に基づき人手検証済み（`verified`）。
 - 将来追加予定のランプ区間（芝公園、霞が関、銀座、飯倉等）については、公式料金区間表または本線隣接導出の根拠とともに順次シードへ追加する。
+
+## 6. CI における自動再生成検証
+
+パイプラインの決定論的性質と成果物の整合性を担保するため、GitHub Actions ワークフロー（`.github/workflows/ci.yml`）で再生成チェックを自動実行している。
+- コミット済みの `fixtures/osm/shutoko-c1.json` を入力とし、外部 Overpass API にはアクセスしない（外部ネットワーク非依存）。
+- `scripts/generate-fixtures.sh` を実行後、`git diff --exit-code` および `git status --porcelain` でコミット済みの `fixtures/generated/` との差分が一切生じないことを検証する。
+- グラフビルダーのロジックや課金シードの更新時は、再生成された `fixtures/generated/` を同一 PR でコミットする必要があり、意図しない出力の乖離やリグレッションを防ぐ。
+

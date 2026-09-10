@@ -609,7 +609,7 @@ fn standard_highway_edges() -> Vec<Value> {
 
 fn build_test_graph(nodes: &[&str], edges: Vec<Value>, forbidden_transitions: Value) -> Value {
     json!({
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "releaseId": "synthetic-v1",
         "vehicleProfile": "passenger-car-etc",
         "nodes": nodes.iter().map(|n| json!({"id": n, "lat": 35.68, "lon": 139.76})).collect::<Vec<_>>(),
@@ -940,6 +940,10 @@ fn candidate_geometry_and_handoff_and_warnings_contract() {
     assert!(
         warnings.contains(&"HANDOFF_WAYPOINTS_UNVERIFIED"),
         "warnings must contain HANDOFF_WAYPOINTS_UNVERIFIED"
+    );
+    assert!(
+        !warnings.contains(&"EXPERIMENTAL_NO_HANDOFF"),
+        "warnings must not contain deprecated EXPERIMENTAL_NO_HANDOFF"
     );
 }
 

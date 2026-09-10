@@ -110,7 +110,7 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "471b4f2badca118d7f592c1b78092bcd93f662e856ff5a057884f26ac4d1d095",
+      "sha256": "bce7e2386c70161b829759d11f498c394d1b6059fc1dccecc9754bb7d1e1d6bd",
       "byteLength": 2907908
     },
     {

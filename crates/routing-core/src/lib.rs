@@ -281,7 +281,7 @@ fn validate<'a>(
     r: &SearchRequest,
     l: &SearchLimits,
 ) -> Result<Index<'a>, RoutingError> {
-    if g.schema_version != 1
+    if g.schema_version != 2
         || g.release_id.is_empty()
         || g.release_id.len() > 256
         || g.release_id != r.release_id
@@ -1258,7 +1258,6 @@ pub fn search(
                 },
                 reasons: Vec::new(),
                 warnings: vec![
-                    "EXPERIMENTAL_NO_HANDOFF".into(),
                     "STATIC_TRAVEL_TIME".into(),
                     "HANDOFF_WAYPOINTS_UNVERIFIED".into(),
                 ],

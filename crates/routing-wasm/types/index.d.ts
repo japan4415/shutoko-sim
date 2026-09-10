@@ -93,6 +93,7 @@ export interface Candidate {
   toll: Toll;
   loop: Loop;
   reasons: string[];
+  /** Warning codes: "HANDOFF_WAYPOINTS_UNVERIFIED", "STATIC_TRAVEL_TIME" */
   warnings: string[];
   handoff: Handoff;
 }

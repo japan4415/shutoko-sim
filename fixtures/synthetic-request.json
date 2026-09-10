@@ -1,0 +1,9 @@
+{
+  "requestId":"synthetic-request",
+  "releaseId":"synthetic-v1",
+  "originNodeId":"s",
+  "minMinutes":30,
+  "maxMinutes":40,
+  "vehicleProfile":"passenger-car-etc",
+  "pricingAt":"2026-09-10T00:00:00Z"
+}

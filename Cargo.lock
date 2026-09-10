@@ -118,6 +118,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "shutoko-graph-builder"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "shutoko-routing-core",
+]
+
+[[package]]
 name = "shutoko-routing-core"
 version = "0.1.0"
 dependencies = [

@@ -36,10 +36,32 @@ pub struct RestrictionReport {
     pub skipped_disconnected: usize,
     /// Number of only_* restrictions with via=way skipped (unsupported for static graph).
     pub skipped_only_via_way: usize,
+    /// Number of restrictions with unrecognized restriction values skipped.
+    pub skipped_unrecognized: usize,
     /// Internal motorway_link edges dropped (not connecting local streets and Shutoko).
     pub dropped_link_edges: usize,
     /// Human-readable diagnostic messages detailing skipped or notable relations.
     pub notes: Vec<String>,
+}
+
+impl RestrictionReport {
+    /// Sum of all categorized turn restriction relations.
+    pub fn total_accounted(&self) -> usize {
+        self.no_turn_via_node
+            + self.only_turn_via_node
+            + self.via_way
+            + self.skipped_conditional
+            + self.skipped_no_via
+            + self.skipped_missing_elements
+            + self.skipped_disconnected
+            + self.skipped_only_via_way
+            + self.skipped_unrecognized
+    }
+
+    /// Verifies that every inspected turn restriction relation is fully accounted for.
+    pub fn is_balanced(&self) -> bool {
+        self.total_relations == self.total_accounted()
+    }
 }
 
 /// Estimated nominal flow speed for Shutoko urban expressways (60 km/h).
@@ -490,6 +512,7 @@ pub fn build_topology_with_report(
         );
 
         if !is_no_turn && !is_only_turn {
+            report.skipped_unrecognized += 1;
             report.notes.push(format!(
                 "relation {}: unrecognized restriction value \"{}\"",
                 elem.id, restriction
@@ -612,9 +635,10 @@ pub fn build_topology_with_report(
                 if let Some(outgoing) = all_outgoing {
                     for fe_id in &fe_candidates {
                         for out_id in outgoing {
-                            if !to_ids.contains(out_id.as_str()) {
-                                forbidden_transitions_set
-                                    .insert(vec![(*fe_id).clone(), out_id.clone()]);
+                            if !to_ids.contains(out_id.as_str())
+                                && forbidden_transitions_set
+                                    .insert(vec![(*fe_id).clone(), out_id.clone()])
+                            {
                                 added_pairs += 1;
                             }
                         }
@@ -622,9 +646,7 @@ pub fn build_topology_with_report(
                 }
 
                 report.only_turn_via_node += 1;
-                if added_pairs > 0 {
-                    report.only_turn_edge_pairs += added_pairs;
-                }
+                report.only_turn_edge_pairs += added_pairs;
             }
             continue;
         }
@@ -774,7 +796,7 @@ pub fn build_topology_with_report(
         );
     }
     eprintln!(
-        "Turn restrictions: {} total relations -> {} no_turn (via=node), {} only_turn (via=node, {} forbidden pairs), {} via_way | skipped: {} conditional, {} no via, {} outside graph, {} disconnected{}",
+        "Turn restrictions: {} total relations -> {} no_turn (via=node), {} only_turn (via=node, {} forbidden pairs), {} via_way | skipped: {} conditional, {} no via, {} outside graph, {} disconnected{}{}",
         report.total_relations,
         report.no_turn_via_node,
         report.only_turn_via_node,
@@ -786,6 +808,11 @@ pub fn build_topology_with_report(
         report.skipped_disconnected,
         if report.skipped_only_via_way > 0 {
             format!(", {} only via-way", report.skipped_only_via_way)
+        } else {
+            String::new()
+        },
+        if report.skipped_unrecognized > 0 {
+            format!(", {} unrecognized", report.skipped_unrecognized)
         } else {
             String::new()
         }

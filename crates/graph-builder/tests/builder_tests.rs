@@ -1371,6 +1371,173 @@ fn test_turn_restriction_only_via_way_skipped() {
 }
 
 #[test]
+fn test_turn_restriction_unrecognized_skipped_and_balanced() {
+    let json_data = json!({
+        "elements": [
+            {"type": "node", "id": 1, "lat": 35.6800, "lon": 139.7600},
+            {"type": "node", "id": 2, "lat": 35.6810, "lon": 139.7600},
+            {"type": "node", "id": 3, "lat": 35.6810, "lon": 139.7590},
+
+            {"type": "way", "id": 10, "nodes": [1, 2], "tags": {"highway": "primary", "oneway": "yes"}},
+            {"type": "way", "id": 20, "nodes": [2, 3], "tags": {"highway": "primary", "oneway": "yes"}},
+
+            // Relation with unrecognized restriction value "no_entry"
+            {
+                "type": "relation",
+                "id": 6000,
+                "tags": {
+                    "type": "restriction",
+                    "restriction": "no_entry"
+                },
+                "members": [
+                    {"type": "way", "ref": 10, "role": "from"},
+                    {"type": "way", "ref": 20, "role": "to"},
+                    {"type": "node", "ref": 2, "role": "via"}
+                ]
+            }
+        ]
+    });
+
+    let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
+    let config = TopologyConfig::default();
+    let (_graph, _snap, report) = build_topology_with_report(&resp, &config).unwrap();
+
+    assert_eq!(report.total_relations, 1);
+    assert_eq!(report.skipped_unrecognized, 1);
+    assert!(report.is_balanced());
+    assert_eq!(report.total_accounted(), 1);
+}
+
+#[test]
+fn test_turn_restriction_only_turn_deduplication() {
+    let json_data = json!({
+        "elements": [
+            {"type": "node", "id": 1, "lat": 35.6800, "lon": 139.7600},
+            {"type": "node", "id": 2, "lat": 35.6810, "lon": 139.7600},
+            {"type": "node", "id": 3, "lat": 35.6820, "lon": 139.7600},
+            {"type": "node", "id": 4, "lat": 35.6810, "lon": 139.7610},
+
+            // From: Way 10 (1 -> 2)
+            {"type": "way", "id": 10, "nodes": [1, 2], "tags": {"highway": "primary", "oneway": "yes"}},
+            // To: Way 20 (2 -> 3)
+            {"type": "way", "id": 20, "nodes": [2, 3], "tags": {"highway": "primary", "oneway": "yes"}},
+            // Alternative outgoing: Way 30 (2 -> 4)
+            {"type": "way", "id": 30, "nodes": [2, 4], "tags": {"highway": "primary", "oneway": "yes"}},
+
+            // Relation 1: only_straight_on (Way 10 -> Way 20) => forbids Way 10 -> Way 30
+            {
+                "type": "relation",
+                "id": 7001,
+                "tags": {"type": "restriction", "restriction": "only_straight_on"},
+                "members": [
+                    {"type": "way", "ref": 10, "role": "from"},
+                    {"type": "way", "ref": 20, "role": "to"},
+                    {"type": "node", "ref": 2, "role": "via"}
+                ]
+            },
+            // Relation 2: duplicate only_straight_on (same from, to, via)
+            {
+                "type": "relation",
+                "id": 7002,
+                "tags": {"type": "restriction", "restriction": "only_straight_on"},
+                "members": [
+                    {"type": "way", "ref": 10, "role": "from"},
+                    {"type": "way", "ref": 20, "role": "to"},
+                    {"type": "node", "ref": 2, "role": "via"}
+                ]
+            }
+        ]
+    });
+
+    let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
+    let config = TopologyConfig::default();
+    let (graph, _snap, report) = build_topology_with_report(&resp, &config).unwrap();
+
+    assert_eq!(report.total_relations, 2);
+    assert_eq!(report.only_turn_via_node, 2);
+    // Even though 2 relations applied, only 1 unique forbidden pair (10 -> 30) was inserted
+    assert_eq!(report.only_turn_edge_pairs, 1);
+    assert_eq!(graph.forbidden_transitions.len(), 1);
+    assert!(report.is_balanced());
+}
+
+#[test]
+fn test_real_c1_turn_restriction_balance() {
+    let osm_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("fixtures/osm/shutoko-c1.json");
+    let osm_content = std::fs::read_to_string(&osm_path).expect("failed to read shutoko-c1.json");
+    let resp: OverpassResponse = serde_json::from_str(&osm_content).unwrap();
+
+    let config = TopologyConfig::default();
+    let (_graph, _snap, report) = build_topology_with_report(&resp, &config).unwrap();
+
+    assert_eq!(
+        report.total_relations, 151,
+        "C1 real dataset contains exactly 151 turn restriction relations"
+    );
+    assert!(
+        report.is_balanced(),
+        "all 151 relations must be accounted for without leakage: accounted={}, total={}",
+        report.total_accounted(),
+        report.total_relations
+    );
+    assert_eq!(report.no_turn_via_node, 35);
+    assert_eq!(report.only_turn_via_node, 28);
+    assert_eq!(report.only_turn_edge_pairs, 23);
+    assert_eq!(report.via_way, 7);
+    assert_eq!(report.skipped_conditional, 8);
+    assert_eq!(report.skipped_no_via, 5);
+    assert_eq!(report.skipped_missing_elements, 67);
+    assert_eq!(report.skipped_disconnected, 1);
+    assert_eq!(report.skipped_only_via_way, 0);
+    assert_eq!(report.skipped_unrecognized, 0);
+}
+
+#[test]
+fn test_real_c1_first_exit_and_benchmark() {
+    use std::time::Instant;
+
+    let osm_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("fixtures/osm/shutoko-c1.json");
+    let osm_content = std::fs::read_to_string(&osm_path).expect("failed to read shutoko-c1.json");
+    let resp: OverpassResponse = serde_json::from_str(&osm_content).unwrap();
+
+    let config = TopologyConfig::default();
+    let (graph, _snap) = build_topology(&resp, &config).unwrap();
+    assert_eq!(graph.edges.len(), 7422, "C1 graph must have 7,422 edges");
+
+    // Anchor node for Kandabashi entry is n:499831338
+    let anchor = "n:499831338";
+
+    let start = Instant::now();
+    let (min_dist, first_exits) =
+        shutoko_graph_builder::find_first_exits_from_anchor(&graph, anchor)
+            .expect("first exit search must succeed on real C1 graph");
+    let elapsed = start.elapsed();
+
+    eprintln!(
+        "Real C1 (7422 edges) find_first_exits_from_anchor elapsed: {:?}, dist: {}m, exits: {:?}",
+        elapsed, min_dist, first_exits
+    );
+
+    // Verify requirement 4: (2027, ["e:w297864314:11:f"])
+    assert_eq!(min_dist, 2027, "first exit distance must be exactly 2027m");
+    assert_eq!(
+        first_exits,
+        vec!["e:w297864314:11:f".to_string()],
+        "first exit must remain Takaracho exit e:w297864314:11:f"
+    );
+}
+
+#[test]
 fn test_refutation_first_exit_mismatch_shintomicho() {
     let osm_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -1792,6 +1959,531 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
     assert!(
         err.message.contains("exit1"),
         "error message must mention true first exit exit1: {}",
+        err.message
+    );
+}
+
+#[test]
+fn test_refutation_counterexample_a_opus5() {
+    use shutoko_graph_builder::{find_first_exits_from_anchor, Edge, EdgeKind, Graph, Node};
+
+    // Counterexample A (Claude Opus 5):
+    // Topology:
+    // Shutoko edges:
+    //   e1: A -> B (dist: 10)
+    //   e2: B -> C (dist: 1)
+    //   e3: A -> W (dist: 1)
+    //   e4: W -> C (dist: 1)
+    //   e5: C -> V (dist: 1)
+    //   e6: V -> W (dist: 1)
+    //   e7: W -> X (dist: 1)
+    // Exit edge:
+    //   e8: X -> OUT (dist: 1)
+    // Forbidden transitions: [["e3", "e7"]] (L=2, history_len=1)
+    //
+    // Calculation under Proposal (b) (walk allowed in first-exit search):
+    // The candidate walk from A to OUT:
+    //   A -(e3:1)-> W -(e4:1)-> C -(e5:1)-> V -(e6:1)-> W -(e7:1)-> X -(e8:1)-> OUT
+    // Cost calculation:
+    //   e3 (1) + e4 (1) + e5 (1) + e6 (1) + e7 (1) + e8 (1) = 6m.
+    // Forbidden transition verification:
+    //   Sequence of edges: [e3, e4, e5, e6, e7, e8]
+    //   The forbidden transition ["e3", "e7"] requires e3 and e7 to be traversed consecutively.
+    //   In this walk, e3 and e7 are separated by [e4, e5, e6], so no window matches ["e3", "e7"].
+    //   Hence, this walk is fully legal under forbidden transitions.
+    //   Proposal (b) drops the simple path constraint from first-exit search, so this 6m walk is valid.
+    //
+    // Failure in prior implementation (with simple path constraint):
+    //   Path A->e3->W->e4->C->e5->V reached state (V, [e5]) at cost 3,
+    //   which pruned the path A->e1->B->e2->C->e5->V (cost 12, suffix [e5]).
+    //   From (V, [e5]), next edge e6 leads to node W, which was already visited in the prefix (via e3).
+    //   The simple path constraint (visited nodes) rejected e6, dead-ending the search
+    //   and causing find_first_exits_from_anchor to return Err("no exit edge reachable...").
+    let graph = Graph {
+        schema_version: 1,
+        release_id: "test-counterexample-a".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node { id: "A".into() },
+            Node { id: "B".into() },
+            Node { id: "C".into() },
+            Node { id: "W".into() },
+            Node { id: "V".into() },
+            Node { id: "X".into() },
+            Node { id: "OUT".into() },
+        ],
+        edges: vec![
+            Edge {
+                id: "e1".into(),
+                from: "A".into(),
+                to: "B".into(),
+                distance_meters: 10,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e2".into(),
+                from: "B".into(),
+                to: "C".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e3".into(),
+                from: "A".into(),
+                to: "W".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e4".into(),
+                from: "W".into(),
+                to: "C".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e5".into(),
+                from: "C".into(),
+                to: "V".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e6".into(),
+                from: "V".into(),
+                to: "W".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e7".into(),
+                from: "W".into(),
+                to: "X".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e8".into(),
+                from: "X".into(),
+                to: "OUT".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Exit,
+            },
+        ],
+        billing_pairs: Vec::new(),
+        forbidden_transitions: vec![vec!["e3".into(), "e7".into()]],
+    };
+
+    let result = find_first_exits_from_anchor(&graph, "A");
+    assert!(
+        result.is_ok(),
+        "search must not fail with Err: {:?}",
+        result.err()
+    );
+    let (min_dist, first_exits) = result.unwrap();
+    assert_eq!(
+        min_dist, 6,
+        "first exit distance under walk semantics must be 6m"
+    );
+    assert_eq!(first_exits, vec!["e8".to_string()], "first exit must be e8");
+}
+
+#[test]
+fn test_refutation_counterexample_b_opus5() {
+    use shutoko_graph_builder::{
+        find_first_exits_from_anchor, validate_billing_pair, BillingPair, Edge, EdgeKind, Graph,
+        Node, Price, VerificationStatus,
+    };
+
+    // Counterexample B (Claude Opus 5):
+    // Extends Counterexample A by adding:
+    //   e9: A -> Z (dist: 40, Shutoko)
+    //   e10: Z -> OUT2 (dist: 1, Exit)
+    //   e_loop: X -> A (dist: 10, Shutoko) -- to provide a valid Shutoko loop from anchor A
+    //
+    // Under Proposal (b):
+    //   True first exit is e8 at distance 6m via walk A-e3-W-e4-C-e5-V-e6-W-e7-X-e8.
+    //   A verified billing pair targeting downstream/alternative exit e10 must be REJECTED
+    //   with FIRST_EXIT_MISMATCH.
+    //   A verified billing pair targeting true exit e8 along simple path
+    //   A-e1-B-e2-C-e5-V-e6-W-e7-X-e8 must be ACCEPTED (simple path contract on billing pair is satisfied).
+    //
+    // Prior buggy behavior:
+    //   e8 was pruned away due to simple path constraint causing dead-end, so the search returned (41, ["e10"]).
+    //   As a result, exit_id=e10 was incorrectly accepted as verified, and exit_id=e8 was incorrectly rejected!
+    let graph = Graph {
+        schema_version: 1,
+        release_id: "test-counterexample-b".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node {
+                id: "entry_node".into(),
+            },
+            Node { id: "A".into() },
+            Node { id: "B".into() },
+            Node { id: "C".into() },
+            Node { id: "W".into() },
+            Node { id: "V".into() },
+            Node { id: "X".into() },
+            Node { id: "Z".into() },
+            Node { id: "OUT".into() },
+            Node { id: "OUT2".into() },
+        ],
+        edges: vec![
+            Edge {
+                id: "entry_e".into(),
+                from: "entry_node".into(),
+                to: "A".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Entry,
+            },
+            Edge {
+                id: "e1".into(),
+                from: "A".into(),
+                to: "B".into(),
+                distance_meters: 10,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e2".into(),
+                from: "B".into(),
+                to: "C".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e3".into(),
+                from: "A".into(),
+                to: "W".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e4".into(),
+                from: "W".into(),
+                to: "C".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e5".into(),
+                from: "C".into(),
+                to: "V".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e6".into(),
+                from: "V".into(),
+                to: "W".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e7".into(),
+                from: "W".into(),
+                to: "X".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e8".into(),
+                from: "X".into(),
+                to: "OUT".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Exit,
+            },
+            Edge {
+                id: "e9".into(),
+                from: "A".into(),
+                to: "Z".into(),
+                distance_meters: 40,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "e10".into(),
+                from: "Z".into(),
+                to: "OUT2".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Exit,
+            },
+            Edge {
+                id: "e_loop".into(),
+                from: "X".into(),
+                to: "A".into(),
+                distance_meters: 10,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+        ],
+        billing_pairs: Vec::new(),
+        forbidden_transitions: vec![vec!["e3".into(), "e7".into()]],
+    };
+
+    let (min_dist, first_exits) = find_first_exits_from_anchor(&graph, "A").unwrap();
+    assert_eq!(min_dist, 6);
+    assert_eq!(first_exits, vec!["e8".to_string()]);
+
+    // 1. Target incorrect downstream exit e10 -> MUST FAIL with FIRST_EXIT_MISMATCH
+    let pair_e10 = BillingPair {
+        id: "bp-e10".into(),
+        entry_id: "entry_e".into(),
+        exit_id: "e10".into(),
+        anchor_node_id: "A".into(),
+        entry_to_anchor_edge_ids: vec!["entry_e".into()],
+        anchor_to_exit_edge_ids: vec!["e9".into(), "e10".into()],
+        vehicle_profile: "passenger-car-etc".into(),
+        status: VerificationStatus::Verified,
+        prices: vec![Price {
+            amount_yen: 300,
+            effective_from: "2026-01-01T00:00:00Z".into(),
+            effective_to: None,
+        }],
+    };
+    let err = validate_billing_pair(&graph, &pair_e10).unwrap_err();
+    assert_eq!(err.rule, "FIRST_EXIT_MISMATCH");
+    assert!(
+        err.message.contains("e8"),
+        "error should identify e8 as the true first exit: {}",
+        err.message
+    );
+
+    // 2. Target correct first exit e8 along simple path e1->e2->e5->e6->e7->e8 -> MUST SUCCEED
+    let pair_e8 = BillingPair {
+        id: "bp-e8".into(),
+        entry_id: "entry_e".into(),
+        exit_id: "e8".into(),
+        anchor_node_id: "A".into(),
+        entry_to_anchor_edge_ids: vec!["entry_e".into()],
+        anchor_to_exit_edge_ids: vec![
+            "e1".into(),
+            "e2".into(),
+            "e5".into(),
+            "e6".into(),
+            "e7".into(),
+            "e8".into(),
+        ],
+        vehicle_profile: "passenger-car-etc".into(),
+        status: VerificationStatus::Verified,
+        prices: vec![Price {
+            amount_yen: 300,
+            effective_from: "2026-01-01T00:00:00Z".into(),
+            effective_to: None,
+        }],
+    };
+    let ok = validate_billing_pair(&graph, &pair_e8);
+    assert!(
+        ok.is_ok(),
+        "valid simple path to true first exit e8 must be accepted: {:?}",
+        ok.err()
+    );
+}
+
+#[test]
+fn test_refutation_counterexample_c_codex() {
+    use shutoko_graph_builder::{
+        find_first_exits_from_anchor, validate_billing_pair, BillingPair, Edge, EdgeKind, Graph,
+        Node, Price, VerificationStatus,
+    };
+
+    // Counterexample C (Codex topology):
+    // Graph:
+    // Anchor: a
+    // Nodes: a, x, y, c, n, z, out1, out2
+    // Edges:
+    //   entry_e: entry -> a (dist: 1, Entry)
+    //   ax: a -> x (dist: 1, Shutoko)
+    //   xc: x -> c (dist: 1, Shutoko)
+    //   ay: a -> y (dist: 2, Shutoko)
+    //   yc: y -> c (dist: 1, Shutoko)
+    //   cn: c -> n (dist: 1, Shutoko)
+    //   nx: n -> x (dist: 1, Shutoko)
+    //   exit1: x -> out1 (dist: 2, Exit)
+    //   nz: n -> z (dist: 4, Shutoko)
+    //   exit2: z -> out2 (dist: 6, Exit)
+    //   loop_e: z -> a (dist: 10, Shutoko)
+    // Forbidden transitions: [["ax", "exit1"]] (L=2)
+    //
+    // Calculation under Proposal (b) (walk allowed):
+    // Walk to exit1:
+    //   a -(ax:1)-> x -(xc:1)-> c -(cn:1)-> n -(nx:1)-> x -(exit1:2)-> out1
+    // Cost calculation:
+    //   ax(1) + xc(1) + cn(1) + nx(1) + exit1(2) = 6m.
+    // Forbidden transition check:
+    //   Path edges: [ax, xc, cn, nx, exit1].
+    //   Contiguous 2-edge sequences: (ax,xc), (xc,cn), (cn,nx), (nx,exit1).
+    //   None match ["ax", "exit1"]. Legal!
+    //   (Note: simple path a->y->c->n->x->exit1 is 2+1+1+1+2 = 7m, which is also legal).
+    //   The shortest walk yields exit1 at distance 6m.
+    //
+    // Failure in prior implementation:
+    //   Cheap path a->x->c->n (cost 3, suffix [cn]) prunes expensive path a->y->c->n (cost 4, suffix [cn]).
+    //   From (n, [cn]), cheap path cannot expand nx because x is already visited.
+    //   High-cost path could expand nx because x is unvisited, but was pruned.
+    //   Search fell back to nz->exit2 (cost 3 + 4 + 6 = 13m).
+    //   The prior function returned (13, ["exit2"]), incorrectly missing exit1!
+    let graph = Graph {
+        schema_version: 1,
+        release_id: "test-counterexample-c".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node { id: "entry".into() },
+            Node { id: "a".into() },
+            Node { id: "x".into() },
+            Node { id: "y".into() },
+            Node { id: "c".into() },
+            Node { id: "n".into() },
+            Node { id: "z".into() },
+            Node { id: "out1".into() },
+            Node { id: "out2".into() },
+        ],
+        edges: vec![
+            Edge {
+                id: "entry_e".into(),
+                from: "entry".into(),
+                to: "a".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Entry,
+            },
+            Edge {
+                id: "ax".into(),
+                from: "a".into(),
+                to: "x".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "xc".into(),
+                from: "x".into(),
+                to: "c".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "ay".into(),
+                from: "a".into(),
+                to: "y".into(),
+                distance_meters: 2,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "yc".into(),
+                from: "y".into(),
+                to: "c".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "cn".into(),
+                from: "c".into(),
+                to: "n".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "nx".into(),
+                from: "n".into(),
+                to: "x".into(),
+                distance_meters: 1,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "exit1".into(),
+                from: "x".into(),
+                to: "out1".into(),
+                distance_meters: 2,
+                duration_seconds: 1,
+                kind: EdgeKind::Exit,
+            },
+            Edge {
+                id: "nz".into(),
+                from: "n".into(),
+                to: "z".into(),
+                distance_meters: 4,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+            Edge {
+                id: "exit2".into(),
+                from: "z".into(),
+                to: "out2".into(),
+                distance_meters: 6,
+                duration_seconds: 1,
+                kind: EdgeKind::Exit,
+            },
+            Edge {
+                id: "loop_e".into(),
+                from: "z".into(),
+                to: "a".into(),
+                distance_meters: 10,
+                duration_seconds: 1,
+                kind: EdgeKind::Shutoko,
+            },
+        ],
+        billing_pairs: Vec::new(),
+        forbidden_transitions: vec![vec!["ax".into(), "exit1".into()]],
+    };
+
+    let (min_dist, first_exits) = find_first_exits_from_anchor(&graph, "a").unwrap();
+    assert_eq!(
+        min_dist, 6,
+        "first exit must be exit1 at distance 6m, not exit2 at 13m"
+    );
+    assert_eq!(first_exits, vec!["exit1".to_string()]);
+
+    // Later exit2 must be rejected with FIRST_EXIT_MISMATCH
+    let pair_exit2 = BillingPair {
+        id: "bp-codex-exit2".into(),
+        entry_id: "entry_e".into(),
+        exit_id: "exit2".into(),
+        anchor_node_id: "a".into(),
+        entry_to_anchor_edge_ids: vec!["entry_e".into()],
+        anchor_to_exit_edge_ids: vec![
+            "ax".into(),
+            "xc".into(),
+            "cn".into(),
+            "nz".into(),
+            "exit2".into(),
+        ],
+        vehicle_profile: "passenger-car-etc".into(),
+        status: VerificationStatus::Verified,
+        prices: vec![Price {
+            amount_yen: 300,
+            effective_from: "2026-01-01T00:00:00Z".into(),
+            effective_to: None,
+        }],
+    };
+    let err = validate_billing_pair(&graph, &pair_exit2).unwrap_err();
+    assert_eq!(err.rule, "FIRST_EXIT_MISMATCH");
+    assert!(
+        err.message.contains("exit1"),
+        "error message must point to true first exit exit1: {}",
         err.message
     );
 }

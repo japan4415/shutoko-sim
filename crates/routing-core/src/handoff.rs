@@ -80,6 +80,7 @@ pub fn select_waypoints(
 ///
 /// Coordinates are formatted with 6 decimal places.
 /// Returns Err(()) if formatted URL exceeds MAX_MAPS_URL_LENGTH (2,048 chars).
+#[allow(clippy::result_unit_err)]
 pub fn format_maps_url(origin: &LatLng, waypoints: &[LatLng]) -> Result<String, ()> {
     let mut url = format!(
         "https://www.google.com/maps/dir/?api=1&origin={:.6},{:.6}&destination={:.6},{:.6}&travelmode=driving",

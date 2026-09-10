@@ -10,3 +10,4 @@ cargo build --locked --release --target wasm32-unknown-unknown -p shutoko-routin
 wasm-bindgen target/wasm32-unknown-unknown/release/shutoko_routing_wasm.wasm \
   --target web --out-dir dist/wasm --out-name shutoko_routing
 printf '%s\n' '{"type":"module","private":true}' > dist/wasm/package.json
+cp crates/routing-wasm/types/index.d.ts dist/wasm/index.d.ts

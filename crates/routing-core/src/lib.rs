@@ -226,6 +226,17 @@ pub struct RoutingError {
     pub code: String,
     pub message: String,
 }
+impl RoutingError {
+    /// Format error as JSON string conforming to RoutingErrorPayload schema.
+    pub fn to_json_string(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|_| {
+            format!(
+                "{{\"code\":\"{}\",\"message\":\"{}\"}}",
+                self.code, self.message
+            )
+        })
+    }
+}
 impl fmt::Display for RoutingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.code, self.message)
@@ -1181,12 +1192,8 @@ pub fn search(
                 lat: snapped.lat,
                 lon: snapped.lon,
             });
-            let waypoints = handoff::select_waypoints(
-                &p.anchor_node_id,
-                cycle,
-                exit_edge,
-                &ix.nodes,
-            );
+            let waypoints =
+                handoff::select_waypoints(&p.anchor_node_id, cycle, exit_edge, &ix.nodes);
             let maps_url = match handoff::format_maps_url(&departure, &waypoints) {
                 Ok(url) => url,
                 Err(()) => {

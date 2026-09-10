@@ -552,7 +552,10 @@ fn real_graph_coordinate_input_snap_and_candidate_enrichment() {
         "waypoints must be at most 3, got {}",
         candidate.handoff.waypoints.len()
     );
-    assert!(candidate.handoff.maps_url.starts_with("https://www.google.com/maps/dir/?api=1&"));
+    assert!(candidate
+        .handoff
+        .maps_url
+        .starts_with("https://www.google.com/maps/dir/?api=1&"));
     assert!(candidate.handoff.maps_url.len() <= 2048);
     assert!(candidate.handoff.verification_set_version.is_none());
     assert!(candidate
@@ -614,7 +617,8 @@ fn test_eight_pairs_determinism_and_performance_table() {
         let req = SearchRequest {
             request_id: format!("det-req-{}", p.id),
             release_id: g.release_id.clone(),
-            origin_node_id: origin.clone(),
+            origin_node_id: Some(origin.clone()),
+            origin: None,
             min_minutes: 15,
             max_minutes,
             vehicle_profile: "passenger-car-etc".into(),

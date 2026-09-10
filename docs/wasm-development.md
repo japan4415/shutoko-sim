@@ -6,7 +6,7 @@
 
 `crates/routing-core` は Rust の純粋な探索処理、`crates/routing-wasm` は JSON 文字列を受け渡す JavaScript 向け境界。ネットワーク、DOM、住所検索には依存しない。`fixtures` は架空の道路・料金データで、実走行案内には使わない。
 
-現段階では出発地点を `originNodeId` で指定する。座標から道路への投影、OSM の取り込み、Google マップでの経路再現判定、R2 配信・マニフェストの検証、ブラウザ Web Worker の制御は後続とする。[インターフェース設計](interfaces.md)は完成時の契約案で、このコアの JSON とは区別する。
+出発地点は `origin: { lat, lon }` または `originNodeId` のどちらかで指定する（排他）。座標指定時は WASM 内部で 200m 以内の一般道ノードへ空間スナップされる。OSM 実データからのグラフ生成、幾何データ合成、Google マップ引き継ぎ URL 生成に対応している。ブラウザ Web Worker の制御や実機検証（#8）は後続とする。[インターフェース設計](interfaces.md)に詳細な契約表を記載している。
 
 ## 準備
 
@@ -30,9 +30,18 @@ bash scripts/build-wasm.sh
 node scripts/test-wasm.mjs
 ```
 
-`dist/wasm/` に `.wasm`、ES module の JS glue、TypeScript 型定義を生成する。生成物は Git に含めず、CI の `routing-wasm` artifact として保存する。ビルドスクリプトは配布や R2 へのアップロードを行わない。
+`dist/wasm/` に `.wasm`、ES module の JS glue、および TypeScript 型定義を生成する。
+- TypeScript 正典型定義: `crates/routing-wasm/types/index.d.ts`
+- ビルドスクリプト（`scripts/build-wasm.sh`）がビルド完了時に `dist/wasm/index.d.ts` へコピーし、npm パッケージ / Web Worker から直接型参照可能にする。
+- 定義される主要型: `SearchRequest`, `SearchLimits`, `SearchResult`, `Candidate`, `Handoff`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
 
-`test-wasm.mjs` は配信用と同じ `--target web` の glue と WASM を Node でロードし、人工グラフの探索と異常入力を検証する。ブラウザ実機・通信・画面操作の検証を代替するものではない。[wasm-bindgen の出力形式](https://wasm-bindgen.github.io/wasm-bindgen/reference/deployment.html)
+`test-wasm.mjs` は配信用と同じ `--target web` の glue と WASM を Node.js でロードし、以下を自動検証する:
+1. 合成グラフに対する `originNodeId` 探索および期待されるエッジ列・時間・料金の算出
+2. 決定論性（同一入力による連続実行でバイト完全一致）
+3. 候補の新フィールド構造（GeoJSON `LineString` 幾何、`mapsUrl` 形式および長さ ≤ 2,048、`snappedOrigin`、`warnings` への `HANDOFF_WAYPOINTS_UNVERIFIED` の包含）
+4. 座標入力（`origin: { lat, lon }`）による空間スナップ探索
+5. 200m 超過座標における接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
+6. 異常入力の拒否と JS 例外（`RoutingErrorPayload { code: "INVALID_INPUT", message }`）のスロー検証
 
 ## 呼び出し
 

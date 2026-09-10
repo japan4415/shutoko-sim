@@ -369,6 +369,8 @@ pub fn generate_billing_pair(
         status: seed.status,
         vehicle_profile: seed.vehicle_profile.clone(),
         prices,
+        entry_name: seed.entry_name.clone(),
+        exit_name: seed.exit_name.clone(),
     };
 
     // 10. Run comprehensive validator

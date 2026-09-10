@@ -453,13 +453,14 @@ fn test_routing_core_search_integration() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     });
 
     let req = SearchRequest {
         request_id: "req-test-1".into(),
         release_id: "integration-rel".into(),
-        origin_node_id: "n:1".into(),
+        origin_node_id: Some("n:1".into()),
+        origin: None,
         min_minutes: 1,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -575,7 +576,7 @@ fn test_billing_pair_seed_and_pathfinding_success() {
                 effective_from: "2026-10-01T00:00:00Z".into(),
                 effective_to: None,
             },
-        ],
+        ], entry_name: None, exit_name: None,
     };
 
     let pair = generate_billing_pair(&graph, &seed).expect("generation should succeed");
@@ -594,7 +595,8 @@ fn test_billing_pair_seed_and_pathfinding_success() {
     let req = shutoko_routing_core::SearchRequest {
         request_id: "req-1".into(),
         release_id: "test-rel".into(),
-        origin_node_id: "n:1".into(),
+        origin_node_id: Some("n:1".into()),
+        origin: None,
         min_minutes: 1,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -633,7 +635,7 @@ fn test_reject_hidden_loop_in_billing_pair() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     let res = validate_billing_pair(&graph, &invalid_pair);
@@ -699,7 +701,7 @@ fn test_reject_graph_with_no_loop_from_anchor() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     let res = validate_billing_pair(&graph, &pair);
@@ -735,7 +737,7 @@ fn test_forbidden_transitions_not_adopted_and_rejected() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     // Case 1: Generator fails because transition into exit path from anchor is forbidden
@@ -764,7 +766,7 @@ fn test_forbidden_transitions_not_adopted_and_rejected() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     let val_res = validate_billing_pair(&graph, &explicit_pair);
@@ -789,7 +791,7 @@ fn test_reject_disconnected_path() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     let err = validate_billing_pair(&graph, &pair).unwrap_err();
@@ -820,7 +822,7 @@ fn test_reject_invalid_edge_kinds() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     let err = validate_billing_pair(&graph, &pair).unwrap_err();
@@ -844,7 +846,7 @@ fn test_reject_invalid_prices_and_overlapping_intervals() {
             amount_yen: 0, // Invalid 0 amount!
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     let err = validate_billing_pair(&graph, &pair).unwrap_err();
@@ -893,7 +895,7 @@ fn test_reject_mismatched_vehicle_profile() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     let err = validate_billing_pair(&graph, &pair).unwrap_err();
@@ -921,7 +923,7 @@ fn test_reject_unverified_section_marked_verified() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     let err = generate_billing_pair(&graph, &seed).unwrap_err();
@@ -1002,7 +1004,7 @@ fn test_deterministic_byte_identical_output_two_runs() {
                 amount_yen: 300,
                 effective_from: "2026-01-01T00:00:00Z".into(),
                 effective_to: None,
-            }],
+            }], entry_name: None, exit_name: None,
         }],
     };
 
@@ -1570,7 +1572,7 @@ fn test_refutation_first_exit_mismatch_shintomicho() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     let result = generate_billing_pair(&graph, &invalid_seed);
@@ -1614,7 +1616,7 @@ fn test_provenance_url_and_date_validation() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
     let err = generate_billing_pair(&graph, &seed_ftp).unwrap_err();
     assert!(matches!(err, BillingError::InvalidProvenance(_)));
@@ -1835,14 +1837,14 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
         vehicle_profile: "passenger-car-etc".into(),
         nodes: vec![
             Node {
-                id: "n:entry".into(),
+                id: "n:entry".into(), lat: 35.68, lon: 139.76,
             },
-            Node { id: "n:1".into() },
-            Node { id: "n:2".into() },
-            Node { id: "n:3".into() },
-            Node { id: "n:4".into() },
-            Node { id: "n:5".into() },
-            Node { id: "n:6".into() },
+            Node { id: "n:1".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "n:2".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "n:3".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "n:4".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "n:5".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "n:6".into(), lat: 35.68, lon: 139.76, },
         ],
         edges: vec![
             Edge {
@@ -1851,7 +1853,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
                 to: "n:1".into(),
                 distance_meters: 10,
                 duration_seconds: 1,
-                kind: EdgeKind::Entry,
+                kind: EdgeKind::Entry, name: None,
             },
             Edge {
                 id: "e1".into(),
@@ -1859,7 +1861,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
                 to: "n:2".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e2".into(),
@@ -1867,7 +1869,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
                 to: "n:3".into(),
                 distance_meters: 2,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e3".into(),
@@ -1875,7 +1877,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
                 to: "n:2".into(),
                 distance_meters: 2,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e4".into(),
@@ -1883,7 +1885,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
                 to: "n:5".into(),
                 distance_meters: 5,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e_loop".into(),
@@ -1891,7 +1893,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
                 to: "n:1".into(),
                 distance_meters: 10,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "exit1".into(),
@@ -1899,7 +1901,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
                 to: "n:4".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Exit,
+                kind: EdgeKind::Exit, name: None,
             },
             Edge {
                 id: "exit2".into(),
@@ -1907,7 +1909,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
                 to: "n:6".into(),
                 distance_meters: 5,
                 duration_seconds: 1,
-                kind: EdgeKind::Exit,
+                kind: EdgeKind::Exit, name: None,
             },
         ],
         billing_pairs: Vec::new(),
@@ -1942,7 +1944,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
 
     let result = validate_billing_pair(&graph, &pair_later_exit);
@@ -2004,13 +2006,13 @@ fn test_refutation_counterexample_a_opus5() {
         release_id: "test-counterexample-a".into(),
         vehicle_profile: "passenger-car-etc".into(),
         nodes: vec![
-            Node { id: "A".into() },
-            Node { id: "B".into() },
-            Node { id: "C".into() },
-            Node { id: "W".into() },
-            Node { id: "V".into() },
-            Node { id: "X".into() },
-            Node { id: "OUT".into() },
+            Node { id: "A".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "B".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "C".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "W".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "V".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "X".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "OUT".into(), lat: 35.68, lon: 139.76, },
         ],
         edges: vec![
             Edge {
@@ -2019,7 +2021,7 @@ fn test_refutation_counterexample_a_opus5() {
                 to: "B".into(),
                 distance_meters: 10,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e2".into(),
@@ -2027,7 +2029,7 @@ fn test_refutation_counterexample_a_opus5() {
                 to: "C".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e3".into(),
@@ -2035,7 +2037,7 @@ fn test_refutation_counterexample_a_opus5() {
                 to: "W".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e4".into(),
@@ -2043,7 +2045,7 @@ fn test_refutation_counterexample_a_opus5() {
                 to: "C".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e5".into(),
@@ -2051,7 +2053,7 @@ fn test_refutation_counterexample_a_opus5() {
                 to: "V".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e6".into(),
@@ -2059,7 +2061,7 @@ fn test_refutation_counterexample_a_opus5() {
                 to: "W".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e7".into(),
@@ -2067,7 +2069,7 @@ fn test_refutation_counterexample_a_opus5() {
                 to: "X".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e8".into(),
@@ -2075,7 +2077,7 @@ fn test_refutation_counterexample_a_opus5() {
                 to: "OUT".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Exit,
+                kind: EdgeKind::Exit, name: None,
             },
         ],
         billing_pairs: Vec::new(),
@@ -2125,17 +2127,17 @@ fn test_refutation_counterexample_b_opus5() {
         vehicle_profile: "passenger-car-etc".into(),
         nodes: vec![
             Node {
-                id: "entry_node".into(),
+                id: "entry_node".into(), lat: 35.68, lon: 139.76,
             },
-            Node { id: "A".into() },
-            Node { id: "B".into() },
-            Node { id: "C".into() },
-            Node { id: "W".into() },
-            Node { id: "V".into() },
-            Node { id: "X".into() },
-            Node { id: "Z".into() },
-            Node { id: "OUT".into() },
-            Node { id: "OUT2".into() },
+            Node { id: "A".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "B".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "C".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "W".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "V".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "X".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "Z".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "OUT".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "OUT2".into(), lat: 35.68, lon: 139.76, },
         ],
         edges: vec![
             Edge {
@@ -2144,7 +2146,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "A".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Entry,
+                kind: EdgeKind::Entry, name: None,
             },
             Edge {
                 id: "e1".into(),
@@ -2152,7 +2154,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "B".into(),
                 distance_meters: 10,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e2".into(),
@@ -2160,7 +2162,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "C".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e3".into(),
@@ -2168,7 +2170,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "W".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e4".into(),
@@ -2176,7 +2178,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "C".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e5".into(),
@@ -2184,7 +2186,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "V".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e6".into(),
@@ -2192,7 +2194,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "W".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e7".into(),
@@ -2200,7 +2202,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "X".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e8".into(),
@@ -2208,7 +2210,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "OUT".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Exit,
+                kind: EdgeKind::Exit, name: None,
             },
             Edge {
                 id: "e9".into(),
@@ -2216,7 +2218,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "Z".into(),
                 distance_meters: 40,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "e10".into(),
@@ -2224,7 +2226,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "OUT2".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Exit,
+                kind: EdgeKind::Exit, name: None,
             },
             Edge {
                 id: "e_loop".into(),
@@ -2232,7 +2234,7 @@ fn test_refutation_counterexample_b_opus5() {
                 to: "A".into(),
                 distance_meters: 10,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
         ],
         billing_pairs: Vec::new(),
@@ -2257,7 +2259,7 @@ fn test_refutation_counterexample_b_opus5() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
     let err = validate_billing_pair(&graph, &pair_e10).unwrap_err();
     assert_eq!(err.rule, "FIRST_EXIT_MISMATCH");
@@ -2288,7 +2290,7 @@ fn test_refutation_counterexample_b_opus5() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
     let ok = validate_billing_pair(&graph, &pair_e8);
     assert!(
@@ -2346,15 +2348,15 @@ fn test_refutation_counterexample_c_codex() {
         release_id: "test-counterexample-c".into(),
         vehicle_profile: "passenger-car-etc".into(),
         nodes: vec![
-            Node { id: "entry".into() },
-            Node { id: "a".into() },
-            Node { id: "x".into() },
-            Node { id: "y".into() },
-            Node { id: "c".into() },
-            Node { id: "n".into() },
-            Node { id: "z".into() },
-            Node { id: "out1".into() },
-            Node { id: "out2".into() },
+            Node { id: "entry".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "a".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "x".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "y".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "c".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "n".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "z".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "out1".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "out2".into(), lat: 35.68, lon: 139.76, },
         ],
         edges: vec![
             Edge {
@@ -2363,7 +2365,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "a".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Entry,
+                kind: EdgeKind::Entry, name: None,
             },
             Edge {
                 id: "ax".into(),
@@ -2371,7 +2373,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "x".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "xc".into(),
@@ -2379,7 +2381,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "c".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "ay".into(),
@@ -2387,7 +2389,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "y".into(),
                 distance_meters: 2,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "yc".into(),
@@ -2395,7 +2397,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "c".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "cn".into(),
@@ -2403,7 +2405,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "n".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "nx".into(),
@@ -2411,7 +2413,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "x".into(),
                 distance_meters: 1,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "exit1".into(),
@@ -2419,7 +2421,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "out1".into(),
                 distance_meters: 2,
                 duration_seconds: 1,
-                kind: EdgeKind::Exit,
+                kind: EdgeKind::Exit, name: None,
             },
             Edge {
                 id: "nz".into(),
@@ -2427,7 +2429,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "z".into(),
                 distance_meters: 4,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
             Edge {
                 id: "exit2".into(),
@@ -2435,7 +2437,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "out2".into(),
                 distance_meters: 6,
                 duration_seconds: 1,
-                kind: EdgeKind::Exit,
+                kind: EdgeKind::Exit, name: None,
             },
             Edge {
                 id: "loop_e".into(),
@@ -2443,7 +2445,7 @@ fn test_refutation_counterexample_c_codex() {
                 to: "a".into(),
                 distance_meters: 10,
                 duration_seconds: 1,
-                kind: EdgeKind::Shutoko,
+                kind: EdgeKind::Shutoko, name: None,
             },
         ],
         billing_pairs: Vec::new(),
@@ -2477,7 +2479,7 @@ fn test_refutation_counterexample_c_codex() {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
             effective_to: None,
-        }],
+        }], entry_name: None, exit_name: None,
     };
     let err = validate_billing_pair(&graph, &pair_exit2).unwrap_err();
     assert_eq!(err.rule, "FIRST_EXIT_MISMATCH");
@@ -2498,7 +2500,7 @@ fn test_issue6_item1_walk_semantics_node_revisit() {
         to: to.into(),
         distance_meters: 1,
         duration_seconds: 1,
-        kind: EdgeKind::Shutoko,
+        kind: EdgeKind::Shutoko, name: None,
     };
 
     // (a) Scout minimal counterexample (issue #6 item 1).
@@ -2512,13 +2514,13 @@ fn test_issue6_item1_walk_semantics_node_revisit() {
         vehicle_profile: "passenger-car-etc".into(),
         nodes: vec![
             Node {
-                id: "Anchor".into(),
+                id: "Anchor".into(), lat: 35.68, lon: 139.76,
             },
-            Node { id: "A".into() },
-            Node { id: "B1".into() },
-            Node { id: "B2".into() },
-            Node { id: "M".into() },
-            Node { id: "N2".into() },
+            Node { id: "A".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "B1".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "B2".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "M".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "N2".into(), lat: 35.68, lon: 139.76, },
         ],
         edges: vec![
             mk("e1", "Anchor", "A"),
@@ -2549,13 +2551,13 @@ fn test_issue6_item1_walk_semantics_node_revisit() {
         vehicle_profile: "passenger-car-etc".into(),
         nodes: vec![
             Node {
-                id: "Anchor".into(),
+                id: "Anchor".into(), lat: 35.68, lon: 139.76,
             },
-            Node { id: "N1".into() },
-            Node { id: "N2".into() },
-            Node { id: "X".into() },
-            Node { id: "R".into() },
-            Node { id: "S".into() },
+            Node { id: "N1".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "N2".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "X".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "R".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "S".into(), lat: 35.68, lon: 139.76, },
         ],
         edges: vec![
             mk("a", "Anchor", "N1"),
@@ -2583,10 +2585,10 @@ fn test_issue6_item1_walk_semantics_node_revisit() {
         vehicle_profile: "passenger-car-etc".into(),
         nodes: vec![
             Node {
-                id: "Anchor".into(),
+                id: "Anchor".into(), lat: 35.68, lon: 139.76,
             },
-            Node { id: "A".into() },
-            Node { id: "B".into() },
+            Node { id: "A".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "B".into(), lat: 35.68, lon: 139.76, },
         ],
         edges: vec![
             mk("e1", "Anchor", "A"),
@@ -2622,23 +2624,23 @@ fn test_issue6_item2_simple_path_first_exit() {
         to: to.into(),
         distance_meters: if id == "e4" { 10 } else { 1 },
         duration_seconds: 1,
-        kind,
+        kind, name: None,
     };
     let graph = Graph {
         schema_version: 1,
         release_id: "test-issue6-item2".into(),
         vehicle_profile: "passenger-car-etc".into(),
         nodes: vec![
-            Node { id: "entry".into() },
-            Node { id: "A".into() },
-            Node { id: "B".into() },
-            Node { id: "C".into() },
-            Node { id: "D".into() },
+            Node { id: "entry".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "A".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "B".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "C".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "D".into(), lat: 35.68, lon: 139.76, },
             Node {
-                id: "out_walk".into(),
+                id: "out_walk".into(), lat: 35.68, lon: 139.76,
             },
             Node {
-                id: "out_simple".into(),
+                id: "out_simple".into(), lat: 35.68, lon: 139.76,
             },
         ],
         edges: vec![
@@ -2671,7 +2673,7 @@ fn test_issue6_item2_simple_path_first_exit() {
         anchor_to_exit_edge_ids: vec!["e4".into(), "exit_simple".into()],
         vehicle_profile: "passenger-car-etc".into(),
         status: VerificationStatus::Verified,
-        prices: Vec::new(),
+        prices: Vec::new(), entry_name: None, exit_name: None,
     };
     let ok = validate_billing_pair(&graph, &pair);
     assert!(
@@ -2696,7 +2698,7 @@ fn test_issue6_item2_first_exit_search_budget_exceeded() {
         to: to.into(),
         distance_meters: dist,
         duration_seconds: 1,
-        kind,
+        kind, name: None,
     };
     // Counterexample A topology (see test_refutation_counterexample_a_opus5).
     let graph = Graph {
@@ -2704,13 +2706,13 @@ fn test_issue6_item2_first_exit_search_budget_exceeded() {
         release_id: "test-issue6-item2-budget".into(),
         vehicle_profile: "passenger-car-etc".into(),
         nodes: vec![
-            Node { id: "A".into() },
-            Node { id: "B".into() },
-            Node { id: "C".into() },
-            Node { id: "W".into() },
-            Node { id: "V".into() },
-            Node { id: "X".into() },
-            Node { id: "OUT".into() },
+            Node { id: "A".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "B".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "C".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "W".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "V".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "X".into(), lat: 35.68, lon: 139.76, },
+            Node { id: "OUT".into(), lat: 35.68, lon: 139.76, },
         ],
         edges: vec![
             mk("e1", "A", "B", 10, EdgeKind::Shutoko),
@@ -2757,7 +2759,7 @@ fn test_issue6_item3_silent_cap_2001_hop_loop_detected() {
     let n = 2002usize;
     let nodes: Vec<Node> = (0..n)
         .map(|i| Node {
-            id: format!("n{}", i),
+            id: format!("n{}", i), lat: 35.68, lon: 139.76,
         })
         .collect();
     let edges: Vec<Edge> = (0..n)
@@ -2767,7 +2769,7 @@ fn test_issue6_item3_silent_cap_2001_hop_loop_detected() {
             to: format!("n{}", (i + 1) % n),
             distance_meters: 1,
             duration_seconds: 1,
-            kind: EdgeKind::Shutoko,
+            kind: EdgeKind::Shutoko, name: None,
         })
         .collect();
     let graph = Graph {

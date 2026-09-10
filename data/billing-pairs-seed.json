@@ -13,9 +13,19 @@
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-10",
-        "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kandabashi entry to Takaracho exit (Gofukubashi and Edobashi exits decommissioned in 2021)."
+        "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kandabashi entry to Takaracho exit (Gofukubashi and Edobashi exits decommissioned in 2021). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/fee/fee-info/about/); Kandabashi to Takaracho toll distance 1.7km with minimum toll 300 yen applied (https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
       },
-      "prices": []
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
+        }
+      ]
     }
   ]
 }

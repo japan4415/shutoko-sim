@@ -6,8 +6,9 @@
 //!   Hidden laps in billing pairs are strictly rejected.
 //! - Edge kinds: entryToAnchor starts with Entry, followed by Shutoko, ending at anchorNodeId.
 //!   anchorToExit starts at anchorNodeId, followed by Shutoko, ending with Exit.
-//! - Loop existence: from anchorNodeId, at least one non-empty directed cycle (length >= 1)
-//!   using only Shutoko edges and returning to anchorNodeId must exist without forbidden transitions.
+//! - Loop existence: from anchorNodeId, at least one non-empty directed closed walk
+//!   (length >= 1, intermediate nodes may be revisited) using only Shutoko edges and
+//!   returning to anchorNodeId must exist without forbidden transitions.
 //! - Forbidden transitions: direct baseline and loop paths must never traverse forbidden sequences.
 //! - Prices: valid RFC 3339 UTC timestamps, non-overlapping half-open intervals, amounts > 0.
 //! - Identifier lengths <= 256 bytes.
@@ -172,10 +173,11 @@ impl<'a> PartialOrd for ExitSearchState<'a> {
     }
 }
 
-/// Explicit expansion budget for the simple-path first-exit search. The state
-/// space (node x suffix x visited-set) is finite, but enumeration of simple
-/// paths is worst-case exponential, so the search stops with a reported error
-/// once this many states are expanded (never a silent truncation).
+/// Explicit budget on states popped from the priority queue for the simple-path
+/// first-exit search. The state space (node x suffix x visited-set) is finite,
+/// but enumeration of simple paths is worst-case exponential, so the search
+/// stops with a reported error once this many states are popped from the queue
+/// (never a silent truncation).
 pub const FIRST_EXIT_STATE_BUDGET: usize = 200_000;
 
 /// Finds the first Exit edge(s) reachable from `anchor_node_id` using only `Shutoko`
@@ -207,9 +209,10 @@ pub const FIRST_EXIT_STATE_BUDGET: usize = 200_000;
 ///    strictly smaller cost. A `cost > min_exit_dist` break further truncates the
 ///    search once the first exit distance is fixed.
 /// 3. **Explicit budget**: simple-path enumeration is worst-case exponential, so
-///    the search also stops after expanding `FIRST_EXIT_STATE_BUDGET` states and
-///    returns `Err` (surfaced as `FIRST_EXIT_SEARCH_FAILED`). The error message
-///    records the number of expanded states; there is no silent truncation.
+///    the search also stops after popping `FIRST_EXIT_STATE_BUDGET` states from
+///    the queue and returns `Err` (surfaced as `FIRST_EXIT_SEARCH_FAILED`). The
+///    error message records the number of popped states; there is no silent
+///    truncation.
 ///
 /// ## Why not plain walk semantics
 ///
@@ -228,9 +231,9 @@ pub fn find_first_exits_from_anchor(
     find_first_exits_from_anchor_with_budget(graph, anchor_node_id, FIRST_EXIT_STATE_BUDGET)
 }
 
-/// Same as [`find_first_exits_from_anchor`] with an explicit expansion budget,
-/// exposed so tests can pin the budget-exceeded `Err` behaviour with a small
-/// constant.
+/// Same as [`find_first_exits_from_anchor`] with an explicit search budget on
+/// popped states, exposed so tests can pin the budget-exceeded `Err` behaviour
+/// with a small constant.
 pub fn find_first_exits_from_anchor_with_budget(
     graph: &Graph,
     anchor_node_id: &str,
@@ -269,7 +272,7 @@ pub fn find_first_exits_from_anchor_with_budget(
         BTreeMap::new();
     let mut min_exit_dist: Option<u64> = None;
     let mut first_exit_ids: Vec<String> = Vec::new();
-    let mut expanded: usize = 0;
+    let mut popped: usize = 0;
 
     while let Some(ExitSearchState {
         cost,
@@ -284,13 +287,13 @@ pub fn find_first_exits_from_anchor_with_budget(
             }
         }
 
-        if expanded >= state_budget {
+        if popped >= state_budget {
             return Err(format!(
-                "first exit search from anchor node \"{}\": 探索予算超過, expanded {} states (budget {})",
-                anchor_node_id, expanded, state_budget
+                "first exit search from anchor node \"{}\": 探索予算超過, popped {} states (budget {})",
+                anchor_node_id, popped, state_budget
             ));
         }
-        expanded += 1;
+        popped += 1;
 
         let suffix: Vec<String> = if history_len > 0 {
             let start = path.len().saturating_sub(history_len);

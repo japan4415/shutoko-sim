@@ -2502,10 +2502,10 @@ fn test_issue6_item1_walk_semantics_node_revisit() {
     };
 
     // (a) Scout minimal counterexample (issue #6 item 1).
-    // The cheap 3-hop prefix registers (N2, e6); the legitimate 7-hop closed walk
-    // Anchor->B1->B2->M->N2->A->Anchor is then pruned by the old (node, last_edge)
-    // key with a per-node no-revisit rule, while the new (node, suffix) walk
-    // semantics finds the closed walk.
+    // (a) は scout 提示グラフ。旧コードでも true になる非判別ケースで、判別性は (b)(c) が担う。
+    // (In the old code, outgoing["Anchor"]=[e1, e3] popped (A, [e1]) first, and since
+    // outgoing["A"] contained e8 (A->Anchor), it returned true at depth 2 before pruning.
+    // The 6-hop closed walk Anchor->B1->B2->M->N2->A->Anchor is detected under walk semantics.)
     let graph = Graph {
         schema_version: 1,
         release_id: "test-issue6-item1-a".into(),
@@ -2685,7 +2685,10 @@ fn test_issue6_item2_simple_path_first_exit() {
 fn test_issue6_item2_first_exit_search_budget_exceeded() {
     use shutoko_graph_builder::{
         find_first_exits_from_anchor_with_budget, Edge, EdgeKind, Graph, Node,
+        FIRST_EXIT_STATE_BUDGET,
     };
+
+    assert_eq!(FIRST_EXIT_STATE_BUDGET, 200_000);
 
     let mk = |id: &str, from: &str, to: &str, dist: u64, kind: EdgeKind| Edge {
         id: id.into(),
@@ -2725,7 +2728,7 @@ fn test_issue6_item2_first_exit_search_budget_exceeded() {
 
     // Full budget: succeeds with the simple-path answer.
     let (min_dist, first_exits) =
-        find_first_exits_from_anchor_with_budget(&graph, "A", 200_000).unwrap();
+        find_first_exits_from_anchor_with_budget(&graph, "A", FIRST_EXIT_STATE_BUDGET).unwrap();
     assert_eq!(min_dist, 15);
     assert_eq!(first_exits, vec!["e8".to_string()]);
 
@@ -2738,8 +2741,8 @@ fn test_issue6_item2_first_exit_search_budget_exceeded() {
         err
     );
     assert!(
-        err.contains("expanded 2 states"),
-        "budget error must record the expanded state count: {}",
+        err.contains("popped 2 states"),
+        "budget error must record the popped state count: {}",
         err
     );
 }
@@ -2799,5 +2802,4 @@ fn test_issue6_item4_invalid_dates_and_engine_version() {
         ManifestConfig::default().engine_version,
         shutoko_routing_core::VERSION
     );
-    assert_eq!(shutoko_routing_core::VERSION, "0.1.0");
 }

@@ -48,7 +48,7 @@
 - **出典・日付の構文検証**: 出典 URL は `http://` または `https://` で始まる有効な URL（空ラベルや先頭・末尾ドットのない有効なホスト名）であること、出典日はカレンダー上に実在する有効な ISO 8601 日付（`YYYY-MM-DD`、存在しない 2月31日等は拒否）であることを検証する。
 - **マニフェストへの伝播**: 検証済みペアの出典情報（`source`, `sourceDate`, `notes`）は `manifest.json` の `provenance` 配列に記録され、成果物配布時にも追跡可能となる。
 
-### 登録ペア（全 9 件）
+### 登録ペア（全 8 件）
 - **ペア ID**: `bp:c1-outer:kandabashi-takaracho`
 - **入口ランプ OSM ウェイ ID**: `92243921`（神田橋入口、一般道側始点: `n:1070862943`）
 - **出口ランプ OSM ウェイ ID**: `297864314`（宝町出口、一般道側終点: `n:1130812252`）
@@ -62,12 +62,12 @@
   - 現行レコード: 金額 300 円、有効期間 `2022-03-31T15:00:00Z` 〜 `2026-09-30T15:00:00Z`（JST 2022-04-01 00:00 〜 2026-10-01 00:00）
   - 2026-10-01 改定後レコード: 金額 300 円、有効期間 `2026-09-30T15:00:00Z` 〜 期限なし（null）
   - 出典:
-    - 料金体系・下限料金: `https://www.shutoko.jp/fee/fee-info/about/`
-    - 神田橋〜宝町 料金距離 1.7km・300 円: `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf`（首都高料金表 2025年4月改訂版 P.3「料金・距離表（ETC 普通車）」）
+    - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で 404）
+    - 神田橋〜宝町 料金距離 1.7km・300 円: `https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf`（旧 URL `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf` は 2026-09-10 時点で 404。首都高料金表 2025年4月改訂版 P.3「料金・距離表（ETC 普通車）」）
     - 2026-10-01 改定発表: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
     - 参照日: `2026-09-10`
 
-#### 新規登録 8 ペア（2026-09-10）
+#### 新規登録 7 ペア（2026-09-10）
 
 いずれも普通車 ETC で料金距離に応じた下限料金 300 円が適用される。料金は神田橋〜宝町と同一の考え方により、改定前後 2 レコード（`2022-03-31T15:00:00Z`〜`2026-09-30T15:00:00Z` / `2026-09-30T15:00:00Z`〜無期限、いずれも 300 円）を登録している。出典は共通で、料金距離・料金は首都高料金表 2025 年 4 月改訂版 P.3、1 区間先の隣接関係は公式路線図に基づく（参照日 `2026-09-10`）。
 
@@ -79,15 +79,17 @@
 | 4 | 内回り | 霞が関入口 → 芝公園出口 | 3.7km | 300 円 | `bp:c1-inner:kasumigaseki-shibakoen` | `916571615` | `203873821` | `264877748` |
 | 5 | 内回り | 代官町入口 → 霞が関出口 | 2.3km | 300 円 | `bp:c1-inner:daikancho-kasumigaseki` | `1091280541` | `1232166619` | `297945194` |
 | 6 | 内回り | 芝公園入口 → 汐留出口 | 2.4km | 300 円 | `bp:c1-inner:shibakoen-shiodome` | `4853797` | `45068171` | `31295430` |
-| 7 | 内回り | 銀座入口 → 京橋出口 | 0.6km | 300 円 | `bp:c1-inner:ginza-kyobashi` | `4848936` | `4849052` | `31254341` |
-| 8 | 内回り | 宝町入口 → 神田橋出口 | 1.7km | 300 円 | `bp:c1-inner:takaracho-kandabashi` | `378284514` | `390441534` | `1891818143` |
+| 7 | 内回り | 宝町入口 → 神田橋出口 | 1.7km | 300 円 | `bp:c1-inner:takaracho-kandabashi` | `378284514` | `390441534` | `1891818143` |
 
 - 出典（共通）:
-  - 料金距離・料金: `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf`（首都高料金表 2025 年 4 月改訂版 P.3「料金・距離表（ETC 普通車）」）
+  - 料金距離・料金: `https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf`（旧 URL `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf` は 2026-09-10 時点で 404。首都高料金表 2025 年 4 月改訂版 P.3「料金・距離表（ETC 普通車）」）
   - 路線図（1 区間先の隣接関係）: `https://www.shutoko.jp/use/network/map/`
-  - 料金体系・下限料金: `https://www.shutoko.jp/fee/fee-info/about/`
+  - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で 404）
   - 2026-10-01 改定発表（下限料金 300 円維持）: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
   - 参照日: `2026-09-10`
+
+> **注記（内回り銀座入口の 1 区間先について）**:
+> 内回り銀座入口 → 新富町出口（0.4km、300 円）は公式資料上の 1 区間先だが、OSM の分流点・合流点の順序（内回り新富町出口の分流点が銀座入口の合流点より上流にある）により First Exit 検証が通らないため未登録。京橋出口は 2 区間先なので登録しない。
 
 ## 4. 成果物の決定論的再生成手順
 
@@ -121,7 +123,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって `manifest.json` の `unverifiedSections` 配列に自動列挙される。
 - **自動列挙対象**: グラフ内に存在するすべての入口・出口エッジのうち、検証済み課金ペアに採用されていないエッジ。OSM ウェイに `name` タグが存在する場合は「エッジID（ウェイ名）」の形式で可読性を担保。
 - **除外路線・通行規制スキップの注記**: C1 外の分岐路線（八重洲線、1号上野線、6号向島線等）や、静的道路グラフで適用外となった通行規制（conditional / no via / outside graph / disconnected / unrecognized 等のスキップカテゴリ）に関する注記も件数付きで同リストに収録。
-- **現状**: 今回のリリース `c1-real-v1` では 3 節の表に記載した 9 ペア（外回り 3・内回り 5・既存の神田橋〜宝町 1）すべてが人手検証済み（`verified`）で、`unverifiedSections` に `rejected:` は存在しない。将来追加予定のランプ区間については、公式料金区間表または本線隣接導出の根拠とともに順次シードへ追加する。
+- **現状**: 今回のリリース `c1-real-v1` では 3 節の表に記載した 8 ペア（外回り 4・内回り 4・既存の神田橋〜宝町 1 を含む）すべてが人手検証済み（`verified`）で、`unverifiedSections` に `rejected:` は存在しない。将来追加予定のランプ区間については、公式料金区間表または本線隣接導出の根拠とともに順次シードへ追加する。
 
 ## 6. CI における自動再生成検証
 

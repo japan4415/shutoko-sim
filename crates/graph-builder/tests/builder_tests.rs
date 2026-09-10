@@ -2808,14 +2808,14 @@ fn test_issue6_item4_invalid_dates_and_engine_version() {
 fn test_all_billing_pairs_seed_prices_verified_and_output_to_graph() {
     use shutoko_graph_builder::{BillingPairsSeedFile, Graph, VerificationStatus};
 
-    // 1. Verify that the declarative seed parses and contains all 9 expected billing pairs
+    // 1. Verify that the declarative seed parses and contains all 8 expected billing pairs
     let seed_str = include_str!("../../../data/billing-pairs-seed.json");
     let seed_file: BillingPairsSeedFile =
         serde_json::from_str(seed_str).expect("data/billing-pairs-seed.json must deserialize");
     assert_eq!(
         seed_file.billing_pairs.len(),
-        9,
-        "seed must have exactly 9 billing pairs"
+        8,
+        "seed must have exactly 8 billing pairs"
     );
 
     let expected_pair_ids = [
@@ -2826,7 +2826,6 @@ fn test_all_billing_pairs_seed_prices_verified_and_output_to_graph() {
         "bp:c1-inner:kasumigaseki-shibakoen",
         "bp:c1-inner:daikancho-kasumigaseki",
         "bp:c1-inner:shibakoen-shiodome",
-        "bp:c1-inner:ginza-kyobashi",
         "bp:c1-inner:takaracho-kandabashi",
     ];
 
@@ -2856,14 +2855,14 @@ fn test_all_billing_pairs_seed_prices_verified_and_output_to_graph() {
         assert_eq!(seed_pair.prices[1].effective_to, None);
     }
 
-    // 2. Verify that the generated graph.json fixture retains all 9 billing pairs with prices
+    // 2. Verify that the generated graph.json fixture retains all 8 billing pairs with prices
     let graph_str = include_str!("../../../fixtures/generated/graph.json");
     let graph: Graph =
         serde_json::from_str(graph_str).expect("fixtures/generated/graph.json must deserialize");
     assert_eq!(
         graph.billing_pairs.len(),
-        9,
-        "graph.json must contain exactly 9 billing pairs"
+        8,
+        "graph.json must contain exactly 8 billing pairs"
     );
 
     for expected_id in &expected_pair_ids {

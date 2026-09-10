@@ -1,7 +1,7 @@
 //! Experimental, bounded routing on explicitly connected directed graphs.
 //! This engine does not establish real-world toll eligibility or navigation safety.
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 use std::fmt;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
@@ -191,6 +191,7 @@ fn utc(s: &str) -> Result<OffsetDateTime, RoutingError> {
 struct Index<'a> {
     edges: BTreeMap<&'a str, &'a Edge>,
     outgoing: BTreeMap<&'a str, Vec<&'a Edge>>,
+    incoming: BTreeMap<&'a str, Vec<&'a Edge>>,
 }
 fn validate<'a>(
     g: &'a Graph,
@@ -252,6 +253,7 @@ fn validate<'a>(
     let mut ix = Index {
         edges: BTreeMap::new(),
         outgoing: BTreeMap::new(),
+        incoming: BTreeMap::new(),
     };
     for e in &g.edges {
         if e.id.is_empty()
@@ -267,8 +269,12 @@ fn validate<'a>(
             return Err(invalid("invalid edge, endpoint, weight, or duplicate id"));
         }
         ix.outgoing.entry(&e.from).or_default().push(e);
+        ix.incoming.entry(&e.to).or_default().push(e);
     }
     for edges in ix.outgoing.values_mut() {
+        edges.sort_by(|a, b| a.id.cmp(&b.id));
+    }
+    for edges in ix.incoming.values_mut() {
         edges.sort_by(|a, b| a.id.cmp(&b.id));
     }
     if g.forbidden_transitions.iter().map(Vec::len).sum::<usize>() > 20_000 {
@@ -472,6 +478,316 @@ fn paths<'a>(
     }
     results
 }
+
+#[derive(Clone)]
+struct DijkstraState<'a> {
+    duration_seconds: u64,
+    distance_meters: u64,
+    edge_id: &'a str,
+    node: &'a str,
+    edge: Option<&'a Edge>,
+    parent_index: Option<usize>,
+    depth: usize,
+}
+
+impl<'a> PartialEq for DijkstraState<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.duration_seconds == other.duration_seconds
+            && self.distance_meters == other.distance_meters
+            && self.edge_id == other.edge_id
+            && self.node == other.node
+    }
+}
+
+impl<'a> Eq for DijkstraState<'a> {}
+
+impl<'a> Ord for DijkstraState<'a> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other
+            .duration_seconds
+            .cmp(&self.duration_seconds)
+            .then_with(|| other.distance_meters.cmp(&self.distance_meters))
+            .then_with(|| other.edge_id.cmp(self.edge_id))
+            .then_with(|| other.node.cmp(self.node))
+    }
+}
+
+impl<'a> PartialOrd for DijkstraState<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+struct HistoryNode<'a> {
+    edge: &'a Edge,
+    parent_index: Option<usize>,
+}
+
+fn transition_allowed_forward<'a>(
+    g: &Graph,
+    history: &[HistoryNode<'a>],
+    my_history_index: Option<usize>,
+    next_edge: &'a Edge,
+) -> bool {
+    for seq in &g.forbidden_transitions {
+        if seq.last().map(String::as_str) != Some(&next_edge.id) {
+            continue;
+        }
+        let mut curr = my_history_index;
+        let mut matched = true;
+        for target_id in seq[..seq.len() - 1].iter().rev() {
+            if let Some(idx) = curr {
+                if history[idx].edge.id != *target_id {
+                    matched = false;
+                    break;
+                }
+                curr = history[idx].parent_index;
+            } else {
+                matched = false;
+                break;
+            }
+        }
+        if matched {
+            return false;
+        }
+    }
+    true
+}
+
+fn transition_allowed_backward<'a>(
+    g: &Graph,
+    history: &[HistoryNode<'a>],
+    my_history_index: Option<usize>,
+    prev_edge: &'a Edge,
+) -> bool {
+    for seq in &g.forbidden_transitions {
+        if seq.first().map(String::as_str) != Some(&prev_edge.id) {
+            continue;
+        }
+        let mut curr = my_history_index;
+        let mut matched = true;
+        for target_id in &seq[1..] {
+            if let Some(idx) = curr {
+                if history[idx].edge.id != *target_id {
+                    matched = false;
+                    break;
+                }
+                curr = history[idx].parent_index;
+            } else {
+                matched = false;
+                break;
+            }
+        }
+        if matched {
+            return false;
+        }
+    }
+    true
+}
+
+fn dijkstra_local_forward<'a>(
+    g: &Graph,
+    ix: &Index<'a>,
+    origin: &'a str,
+    max_local_edges: usize,
+    max_seconds: u64,
+    l: &SearchLimits,
+    budget: &mut Budget,
+) -> BTreeMap<&'a str, Vec<&'a Edge>> {
+    let mut best_for_node: BTreeMap<&'a str, Vec<&'a Edge>> = BTreeMap::new();
+    let mut best_cost: BTreeMap<(&'a str, Option<&'a str>), (u64, u64)> = BTreeMap::new();
+    let mut history: Vec<HistoryNode<'a>> = Vec::new();
+    let mut pq: BinaryHeap<DijkstraState<'a>> = BinaryHeap::new();
+
+    best_cost.insert((origin, None), (0, 0));
+    pq.push(DijkstraState {
+        duration_seconds: 0,
+        distance_meters: 0,
+        edge_id: "",
+        node: origin,
+        edge: None,
+        parent_index: None,
+        depth: 0,
+    });
+
+    while let Some(current) = pq.pop() {
+        let state_key = (current.node, current.edge.map(|e| e.id.as_str()));
+        if let Some(&(best_d, best_m)) = best_cost.get(&state_key) {
+            if (current.duration_seconds, current.distance_meters) > (best_d, best_m) {
+                continue;
+            }
+        }
+
+        if !budget.take(l) {
+            break;
+        }
+
+        let my_history_index = if let Some(e) = current.edge {
+            let idx = history.len();
+            history.push(HistoryNode {
+                edge: e,
+                parent_index: current.parent_index,
+            });
+            Some(idx)
+        } else {
+            None
+        };
+
+        best_for_node.entry(current.node).or_insert_with(|| {
+            let mut path = Vec::new();
+            let mut curr = my_history_index;
+            while let Some(idx) = curr {
+                path.push(history[idx].edge);
+                curr = history[idx].parent_index;
+            }
+            path.reverse();
+            path
+        });
+
+        if current.depth >= max_local_edges {
+            continue;
+        }
+
+        if let Some(outgoing) = ix.outgoing.get(current.node) {
+            for e in outgoing
+                .iter()
+                .copied()
+                .filter(|e| e.kind == EdgeKind::Local)
+            {
+                let next_d = current.duration_seconds + e.duration_seconds;
+                if next_d > max_seconds {
+                    continue;
+                }
+                let next_m = current.distance_meters + e.distance_meters;
+
+                if !transition_allowed_forward(g, &history, my_history_index, e) {
+                    continue;
+                }
+
+                let next_state_key = (e.to.as_str(), Some(e.id.as_str()));
+                if let Some(&(best_d, best_m)) = best_cost.get(&next_state_key) {
+                    if (next_d, next_m) >= (best_d, best_m) {
+                        continue;
+                    }
+                }
+                best_cost.insert(next_state_key, (next_d, next_m));
+                pq.push(DijkstraState {
+                    duration_seconds: next_d,
+                    distance_meters: next_m,
+                    edge_id: e.id.as_str(),
+                    node: e.to.as_str(),
+                    edge: Some(e),
+                    parent_index: my_history_index,
+                    depth: current.depth + 1,
+                });
+            }
+        }
+    }
+
+    best_for_node
+}
+
+fn dijkstra_local_backward<'a>(
+    g: &Graph,
+    ix: &Index<'a>,
+    origin: &'a str,
+    max_local_edges: usize,
+    max_seconds: u64,
+    l: &SearchLimits,
+    budget: &mut Budget,
+) -> BTreeMap<&'a str, Vec<&'a Edge>> {
+    let mut best_for_node: BTreeMap<&'a str, Vec<&'a Edge>> = BTreeMap::new();
+    let mut best_cost: BTreeMap<(&'a str, Option<&'a str>), (u64, u64)> = BTreeMap::new();
+    let mut history: Vec<HistoryNode<'a>> = Vec::new();
+    let mut pq: BinaryHeap<DijkstraState<'a>> = BinaryHeap::new();
+
+    best_cost.insert((origin, None), (0, 0));
+    pq.push(DijkstraState {
+        duration_seconds: 0,
+        distance_meters: 0,
+        edge_id: "",
+        node: origin,
+        edge: None,
+        parent_index: None,
+        depth: 0,
+    });
+
+    while let Some(current) = pq.pop() {
+        let state_key = (current.node, current.edge.map(|e| e.id.as_str()));
+        if let Some(&(best_d, best_m)) = best_cost.get(&state_key) {
+            if (current.duration_seconds, current.distance_meters) > (best_d, best_m) {
+                continue;
+            }
+        }
+
+        if !budget.take(l) {
+            break;
+        }
+
+        let my_history_index = if let Some(e) = current.edge {
+            let idx = history.len();
+            history.push(HistoryNode {
+                edge: e,
+                parent_index: current.parent_index,
+            });
+            Some(idx)
+        } else {
+            None
+        };
+
+        best_for_node.entry(current.node).or_insert_with(|| {
+            let mut path = Vec::new();
+            let mut curr = my_history_index;
+            while let Some(idx) = curr {
+                path.push(history[idx].edge);
+                curr = history[idx].parent_index;
+            }
+            path
+        });
+
+        if current.depth >= max_local_edges {
+            continue;
+        }
+
+        if let Some(incoming) = ix.incoming.get(current.node) {
+            for e in incoming
+                .iter()
+                .copied()
+                .filter(|e| e.kind == EdgeKind::Local)
+            {
+                let next_d = current.duration_seconds + e.duration_seconds;
+                if next_d > max_seconds {
+                    continue;
+                }
+                let next_m = current.distance_meters + e.distance_meters;
+
+                if !transition_allowed_backward(g, &history, my_history_index, e) {
+                    continue;
+                }
+
+                let next_state_key = (e.from.as_str(), Some(e.id.as_str()));
+                if let Some(&(best_d, best_m)) = best_cost.get(&next_state_key) {
+                    if (next_d, next_m) >= (best_d, best_m) {
+                        continue;
+                    }
+                }
+                best_cost.insert(next_state_key, (next_d, next_m));
+                pq.push(DijkstraState {
+                    duration_seconds: next_d,
+                    distance_meters: next_m,
+                    edge_id: e.id.as_str(),
+                    node: e.from.as_str(),
+                    edge: Some(e),
+                    parent_index: my_history_index,
+                    depth: current.depth + 1,
+                });
+            }
+        }
+    }
+
+    best_for_node
+}
+
 // Validated weights and segment lengths bound a full route to 10,000 edges:
 // <= 864,000,000 seconds and <= 100,000,000,000 meters, far below u64::MAX.
 fn seconds(edges: &[&Edge]) -> u64 {
@@ -508,120 +824,131 @@ pub fn search(
     let mut connection = false;
     let mut found_loop = false;
     let mut legal_route = false;
+    let forward_map = dijkstra_local_forward(
+        g,
+        &ix,
+        &r.origin_node_id,
+        l.max_local_edges,
+        r.max_minutes * 60,
+        l,
+        &mut budget,
+    );
+    let backward_map = dijkstra_local_backward(
+        g,
+        &ix,
+        &r.origin_node_id,
+        l.max_local_edges,
+        r.max_minutes * 60,
+        l,
+        &mut budget,
+    );
+
+    let mut loop_cache: BTreeMap<&str, Vec<Vec<&Edge>>> = BTreeMap::new();
+
     'pairs: for p in pairs {
         let pre = path(&ix, &p.entry_to_anchor_edge_ids)?;
         let post = path(&ix, &p.anchor_to_exit_edge_ids)?;
-        let access = paths(
-            g,
-            &ix,
-            &r.origin_node_id,
-            &pre[0].from,
-            EdgeKind::Local,
-            l.max_local_edges,
-            r.max_minutes * 60,
-            l,
-            &mut budget,
-        );
-        let returns = paths(
-            g,
-            &ix,
-            &post.last().unwrap().to,
-            &r.origin_node_id,
-            EdgeKind::Local,
-            l.max_local_edges,
-            r.max_minutes * 60,
-            l,
-            &mut budget,
-        );
-        if access.is_empty() || returns.is_empty() {
+        let (Some(access), Some(returns)) = (
+            forward_map.get(pre[0].from.as_str()),
+            backward_map.get(post.last().unwrap().to.as_str()),
+        ) else {
             continue;
-        }
+        };
         connection = true;
-        let loops = paths(
-            g,
-            &ix,
-            &p.anchor_node_id,
-            &p.anchor_node_id,
-            EdgeKind::Shutoko,
-            l.max_loop_edges,
-            r.max_minutes * 60,
-            l,
-            &mut budget,
-        );
+
+        let loops = if let Some(cached) = loop_cache.get(p.anchor_node_id.as_str()) {
+            cached.clone()
+        } else {
+            let result = paths(
+                g,
+                &ix,
+                &p.anchor_node_id,
+                &p.anchor_node_id,
+                EdgeKind::Shutoko,
+                l.max_loop_edges,
+                r.max_minutes * 60,
+                l,
+                &mut budget,
+            );
+            loop_cache.insert(p.anchor_node_id.as_str(), result.clone());
+            result
+        };
         found_loop |= !loops.is_empty();
+
         for cycle in &loops {
-            for a in &access {
-                for ret in &returns {
-                    if !budget.take(l) {
-                        break 'pairs;
-                    }
-                    let highway: Vec<_> = pre.iter().chain(cycle).chain(&post).copied().collect();
-                    let all: Vec<_> = a.iter().chain(&highway).chain(ret).copied().collect();
-                    if !allowed(g, &all) {
-                        continue;
-                    }
-                    legal_route = true;
-                    let base = seconds(&all);
-                    let buffer = 300.max(base.div_ceil(5));
-                    if base < r.min_minutes * 60 || base + buffer > r.max_minutes * 60 {
-                        continue;
-                    }
-                    if candidates.len() == l.beam_width || candidate_edges + all.len() > 20_000 {
-                        budget.truncated = true;
-                        break 'pairs;
-                    }
-                    candidate_edges += all.len();
-                    let price = p.prices.iter().find(|v| {
-                        utc(&v.effective_from).is_ok_and(|from| from <= now)
-                            && v.effective_to
-                                .as_deref()
-                                .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
-                    });
-                    let ids = edge_ids(&all);
-                    // Length-prefixed components provide stable, collision-free IDs without hashing.
-                    let id = std::iter::once(p.id.as_str())
-                        .chain(ids.iter().map(String::as_str))
-                        .map(|s| format!("{}:{}", s.len(), s))
-                        .collect::<String>();
-                    candidates.push(Candidate {
-                        id,
-                        release_id: r.release_id.clone(),
-                        origin_node_id: r.origin_node_id.clone(),
-                        entry_id: p.entry_id.clone(),
-                        exit_id: p.exit_id.clone(),
-                        edge_ids: ids,
-                        duration: Duration {
-                            access_seconds: seconds(a),
-                            shutoko_seconds: seconds(&highway),
-                            return_seconds: seconds(ret),
-                            base_seconds: base,
-                            buffer_seconds: buffer,
-                            plan_seconds: base + buffer,
-                        },
-                        distance_meters: meters(&all),
-                        shutoko_distance_meters: meters(&highway),
-                        toll: Toll {
-                            billing_pair_id: p.id.clone(),
-                            charged_section_count: 1,
-                            amount_yen: price.map(|v| v.amount_yen),
-                            pricing_at: r.pricing_at.clone(),
-                            effective_from: price.map(|v| v.effective_from.clone()),
-                            effective_to: price.and_then(|v| v.effective_to.clone()),
-                        },
-                        r#loop: Loop {
-                            anchor_node_id: p.anchor_node_id.clone(),
-                            edge_ids: edge_ids(cycle),
-                            duration_seconds: seconds(cycle),
-                            distance_meters: meters(cycle),
-                            validated: true,
-                        },
-                        warnings: vec![
-                            "EXPERIMENTAL_NO_HANDOFF".into(),
-                            "STATIC_TRAVEL_TIME".into(),
-                        ],
-                    });
-                }
+            if !budget.take(l) {
+                break 'pairs;
             }
+            let highway: Vec<_> = pre.iter().chain(cycle).chain(&post).copied().collect();
+            let all: Vec<_> = access
+                .iter()
+                .chain(&highway)
+                .chain(returns)
+                .copied()
+                .collect();
+            if !allowed(g, &all) {
+                continue;
+            }
+            legal_route = true;
+            let base = seconds(&all);
+            let buffer = 300.max(base.div_ceil(5));
+            if base < r.min_minutes * 60 || base + buffer > r.max_minutes * 60 {
+                continue;
+            }
+            if candidates.len() == l.beam_width || candidate_edges + all.len() > 20_000 {
+                budget.truncated = true;
+                break 'pairs;
+            }
+            candidate_edges += all.len();
+            let price = p.prices.iter().find(|v| {
+                utc(&v.effective_from).is_ok_and(|from| from <= now)
+                    && v.effective_to
+                        .as_deref()
+                        .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
+            });
+            let ids = edge_ids(&all);
+            // Length-prefixed components provide stable, collision-free IDs without hashing.
+            let id = std::iter::once(p.id.as_str())
+                .chain(ids.iter().map(String::as_str))
+                .map(|s| format!("{}:{}", s.len(), s))
+                .collect::<String>();
+            candidates.push(Candidate {
+                id,
+                release_id: r.release_id.clone(),
+                origin_node_id: r.origin_node_id.clone(),
+                entry_id: p.entry_id.clone(),
+                exit_id: p.exit_id.clone(),
+                edge_ids: ids,
+                duration: Duration {
+                    access_seconds: seconds(access),
+                    shutoko_seconds: seconds(&highway),
+                    return_seconds: seconds(returns),
+                    base_seconds: base,
+                    buffer_seconds: buffer,
+                    plan_seconds: base + buffer,
+                },
+                distance_meters: meters(&all),
+                shutoko_distance_meters: meters(&highway),
+                toll: Toll {
+                    billing_pair_id: p.id.clone(),
+                    charged_section_count: 1,
+                    amount_yen: price.map(|v| v.amount_yen),
+                    pricing_at: r.pricing_at.clone(),
+                    effective_from: price.map(|v| v.effective_from.clone()),
+                    effective_to: price.and_then(|v| v.effective_to.clone()),
+                },
+                r#loop: Loop {
+                    anchor_node_id: p.anchor_node_id.clone(),
+                    edge_ids: edge_ids(cycle),
+                    duration_seconds: seconds(cycle),
+                    distance_meters: meters(cycle),
+                    validated: true,
+                },
+                warnings: vec![
+                    "EXPERIMENTAL_NO_HANDOFF".into(),
+                    "STATIC_TRAVEL_TIME".into(),
+                ],
+            });
         }
     }
     let time_ranking = candidates.iter().any(|c| c.toll.amount_yen.is_none());

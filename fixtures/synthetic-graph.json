@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "synthetic-v1",
+  "vehicleProfile": "passenger-car-etc",
+  "nodes": [{"id":"s"},{"id":"i"},{"id":"a"},{"id":"b"},{"id":"c"},{"id":"o"}],
+  "edges": [
+    {"id":"access","from":"s","to":"i","kind":"local","durationSeconds":60,"distanceMeters":500},
+    {"id":"entry","from":"i","to":"a","kind":"entry","durationSeconds":30,"distanceMeters":200},
+    {"id":"ab","from":"a","to":"b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+    {"id":"bc","from":"b","to":"c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+    {"id":"ca","from":"c","to":"a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+    {"id":"exit","from":"a","to":"o","kind":"exit","durationSeconds":30,"distanceMeters":200},
+    {"id":"return","from":"o","to":"s","kind":"local","durationSeconds":60,"distanceMeters":500}
+  ],
+  "billingPairs": [{
+    "id":"one-section",
+    "entryId":"entry",
+    "exitId":"exit",
+    "anchorNodeId":"a",
+    "entryToAnchorEdgeIds":["entry"],
+    "anchorToExitEdgeIds":["exit"],
+    "status":"verified",
+    "vehicleProfile":"passenger-car-etc",
+    "prices":[{"amountYen":300,"effectiveFrom":"2026-01-01T00:00:00Z","effectiveTo":"2026-10-01T00:00:00Z"}]
+  }],
+  "forbiddenTransitions": []
+}

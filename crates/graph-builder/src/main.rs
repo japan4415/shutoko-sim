@@ -4,10 +4,12 @@
 //! from OSM Overpass export JSON and human-verified billing pair seeds.
 
 use shutoko_graph_builder::{
-    build_manifest, build_topology, generate_and_validate_billing_pairs,
+    build_manifest, build_topology_with_report, generate_and_validate_billing_pairs,
     manifest_to_deterministic_json, snap_index_to_deterministic_json, to_deterministic_json,
-    BillingPairsSeedFile, ManifestConfig, OverpassResponse, TopologyConfig, VerificationStatus,
+    BillingPairProvenance, BillingPairsSeedFile, EdgeKind, ManifestConfig, OverpassResponse,
+    TopologyConfig, VerificationStatus,
 };
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -33,6 +35,7 @@ OPTIONS:
     --coverage-area <STR>   Textual coverage scope description [default: "Tokyo Inner Circular Route (C1) and Metropolitan Expressway"]
     --graph-version <VER>   Graph dataset version [default: "1.0.0"]
     --unverified-section <S> Unverified section to record in manifest (can be specified multiple times)
+    --strict                Fail with non-zero exit code if no verified billing pairs are generated
     -h, --help              Print help information
     -V, --version           Print version information
 "#
@@ -50,6 +53,7 @@ struct CliArgs {
     coverage_area: String,
     graph_version: String,
     unverified_sections: Vec<String>,
+    strict: bool,
 }
 
 fn parse_args() -> Result<CliArgs, String> {
@@ -71,6 +75,7 @@ fn parse_args() -> Result<CliArgs, String> {
         "Tokyo Inner Circular Route (C1) and Metropolitan Expressway".to_string();
     let mut graph_version = "1.0.0".to_string();
     let mut unverified_sections: Vec<String> = Vec::new();
+    let mut strict = false;
 
     let mut i = 1;
     while i < raw_args.len() {
@@ -153,6 +158,9 @@ fn parse_args() -> Result<CliArgs, String> {
                 }
                 unverified_sections.push(raw_args[i].clone());
             }
+            "--strict" => {
+                strict = true;
+            }
             unknown => {
                 return Err(format!("unknown option: {}", unknown));
             }
@@ -174,6 +182,7 @@ fn parse_args() -> Result<CliArgs, String> {
         coverage_area,
         graph_version,
         unverified_sections,
+        strict,
     })
 }
 
@@ -208,11 +217,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         release_id: args.release_id.clone(),
         vehicle_profile: args.vehicle_profile.clone(),
     };
-    let (mut graph, snap_index) = build_topology(&overpass_resp, &top_config)
-        .map_err(|e| format!("topology build failed: {}", e))?;
+    let (mut graph, snap_index, top_report) =
+        build_topology_with_report(&overpass_resp, &top_config)
+            .map_err(|e| format!("topology build failed: {}", e))?;
 
     // 3. Process declarative billing pair seeds if provided
     let mut unverified_from_seeds = Vec::new();
+    let mut billing_provenances = Vec::new();
+
     if let Some(seed_file_path) = &args.seed_path {
         let seed_raw = fs::read_to_string(seed_file_path).map_err(|e| {
             format!(
@@ -243,9 +255,27 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         for pair in &report.valid_pairs {
-            if pair.status == VerificationStatus::Unverified {
+            if pair.status == VerificationStatus::Verified {
+                if let Some(s) = seed_file.billing_pairs.iter().find(|s| s.id == pair.id) {
+                    billing_provenances.push(BillingPairProvenance {
+                        id: s.id.clone(),
+                        source: s.provenance.source.clone(),
+                        source_date: s.provenance.source_date.clone(),
+                        notes: s.provenance.notes.clone(),
+                    });
+                }
+            } else if pair.status == VerificationStatus::Unverified {
                 unverified_from_seeds.push(format!("unverified:{}", pair.id));
             }
+        }
+
+        if args.strict
+            && report
+                .valid_pairs
+                .iter()
+                .all(|p| p.status != VerificationStatus::Verified)
+        {
+            return Err("strict mode: no verified billing pair generated".into());
         }
 
         graph.billing_pairs = report.valid_pairs;
@@ -276,8 +306,72 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     verified_exits.sort();
     verified_exits.dedup();
 
+    // Index OSM way names from overpass elements for human-readable unverified section labels
+    let mut way_names: HashMap<i64, String> = HashMap::new();
+    for elem in &overpass_resp.elements {
+        if elem.is_way() {
+            if let Some(name) = elem
+                .get_tag("name")
+                .or_else(|| elem.get_tag("name:ja"))
+                .or_else(|| elem.get_tag("description"))
+            {
+                way_names.insert(elem.id, name.to_string());
+            }
+        }
+    }
+
+    let extract_way_id = |edge_id: &str| -> Option<i64> {
+        let parts: Vec<&str> = edge_id.split(':').collect();
+        if parts.len() >= 2 && parts[1].starts_with('w') {
+            parts[1][1..].parse::<i64>().ok()
+        } else {
+            None
+        }
+    };
+
+    // Automatically enumerate unverified entry and exit edges present in graph but not in verified billing pairs
+    let mut unverified_edge_sections = Vec::new();
+    for e in &graph.edges {
+        if e.kind == EdgeKind::Entry && !verified_entries.contains(&e.id) {
+            let label = if let Some(wid) = extract_way_id(&e.id) {
+                if let Some(name) = way_names.get(&wid) {
+                    format!("entry:{} ({})", e.id, name)
+                } else {
+                    format!("entry:{}", e.id)
+                }
+            } else {
+                format!("entry:{}", e.id)
+            };
+            unverified_edge_sections.push(label);
+        } else if e.kind == EdgeKind::Exit && !verified_exits.contains(&e.id) {
+            let label = if let Some(wid) = extract_way_id(&e.id) {
+                if let Some(name) = way_names.get(&wid) {
+                    format!("exit:{} ({})", e.id, name)
+                } else {
+                    format!("exit:{}", e.id)
+                }
+            } else {
+                format!("exit:{}", e.id)
+            };
+            unverified_edge_sections.push(label);
+        }
+    }
+
     let mut all_unverified = args.unverified_sections;
     all_unverified.extend(unverified_from_seeds);
+    all_unverified.extend(unverified_edge_sections);
+
+    // Note excluded routes and conditional restrictions
+    all_unverified.push(
+        "excluded-route: Metropolitan Expressway lines other than C1 (e.g. B, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, K, S, Y)".to_string(),
+    );
+    if top_report.skipped_conditional > 0 {
+        all_unverified.push(format!(
+            "unsupported-restriction: {} conditional turn restrictions (restriction:conditional) excluded from static graph",
+            top_report.skipped_conditional
+        ));
+    }
+
     all_unverified.sort();
     all_unverified.dedup();
 
@@ -293,6 +387,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         time_model_version: "v1-static-speeds".into(),
         billing_pairs_version: "v1".into(),
         unverified_sections: all_unverified,
+        provenance: billing_provenances,
     };
 
     let manifest = build_manifest(

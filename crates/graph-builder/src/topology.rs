@@ -2,8 +2,8 @@
 //!
 //! # Design & Determinism
 //! - Ways are segmented into consecutive node pairs connected strictly by shared OSM node ID.
-//! - Non-overlapping layers (bridge, tunnel, layer) that cross geometrically without sharing
-//!   a node ID are NEVER connected.
+//! - Edges connect strictly by shared OSM node IDs; different levels or geometric crossings
+//!   without shared node IDs naturally remain separated without requiring layer/bridge/tunnel tags.
 //! - Forward/reverse edges for `oneway` tags are expanded deterministically with unique IDs.
 //! - Edge distances use the Haversine formula with Earth radius R = 6,371,000.0 m, rounded to u64.
 //! - Durations use static speed models per `EdgeKind` with rounding to u64 seconds.
@@ -12,6 +12,33 @@
 use crate::model::{Edge, EdgeKind, Graph, Node, SnapIndex, SnapNode};
 use crate::osm::{OsmElement, OverpassResponse};
 use std::collections::{BTreeSet, HashMap, HashSet};
+
+/// Diagnostic report capturing turn restriction and ramp topology statistics.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RestrictionReport {
+    /// Total relation elements with type=restriction inspected.
+    pub total_relations: usize,
+    /// Count of no_* turn restrictions applied with via=node.
+    pub no_turn_via_node: usize,
+    /// Count of only_* turn restrictions applied with via=node.
+    pub only_turn_via_node: usize,
+    /// Number of distinct forbidden edge pairs generated from only_* restrictions.
+    pub only_turn_edge_pairs: usize,
+    /// Count of via=way restrictions applied (edge sequences of length >= 3).
+    pub via_way: usize,
+    /// Number of conditional restrictions skipped (e.g. restriction:conditional).
+    pub skipped_conditional: usize,
+    /// Number of restriction relations missing a via member.
+    pub skipped_no_via: usize,
+    /// Number of restrictions referencing ways/nodes outside the extracted graph.
+    pub skipped_missing_elements: usize,
+    /// Number of via=way restrictions where ways do not connect into a continuous path.
+    pub skipped_disconnected: usize,
+    /// Internal motorway_link edges dropped (not connecting local streets and Shutoko).
+    pub dropped_link_edges: usize,
+    /// Human-readable diagnostic messages detailing skipped or notable relations.
+    pub notes: Vec<String>,
+}
 
 /// Estimated nominal flow speed for Shutoko urban expressways (60 km/h).
 /// Rationale: Tokyo inner circular route (C1) has a legal speed limit of 50-60 km/h;
@@ -156,11 +183,11 @@ pub fn parse_oneway(element: &OsmElement) -> OnewayDirection {
     }
 }
 
-/// Build `Graph` and `SnapIndex` from Overpass API elements.
-pub fn build_topology(
+/// Build `Graph`, `SnapIndex`, and diagnostic `RestrictionReport` from Overpass API elements.
+pub fn build_topology_with_report(
     response: &OverpassResponse,
     config: &TopologyConfig,
-) -> Result<(Graph, SnapIndex), String> {
+) -> Result<(Graph, SnapIndex, RestrictionReport), String> {
     // 1. Index nodes with coordinates
     let mut node_coords: HashMap<i64, (f64, f64)> = HashMap::new();
     for elem in &response.elements {
@@ -331,6 +358,7 @@ pub fn build_topology(
     // Build final edges
     let mut final_edges: Vec<Edge> = Vec::new();
     let mut final_edge_ids: HashSet<String> = HashSet::new();
+    let mut dropped_link_edges = 0;
 
     for edge in intermediate_edges {
         let kind = if let Some(k) = edge.tentative_kind {
@@ -355,7 +383,8 @@ pub fn build_topology(
                     EdgeKind::Shutoko
                 }
             } else {
-                // Not a distinct entry/exit between local and Shutoko
+                // Not a distinct entry/exit between local and Shutoko (e.g. internal JCT connector)
+                dropped_link_edges += 1;
                 continue;
             }
         } else {
@@ -399,10 +428,27 @@ pub fn build_topology(
         .collect();
     nodes.sort_by(|a, b| a.id.cmp(&b.id));
 
+    // Map final edge IDs to edge references and build outgoing index
+    let final_edges_by_id: HashMap<String, &Edge> =
+        final_edges.iter().map(|e| (e.id.clone(), e)).collect();
+    let mut final_outgoing: HashMap<String, Vec<String>> = HashMap::new();
+    for edge in &final_edges {
+        final_outgoing
+            .entry(edge.from.clone())
+            .or_default()
+            .push(edge.id.clone());
+    }
+    for list in final_outgoing.values_mut() {
+        list.sort();
+    }
+
     // 5. Parse turn restrictions from relations
     let mut forbidden_transitions_set: BTreeSet<Vec<String>> = BTreeSet::new();
+    let mut report = RestrictionReport {
+        dropped_link_edges,
+        ..Default::default()
+    };
 
-    // Map for fast lookup of edges by (way_id, from, to)
     for elem in &response.elements {
         if !elem.is_relation() {
             continue;
@@ -411,73 +457,323 @@ pub fn build_topology(
             continue;
         }
 
+        report.total_relations += 1;
+
         let restriction = match elem.get_tag("restriction") {
             Some(r) => r,
-            None => continue,
+            None => {
+                if let Some(cond) = elem.get_tag("restriction:conditional") {
+                    report.skipped_conditional += 1;
+                    report.notes.push(format!(
+                        "relation {}: conditional restriction ({}) skipped (traffic regulation out of scope)",
+                        elem.id, cond
+                    ));
+                } else {
+                    report.skipped_missing_elements += 1;
+                    report
+                        .notes
+                        .push(format!("relation {}: missing restriction tag", elem.id));
+                }
+                continue;
+            }
         };
 
-        if !matches!(
+        let is_no_turn = matches!(
             restriction,
             "no_left_turn" | "no_right_turn" | "no_u_turn" | "no_straight_on"
-        ) {
+        );
+        let is_only_turn = matches!(
+            restriction,
+            "only_left_turn" | "only_right_turn" | "only_straight_on" | "only_u_turn"
+        );
+
+        if !is_no_turn && !is_only_turn {
+            report.notes.push(format!(
+                "relation {}: unrecognized restriction value \"{}\"",
+                elem.id, restriction
+            ));
             continue;
         }
 
         let members = match &elem.members {
             Some(m) => m,
-            None => continue,
+            None => {
+                report.skipped_no_via += 1;
+                continue;
+            }
         };
 
-        let mut from_way: Option<i64> = None;
-        let mut to_way: Option<i64> = None;
-        let mut via_node: Option<i64> = None;
+        let mut from_ways: Vec<i64> = Vec::new();
+        let mut to_ways: Vec<i64> = Vec::new();
+        let mut via_nodes: Vec<i64> = Vec::new();
+        let mut via_ways: Vec<i64> = Vec::new();
 
         for m in members {
             if m.role == "from" && m.member_type == "way" {
-                from_way = Some(m.ref_id);
+                from_ways.push(m.ref_id);
             } else if m.role == "to" && m.member_type == "way" {
-                to_way = Some(m.ref_id);
-            } else if m.role == "via" && m.member_type == "node" {
-                via_node = Some(m.ref_id);
+                to_ways.push(m.ref_id);
+            } else if m.role == "via" {
+                if m.member_type == "node" {
+                    via_nodes.push(m.ref_id);
+                } else if m.member_type == "way" {
+                    via_ways.push(m.ref_id);
+                }
             }
         }
 
-        if let (Some(fw), Some(tw), Some(vn)) = (from_way, to_way, via_node) {
+        if from_ways.is_empty() || to_ways.is_empty() {
+            report.skipped_missing_elements += 1;
+            report.notes.push(format!(
+                "relation {}: missing from or to way member",
+                elem.id
+            ));
+            continue;
+        }
+
+        if via_nodes.is_empty() && via_ways.is_empty() {
+            report.skipped_no_via += 1;
+            report
+                .notes
+                .push(format!("relation {}: missing via member", elem.id));
+            continue;
+        }
+
+        let fw = from_ways[0];
+        let tw = to_ways[0];
+
+        // 5a. Handle via=node
+        if let Some(&vn) = via_nodes.first() {
             let via_node_str = format!("n:{}", vn);
 
-            // Find an edge in fw ending at vn, and an edge in tw starting at vn
             let fw_edges = match way_edges_by_id.get(&fw) {
                 Some(es) => es,
-                None => continue,
+                None => {
+                    report.skipped_missing_elements += 1;
+                    report.notes.push(format!(
+                        "relation {}: from way {} not in graph",
+                        elem.id, fw
+                    ));
+                    continue;
+                }
             };
             let tw_edges = match way_edges_by_id.get(&tw) {
                 Some(es) => es,
-                None => continue,
+                None => {
+                    report.skipped_missing_elements += 1;
+                    report
+                        .notes
+                        .push(format!("relation {}: to way {} not in graph", elem.id, tw));
+                    continue;
+                }
             };
+
+            let fe_candidates: Vec<&String> = fw_edges
+                .iter()
+                .filter(|eid| {
+                    final_edges_by_id
+                        .get(*eid)
+                        .is_some_and(|e| e.to == via_node_str)
+                })
+                .collect();
+
+            let te_candidates: Vec<&String> = tw_edges
+                .iter()
+                .filter(|eid| {
+                    final_edges_by_id
+                        .get(*eid)
+                        .is_some_and(|e| e.from == via_node_str)
+                })
+                .collect();
+
+            if fe_candidates.is_empty() || te_candidates.is_empty() {
+                report.skipped_missing_elements += 1;
+                report.notes.push(format!(
+                    "relation {}: no active edges connecting via node {} (fw:{}, tw:{})",
+                    elem.id, vn, fw, tw
+                ));
+                continue;
+            }
+
+            if is_no_turn {
+                for fe_id in &fe_candidates {
+                    for te_id in &te_candidates {
+                        forbidden_transitions_set.insert(vec![(*fe_id).clone(), (*te_id).clone()]);
+                    }
+                }
+                report.no_turn_via_node += 1;
+            } else if is_only_turn {
+                let to_ids: HashSet<&str> = te_candidates.iter().map(|s| s.as_str()).collect();
+                let all_outgoing = final_outgoing.get(&via_node_str);
+                let mut added_pairs = 0;
+
+                if let Some(outgoing) = all_outgoing {
+                    for fe_id in &fe_candidates {
+                        for out_id in outgoing {
+                            if !to_ids.contains(out_id.as_str()) {
+                                forbidden_transitions_set
+                                    .insert(vec![(*fe_id).clone(), out_id.clone()]);
+                                added_pairs += 1;
+                            }
+                        }
+                    }
+                }
+
+                if added_pairs > 0 {
+                    report.only_turn_via_node += 1;
+                    report.only_turn_edge_pairs += added_pairs;
+                }
+            }
+            continue;
+        }
+
+        // 5b. Handle via=way
+        if !via_ways.is_empty() {
+            let fw_edges = match way_edges_by_id.get(&fw) {
+                Some(es) => es,
+                None => {
+                    report.skipped_missing_elements += 1;
+                    report.notes.push(format!(
+                        "relation {}: from way {} not in graph",
+                        elem.id, fw
+                    ));
+                    continue;
+                }
+            };
+            let tw_edges = match way_edges_by_id.get(&tw) {
+                Some(es) => es,
+                None => {
+                    report.skipped_missing_elements += 1;
+                    report
+                        .notes
+                        .push(format!("relation {}: to way {} not in graph", elem.id, tw));
+                    continue;
+                }
+            };
+
+            let mut all_via_edges = Vec::new();
+            let mut missing_via = false;
+            for vw in &via_ways {
+                match way_edges_by_id.get(vw) {
+                    Some(es) => {
+                        for eid in es {
+                            if final_edge_ids.contains(eid) {
+                                all_via_edges.push(eid.clone());
+                            }
+                        }
+                    }
+                    None => {
+                        missing_via = true;
+                        break;
+                    }
+                }
+            }
+
+            if missing_via || all_via_edges.is_empty() {
+                report.skipped_missing_elements += 1;
+                report.notes.push(format!(
+                    "relation {}: via ways not fully present in graph",
+                    elem.id
+                ));
+                continue;
+            }
+
+            let to_edge_set: HashSet<&str> = tw_edges
+                .iter()
+                .filter(|id| final_edge_ids.contains(*id))
+                .map(String::as_str)
+                .collect();
+
+            if to_edge_set.is_empty() {
+                report.skipped_missing_elements += 1;
+                continue;
+            }
+
+            let mut found_any_path = false;
 
             for fe_id in fw_edges {
                 if !final_edge_ids.contains(fe_id) {
                     continue;
                 }
-                let fe = final_edges.iter().find(|e| e.id == *fe_id).unwrap();
-                if fe.to != via_node_str {
-                    continue;
-                }
+                let _fe = match final_edges_by_id.get(fe_id) {
+                    Some(e) => e,
+                    None => continue,
+                };
 
-                for te_id in tw_edges {
-                    if !final_edge_ids.contains(te_id) {
+                let mut queue: Vec<Vec<String>> = vec![vec![fe_id.clone()]];
+                let mut visited_path_prefixes: HashSet<String> = HashSet::new();
+
+                while let Some(path) = queue.pop() {
+                    let last_edge_id = path.last().unwrap();
+                    let last_edge = match final_edges_by_id.get(last_edge_id) {
+                        Some(e) => e,
+                        None => continue,
+                    };
+
+                    if to_edge_set.contains(last_edge_id.as_str()) && path.len() >= 3 {
+                        if is_no_turn {
+                            forbidden_transitions_set.insert(path.clone());
+                            found_any_path = true;
+                        }
                         continue;
                     }
-                    let te = final_edges.iter().find(|e| e.id == *te_id).unwrap();
-                    if te.from != via_node_str {
+
+                    if path.len() > via_ways.len() + 10 {
                         continue;
                     }
 
-                    forbidden_transitions_set.insert(vec![fe_id.clone(), te_id.clone()]);
+                    if let Some(nexts) = final_outgoing.get(&last_edge.to) {
+                        for next_id in nexts {
+                            if path.contains(next_id) {
+                                continue;
+                            }
+                            let has_via = path.iter().skip(1).any(|id| all_via_edges.contains(id));
+                            let is_via = all_via_edges.contains(next_id);
+                            let is_to = to_edge_set.contains(next_id.as_str());
+
+                            if is_via || (has_via && is_to) {
+                                let mut new_path = path.clone();
+                                new_path.push(next_id.clone());
+                                let path_key = new_path.join("->");
+                                if visited_path_prefixes.insert(path_key) {
+                                    queue.push(new_path);
+                                }
+                            }
+                        }
+                    }
                 }
+            }
+
+            if found_any_path {
+                report.via_way += 1;
+            } else {
+                report.skipped_disconnected += 1;
+                report.notes.push(format!(
+                    "relation {}: disconnected via-way path between from way {} and to way {}",
+                    elem.id, fw, tw
+                ));
             }
         }
     }
+
+    if report.dropped_link_edges > 0 {
+        eprintln!(
+            "Info: dropped {} internal motorway_link edges (not connecting local streets and Shutoko)",
+            report.dropped_link_edges
+        );
+    }
+    eprintln!(
+        "Turn restrictions: {} total relations -> {} no_turn (via=node), {} only_turn (via=node, {} forbidden pairs), {} via_way | skipped: {} conditional, {} no via, {} outside graph, {} disconnected",
+        report.total_relations,
+        report.no_turn_via_node,
+        report.only_turn_via_node,
+        report.only_turn_edge_pairs,
+        report.via_way,
+        report.skipped_conditional,
+        report.skipped_no_via,
+        report.skipped_missing_elements,
+        report.skipped_disconnected
+    );
 
     let mut forbidden_transitions: Vec<Vec<String>> =
         forbidden_transitions_set.into_iter().collect();
@@ -528,6 +824,15 @@ pub fn build_topology(
         nodes: snap_nodes,
     };
 
+    Ok((graph, snap_index, report))
+}
+
+/// Build `Graph` and `SnapIndex` from Overpass API elements.
+pub fn build_topology(
+    response: &OverpassResponse,
+    config: &TopologyConfig,
+) -> Result<(Graph, SnapIndex), String> {
+    let (graph, snap_index, _report) = build_topology_with_report(response, config)?;
     Ok((graph, snap_index))
 }
 

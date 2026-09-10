@@ -1,7 +1,7 @@
 use serde_json::json;
 use shutoko_graph_builder::{
-    build_topology, haversine_distance_meters, to_deterministic_json, EdgeKind, OverpassResponse,
-    TopologyConfig, LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
+    build_topology, build_topology_with_report, haversine_distance_meters, to_deterministic_json,
+    EdgeKind, OverpassResponse, TopologyConfig, LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
 };
 
 #[test]
@@ -727,7 +727,7 @@ fn test_forbidden_transitions_not_adopted_and_rejected() {
         status: VerificationStatus::Verified,
         one_section_ahead_verified: true,
         provenance: SeedProvenance {
-            source: "test".into(),
+            source: "https://test.example.com".into(),
             source_date: "2026-09-10".into(),
             notes: None,
         },
@@ -913,7 +913,7 @@ fn test_reject_unverified_section_marked_verified() {
         status: VerificationStatus::Verified,
         one_section_ahead_verified: false, // Inconsistent with status=verified!
         provenance: SeedProvenance {
-            source: "test".into(),
+            source: "https://test.example.com".into(),
             source_date: "2026-09-10".into(),
             notes: None,
         },
@@ -948,6 +948,7 @@ fn test_manifest_generation_and_checksum_verification() {
         time_model_version: "v1-static-speeds".into(),
         billing_pairs_version: "v1".into(),
         unverified_sections: vec!["unverified-ramp-x".into()],
+        provenance: vec![],
     };
 
     let manifest = build_manifest(
@@ -1023,6 +1024,7 @@ fn test_deterministic_byte_identical_output_two_runs() {
         time_model_version: "v1-static-speeds".into(),
         billing_pairs_version: "v1".into(),
         unverified_sections: vec![],
+        provenance: vec![],
     };
     let manifest_1 = build_manifest(
         &manifest_cfg,
@@ -1166,5 +1168,411 @@ fn test_cli_full_end_to_end_execution() {
     }
 
     // Clean up
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_turn_restriction_only_straight_on_forbids_alternative_outgoings() {
+    let json_data = json!({
+        "elements": [
+            {"type": "node", "id": 1, "lat": 35.6800, "lon": 139.7600},
+            {"type": "node", "id": 2, "lat": 35.6810, "lon": 139.7600}, // via node
+            {"type": "node", "id": 3, "lat": 35.6810, "lon": 139.7590}, // left branch
+            {"type": "node", "id": 4, "lat": 35.6820, "lon": 139.7600}, // straight branch
+
+            // Way 10: 1 -> 2
+            {
+                "type": "way", "id": 10, "nodes": [1, 2],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+            // Way 20: 2 -> 3 (left branch)
+            {
+                "type": "way", "id": 20, "nodes": [2, 3],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+            // Way 30: 2 -> 4 (straight branch)
+            {
+                "type": "way", "id": 30, "nodes": [2, 4],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+
+            // Relation: only_straight_on from Way 10 to Way 30 via Node 2
+            {
+                "type": "relation",
+                "id": 2000,
+                "tags": {
+                    "type": "restriction",
+                    "restriction": "only_straight_on"
+                },
+                "members": [
+                    {"type": "way", "ref": 10, "role": "from"},
+                    {"type": "way", "ref": 30, "role": "to"},
+                    {"type": "node", "ref": 2, "role": "via"}
+                ]
+            }
+        ]
+    });
+
+    let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
+    let config = TopologyConfig::default();
+    let (graph, _snap, report) = build_topology_with_report(&resp, &config).unwrap();
+
+    assert_eq!(report.only_turn_via_node, 1);
+    assert_eq!(report.only_turn_edge_pairs, 1);
+    // Should forbid Way 10 -> Way 20, NOT Way 10 -> Way 30
+    assert_eq!(graph.forbidden_transitions.len(), 1);
+    assert_eq!(
+        graph.forbidden_transitions[0],
+        vec!["e:w10:0:f".to_string(), "e:w20:0:f".to_string()]
+    );
+}
+
+#[test]
+fn test_turn_restriction_via_way_sequence() {
+    let json_data = json!({
+        "elements": [
+            {"type": "node", "id": 1, "lat": 35.6800, "lon": 139.7600},
+            {"type": "node", "id": 2, "lat": 35.6810, "lon": 139.7600},
+            {"type": "node", "id": 3, "lat": 35.6820, "lon": 139.7600},
+            {"type": "node", "id": 4, "lat": 35.6830, "lon": 139.7600},
+
+            // Way 10: 1 -> 2 (from)
+            {
+                "type": "way", "id": 10, "nodes": [1, 2],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+            // Way 20: 2 -> 3 (via)
+            {
+                "type": "way", "id": 20, "nodes": [2, 3],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+            // Way 30: 3 -> 4 (to)
+            {
+                "type": "way", "id": 30, "nodes": [3, 4],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+
+            // Relation: no_u_turn from Way 10 to Way 30 via Way 20
+            {
+                "type": "relation",
+                "id": 3000,
+                "tags": {
+                    "type": "restriction",
+                    "restriction": "no_u_turn"
+                },
+                "members": [
+                    {"type": "way", "ref": 10, "role": "from"},
+                    {"type": "way", "ref": 20, "role": "via"},
+                    {"type": "way", "ref": 30, "role": "to"}
+                ]
+            }
+        ]
+    });
+
+    let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
+    let config = TopologyConfig::default();
+    let (graph, _snap, report) = build_topology_with_report(&resp, &config).unwrap();
+
+    assert_eq!(report.via_way, 1);
+    assert_eq!(graph.forbidden_transitions.len(), 1);
+    assert_eq!(
+        graph.forbidden_transitions[0],
+        vec![
+            "e:w10:0:f".to_string(),
+            "e:w20:0:f".to_string(),
+            "e:w30:0:f".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn test_turn_restriction_conditional_skipped() {
+    let json_data = json!({
+        "elements": [
+            {"type": "node", "id": 1, "lat": 35.6800, "lon": 139.7600},
+            {"type": "node", "id": 2, "lat": 35.6810, "lon": 139.7600},
+            {"type": "node", "id": 3, "lat": 35.6810, "lon": 139.7590},
+
+            {
+                "type": "way", "id": 10, "nodes": [1, 2],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+            {
+                "type": "way", "id": 20, "nodes": [2, 3],
+                "tags": {"highway": "primary", "oneway": "yes"}
+            },
+            {
+                "type": "relation",
+                "id": 4000,
+                "tags": {
+                    "type": "restriction",
+                    "restriction:conditional": "no_right_turn @ (07:00-09:00)"
+                },
+                "members": [
+                    {"type": "way", "ref": 10, "role": "from"},
+                    {"type": "way", "ref": 20, "role": "to"},
+                    {"type": "node", "ref": 2, "role": "via"}
+                ]
+            }
+        ]
+    });
+
+    let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
+    let config = TopologyConfig::default();
+    let (graph, _snap, report) = build_topology_with_report(&resp, &config).unwrap();
+
+    assert_eq!(report.skipped_conditional, 1);
+    assert_eq!(graph.forbidden_transitions.len(), 0);
+}
+
+#[test]
+fn test_refutation_first_exit_mismatch_shintomicho() {
+    let osm_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("fixtures/osm/shutoko-c1.json");
+    let osm_content = std::fs::read_to_string(&osm_path).expect("failed to read shutoko-c1.json");
+    let resp: OverpassResponse = serde_json::from_str(&osm_content).unwrap();
+
+    let config = TopologyConfig::default();
+    let (graph, _snap) = build_topology(&resp, &config).unwrap();
+
+    // Valid seed uses Takaracho exit (297864314)
+    // Refutation test uses Shintomicho exit (760760233) which is downstream after Takaracho
+    let invalid_seed = BillingPairSeed {
+        id: "bp-refutation-shintomicho".into(),
+        entry_osm_way_id: 92243921,    // Kandabashi entry
+        exit_osm_way_id: 760760233,    // Shintomicho exit
+        anchor_osm_node_id: 499831338, // Anchor node
+        vehicle_profile: "passenger-car-etc".into(),
+        status: VerificationStatus::Verified,
+        one_section_ahead_verified: true,
+        provenance: SeedProvenance {
+            source: "https://www.shutoko.jp/tariff".into(),
+            source_date: "2026-09-10".into(),
+            notes: Some("Deliberately trying to verify a second exit".into()),
+        },
+        prices: vec![SeedPrice {
+            amount_yen: 300,
+            effective_from: "2026-01-01T00:00:00Z".into(),
+            effective_to: None,
+        }],
+    };
+
+    let result = generate_billing_pair(&graph, &invalid_seed);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    match err {
+        BillingError::ValidationFailed(validation_err) => {
+            assert_eq!(validation_err.rule, "FIRST_EXIT_MISMATCH");
+            assert!(
+                validation_err.message.contains("e:w297864314:11:f"),
+                "error message should indicate expected first exit: {}",
+                validation_err.message
+            );
+        }
+        other => panic!(
+            "expected ValidationFailed(FIRST_EXIT_MISMATCH), got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn test_provenance_url_and_date_validation() {
+    let (graph, _snap) = create_test_loop_graph();
+
+    // 1. Invalid URL scheme (ftp)
+    let seed_ftp = BillingPairSeed {
+        id: "bp-prov-ftp".into(),
+        entry_osm_way_id: 2,
+        exit_osm_way_id: 6,
+        anchor_osm_node_id: 3,
+        vehicle_profile: "passenger-car-etc".into(),
+        status: VerificationStatus::Verified,
+        one_section_ahead_verified: true,
+        provenance: SeedProvenance {
+            source: "ftp://example.com/rates".into(),
+            source_date: "2026-09-10".into(),
+            notes: None,
+        },
+        prices: vec![SeedPrice {
+            amount_yen: 300,
+            effective_from: "2026-01-01T00:00:00Z".into(),
+            effective_to: None,
+        }],
+    };
+    let err = generate_billing_pair(&graph, &seed_ftp).unwrap_err();
+    assert!(matches!(err, BillingError::InvalidProvenance(_)));
+
+    // 2. Not a URL (plain string)
+    let mut seed_plain = seed_ftp.clone();
+    seed_plain.provenance.source = "official-guide-v1".into();
+    let err = generate_billing_pair(&graph, &seed_plain).unwrap_err();
+    assert!(matches!(err, BillingError::InvalidProvenance(_)));
+
+    // 3. Invalid date (Feb 31)
+    let mut seed_bad_date = seed_ftp.clone();
+    seed_bad_date.provenance.source = "https://www.shutoko.jp".into();
+    seed_bad_date.provenance.source_date = "2026-02-31".into();
+    let err = generate_billing_pair(&graph, &seed_bad_date).unwrap_err();
+    assert!(matches!(err, BillingError::InvalidProvenance(_)));
+
+    // 4. Invalid date format
+    let mut seed_bad_fmt = seed_bad_date.clone();
+    seed_bad_fmt.provenance.source_date = "2026/09/10".into();
+    let err = generate_billing_pair(&graph, &seed_bad_fmt).unwrap_err();
+    assert!(matches!(err, BillingError::InvalidProvenance(_)));
+}
+
+#[test]
+fn test_cli_strict_mode() {
+    let tmp_dir = std::env::temp_dir().join(format!("shutoko-test-strict-{}", std::process::id()));
+    let osm_path = tmp_dir.join("osm.json");
+    let out_dir_normal = tmp_dir.join("out-normal");
+    let out_dir_strict_ok = tmp_dir.join("out-strict-ok");
+    let out_dir_strict_fail = tmp_dir.join("out-strict-fail");
+
+    let _ = std::fs::create_dir_all(&tmp_dir);
+
+    let osm_json = json!({
+        "elements": [
+            {"type": "node", "id": 1, "lat": 35.6800, "lon": 139.7600},
+            {"type": "node", "id": 2, "lat": 35.6810, "lon": 139.7600},
+            {"type": "node", "id": 6, "lat": 35.6790, "lon": 139.7600},
+            {"type": "node", "id": 3, "lat": 35.6820, "lon": 139.7650},
+            {"type": "node", "id": 4, "lat": 35.6830, "lon": 139.7650},
+            {"type": "node", "id": 5, "lat": 35.6825, "lon": 139.7670},
+
+            {"type": "way", "id": 1, "nodes": [1, 2], "tags": {"highway": "primary", "oneway": "yes"}},
+            {"type": "way", "id": 2, "nodes": [2, 3], "tags": {"highway": "motorway_link", "oneway": "yes"}},
+            {"type": "way", "id": 3, "nodes": [3, 4], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
+            {"type": "way", "id": 4, "nodes": [4, 5], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
+            {"type": "way", "id": 5, "nodes": [5, 3], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
+            {"type": "way", "id": 6, "nodes": [4, 6], "tags": {"highway": "motorway_link", "oneway": "yes"}},
+            {"type": "way", "id": 7, "nodes": [6, 1], "tags": {"highway": "primary", "oneway": "yes"}}
+        ]
+    });
+    std::fs::write(&osm_path, serde_json::to_string_pretty(&osm_json).unwrap()).unwrap();
+
+    let verified_seed_path = tmp_dir.join("verified-seed.json");
+    let verified_seed_json = json!({
+        "schemaVersion": 1,
+        "description": "Verified seed",
+        "billingPairs": [
+            {
+                "id": "bp:test:verified",
+                "entryOsmWayId": 2,
+                "exitOsmWayId": 6,
+                "anchorOsmNodeId": 3,
+                "vehicleProfile": "passenger-car-etc",
+                "status": "verified",
+                "oneSectionAheadVerified": true,
+                "provenance": {
+                    "source": "https://test.example.com",
+                    "sourceDate": "2026-09-10"
+                },
+                "prices": [
+                    {
+                        "amountYen": 300,
+                        "effectiveFrom": "2026-01-01T00:00:00Z"
+                    }
+                ]
+            }
+        ]
+    });
+    std::fs::write(
+        &verified_seed_path,
+        serde_json::to_string_pretty(&verified_seed_json).unwrap(),
+    )
+    .unwrap();
+
+    let unverified_seed_path = tmp_dir.join("unverified-seed.json");
+    let unverified_seed_json = json!({
+        "schemaVersion": 1,
+        "description": "Unverified seed",
+        "billingPairs": []
+    });
+    std::fs::write(
+        &unverified_seed_path,
+        serde_json::to_string_pretty(&unverified_seed_json).unwrap(),
+    )
+    .unwrap();
+
+    let bin_path = env!("CARGO_BIN_EXE_shutoko-graph-builder");
+
+    // Case 1: Verified seed with --strict succeeds
+    let status1 = std::process::Command::new(bin_path)
+        .args([
+            "--osm",
+            osm_path.to_str().unwrap(),
+            "--seed",
+            verified_seed_path.to_str().unwrap(),
+            "--out-dir",
+            out_dir_strict_ok.to_str().unwrap(),
+            "--release-id",
+            "test-strict-ok",
+            "--built-at",
+            "2026-09-10T00:00:00Z",
+            "--source-date",
+            "2026-09-10",
+            "--strict",
+        ])
+        .status()
+        .expect("failed to execute binary (case 1)");
+    assert!(
+        status1.success(),
+        "expected --strict to succeed when all sections verified"
+    );
+
+    // Case 2: Unverified seed without --strict succeeds
+    let status2 = std::process::Command::new(bin_path)
+        .args([
+            "--osm",
+            osm_path.to_str().unwrap(),
+            "--seed",
+            unverified_seed_path.to_str().unwrap(),
+            "--out-dir",
+            out_dir_normal.to_str().unwrap(),
+            "--release-id",
+            "test-normal",
+            "--built-at",
+            "2026-09-10T00:00:00Z",
+            "--source-date",
+            "2026-09-10",
+        ])
+        .status()
+        .expect("failed to execute binary (case 2)");
+    assert!(
+        status2.success(),
+        "expected non-strict mode to succeed with unverified sections"
+    );
+
+    // Case 3: Unverified seed with --strict fails
+    let status3 = std::process::Command::new(bin_path)
+        .args([
+            "--osm",
+            osm_path.to_str().unwrap(),
+            "--seed",
+            unverified_seed_path.to_str().unwrap(),
+            "--out-dir",
+            out_dir_strict_fail.to_str().unwrap(),
+            "--release-id",
+            "test-strict-fail",
+            "--built-at",
+            "2026-09-10T00:00:00Z",
+            "--source-date",
+            "2026-09-10",
+            "--strict",
+        ])
+        .status()
+        .expect("failed to execute binary (case 3)");
+    assert!(
+        !status3.success(),
+        "expected --strict to fail when unverified sections exist"
+    );
+
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }

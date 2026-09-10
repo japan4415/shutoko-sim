@@ -30,6 +30,8 @@ pub use topology::{
     RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
 };
 pub use validate::{
-    contains_forbidden_transition, find_first_exits_from_anchor, has_non_empty_shutoko_loop,
-    parse_iso_date, parse_utc_timestamp, validate_billing_pair, validate_url, ValidationError,
+    contains_forbidden_transition, find_first_exits_from_anchor,
+    find_first_exits_from_anchor_with_budget, has_non_empty_shutoko_loop, parse_iso_date,
+    parse_utc_timestamp, validate_billing_pair, validate_url, ValidationError,
+    FIRST_EXIT_STATE_BUDGET,
 };

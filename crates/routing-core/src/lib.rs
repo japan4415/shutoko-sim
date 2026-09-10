@@ -5,6 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
+/// Routing engine version, reported as `manifest.engineVersion` so that the
+/// manifest always records the search-engine version (not the builder's own).
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Graph {

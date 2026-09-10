@@ -145,11 +145,15 @@ pub fn contains_forbidden_transition(
 }
 
 /// Dijkstra state for finding the first reachable exit edge from anchor.
+/// Each state carries its own visited-node set so that the simple-path
+/// constraint is part of the state identity (see the soundness rationale on
+/// `find_first_exits_from_anchor`).
 #[derive(Clone, Eq, PartialEq)]
 struct ExitSearchState<'a> {
     cost: u64,
     node: &'a str,
     path: Vec<String>,
+    visited: BTreeSet<&'a str>,
 }
 
 impl<'a> Ord for ExitSearchState<'a> {
@@ -168,44 +172,69 @@ impl<'a> PartialOrd for ExitSearchState<'a> {
     }
 }
 
-/// Finds the first Exit edge(s) reachable from `anchor_node_id` using only `Shutoko` edges,
-/// respecting forbidden transitions.
+/// Explicit expansion budget for the simple-path first-exit search. The state
+/// space (node x suffix x visited-set) is finite, but enumeration of simple
+/// paths is worst-case exponential, so the search stops with a reported error
+/// once this many states are expanded (never a silent truncation).
+pub const FIRST_EXIT_STATE_BUDGET: usize = 200_000;
+
+/// Finds the first Exit edge(s) reachable from `anchor_node_id` using only `Shutoko`
+/// edges, respecting forbidden transitions.
 /// Returns `(min_distance_meters, exit_edge_ids)`.
 ///
-/// # Pruning and Soundness (Proposal (b): Walk Semantics)
+/// # Semantics: simple paths with a visited-set state key (issue #6 item 2)
 ///
-/// ## Soundness Rationale
+/// The search enumerates **simple paths** (a node is visited at most once per path).
+/// Each Dijkstra state carries its own visited-node set, and the pruning key is
+/// `(node, suffix, visited_nodes)` where `suffix` is the last `L - 1` traversed edge
+/// IDs (`L` = maximum length among `graph.forbidden_transitions`, same definition as
+/// in `has_non_empty_shutoko_loop`).
 ///
-/// In previous iterations, pruning states were tracked at `(node, suffix)` granularity where
-/// `suffix` is the last `L - 1` edges traversed (with `L` being the maximum forbidden transition length).
-/// However, an internal simple path constraint (visited node prohibition) was also enforced.
-/// Because simple path validity depends on the *entire history of visited nodes*, two paths reaching
-/// `(node, suffix)` did NOT have identical future continuation feasibility: a cheaper path with a
-/// larger visited-node set could dead-end, while having pruned a more expensive path that had the
-/// necessary unvisited nodes to reach an exit (as demonstrated by Counterexamples A, B, and C).
+/// ## Soundness rationale
 ///
-/// Under Proposal (b), the node-revisiting prohibition (simple path constraint) is **removed**
-/// from this first-exit search, allowing walks over `Shutoko` edges:
-/// 1. **Exact State Equivalence**: With no node-visiting constraints, edge traversal validity
-///    depends *strictly and solely* on the current node and the last `L - 1` edge transitions
-///    checked against `graph.forbidden_transitions`. Any two paths arriving at `(node, suffix)`
-///    have strictly identical legal future transitions. Therefore, pruning an arrival with cost `c2`
-///    when a path has already arrived at `(node, suffix)` with `c1 <= c2` is **provably sound**.
-/// 2. **Termination**: The state space `node × suffix` is finite (since $|V|$, $|E|$, and `L`
-///    are finite). Every edge has strictly positive distance (`distance_meters >= 1`).
-///    Because state visits require strictly smaller costs (`next_cost < best_cost_by_state`),
-///    no zero/negative cycles exist, and Dijkstra's algorithm is guaranteed to terminate.
-/// 3. **Semantics & Fail-Safe Guard**: Finding the earliest reachable exit edge via a walk
-///    expands the reachable candidate path set compared to simple paths ($D_{\text{walk}} \le D_{\text{simple}}$).
-///    This guarantees that any reachable exit cannot be overlooked due to historical node visits,
-///    shifting the verification guard strictly to the **fail-safe direction** (making it harder
-///    for downstream or incorrect billing pairs to slip past verification).
-/// 4. **Preservation of Billing Pair Contract**: Note that the direct path of any verified
-///    billing pair (`entry_to_anchor_edge_ids` + `anchor_to_exit_edge_ids`) must still be a strictly
-///    simple path, which is independently enforced by `validate_billing_pair` (rule 8).
+/// 1. **Exact state equivalence**: from a given state, the set of legal future
+///    continuations is fully determined by (a) the current node, (b) the suffix
+///    (windows of a forbidden-transition match that end at the newest edge depend
+///    only on the suffix plus the new edge; earlier windows were already checked),
+///    and (c) the visited-node set (which decides the simple-path constraint).
+///    Two paths arriving at the identical `(node, suffix, visited_nodes)` triple
+///    therefore have strictly identical future feasibility and identical additive
+///    cost structure, so keeping only the cheapest arrival per key is sound.
+///    Counterexamples A/B/C of PR #5 do not arise here because their pruned paths
+///    differ in the visited set and thus receive distinct keys.
+/// 2. **Termination**: the key space is finite (finitely many nodes, suffix
+///    sequences, and visited subsets), and each key is re-pushed only on a
+///    strictly smaller cost. A `cost > min_exit_dist` break further truncates the
+///    search once the first exit distance is fixed.
+/// 3. **Explicit budget**: simple-path enumeration is worst-case exponential, so
+///    the search also stops after expanding `FIRST_EXIT_STATE_BUDGET` states and
+///    returns `Err` (surfaced as `FIRST_EXIT_SEARCH_FAILED`). The error message
+///    records the number of expanded states; there is no silent truncation.
+///
+/// ## Why not plain walk semantics
+///
+/// Under pure walk semantics (node revisits allowed), a shortest walk can loop back
+/// through a node to dodge a forbidden transition and report an earlier exit than
+/// the simple-path one (issue #6 item 2: a 4m looping walk vs. the 11m simple-path
+/// exit). This contradicts the driver intuition that the exit reached after a full
+/// lap is not the "one section ahead" exit, and can reject a correct simple-path
+/// billing pair with `FIRST_EXIT_MISMATCH`. The direct path of any verified billing
+/// pair is itself a strictly simple path (rule 8 of `validate_billing_pair`), so a
+/// simple-path definition of "first exit" is the consistent choice.
 pub fn find_first_exits_from_anchor(
     graph: &Graph,
     anchor_node_id: &str,
+) -> Result<(u64, Vec<String>), String> {
+    find_first_exits_from_anchor_with_budget(graph, anchor_node_id, FIRST_EXIT_STATE_BUDGET)
+}
+
+/// Same as [`find_first_exits_from_anchor`] with an explicit expansion budget,
+/// exposed so tests can pin the budget-exceeded `Err` behaviour with a small
+/// constant.
+pub fn find_first_exits_from_anchor_with_budget(
+    graph: &Graph,
+    anchor_node_id: &str,
+    state_budget: usize,
 ) -> Result<(u64, Vec<String>), String> {
     let mut shutoko_outgoing: BTreeMap<&str, Vec<&Edge>> = BTreeMap::new();
     let mut exit_outgoing: BTreeMap<&str, Vec<&Edge>> = BTreeMap::new();
@@ -227,22 +256,41 @@ pub fn find_first_exits_from_anchor(
     let history_len = max_forbidden_len.saturating_sub(1);
 
     let mut heap = std::collections::BinaryHeap::new();
+    let mut start_visited: BTreeSet<&str> = BTreeSet::new();
+    start_visited.insert(anchor_node_id);
     heap.push(ExitSearchState {
         cost: 0,
         node: anchor_node_id,
         path: Vec::new(),
+        visited: start_visited,
     });
 
-    let mut best_cost_by_state: BTreeMap<(&str, Vec<String>), u64> = BTreeMap::new();
+    let mut best_cost_by_state: BTreeMap<(&str, Vec<String>, BTreeSet<&str>), u64> =
+        BTreeMap::new();
     let mut min_exit_dist: Option<u64> = None;
     let mut first_exit_ids: Vec<String> = Vec::new();
+    let mut expanded: usize = 0;
 
-    while let Some(ExitSearchState { cost, node, path }) = heap.pop() {
+    while let Some(ExitSearchState {
+        cost,
+        node,
+        path,
+        visited,
+    }) = heap.pop()
+    {
         if let Some(min_dist) = min_exit_dist {
             if cost > min_dist {
                 break;
             }
         }
+
+        if expanded >= state_budget {
+            return Err(format!(
+                "first exit search from anchor node \"{}\": 探索予算超過, expanded {} states (budget {})",
+                anchor_node_id, expanded, state_budget
+            ));
+        }
+        expanded += 1;
 
         let suffix: Vec<String> = if history_len > 0 {
             let start = path.len().saturating_sub(history_len);
@@ -251,7 +299,7 @@ pub fn find_first_exits_from_anchor(
             Vec::new()
         };
 
-        if let Some(&best) = best_cost_by_state.get(&(node, suffix)) {
+        if let Some(&best) = best_cost_by_state.get(&(node, suffix.clone(), visited.clone())) {
             if cost > best {
                 continue;
             }
@@ -284,7 +332,8 @@ pub fn find_first_exits_from_anchor(
             }
         }
 
-        // Expand Shutoko outgoing edges (walk allowed: no node-revisit constraint)
+        // Expand Shutoko outgoing edges under the simple-path constraint:
+        // a next node already in the visited set is not revisited.
         if let Some(next_edges) = shutoko_outgoing.get(node) {
             for e in next_edges {
                 let next_node = e.to.as_str();
@@ -302,6 +351,12 @@ pub fn find_first_exits_from_anchor(
                     }
                 }
 
+                let mut next_visited = visited.clone();
+                if !next_visited.insert(next_node) {
+                    // Simple path: the node was already visited on this path.
+                    continue;
+                }
+
                 let next_suffix: Vec<String> = if history_len > 0 {
                     let start = candidate_path.len().saturating_sub(history_len);
                     candidate_path[start..].to_vec()
@@ -309,13 +364,15 @@ pub fn find_first_exits_from_anchor(
                     Vec::new()
                 };
 
-                let state_key = (next_node, next_suffix);
+                let visited_for_state = next_visited.clone();
+                let state_key = (next_node, next_suffix, next_visited);
                 if next_cost < *best_cost_by_state.get(&state_key).unwrap_or(&u64::MAX) {
                     best_cost_by_state.insert(state_key, next_cost);
                     heap.push(ExitSearchState {
                         cost: next_cost,
                         node: next_node,
                         path: candidate_path,
+                        visited: visited_for_state,
                     });
                 }
             }
@@ -334,9 +391,36 @@ pub fn find_first_exits_from_anchor(
     }
 }
 
-/// Verifies that from `anchor_node_id`, there exists at least one non-empty directed cycle
-/// (length >= 1) consisting solely of `Shutoko` edges that returns to `anchor_node_id`
-/// without traversing any forbidden transitions.
+/// Verifies that from `anchor_node_id`, there exists at least one non-empty directed
+/// closed walk (length >= 1) consisting solely of `Shutoko` edges that returns to
+/// `anchor_node_id` without traversing any forbidden transitions.
+///
+/// # Semantics: walk over a finite `(node, suffix)` state space (issue #6 item 1/3)
+///
+/// The judgment is the existence of a **closed walk** from the anchor back to
+/// itself, not the existence of a simple cycle; intermediate nodes may be
+/// revisited. The search is a BFS over states `(node, suffix)` where `suffix` is
+/// the last `L - 1` traversed edge IDs (`L` = maximum length among
+/// `graph.forbidden_transitions`).
+///
+/// ## Soundness rationale
+///
+/// 1. **Sound pruning**: whether a continuation is legal depends only on the
+///    current node and the last `L - 1` edges. Windows of a forbidden-transition
+///    match that lie entirely inside an already-checked prefix cannot change;
+///    every future window ends at a newly appended edge and involves only the
+///    suffix plus that edge. Hence two paths that reach the same `(node, suffix)`
+///    have strictly identical sets of legal continuations, and skipping a later
+///    arrival at an already-seen `(node, suffix)` is provably sound. (The former
+///    per-node "no revisit" prohibition was unsound against this key: a cheap
+///    early arrival could exhaust a node for a later, legitimate closed walk —
+///    see the issue #6 item 1 regression test.)
+/// 2. **Termination**: the state space `node x suffix` is finite (finitely many
+///    nodes and finitely many edge-ID sequences of length <= L - 1), and each
+///    state is enqueued at most once, so the BFS always terminates. The former
+///    silent `path.len() > 2000` cutoff is therefore unnecessary and removed.
+/// 3. **Reachability only**: this is an existence check, so distances are not
+///    tracked.
 pub fn has_non_empty_shutoko_loop(graph: &Graph, anchor_node_id: &str) -> bool {
     let mut outgoing: BTreeMap<&str, Vec<&Edge>> = BTreeMap::new();
     for e in &graph.edges {
@@ -345,34 +429,39 @@ pub fn has_non_empty_shutoko_loop(graph: &Graph, anchor_node_id: &str) -> bool {
         }
     }
 
-    let edge_map: std::collections::HashMap<&str, &Edge> =
-        graph.edges.iter().map(|e| (e.id.as_str(), e)).collect();
+    let max_forbidden_len = graph
+        .forbidden_transitions
+        .iter()
+        .map(|s| s.len())
+        .max()
+        .unwrap_or(0);
+    let history_len = max_forbidden_len.saturating_sub(1);
 
     let mut queue: VecDeque<(&str, Vec<String>)> = VecDeque::new();
+    let mut visited_states: HashSet<(&str, Vec<String>)> = HashSet::new();
+
     if let Some(initial_edges) = outgoing.get(anchor_node_id) {
         for e in initial_edges {
             let path = vec![e.id.clone()];
-            if !contains_forbidden_transition(&path, &graph.forbidden_transitions) {
-                if e.to == anchor_node_id {
-                    return true;
-                }
+            if contains_forbidden_transition(&path, &graph.forbidden_transitions) {
+                continue;
+            }
+            if e.to == anchor_node_id {
+                return true;
+            }
+            let suffix: Vec<String> = if history_len > 0 {
+                let start = path.len().saturating_sub(history_len);
+                path[start..].to_vec()
+            } else {
+                Vec::new()
+            };
+            if visited_states.insert((e.to.as_str(), suffix)) {
                 queue.push_back((e.to.as_str(), path));
             }
         }
     }
 
-    let mut visited_states: HashSet<(&str, String)> = HashSet::new();
-
     while let Some((curr, path)) = queue.pop_front() {
-        if path.len() > 2000 {
-            continue;
-        }
-
-        let last_edge_id = path.last().cloned().unwrap_or_default();
-        if !visited_states.insert((curr, last_edge_id)) {
-            continue;
-        }
-
         if let Some(next_edges) = outgoing.get(curr) {
             for e in next_edges {
                 let mut next_path = path.clone();
@@ -386,16 +475,15 @@ pub fn has_non_empty_shutoko_loop(graph: &Graph, anchor_node_id: &str) -> bool {
                     return true;
                 }
 
-                // Avoid infinite loops that do not visit anchor
-                if path.iter().any(|id| {
-                    edge_map
-                        .get(id.as_str())
-                        .is_some_and(|edge| edge.from == e.to || edge.to == e.to)
-                }) {
-                    continue;
+                let suffix: Vec<String> = if history_len > 0 {
+                    let start = next_path.len().saturating_sub(history_len);
+                    next_path[start..].to_vec()
+                } else {
+                    Vec::new()
+                };
+                if visited_states.insert((e.to.as_str(), suffix)) {
+                    queue.push_back((e.to.as_str(), next_path));
                 }
-
-                queue.push_back((e.to.as_str(), next_path));
             }
         }
     }

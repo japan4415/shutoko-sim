@@ -160,10 +160,10 @@ fn test_edge_kind_classification_shutoko_entry_exit_local() {
 
     // Entry ramp segments
     assert_eq!(edge_kinds.get("e:w3:0:f"), Some(&EdgeKind::Entry));
-    assert_eq!(edge_kinds.get("e:w3:1:f"), Some(&EdgeKind::Entry));
+    assert_eq!(edge_kinds.get("e:w3:1:f"), Some(&EdgeKind::Shutoko));
 
     // Exit ramp segments
-    assert_eq!(edge_kinds.get("e:w4:0:f"), Some(&EdgeKind::Exit));
+    assert_eq!(edge_kinds.get("e:w4:0:f"), Some(&EdgeKind::Shutoko));
     assert_eq!(edge_kinds.get("e:w4:1:f"), Some(&EdgeKind::Exit));
 
     // Footway was excluded

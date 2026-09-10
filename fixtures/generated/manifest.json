@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "c1-real-v1",
+  "engineVersion": "0.1.0",
+  "graphVersion": "1.0.0",
+  "builtAt": "2026-09-10T00:00:00Z",
+  "sourceDate": "2026-09-10",
+  "coverage": {
+    "area": "Tokyo Inner Circular Route (C1) and connecting ramps",
+    "verifiedEntries": [
+      "e:w92243921:0:f"
+    ],
+    "verifiedExits": [
+      "e:w297864314:11:f"
+    ]
+  },
+  "vehicleProfile": "passenger-car-etc",
+  "timeModelVersion": "v1-static-speeds",
+  "billingPairsVersion": "v1",
+  "attribution": "© OpenStreetMap contributors",
+  "odblLicenseUrl": "https://www.openstreetmap.org/copyright",
+  "unverifiedSections": [],
+  "artifacts": [
+    {
+      "path": "graph.json",
+      "sha256": "e630a52fd9149a86bcfc15d0eb85f46cef9b4bc21dfd12f7aae3843a7925b1e5",
+      "byteLength": 1618062
+    },
+    {
+      "path": "snap-index.json",
+      "sha256": "a3aea1c5799026926d5bf536c887f012e131f971e4999165f6e74b4f2dcbce8c",
+      "byteLength": 495332
+    }
+  ]
+}

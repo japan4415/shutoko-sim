@@ -343,9 +343,17 @@ pub fn build_topology(
             let backward_from_shutoko = reaches_target_backward(&edge.from, &shutoko_nodes);
 
             if forward_to_shutoko && backward_from_local && !backward_from_shutoko {
-                EdgeKind::Entry
+                if local_nodes.contains(&edge.from) {
+                    EdgeKind::Entry
+                } else {
+                    EdgeKind::Shutoko
+                }
             } else if forward_to_local && backward_from_shutoko && !backward_from_local {
-                EdgeKind::Exit
+                if local_nodes.contains(&edge.to) {
+                    EdgeKind::Exit
+                } else {
+                    EdgeKind::Shutoko
+                }
             } else {
                 // Not a distinct entry/exit between local and Shutoko
                 continue;
@@ -355,7 +363,13 @@ pub fn build_topology(
         };
 
         let speed = match kind {
-            EdgeKind::Shutoko => SHUTOKO_SPEED_KMH,
+            EdgeKind::Shutoko => {
+                if edge.is_motorway_link {
+                    RAMP_SPEED_KMH
+                } else {
+                    SHUTOKO_SPEED_KMH
+                }
+            }
             EdgeKind::Entry | EdgeKind::Exit => RAMP_SPEED_KMH,
             EdgeKind::Local => LOCAL_SPEED_KMH,
         };

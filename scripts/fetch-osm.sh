@@ -20,6 +20,13 @@ ENDPOINT="${2:-"https://overpass-api.de/api/interpreter"}"
 
 mkdir -p "$(dirname "${OUTPUT_PATH}")"
 
+# Overpass query rationale:
+# 1. Motorway link expansion: C1 connecting ramps (Shibakoen, Iikura, Kasumigaseki,
+#    Shiodome, Takaracho, etc.) consist of 3 to 5 successive motorway_link ways.
+#    Expanding link traversal up to 5 hops ensures all ramp endpoints reach surface streets.
+# 2. Local surface streets: Include trunk/primary/secondary within bbox covering C1
+#    (35.645,139.730,35.700,139.785), plus all surface streets and connecting links
+#    (including *_link and service) directly touching ramp endpoints.
 OVERPASS_QUERY='[out:json][timeout:90];
 relation(4256008) -> .c1;
 (
@@ -28,26 +35,36 @@ relation(4256008) -> .c1;
   node(w);
 ) -> .c1_all;
 node.c1_all -> .c1_nodes;
-way(bn.c1_nodes)["highway"="motorway_link"] -> .direct_links;
+
+way(bn.c1_nodes)["highway"="motorway_link"] -> .links;
+
+( .links; node(w.links); ) -> .l_nodes;
+( .links; way(bn.l_nodes)["highway"="motorway_link"]; ) -> .links;
+
+( .links; node(w.links); ) -> .l_nodes;
+( .links; way(bn.l_nodes)["highway"="motorway_link"]; ) -> .links;
+
+( .links; node(w.links); ) -> .l_nodes;
+( .links; way(bn.l_nodes)["highway"="motorway_link"]; ) -> .links;
+
+( .links; node(w.links); ) -> .l_nodes;
+( .links; way(bn.l_nodes)["highway"="motorway_link"]; ) -> .links;
+
+node(w.links) -> .all_link_nodes;
+
 (
-  .direct_links;
-  node(w.direct_links);
-) -> .links_step1;
-node.links_step1 -> .links_nodes1;
-way(bn.links_nodes1)["highway"="motorway_link"] -> .all_links;
-node(w.all_links) -> .all_link_nodes;
-(
-  way["highway"~"^(trunk|primary|secondary)$"](35.65,139.735,35.695,139.78);
-  way(bn.all_link_nodes)["highway"~"^(tertiary|residential|unclassified)$"];
+  way["highway"~"^(trunk|primary|secondary)$"](35.645,139.730,35.700,139.785);
+  way(bn.all_link_nodes)["highway"~"^(trunk|primary|secondary|tertiary|residential|unclassified|trunk_link|primary_link|secondary_link|tertiary_link|service)$"];
 ) -> .local_ways;
+
 (
   .c1_all;
-  .all_links;
-  node(w.all_links);
+  .links;
+  node(w.links);
   .local_ways;
   node(w.local_ways);
   relation(bw.c1_all)["type"="restriction"];
-  relation(bw.all_links)["type"="restriction"];
+  relation(bw.links)["type"="restriction"];
   relation(bw.local_ways)["type"="restriction"];
 );
 out body;'

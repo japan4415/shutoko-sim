@@ -62,7 +62,7 @@
   - 現行レコード: 金額 300 円、有効期間 `2022-03-31T15:00:00Z` 〜 `2026-09-30T15:00:00Z`（JST 2022-04-01 00:00 〜 2026-10-01 00:00）
   - 2026-10-01 改定後レコード: 金額 300 円、有効期間 `2026-09-30T15:00:00Z` 〜 期限なし（null）
   - 出典:
-    - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で 404）
+    - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト）
     - 神田橋〜宝町 料金距離 1.7km・300 円: `https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf`（旧 URL `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf` は 2026-09-10 時点で 404。首都高料金表 2025年4月改訂版 P.3「料金・距離表（ETC 普通車）」）
     - 2026-10-01 改定発表: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
     - 参照日: `2026-09-10`
@@ -84,7 +84,7 @@
 - 出典（共通）:
   - 料金距離・料金: `https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf`（旧 URL `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf` は 2026-09-10 時点で 404。首都高料金表 2025 年 4 月改訂版 P.3「料金・距離表（ETC 普通車）」）
   - 路線図（1 区間先の隣接関係）: `https://www.shutoko.jp/use/network/map/`
-  - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で 404）
+  - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト）
   - 2026-10-01 改定発表（下限料金 300 円維持）: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
   - 参照日: `2026-09-10`
 

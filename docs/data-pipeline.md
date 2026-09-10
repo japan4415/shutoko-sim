@@ -14,19 +14,19 @@
 ## 2. OSM 実データ取得手順
 
 ### 取得仕様
-- **取得日**: 2026-09-10（UTC: `2026-09-10T05:08:05Z`）
+- **取得日**: 2026-09-10（UTC: `2026-09-10T13:25:54Z`）
 - **Overpass API エンドポイント**:
   - 主系: `https://overpass-api.de/api/interpreter`
   - 副系: `https://overpass.kumi.systems/api/interpreter`
-- **クエリ SHA-256**: `ae297db9599a41f5a56f3a270ab3d01032cca6c1164e0ced06c5c6a2399f4b3f`
+- **クエリ SHA-256**: `d578e54ce4ba2d960b783ceaa0ef49de664280d2d1be035f5ec8a62b1cd80604`
 - **出力先**: `fixtures/osm/shutoko-c1.json`
-- **ファイルサイズ**: 1,780,598 bytes（約 1.78 MB）
-- **要素数**: 合計 8,511 要素（ノード: 7,086、ウェイ: 1,273、リレーション: 152）
+- **ファイルサイズ**: 2,298,787 bytes（約 2.30 MB）
+- **要素数**: 合計 10,837 要素（ノード: 8,953、ウェイ: 1,688、リレーション: 196）
 
 ### 対象範囲
 - **首都高速都心環状線（C1）**: リレーション ID `4256008`（首都高速都心環状線、`ref=C1`）
-- **接続ランプ（motorway_link）**: C1 本線ノードから 2 ホップ以内で到達可能な進入・退出ランプウェイ
-- **周辺主要一般道**: C1 領域のバウンディングボックス（緯度 35.65〜35.695、経度 139.735〜139.78）内の幹線道路（`highway` が `trunk`、`primary`、`secondary`）およびランプ端点に接続する道路（`tertiary`、`residential`、`unclassified`）
+- **接続ランプ（motorway_link）**: C1 本線ノードから最大 5 ホップで到達可能な進入・退出ランプウェイ（芝公園・飯倉・霞が関・汐留・宝町等の多ホップランプを包含）
+- **周辺主要一般道**: C1 領域のバウンディングボックス（緯度 35.645〜35.700、経度 139.730〜139.785）内の幹線道路（`highway` が `trunk`、`primary`、`secondary`）およびランプ端点に接続する道路・リンク（`tertiary`、`residential`、`unclassified`、`*_link`、`service`）
 - **右左折・Uターン禁止制限**: 対象ウェイに関連する `type=restriction` リレーション
   - `no_*`（via=node）: from エッジから to エッジへの禁止遷移ペア（長さ 2）を生成。
   - `only_*`（via=node）: via ノードにおける to 以外の代替流出エッジを自動特定し、禁止遷移ペアとして生成。
@@ -48,7 +48,7 @@
 - **出典・日付の構文検証**: 出典 URL は `http://` または `https://` で始まる有効な URL（空ラベルや先頭・末尾ドットのない有効なホスト名）であること、出典日はカレンダー上に実在する有効な ISO 8601 日付（`YYYY-MM-DD`、存在しない 2月31日等は拒否）であることを検証する。
 - **マニフェストへの伝播**: 検証済みペアの出典情報（`source`, `sourceDate`, `notes`）は `manifest.json` の `provenance` 配列に記録され、成果物配布時にも追跡可能となる。
 
-### 登録ペア: 神田橋入口 〜 宝町出口
+### 登録ペア（全 8 件）
 - **ペア ID**: `bp:c1-outer:kandabashi-takaracho`
 - **入口ランプ OSM ウェイ ID**: `92243921`（神田橋入口、一般道側始点: `n:1070862943`）
 - **出口ランプ OSM ウェイ ID**: `297864314`（宝町出口、一般道側終点: `n:1130812252`）
@@ -62,10 +62,34 @@
   - 現行レコード: 金額 300 円、有効期間 `2022-03-31T15:00:00Z` 〜 `2026-09-30T15:00:00Z`（JST 2022-04-01 00:00 〜 2026-10-01 00:00）
   - 2026-10-01 改定後レコード: 金額 300 円、有効期間 `2026-09-30T15:00:00Z` 〜 期限なし（null）
   - 出典:
-    - 料金体系・下限料金: `https://www.shutoko.jp/fee/fee-info/about/`
-    - 神田橋〜宝町 料金距離 1.7km・300 円: `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf`（首都高料金表 2025年4月改訂版 P.3「料金・距離表（ETC 普通車）」）
+    - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト）
+    - 神田橋〜宝町 料金距離 1.7km・300 円: `https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf`（旧 URL `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf` は 2026-09-10 時点で 404。首都高料金表 2025年4月改訂版 P.3「料金・距離表（ETC 普通車）」）
     - 2026-10-01 改定発表: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
     - 参照日: `2026-09-10`
+
+#### 新規登録 7 ペア（2026-09-10）
+
+いずれも普通車 ETC で料金距離に応じた下限料金 300 円が適用される。料金は神田橋〜宝町と同一の考え方により、改定前後 2 レコード（`2022-03-31T15:00:00Z`〜`2026-09-30T15:00:00Z` / `2026-09-30T15:00:00Z`〜無期限、いずれも 300 円）を登録している。出典は共通で、料金距離・料金は首都高料金表 2025 年 4 月改訂版 P.3、1 区間先の隣接関係は公式路線図に基づく（参照日 `2026-09-10`）。
+
+| # | 方向 | 入口 → 出口 | 料金距離 | 普通車 ETC | ペア ID | 入口 way | 出口 way | 基準点（anchor）node |
+|---|------|------------|---------|-----------|---------|---------|---------|---------------------|
+| 1 | 外回り | 霞が関入口 → 代官町出口 | 2.3km | 300 円 | `bp:c1-outer:kasumigaseki-daikancho` | `916571610` | `276920911` | `577255571` |
+| 2 | 外回り | 銀座入口 → 芝公園出口 | 3.4km | 300 円 | `bp:c1-outer:ginza-shibakoen` | `4848922` | `944671542` | `31254160` |
+| 3 | 外回り | 芝公園入口 → 飯倉出口 | 1.6km | 300 円 | `bp:c1-outer:shibakoen-iikura` | `4853801` | `203832842` | `31296971` |
+| 4 | 内回り | 霞が関入口 → 芝公園出口 | 3.7km | 300 円 | `bp:c1-inner:kasumigaseki-shibakoen` | `916571615` | `203873821` | `264877748` |
+| 5 | 内回り | 代官町入口 → 霞が関出口 | 2.3km | 300 円 | `bp:c1-inner:daikancho-kasumigaseki` | `1091280541` | `1232166619` | `297945194` |
+| 6 | 内回り | 芝公園入口 → 汐留出口 | 2.4km | 300 円 | `bp:c1-inner:shibakoen-shiodome` | `4853797` | `45068171` | `31295430` |
+| 7 | 内回り | 宝町入口 → 神田橋出口 | 1.7km | 300 円 | `bp:c1-inner:takaracho-kandabashi` | `378284514` | `390441534` | `1891818143` |
+
+- 出典（共通）:
+  - 料金距離・料金: `https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf`（旧 URL `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf` は 2026-09-10 時点で 404。首都高料金表 2025 年 4 月改訂版 P.3「料金・距離表（ETC 普通車）」）
+  - 路線図（1 区間先の隣接関係）: `https://www.shutoko.jp/use/network/map/`
+  - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト）
+  - 2026-10-01 改定発表（下限料金 300 円維持）: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
+  - 参照日: `2026-09-10`
+
+> **注記（内回り銀座入口の 1 区間先について）**:
+> 内回り銀座入口 → 新富町出口（0.4km、300 円）は公式資料上の 1 区間先だが、OSM の分流点・合流点の順序（内回り新富町出口の分流点が銀座入口の合流点より上流にある）により First Exit 検証が通らないため未登録。京橋出口は 2 区間先なので登録しない。
 
 ## 4. 成果物の決定論的再生成手順
 
@@ -99,7 +123,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって `manifest.json` の `unverifiedSections` 配列に自動列挙される。
 - **自動列挙対象**: グラフ内に存在するすべての入口・出口エッジのうち、検証済み課金ペアに採用されていないエッジ。OSM ウェイに `name` タグが存在する場合は「エッジID（ウェイ名）」の形式で可読性を担保。
 - **除外路線・通行規制スキップの注記**: C1 外の分岐路線（八重洲線、1号上野線、6号向島線等）や、静的道路グラフで適用外となった通行規制（conditional / no via / outside graph / disconnected / unrecognized 等のスキップカテゴリ）に関する注記も件数付きで同リストに収録。
-- **現状**: 今回のリリース `c1-real-v1` では `bp:c1-outer:kandabashi-takaracho` のみを人手検証済み（`verified`）。将来追加予定のランプ区間（芝公園、霞が関、銀座、飯倉等）については、公式料金区間表または本線隣接導出の根拠とともに順次シードへ追加する。
+- **現状**: 今回のリリース `c1-real-v1` では 3 節の表に記載した 8 ペア（外回り 4・内回り 4・既存の神田橋〜宝町 1 を含む）すべてが人手検証済み（`verified`）で、`unverifiedSections` に `rejected:` は存在しない。将来追加予定のランプ区間については、公式料金区間表または本線隣接導出の根拠とともに順次シードへ追加する。
 
 ## 6. CI における自動再生成検証
 

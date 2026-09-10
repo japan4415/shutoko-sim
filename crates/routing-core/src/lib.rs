@@ -488,6 +488,7 @@ struct DijkstraState<'a> {
     edge: Option<&'a Edge>,
     parent_index: Option<usize>,
     depth: usize,
+    suffix: Vec<&'a str>,
 }
 
 impl<'a> PartialEq for DijkstraState<'a> {
@@ -496,6 +497,7 @@ impl<'a> PartialEq for DijkstraState<'a> {
             && self.distance_meters == other.distance_meters
             && self.edge_id == other.edge_id
             && self.node == other.node
+            && self.suffix == other.suffix
     }
 }
 
@@ -509,6 +511,7 @@ impl<'a> Ord for DijkstraState<'a> {
             .then_with(|| other.distance_meters.cmp(&self.distance_meters))
             .then_with(|| other.edge_id.cmp(self.edge_id))
             .then_with(|| other.node.cmp(self.node))
+            .then_with(|| other.suffix.cmp(&self.suffix))
     }
 }
 
@@ -516,6 +519,21 @@ impl<'a> PartialOrd for DijkstraState<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
+}
+
+fn next_suffix<'a>(
+    current_suffix: &[&'a str],
+    next_edge_id: &'a str,
+    history_len: usize,
+) -> Vec<&'a str> {
+    if history_len == 0 {
+        return Vec::new();
+    }
+    let mut next = Vec::with_capacity(history_len);
+    let start = current_suffix.len().saturating_sub(history_len - 1);
+    next.extend_from_slice(&current_suffix[start..]);
+    next.push(next_edge_id);
+    next
 }
 
 struct HistoryNode<'a> {
@@ -554,52 +572,37 @@ fn transition_allowed_forward<'a>(
     true
 }
 
-fn transition_allowed_backward<'a>(
-    g: &Graph,
-    history: &[HistoryNode<'a>],
-    my_history_index: Option<usize>,
-    prev_edge: &'a Edge,
-) -> bool {
-    for seq in &g.forbidden_transitions {
-        if seq.first().map(String::as_str) != Some(&prev_edge.id) {
-            continue;
-        }
-        let mut curr = my_history_index;
-        let mut matched = true;
-        for target_id in &seq[1..] {
-            if let Some(idx) = curr {
-                if history[idx].edge.id != *target_id {
-                    matched = false;
-                    break;
-                }
-                curr = history[idx].parent_index;
-            } else {
-                matched = false;
-                break;
-            }
-        }
-        if matched {
-            return false;
-        }
-    }
-    true
-}
-
+#[allow(clippy::too_many_arguments)]
 fn dijkstra_local_forward<'a>(
     g: &Graph,
     ix: &Index<'a>,
     origin: &'a str,
+    target_entry_edges: &[&'a Edge],
     max_local_edges: usize,
     max_seconds: u64,
     l: &SearchLimits,
     budget: &mut Budget,
 ) -> BTreeMap<&'a str, Vec<&'a Edge>> {
-    let mut best_for_node: BTreeMap<&'a str, Vec<&'a Edge>> = BTreeMap::new();
-    let mut best_cost: BTreeMap<(&'a str, Option<&'a str>), (u64, u64)> = BTreeMap::new();
+    let max_forbidden_len = g
+        .forbidden_transitions
+        .iter()
+        .map(|s| s.len())
+        .max()
+        .unwrap_or(0);
+    let history_len = max_forbidden_len.saturating_sub(1);
+
+    let mut entry_by_from: BTreeMap<&'a str, Vec<&'a Edge>> = BTreeMap::new();
+    for e in target_entry_edges {
+        entry_by_from.entry(e.from.as_str()).or_default().push(e);
+    }
+    let total_targets = target_entry_edges.len();
+
+    let mut best_for_entry: BTreeMap<&'a str, Vec<&'a Edge>> = BTreeMap::new();
+    let mut best_cost: BTreeMap<(&'a str, Vec<&'a str>), (u64, u64)> = BTreeMap::new();
     let mut history: Vec<HistoryNode<'a>> = Vec::new();
     let mut pq: BinaryHeap<DijkstraState<'a>> = BinaryHeap::new();
 
-    best_cost.insert((origin, None), (0, 0));
+    best_cost.insert((origin, Vec::new()), (0, 0));
     pq.push(DijkstraState {
         duration_seconds: 0,
         distance_meters: 0,
@@ -608,10 +611,11 @@ fn dijkstra_local_forward<'a>(
         edge: None,
         parent_index: None,
         depth: 0,
+        suffix: Vec::new(),
     });
 
     while let Some(current) = pq.pop() {
-        let state_key = (current.node, current.edge.map(|e| e.id.as_str()));
+        let state_key = (current.node, current.suffix.clone());
         if let Some(&(best_d, best_m)) = best_cost.get(&state_key) {
             if (current.duration_seconds, current.distance_meters) > (best_d, best_m) {
                 continue;
@@ -633,16 +637,25 @@ fn dijkstra_local_forward<'a>(
             None
         };
 
-        best_for_node.entry(current.node).or_insert_with(|| {
-            let mut path = Vec::new();
-            let mut curr = my_history_index;
-            while let Some(idx) = curr {
-                path.push(history[idx].edge);
-                curr = history[idx].parent_index;
+        if let Some(entries) = entry_by_from.get(current.node) {
+            for &entry_e in entries {
+                if !best_for_entry.contains_key(entry_e.id.as_str())
+                    && transition_allowed_forward(g, &history, my_history_index, entry_e)
+                {
+                    let mut path = Vec::new();
+                    let mut curr = my_history_index;
+                    while let Some(idx) = curr {
+                        path.push(history[idx].edge);
+                        curr = history[idx].parent_index;
+                    }
+                    path.reverse();
+                    best_for_entry.insert(entry_e.id.as_str(), path);
+                }
             }
-            path.reverse();
-            path
-        });
+            if best_for_entry.len() == total_targets {
+                break;
+            }
+        }
 
         if current.depth >= max_local_edges {
             continue;
@@ -664,7 +677,8 @@ fn dijkstra_local_forward<'a>(
                     continue;
                 }
 
-                let next_state_key = (e.to.as_str(), Some(e.id.as_str()));
+                let next_suf = next_suffix(&current.suffix, e.id.as_str(), history_len);
+                let next_state_key = (e.to.as_str(), next_suf.clone());
                 if let Some(&(best_d, best_m)) = best_cost.get(&next_state_key) {
                     if (next_d, next_m) >= (best_d, best_m) {
                         continue;
@@ -679,113 +693,156 @@ fn dijkstra_local_forward<'a>(
                     edge: Some(e),
                     parent_index: my_history_index,
                     depth: current.depth + 1,
+                    suffix: next_suf,
                 });
             }
         }
     }
 
-    best_for_node
+    best_for_entry
 }
 
+#[allow(clippy::too_many_arguments)]
 fn dijkstra_local_backward<'a>(
     g: &Graph,
     ix: &Index<'a>,
-    origin: &'a str,
+    exit_edges: &[&'a Edge],
+    destination: &'a str,
     max_local_edges: usize,
     max_seconds: u64,
     l: &SearchLimits,
     budget: &mut Budget,
 ) -> BTreeMap<&'a str, Vec<&'a Edge>> {
-    let mut best_for_node: BTreeMap<&'a str, Vec<&'a Edge>> = BTreeMap::new();
-    let mut best_cost: BTreeMap<(&'a str, Option<&'a str>), (u64, u64)> = BTreeMap::new();
-    let mut history: Vec<HistoryNode<'a>> = Vec::new();
-    let mut pq: BinaryHeap<DijkstraState<'a>> = BinaryHeap::new();
+    let max_forbidden_len = g
+        .forbidden_transitions
+        .iter()
+        .map(|s| s.len())
+        .max()
+        .unwrap_or(0);
+    let history_len = max_forbidden_len.saturating_sub(1);
 
-    best_cost.insert((origin, None), (0, 0));
-    pq.push(DijkstraState {
-        duration_seconds: 0,
-        distance_meters: 0,
-        edge_id: "",
-        node: origin,
-        edge: None,
-        parent_index: None,
-        depth: 0,
-    });
+    let mut best_for_exit: BTreeMap<&'a str, Vec<&'a Edge>> = BTreeMap::new();
 
-    while let Some(current) = pq.pop() {
-        let state_key = (current.node, current.edge.map(|e| e.id.as_str()));
-        if let Some(&(best_d, best_m)) = best_cost.get(&state_key) {
-            if (current.duration_seconds, current.distance_meters) > (best_d, best_m) {
-                continue;
-            }
-        }
-
-        if !budget.take(l) {
-            break;
-        }
-
-        let my_history_index = if let Some(e) = current.edge {
-            let idx = history.len();
-            history.push(HistoryNode {
-                edge: e,
-                parent_index: current.parent_index,
-            });
-            Some(idx)
-        } else {
-            None
-        };
-
-        best_for_node.entry(current.node).or_insert_with(|| {
-            let mut path = Vec::new();
-            let mut curr = my_history_index;
-            while let Some(idx) = curr {
-                path.push(history[idx].edge);
-                curr = history[idx].parent_index;
-            }
-            path
-        });
-
-        if current.depth >= max_local_edges {
+    for &exit_edge in exit_edges {
+        if best_for_exit.contains_key(exit_edge.id.as_str()) {
             continue;
         }
 
-        if let Some(incoming) = ix.incoming.get(current.node) {
-            for e in incoming
-                .iter()
-                .copied()
-                .filter(|e| e.kind == EdgeKind::Local)
-            {
-                let next_d = current.duration_seconds + e.duration_seconds;
-                if next_d > max_seconds {
+        if exit_edge.to == destination {
+            best_for_exit.insert(exit_edge.id.as_str(), Vec::new());
+            continue;
+        }
+
+        let mut best_cost: BTreeMap<(&'a str, Vec<&'a str>), (u64, u64)> = BTreeMap::new();
+        let mut history: Vec<HistoryNode<'a>> = Vec::new();
+        let mut pq: BinaryHeap<DijkstraState<'a>> = BinaryHeap::new();
+
+        history.push(HistoryNode {
+            edge: exit_edge,
+            parent_index: None,
+        });
+        let initial_history_index = Some(0);
+
+        let initial_suffix = if history_len > 0 {
+            vec![exit_edge.id.as_str()]
+        } else {
+            Vec::new()
+        };
+
+        best_cost.insert((exit_edge.to.as_str(), initial_suffix.clone()), (0, 0));
+        pq.push(DijkstraState {
+            duration_seconds: 0,
+            distance_meters: 0,
+            edge_id: exit_edge.id.as_str(),
+            node: exit_edge.to.as_str(),
+            edge: None,
+            parent_index: initial_history_index,
+            depth: 0,
+            suffix: initial_suffix,
+        });
+
+        while let Some(current) = pq.pop() {
+            let state_key = (current.node, current.suffix.clone());
+            if let Some(&(best_d, best_m)) = best_cost.get(&state_key) {
+                if (current.duration_seconds, current.distance_meters) > (best_d, best_m) {
                     continue;
                 }
-                let next_m = current.distance_meters + e.distance_meters;
+            }
 
-                if !transition_allowed_backward(g, &history, my_history_index, e) {
-                    continue;
+            if !budget.take(l) {
+                break;
+            }
+
+            let my_history_index = if let Some(e) = current.edge {
+                let idx = history.len();
+                history.push(HistoryNode {
+                    edge: e,
+                    parent_index: current.parent_index,
+                });
+                Some(idx)
+            } else {
+                current.parent_index
+            };
+
+            if current.node == destination {
+                let mut path = Vec::new();
+                let mut curr = my_history_index;
+                while let Some(idx) = curr {
+                    if idx == 0 {
+                        break;
+                    }
+                    path.push(history[idx].edge);
+                    curr = history[idx].parent_index;
                 }
+                path.reverse();
+                best_for_exit.insert(exit_edge.id.as_str(), path);
+                break;
+            }
 
-                let next_state_key = (e.from.as_str(), Some(e.id.as_str()));
-                if let Some(&(best_d, best_m)) = best_cost.get(&next_state_key) {
-                    if (next_d, next_m) >= (best_d, best_m) {
+            if current.depth >= max_local_edges {
+                continue;
+            }
+
+            if let Some(outgoing) = ix.outgoing.get(current.node) {
+                for e in outgoing
+                    .iter()
+                    .copied()
+                    .filter(|e| e.kind == EdgeKind::Local)
+                {
+                    let next_d = current.duration_seconds + e.duration_seconds;
+                    if next_d > max_seconds {
                         continue;
                     }
+                    let next_m = current.distance_meters + e.distance_meters;
+
+                    if !transition_allowed_forward(g, &history, my_history_index, e) {
+                        continue;
+                    }
+
+                    let next_suf = next_suffix(&current.suffix, e.id.as_str(), history_len);
+                    let next_state_key = (e.to.as_str(), next_suf.clone());
+                    if let Some(&(best_d, best_m)) = best_cost.get(&next_state_key) {
+                        if (next_d, next_m) >= (best_d, best_m) {
+                            continue;
+                        }
+                    }
+                    best_cost.insert(next_state_key, (next_d, next_m));
+                    pq.push(DijkstraState {
+                        duration_seconds: next_d,
+                        distance_meters: next_m,
+                        edge_id: e.id.as_str(),
+                        node: e.to.as_str(),
+                        edge: Some(e),
+                        parent_index: my_history_index,
+                        depth: current.depth + 1,
+                        suffix: next_suf,
+                    });
                 }
-                best_cost.insert(next_state_key, (next_d, next_m));
-                pq.push(DijkstraState {
-                    duration_seconds: next_d,
-                    distance_meters: next_m,
-                    edge_id: e.id.as_str(),
-                    node: e.from.as_str(),
-                    edge: Some(e),
-                    parent_index: my_history_index,
-                    depth: current.depth + 1,
-                });
             }
         }
     }
 
-    best_for_node
+    best_for_exit
 }
 
 // Validated weights and segment lengths bound a full route to 10,000 edges:
@@ -824,18 +881,46 @@ pub fn search(
     let mut connection = false;
     let mut found_loop = false;
     let mut legal_route = false;
+
+    let mut verified_pairs = Vec::with_capacity(pairs.len());
+    let mut entry_edges = Vec::with_capacity(pairs.len());
+    let mut exit_edges = Vec::with_capacity(pairs.len());
+    for p in pairs {
+        let pre = path(&ix, &p.entry_to_anchor_edge_ids)?;
+        let post = path(&ix, &p.anchor_to_exit_edge_ids)?;
+        entry_edges.push(pre[0]);
+        exit_edges.push(post.last().copied().unwrap());
+        verified_pairs.push((p, pre, post));
+    }
+    entry_edges.sort_by_key(|e| e.id.as_str());
+    entry_edges.dedup_by_key(|e| e.id.as_str());
+    exit_edges.sort_by_key(|e| e.id.as_str());
+    exit_edges.dedup_by_key(|e| e.id.as_str());
+
     let forward_map = dijkstra_local_forward(
         g,
         &ix,
         &r.origin_node_id,
+        &entry_edges,
         l.max_local_edges,
         r.max_minutes * 60,
         l,
         &mut budget,
     );
+    let mut active_exit_edges = Vec::new();
+    for (_p, pre, post) in &verified_pairs {
+        let entry_edge = pre[0];
+        if forward_map.contains_key(entry_edge.id.as_str()) {
+            active_exit_edges.push(post.last().copied().unwrap());
+        }
+    }
+    active_exit_edges.sort_by_key(|e| e.id.as_str());
+    active_exit_edges.dedup_by_key(|e| e.id.as_str());
+
     let backward_map = dijkstra_local_backward(
         g,
         &ix,
+        &active_exit_edges,
         &r.origin_node_id,
         l.max_local_edges,
         r.max_minutes * 60,
@@ -843,36 +928,28 @@ pub fn search(
         &mut budget,
     );
 
-    let mut loop_cache: BTreeMap<&str, Vec<Vec<&Edge>>> = BTreeMap::new();
-
-    'pairs: for p in pairs {
-        let pre = path(&ix, &p.entry_to_anchor_edge_ids)?;
-        let post = path(&ix, &p.anchor_to_exit_edge_ids)?;
+    'pairs: for (p, pre, post) in verified_pairs {
+        let entry_edge = pre[0];
+        let exit_edge = post.last().unwrap();
         let (Some(access), Some(returns)) = (
-            forward_map.get(pre[0].from.as_str()),
-            backward_map.get(post.last().unwrap().to.as_str()),
+            forward_map.get(entry_edge.id.as_str()),
+            backward_map.get(exit_edge.id.as_str()),
         ) else {
             continue;
         };
         connection = true;
 
-        let loops = if let Some(cached) = loop_cache.get(p.anchor_node_id.as_str()) {
-            cached.clone()
-        } else {
-            let result = paths(
-                g,
-                &ix,
-                &p.anchor_node_id,
-                &p.anchor_node_id,
-                EdgeKind::Shutoko,
-                l.max_loop_edges,
-                r.max_minutes * 60,
-                l,
-                &mut budget,
-            );
-            loop_cache.insert(p.anchor_node_id.as_str(), result.clone());
-            result
-        };
+        let loops = paths(
+            g,
+            &ix,
+            &p.anchor_node_id,
+            &p.anchor_node_id,
+            EdgeKind::Shutoko,
+            l.max_loop_edges,
+            r.max_minutes * 60,
+            l,
+            &mut budget,
+        );
         found_loop |= !loops.is_empty();
 
         for cycle in &loops {

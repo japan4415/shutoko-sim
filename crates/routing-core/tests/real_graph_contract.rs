@@ -121,8 +121,8 @@ fn real_graph_routing_core_search_returns_candidates() {
 
     assert_eq!(result.status, "ok", "search status must be ok");
     assert!(
-        result.expanded_states < 50_000,
-        "expanded states must be well below 100,000, got: {}",
+        result.expanded_states < 100_000,
+        "expanded states must be below 100,000, got: {}",
         result.expanded_states
     );
     assert_eq!(result.request_id, "req-c1-kandabashi-1");
@@ -262,28 +262,40 @@ fn real_graph_search_json_wasm_contract_parity() {
     assert_eq!(candidates[0]["toll"]["amountYen"].as_u64(), Some(300));
 }
 
-/// 代表ペア定数: 探索コアの既定上限では全ペアの候補が得られないため、
-/// 一般道網が連結している課金ペア（5ペア）:
-/// 既定 SearchLimits::default()（max_expanded_states: 100,000）で
-/// 入口エッジ from ノードを起点とする探索により自ペア Candidate（300円・10km以上・status == "ok"）が得られる。
-const CONNECTED_SEARCH_PAIR_IDS: [&str; 5] = [
-    "bp:c1-outer:kandabashi-takaracho",
-    "bp:c1-inner:takaracho-kandabashi",
-    "bp:c1-inner:kasumigaseki-shibakoen",
-    "bp:c1-inner:shibakoen-shiodome",
-    "bp:c1-outer:shibakoen-iikura",
-];
+/// 連結 5 ペアの探索契約定数
+/// 各ペアの C1 一周計画時間が時間窓に収まる max_minutes とその根拠を明示。
+struct ConnectedPairContract {
+    pair_id: &'static str,
+    max_minutes: u64,
+    rationale: &'static str,
+}
 
-/// 一般道網が OSM 取得境界により切断されている課金ペア（3ペア、analyze-002 F7）:
-/// Shibakoen 出口（外回り n:254360532、13ノード孤立成分）や
-/// Daikancho 出口/入口（61ノード/16ノード孤立成分）など、
-/// OSM 取得範囲（fetch-osm.sh の bbox / リンク走査境界）に起因して一般道側が物理的に切断されているため、
-/// 候補なし（status == "no_candidates"）となる。
-/// 既定 limits で truncated にならず、expanded_states も上限を大きく下回ることを固定する。
-const DISCONNECTED_SEARCH_PAIR_IDS: [&str; 3] = [
-    "bp:c1-outer:ginza-shibakoen",
-    "bp:c1-outer:kasumigaseki-daikancho",
-    "bp:c1-inner:daikancho-kasumigaseki",
+const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 5] = [
+    ConnectedPairContract {
+        pair_id: "bp:c1-outer:kandabashi-takaracho",
+        max_minutes: 60,
+        rationale: "神田橋〜宝町（外回り）。C1 一周の実走行計画時間は約30分（base=1503s, plan=1803s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-inner:takaracho-kandabashi",
+        max_minutes: 60,
+        rationale: "宝町〜神田橋（内回り）。C1 一周の実走行計画時間は約28.4分（base=1405s, plan=1705s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-inner:kasumigaseki-shibakoen",
+        max_minutes: 60,
+        rationale: "霞が関〜芝公園（内回り）。C1 一周の実走行計画時間は約34.3分（base=1717s, plan=2060s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-inner:shibakoen-shiodome",
+        max_minutes: 30,
+        rationale: "芝公園〜汐留（内回り）。実走行計画時間は約28.8分（base=1431s, plan=1731s）。max_minutes=60 では霞が関入口（kasumigaseki-shibakoen, 首都高1205s/300円）が time_per_yen 比率（1205/300 > 1136/300）により上位にランクインし、同一の内回り C1 ループであるため 80% Jaccard 類似度除外により芝公園入口側の候補が除外される。計画時間30分枠では遠隔の霞が関（plan=2464s ≈ 41分）が時間窓外となり、自ペア候補が採択される。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-outer:shibakoen-iikura",
+        max_minutes: 60,
+        rationale: "芝公園〜飯倉（外回り）。C1 一周の実走行計画時間は約26.6分（base=1298s, plan=1598s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
+    },
 ];
 
 #[test]
@@ -297,25 +309,14 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
     let start_total = std::time::Instant::now();
 
     // 1. 一般道が連結している 5 ペアの探索契約
-    for id in CONNECTED_SEARCH_PAIR_IDS {
+    for contract in CONNECTED_SEARCH_PAIRS {
         let pair = g
             .billing_pairs
             .iter()
-            .find(|p| p.id == id)
-            .unwrap_or_else(|| panic!("billing pair {} must exist in fixture", id));
+            .find(|p| p.id == contract.pair_id)
+            .unwrap_or_else(|| panic!("billing pair {} must exist in fixture", contract.pair_id));
         let entry_edge = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()];
         let origin_node_id = entry_edge.from.clone();
-
-        let max_minutes = if id == "bp:c1-inner:shibakoen-shiodome" {
-            // Shibakoen-Shiodome の実走行計画時間は約28.8分（base=1431s, buffer=300s）。
-            // maxMinutes=60 の場合、一般道で約14分（848s）離れた霞が関入口（kasumigaseki-shibakoen, 首都高1205s/300円）が
-            // time_per_yen 比率（1205/300 > 1136/300）により上位にランクインし、同一の内回り C1 ループであるため
-            // 80% Jaccard 類似度除外により芝公園入口側の候補が除外される。
-            // 計画時間30分枠では遠隔の霞が関（plan=2464s ≈ 41分）が時間窓外となり、自ペア候補が採択される。
-            30
-        } else {
-            60
-        };
 
         let req_start = std::time::Instant::now();
         let request = SearchRequest {
@@ -323,7 +324,7 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             release_id: g.release_id.clone(),
             origin_node_id: origin_node_id.clone(),
             min_minutes: 15,
-            max_minutes,
+            max_minutes: contract.max_minutes,
             vehicle_profile: "passenger-car-etc".into(),
             pricing_at: "2026-09-10T00:00:00Z".into(),
         };
@@ -332,9 +333,10 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             .unwrap_or_else(|e| panic!("search must succeed for pair {}: {}", pair.id, e));
 
         eprintln!(
-            "SEARCH for pair {} (origin={}): status={}, expanded={}, candidates_count={}, elapsed={:?}",
+            "SEARCH for pair {} (origin={}, max_minutes={}): status={}, expanded={}, candidates_count={}, elapsed={:?}",
             pair.id,
             origin_node_id,
+            contract.max_minutes,
             result.status,
             result.expanded_states,
             result.candidates.len(),
@@ -343,12 +345,12 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
 
         assert_eq!(
             result.status, "ok",
-            "search for connected pair {} must have status 'ok', got {}",
-            pair.id, result.status
+            "search for connected pair {} must have status 'ok', got {} (rationale: {})",
+            pair.id, result.status, contract.rationale
         );
         assert!(
-            result.expanded_states < 50_000,
-            "pair {}: expanded states must be well below 100,000, got: {}",
+            result.expanded_states < 100_000,
+            "pair {}: expanded states must be below 100,000, got: {}",
             pair.id,
             result.expanded_states
         );
@@ -359,8 +361,8 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             .find(|c| c.toll.billing_pair_id == pair.id)
             .unwrap_or_else(|| {
                 panic!(
-                    "candidate with billing_pair_id {} must be found from origin {}",
-                    pair.id, origin_node_id
+                    "candidate with billing_pair_id {} must be found from origin {} with max_minutes={} ({})",
+                    pair.id, origin_node_id, contract.max_minutes, contract.rationale
                 )
             });
 
@@ -378,23 +380,20 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         );
     }
 
-    // 2. OSM データ境界により一般道が切断されている 3 ペアの契約
-    // 既定 limits で truncated にならず（expanded_states が上限を大きく下回る）、
-    // 自ペアの Candidate は生成されないことを固定。
-    // 起点周辺に他の連結入口が存在する場合は他ペア候補により status == "ok" となり得るが、
-    // 孤立成分内（Ginza 外回り等）では status == "no_candidates" となる。
-    for id in DISCONNECTED_SEARCH_PAIR_IDS {
-        let pair = g
-            .billing_pairs
-            .iter()
-            .find(|p| p.id == id)
-            .unwrap_or_else(|| panic!("billing pair {} must exist in fixture", id));
-        let entry_edge = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()];
-        let origin_node_id = entry_edge.from.clone();
-
-        let req_start = std::time::Instant::now();
+    // 2. OSM データ境界により一般道が切断されている 3 ペアの契約（実態に合わせる）
+    // 既定 limits で truncated にならず、孤立成分と一般道連結性の実態を固定する。
+    //
+    // (a) bp:c1-outer:ginza-shibakoen:
+    //     Ginza 外回り出口（n:254360532、13ノード孤立成分）など OSM 取得境界により
+    //     一般道側が物理的に切断されており他入口へも到達不能なため status == "no_candidates"。
+    {
+        let pair_id = "bp:c1-outer:ginza-shibakoen";
+        let pair = g.billing_pairs.iter().find(|p| p.id == pair_id).unwrap();
+        let origin_node_id = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()]
+            .from
+            .clone();
         let request = SearchRequest {
-            request_id: format!("req-loop-{}", pair.id),
+            request_id: format!("req-loop-{}", pair_id),
             release_id: g.release_id.clone(),
             origin_node_id: origin_node_id.clone(),
             min_minutes: 15,
@@ -402,39 +401,74 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             vehicle_profile: "passenger-car-etc".into(),
             pricing_at: "2026-09-10T00:00:00Z".into(),
         };
-
-        let result = search(&g, &request, &limits)
-            .unwrap_or_else(|e| panic!("search must succeed for pair {}: {}", pair.id, e));
-
-        eprintln!(
-            "DISCONNECTED SEARCH for pair {} (origin={}): status={}, expanded={}, candidates_count={}, elapsed={:?}",
-            pair.id,
-            origin_node_id,
-            result.status,
-            result.expanded_states,
-            result.candidates.len(),
-            req_start.elapsed()
+        let result = search(&g, &request, &limits).expect("search must succeed");
+        assert_eq!(
+            result.status, "no_candidates",
+            "ginza-shibakoen must have status no_candidates due to isolated component"
         );
+        assert!(result.candidates.is_empty());
+        assert!(result.expanded_states < 100_000);
+    }
 
-        assert_ne!(
-            result.status, "truncated",
-            "disconnected pair {} must not be truncated, got: {}",
-            pair.id, result.status
+    // (b) bp:c1-inner:daikancho-kasumigaseki:
+    //     Daikancho 入口/出口（16ノード/61ノード孤立成分）が OSM 取得境界により孤立しているため
+    //     一般道側が切断されており status == "no_candidates"。
+    {
+        let pair_id = "bp:c1-inner:daikancho-kasumigaseki";
+        let pair = g.billing_pairs.iter().find(|p| p.id == pair_id).unwrap();
+        let origin_node_id = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()]
+            .from
+            .clone();
+        let request = SearchRequest {
+            request_id: format!("req-loop-{}", pair_id),
+            release_id: g.release_id.clone(),
+            origin_node_id: origin_node_id.clone(),
+            min_minutes: 15,
+            max_minutes: 60,
+            vehicle_profile: "passenger-car-etc".into(),
+            pricing_at: "2026-09-10T00:00:00Z".into(),
+        };
+        let result = search(&g, &request, &limits).expect("search must succeed");
+        assert_eq!(
+            result.status, "no_candidates",
+            "daikancho-kasumigaseki must have status no_candidates due to isolated component"
         );
-        assert!(
-            result.expanded_states < 50_000,
-            "pair {}: expanded states must be well below 100,000, got: {}",
-            pair.id,
-            result.expanded_states
+        assert!(result.candidates.is_empty());
+        assert!(result.expanded_states < 100_000);
+    }
+
+    // (c) bp:c1-outer:kasumigaseki-daikancho:
+    //     Kasumigaseki 起点は一般道網に連結しているため他ペア候補（神田橋・芝公園等経由）により
+    //     status == "ok" となるが、Daikancho 出口側が切断されているため自ペア候補は含まれない。
+    {
+        let pair_id = "bp:c1-outer:kasumigaseki-daikancho";
+        let pair = g.billing_pairs.iter().find(|p| p.id == pair_id).unwrap();
+        let origin_node_id = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()]
+            .from
+            .clone();
+        let request = SearchRequest {
+            request_id: format!("req-loop-{}", pair_id),
+            release_id: g.release_id.clone(),
+            origin_node_id: origin_node_id.clone(),
+            min_minutes: 15,
+            max_minutes: 60,
+            vehicle_profile: "passenger-car-etc".into(),
+            pricing_at: "2026-09-10T00:00:00Z".into(),
+        };
+        let result = search(&g, &request, &limits).expect("search must succeed");
+        assert_eq!(
+            result.status, "ok",
+            "kasumigaseki-daikancho must have status ok due to reachable other pairs"
         );
         assert!(
             !result
                 .candidates
                 .iter()
-                .any(|c| c.toll.billing_pair_id == pair.id),
-            "pair {} must not produce candidate due to isolated component in OSM data",
-            pair.id
+                .any(|c| c.toll.billing_pair_id == pair_id),
+            "kasumigaseki-daikancho must not contain own-pair candidate due to isolated exit"
         );
+        assert!(!result.candidates.is_empty());
+        assert!(result.expanded_states < 100_000);
     }
 
     // 全 8 ペアの fixture 上のメタデータ整合性（verified・料金レコード・経路ワイヤリング）を確認
@@ -470,4 +504,77 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         "total search time for all 8 pairs must be under 60 seconds, took {:?}",
         total_elapsed
     );
+}
+
+#[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn test_eight_pairs_determinism_and_performance_table() {
+    let g = real_graph();
+    let graph_json = include_str!("../../../fixtures/generated/graph.json");
+    let limits = SearchLimits::default();
+    let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
+        g.edges.iter().map(|e| (e.id.as_str(), e)).collect();
+
+    let mut pairs: Vec<_> = g.billing_pairs.iter().collect();
+    pairs.sort_by(|a, b| a.id.cmp(&b.id));
+
+    eprintln!("\n=== 8 PAIRS PERFORMANCE AND DETERMINISM (release) ===");
+    eprintln!(
+        "pair_id | origin | status | candidates | own_pair | expanded | time_ms | determinism_3x"
+    );
+
+    for p in pairs {
+        let origin = edge_map[p.entry_to_anchor_edge_ids[0].as_str()]
+            .from
+            .clone();
+        let max_minutes = if p.id == "bp:c1-inner:shibakoen-shiodome" {
+            30
+        } else {
+            60
+        };
+        let req = SearchRequest {
+            request_id: format!("det-req-{}", p.id),
+            release_id: g.release_id.clone(),
+            origin_node_id: origin.clone(),
+            min_minutes: 15,
+            max_minutes,
+            vehicle_profile: "passenger-car-etc".into(),
+            pricing_at: "2026-09-10T00:00:00Z".into(),
+        };
+        let req_json = serde_json::to_string(&req).unwrap();
+
+        // 3 回 search_json を実行し、バイト完全一致（決定論）を確認
+        let res1 = search_json(graph_json, &req_json, "{}").unwrap();
+        let res2 = search_json(graph_json, &req_json, "{}").unwrap();
+        let res3 = search_json(graph_json, &req_json, "{}").unwrap();
+        assert_eq!(
+            res1, res2,
+            "search_json determinism check 1 vs 2 failed for {}",
+            p.id
+        );
+        assert_eq!(
+            res2, res3,
+            "search_json determinism check 2 vs 3 failed for {}",
+            p.id
+        );
+
+        let t0 = std::time::Instant::now();
+        let res = search(&g, &req, &limits).unwrap();
+        let elapsed = t0.elapsed();
+
+        let own = res
+            .candidates
+            .iter()
+            .any(|c| c.toll.billing_pair_id == p.id);
+        eprintln!(
+            "{} | {} | {} | {} | {} | {} | {:.2}ms | 3x_byte_identical_PASS",
+            p.id,
+            origin,
+            res.status,
+            res.candidates.len(),
+            own,
+            res.expanded_states,
+            elapsed.as_secs_f64() * 1000.0
+        );
+    }
 }

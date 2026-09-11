@@ -2,9 +2,11 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
+    <!-- #15（住所検索・地図描画）で connect-src に https://msearch.gsi.go.jp、
+         img-src に https://*.tile.openstreetmap.org を追加する。現状は未使用のため許可しない。 -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://msearch.gsi.go.jp https://*.tile.openstreetmap.org; img-src 'self' data: https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Shutoko Sim</title>

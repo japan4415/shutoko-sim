@@ -78,9 +78,13 @@ for (const wasmFile of wasmFiles) {
 
 const modeFlag = isRemote ? "--remote" : "--local";
 const modeLabel = isRemote ? "remote" : "local";
-console.log(`Seeding ${modeLabel} R2 bucket 'shutoko-artifacts' for release '${releaseId}'...`);
+// wrangler のローカル miniflare は preview_bucket_name を状態ディレクトリ名に使うため、
+// --local の投入先は preview バケットへ合わせる（本番名 shutoko-artifacts は使わない）。
+// --remote は本番バケットへの明示的な投入なので bucket_name を使う。
+const bucketName = isRemote ? "shutoko-artifacts" : "shutoko-artifacts-preview";
+console.log(`Seeding ${modeLabel} R2 bucket '${bucketName}' for release '${releaseId}'...`);
 for (const file of filesToUpload) {
-  const r2Key = `shutoko-artifacts/releases/${releaseId}/${file.name}`;
+  const r2Key = `${bucketName}/releases/${releaseId}/${file.name}`;
   const contentType = contentTypeFor(file.name);
   console.log(`Uploading ${file.path} to ${modeLabel} ${r2Key} (${contentType})...`);
   try {

@@ -34,13 +34,33 @@
           </div>
           <div>
             <label for="min-minutes">最小時間（分）</label>
-            <input id="min-minutes" type="number" step="1" min="1" max="240" value="15" />
+            <input
+              id="min-minutes"
+              type="number"
+              step="1"
+              min="1"
+              max="240"
+              value="15"
+              aria-describedby="time-note"
+            />
           </div>
           <div>
             <label for="max-minutes">最大時間（分）</label>
-            <input id="max-minutes" type="number" step="1" min="1" max="240" value="60" />
+            <input
+              id="max-minutes"
+              type="number"
+              step="1"
+              min="1"
+              max="240"
+              value="60"
+              aria-describedby="time-note"
+            />
           </div>
         </div>
+        <!-- 時間の前提は条件を入力する時点で示す（docs/requirements.md:12 / design-review-002 D1）。
+             最小・最大の両 input から aria-describedby で結ぶ。エラー id が付くときは
+             main.ts が空白区切りで併記する。 -->
+        <p id="time-note" class="field-note">一般道での帰着までを含み、休憩は含みません</p>
         <button id="search-btn" type="button">ルートを探す</button>
         <!-- 入力エラーは支援技術へ即時通知する（role="alert"）。
              探索ボタンより下に置くことで、エラーが出消ししてもボタンの位置が変わらない

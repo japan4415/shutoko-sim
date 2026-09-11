@@ -41,6 +41,17 @@ const INPUTS = [el.lat, el.lon, el.minMinutes, el.maxMinutes];
 /** エラー文言の li に振る id の接頭辞。欄の aria-describedby から参照する。 */
 const ERROR_ID_PREFIX = "input-error-";
 
+/**
+ * 欄に静的に紐づく説明文の id。index.html が付けた aria-describedby を起動時に控え、
+ * エラー id と空白区切りで併記する（例: 時間欄の #time-note）。
+ */
+const STATIC_DESCRIBEDBY = new Map<HTMLInputElement, string[]>(
+  INPUTS.map((input) => [
+    input,
+    (input.getAttribute("aria-describedby") ?? "").split(" ").filter((id) => id !== ""),
+  ]),
+);
+
 let worker: Worker | null = null;
 let workerReady = false;
 // ブート初期化が失敗済みなら true。ready は来ないので送信を保留せず即再試行させる。
@@ -272,13 +283,18 @@ function applyInputErrors(fields: import("./ui/model").InputFieldErrors): HTMLIn
   }
 
   for (const input of INPUTS) {
-    const ids = describedBy.get(input);
-    if (ids === undefined) {
-      input.removeAttribute("aria-invalid");
-      input.removeAttribute("aria-describedby");
-    } else {
+    const errorIds = describedBy.get(input) ?? [];
+    // 静的な注記（例: #time-note）を先に、エラー id を続けて空白区切りで併記する。
+    const describedIds = [...(STATIC_DESCRIBEDBY.get(input) ?? []), ...errorIds];
+    if (errorIds.length > 0) {
       input.setAttribute("aria-invalid", "true");
-      input.setAttribute("aria-describedby", ids.join(" "));
+    } else {
+      input.removeAttribute("aria-invalid");
+    }
+    if (describedIds.length > 0) {
+      input.setAttribute("aria-describedby", describedIds.join(" "));
+    } else {
+      input.removeAttribute("aria-describedby");
     }
   }
 

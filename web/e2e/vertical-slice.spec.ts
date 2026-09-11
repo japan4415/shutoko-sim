@@ -58,6 +58,18 @@ test("(a) 神田橋プリセット 15〜60 で候補カードと Maps URL が表
   await expect(firstCard).toContainText("300");
   await expect(page.locator("#results .card")).toHaveCount(2);
 
+  // 強調は所要時間の数値だけに当たり、但し書きは別要素の補助テキスト（design-review-002 C2）。
+  await expect(firstCard.locator(".duration")).toHaveText(/^総所要時間: 約\d+分$/);
+  await expect(firstCard.locator(".duration-note")).toHaveText(
+    "一般道での帰着までを含み、休憩は含みません",
+  );
+
+  // 同じ但し書きを時間の入力欄にも併記し、両 input から aria-describedby で結ぶ
+  // （design-review-002 D1 / 修正 6）。
+  await expect(page.locator("#time-note")).toHaveText("一般道での帰着までを含み、休憩は含みません");
+  await expect(page.locator("#min-minutes")).toHaveAttribute("aria-describedby", "time-note");
+  await expect(page.locator("#max-minutes")).toHaveAttribute("aria-describedby", "time-note");
+
   const mapsUrl = await firstCard.getAttribute("data-maps-url");
   expect(mapsUrl, "data-maps-url 属性").not.toBeNull();
   expect(mapsUrl?.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);

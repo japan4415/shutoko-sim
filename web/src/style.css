@@ -59,6 +59,13 @@ select {
   gap: 8px;
 }
 
+/* 入力欄に添える前提の注記（design-review-002 D1）。 */
+.field-note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #5a5f66;
+}
+
 #search-btn {
   font: inherit;
   align-self: flex-start;

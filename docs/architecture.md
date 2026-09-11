@@ -68,19 +68,43 @@ Cloudflare Workers の通常の WASM 利用は事前コンパイル済みモジ�
 
 同期 WASM が動作中の場合、キャンセルは Web Worker を終了して実現する。UI は再検索時に新しい Web Worker を起動する。古い request ID の応答は無視する。
 
-## 公開と更新
+## 公開と更新（R2 成果物配信）
 
-成果物を `releases/<releaseId>/` にアップロードし、統合検証後にその ID を参照するアプリを公開する。公開済みファイルを上書きしない。新旧バージョンを混ぜないよう、キャッシュキーは完全なバージョン付きパスとする。マニフェストに載らないパスや任意 URL の代理取得は拒否する。
+静的成果物（WASM, graph.json, snap-index.json, manifest.json 等）は Cloudflare R2 バケット（バインディング名: `ARTIFACTS_BUCKET`、バケット名: `shutoko-artifacts`）を介して配信する。成果物は `releases/<releaseId>/<artifact>` に配置し、Workers は環境変数 `ALLOWED_RELEASES` で許可された版かつ `releases/<releaseId>/manifest.json` が R2 上に実在する版のみを公開する。公開済みファイルを上書きしない。新旧バージョンを混ぜないよう、キャッシュキーは完全なバージョン付きパスとする。マニフェストに載らないパスや成果物 allowlist 外の要求、任意 URL の代理取得は 404 で拒否する。
 
-R2 は非公開バケットとし、Workers が配信用の許可パスだけ公開する。データはクライアントが取得できる公開情報として扱い、秘密を格納しない。WASM は `application/wasm`、JSON は `application/json` で返す。失敗時はアプリの参照 release を直前の正常版に戻す。キャッシュ済み旧クライアント向けに旧成果物を最低30日保持する提案とし、期限切れは再読込を案内する。
+R2 は非公開バケットとし、Workers が配信用の許可パスだけ公開する。データはクライアントが取得できる公開情報として扱い、秘密を格納しない。WASM は `application/wasm`、JSON は `application/json; charset=utf-8`、JS は `text/javascript; charset=utf-8`、型定義は `text/plain; charset=utf-8` で返す。Cache-Control は `manifest.json` に `public, max-age=300, stale-while-revalidate=60`、その他成果物に `public, max-age=31536000, immutable` を設定し、`ETag` および `If-None-Match`（304 Not Modified）に対応する。失敗時はアプリの参照 release を直前の正常版に戻す。キャッシュ済み旧クライアント向けに旧成果物を最低30日保持する。
 
-## 運用・プライバシー
+### ローカル開発用シード手順
+ローカル開発時（wrangler dev）は、`workers/scripts/seed-local-r2.mjs`（`npm --prefix workers run seed:local`）により、`fixtures/generated/*.json` の SHA-256 チェックサムおよびバイト長を `manifest.json` と照合した上で、Miniflare のローカル R2 エミュレータへ成果物一式（および WASM ビルド成果物）を一括投入できる。
+
+## 運用・プライバシー・セキュリティ
 
 住所検索には確定した住所を送るが、検索履歴を保存しない。座標・住所・出発リンクをアプリ URL、アクセスログ、例外本文、解析イベントへ含めない。タイル提供者には表示範囲、住所検索先には検索語、Google には出発操作で地点情報が伝わるため、画面から確認できる説明を用意する。
 
-Workers の住所検索に本文サイズ、文字数、タイムアウト、レート制限を設け、プロバイダーの秘密鍵は Workers の secret で管理する。任意の外部 URL を入力させない。CSP で script / connect / worker / img の許可先を限定し、WASM 実行に必要な設定は実装時に検証する。
+### レート制限と保護（[[ratelimits]]）
+Cloudflare Workers 公式の Rate Limiting binding（`[[ratelimits]]`）を採用:
+- `IP_RATE_LIMITER`: `CF-Connecting-IP` をキーとして送信元 IP ごとに毎分 10 回（limit: 10, period: 60）。超過時は 429 `RATE_LIMITED`（`Retry-After: 60`）。
+- `GLOBAL_RATE_LIMITER`: 固定キー `"global"` でサービス全体で毎分 600 回（limit: 600, period: 60）。
+プロバイダーの秘密鍵が必要な場合は Workers Secret（`GEOCODER_API_KEY`）で管理し、国土地理院 API ではキー不要の完全ローカル完結とする。接続先 URL はコード内定数とし SSRF を防止する。
 
-集計対象は成否コード、処理時間、成果物バージョン、候補数だけとする。保存期間は暫定14日、プロバイダー側の保存方針も選定時に確認する。通信失敗率、データ不整合、探索失敗率を監視し、住所検索障害時も既に確定した座標でのローカル探索は可能にする。
+### ログ設計
+アクセスログおよびエラーログは以下の構造化 JSON のみに限定し、プライバシー保護のため検索クエリ・座標・クライアント IP は一切出力しない:
+```json
+{
+  "event": "releases_request | geocode_request | unknown_route",
+  "status": 200,
+  "durationMs": 12,
+  "releaseId": "c1-real-v1",
+  "artifact": "manifest.json",
+  "candidateCount": 5,
+  "errorCode": "NOT_FOUND"
+}
+```
+
+### CORS / CSP 方針
+- **CORS 方針**: 本番環境ではフロントエンド静的ファイルと Workers API は同一オリジンで配信されるため、Workers 側に不要なワイルドカード CORS ヘッダは付与しない。ローカル開発時は Vite の開発サーバー（ポート 5173）から Workers（ポート 8787）へ `server.proxy`（`/api`, `/releases`）を用いて同一オリジン中継を行う。
+- **CSP ヘッダ方針**: HTML を配信する Web アプリ層（#12）で付与する。方針: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://msearch.gsi.go.jp https://*.tile.openstreetmap.org; img-src 'self' data: https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'`。WASM 実行のために `'wasm-unsafe-eval'` を許容する。
+
 
 ## 実走行経路と課金対象の分離
 

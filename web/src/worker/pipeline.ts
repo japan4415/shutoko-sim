@@ -1,6 +1,12 @@
 // 探索パイプラインの純粋関数群。Worker 本体（search-worker.ts）はこれらを配線するだけ。
 // fetch と import は引数注入にし、Vitest からモックで決定論的に検証できるようにする。
-import type { SearchResult, SearchRequest, UiSearchMessage } from "./types";
+import type {
+  BenchPayload,
+  SearchResult,
+  SearchRequest,
+  UiSearchMessage,
+  WorkerResponse,
+} from "./types";
 
 /** 成果物 1 件の期待値（sha256 hex 小文字 / バイト長）。 */
 export interface ArtifactExpectation {
@@ -172,6 +178,17 @@ function engineExpectation(engine: EngineLike, path: string, engineUrl: string):
   return { sha256: entry.sha256, byteLength: entry.byteLength };
 }
 
+/** loadRelease の任意オプション（計測ページ専用。通常 UI は指定しない）。 */
+export interface LoadReleaseOptions {
+  /**
+   * 成果物 URL に付けるキャッシュ回避クエリ（`?bench=<nonce>`）。
+   * 配信側ルータ（workers/src/index.ts の getRawPath）はクエリを落とすため
+   * 同一成果物が返り、sha256 照合もバイト列に対して行われるので壊れない。
+   * 省略時は URL を一切変えない（通常経路の挙動は不変）。
+   */
+  cacheBust?: string;
+}
+
 /**
  * 1 リリース分の成果物を manifest → engine.json → graph.json → wasm → glue の順で
  * 取得・照合し、WASM を初期化して検索境界を返す。
@@ -188,22 +205,29 @@ export async function loadRelease(
   releaseId: string,
   importImpl: ImportLike = (url: string) => import(url),
   signal?: AbortSignal,
+  options: LoadReleaseOptions = {},
 ): Promise<LoadedRelease> {
   const base = `/releases/${encodeURIComponent(releaseId)}`;
+  // cacheBust 未指定なら空文字（既存の URL と完全に同一）。
+  const query =
+    options.cacheBust === undefined || options.cacheBust === ""
+      ? ""
+      : `?bench=${encodeURIComponent(options.cacheBust)}`;
 
-  const manifestText = await fetchText(fetchImpl, `${base}/manifest.json`, signal);
+  const manifestUrl = `${base}/manifest.json${query}`;
+  const manifestText = await fetchText(fetchImpl, manifestUrl, signal);
   let manifest: ManifestLike;
   try {
     manifest = JSON.parse(manifestText) as ManifestLike;
   } catch {
-    throw new PipelineError("ARTIFACT_MISMATCH", `${base}/manifest.json: JSON デコード失敗`);
+    throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: JSON デコード失敗`);
   }
   const graphEntry = (manifest.artifacts ?? []).find((a) => a.path === "graph.json");
   if (!graphEntry) {
-    throw new PipelineError("ARTIFACT_MISMATCH", `${base}/manifest.json: artifacts に graph.json 無し`);
+    throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: artifacts に graph.json 無し`);
   }
 
-  const engineUrl = `${base}/engine.json`;
+  const engineUrl = `${base}/engine.json${query}`;
   const engineText = await fetchText(fetchImpl, engineUrl, signal);
   let engine: EngineLike;
   try {
@@ -225,15 +249,16 @@ export async function loadRelease(
   const wasmExpected = engineExpectation(engine, WASM_ARTIFACT_PATH, engineUrl);
   const glueExpected = engineExpectation(engine, GLUE_ARTIFACT_PATH, engineUrl);
 
-  const graphBytes = await fetchBytes(fetchImpl, `${base}/graph.json`, signal);
-  await verifyOrStop(`${base}/graph.json`, graphBytes, graphEntry);
+  const graphUrl = `${base}/graph.json${query}`;
+  const graphBytes = await fetchBytes(fetchImpl, graphUrl, signal);
+  await verifyOrStop(graphUrl, graphBytes, graphEntry);
   const graphJson = new TextDecoder().decode(graphBytes);
 
-  const wasmUrl = `${base}/${WASM_ARTIFACT_PATH}`;
+  const wasmUrl = `${base}/${WASM_ARTIFACT_PATH}${query}`;
   const wasmBytes = await fetchBytes(fetchImpl, wasmUrl, signal);
   await verifyOrStop(wasmUrl, wasmBytes, wasmExpected);
 
-  const glueUrl = `${base}/${GLUE_ARTIFACT_PATH}`;
+  const glueUrl = `${base}/${GLUE_ARTIFACT_PATH}${query}`;
   const glueText = await fetchText(fetchImpl, glueUrl, signal);
   await verifyOrStop(glueUrl, new TextEncoder().encode(glueText), glueExpected);
   const glue = await importImpl(glueUrl);
@@ -246,4 +271,21 @@ export async function loadRelease(
 /** search() の戻り値 JSON 文字列を SearchResult に展開する。 */
 export function parseSearchResult(resultJson: string): SearchResult {
   return JSON.parse(resultJson) as SearchResult;
+}
+
+/**
+ * `result` 応答を組み立てる。
+ * `bench` が undefined のときは `bench` キー自体を付けない（通常 UI の応答形を変えない）。
+ */
+export function buildResultResponse(
+  requestId: string,
+  result: SearchResult,
+  bench?: BenchPayload,
+): WorkerResponse {
+  return {
+    type: "result",
+    requestId,
+    result,
+    ...(bench === undefined ? {} : { bench }),
+  };
 }

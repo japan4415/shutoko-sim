@@ -99,6 +99,17 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 
 `TIMEOUT` は Worker が送る応答ではなく UI 側が生成する状態であり、次回検索時に新しい Worker を再生成して `ready` を待ってから再送する。ブート時の初期化失敗の `error` は `requestId: ""` で送られ、UI は再読み込みを案内する。WASM 呼出は `search(graph, request, limits)` に相当する純粋な境界とし、JS glue が型とメモリ管理を担う。UI の制限を信用せず Rust 側でも座標の有限性・範囲（`-90.0..=90.0`, `-180.0..=180.0`）、`origin` と `originNodeId` の排他性、分の整数・大小関係、版・車両の一致、`pricingAt` の有効な UTC 時刻を検証する。構造や値の不正は `Err(RoutingError { code: "INVALID_INPUT", message })` を返し、WASM 境界で JSON シリアライズされた `RoutingErrorPayload` として JS 例外をスローする。
 
+### 計測フック（`bench`、任意・#13）
+
+性能計測ページ（`web/bench.html`）だけが付ける任意フィールド。**通常 UI は付けない**ため、`bench` が無いときの取得順・照合・エラーの挙動は一切変わらない。
+
+- `search` の `bench.cacheBust?: string`: 指定された時だけ、5 成果物（manifest / engine / graph / wasm / glue）の URL に `?bench=<nonce>` を付けて取得する。配信側ルータ（`workers/src/index.ts` の `getRawPath`）はクエリを落とすため同一成果物が返り、sha256 照合はバイト列に対して行われるので成立する。cold 計測（ブラウザ HTTP キャッシュ `immutable` の迂回）専用。
+- `result` の `bench`（`msg.bench` があるときだけ載る）:
+  - `marks`: `loadStartEpochMs` / `loadEndEpochMs` / `searchStartEpochMs` / `searchEndEpochMs`。すべて `performance.timeOrigin + performance.now()` の epoch ms で、ページと Worker で同じ土台の差分を取れる。
+  - `resources`: Worker 内で収集した成果物 URL の Resource Timing（`name` / `transferSize` / `encodedBodySize` / `decodedBodySize` / `deliveryType` / `responseStatus` / `duration`）。Worker の fetch はメイン document の Resource Timing に出ないため Worker 側で収集して返す。
+  - `memory`: `performance.memory` の探索直前・直後サンプル（MiB）。取得できない環境では `null`。
+- `ready` の payload は従来どおり。bench Worker（`new Worker(url, { name: "bench" })`）は起動時の先読みを行わず `search` メッセージ駆動で取得する（先読みが先に走ると `cacheBust` 付きの取得が先読み済みリリースに相乗りして cold 計測が成立しないため）。
+
 ### 空間スナップ契約
 - スナップ対象: 一般道（`EdgeKind::Local`）に接する（from / to のいずれか）ノードのみ。
 - スナップ距離計算: 等距円筒近似（Equirectangular approximation、東京付近 `cos(lat)` 補正）。

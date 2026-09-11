@@ -35,6 +35,23 @@ function mustGet<T extends Element>(id: string): T {
   return node as unknown as T;
 }
 
+/** 入力欄を DOM 順に並べたもの。エラー表示・aria 付与・フォーカス移動の走査順。 */
+const INPUTS = [el.lat, el.lon, el.minMinutes, el.maxMinutes];
+
+/** エラー文言の li に振る id の接頭辞。欄の aria-describedby から参照する。 */
+const ERROR_ID_PREFIX = "input-error-";
+
+/**
+ * 欄に静的に紐づく説明文の id。index.html が付けた aria-describedby を起動時に控え、
+ * エラー id と空白区切りで併記する（例: 時間欄の #time-note）。
+ */
+const STATIC_DESCRIBEDBY = new Map<HTMLInputElement, string[]>(
+  INPUTS.map((input) => [
+    input,
+    (input.getAttribute("aria-describedby") ?? "").split(" ").filter((id) => id !== ""),
+  ]),
+);
+
 let worker: Worker | null = null;
 let workerReady = false;
 // ブート初期化が失敗済みなら true。ready は来ないので送信を保留せず即再試行させる。
@@ -155,10 +172,17 @@ function renderCard(model: import("./ui/model").CardModel): HTMLElement {
   card.dataset.mapsUrl = model.mapsUrl;
 
   // 所要時間は候補比較の主要指標なので class を付けて強調する（design-review-001 F4）。
+  // 強調は数値だけに当て、但し書きは別要素の補助テキストへ落とす（design-review-002 C2）。
   const duration = document.createElement("p");
   duration.className = "duration";
-  duration.textContent = `総所要時間: 約${String(model.planMinutes)}分（一般道での帰着まで含み、休憩は含まない）`;
+  duration.textContent = `総所要時間: 約${String(model.planMinutes)}分`;
   card.appendChild(duration);
+
+  // 同じ但し書きを時間の入力欄直下にも置く（index.html の #time-note）。
+  const durationNote = document.createElement("p");
+  durationNote.className = "duration-note";
+  durationNote.textContent = "一般道での帰着までを含み、休憩は含みません";
+  card.appendChild(durationNote);
 
   const items: string[] = [
     model.toll,
@@ -190,12 +214,19 @@ function renderCard(model: import("./ui/model").CardModel): HTMLElement {
   return card;
 }
 
-function invalidateResults(options?: { silent?: boolean }): void {
+/**
+ * 条件変更時に前回の候補・出発リンクを無効化する。
+ * 入力エラーは消さない（design-review-002 N1）。ここで消すと、欄を直して探索ボタンへ
+ * ポインタを運ぶ途中の change でエラー一覧が縮み、ボタンが指の下から動いて
+ * mouseup が空振りする。消去は探索ボタン押下時の再検証（applyInputErrors）だけに任せる。
+ * まだ一度も探索していないときはステータスに触らない（design-review-002 M1:
+ * 未検索の利用者に「再検索」を促さない）。
+ */
+function invalidateResults(): void {
   // 条件変更時は前回の候補と出発リンクを消す（docs/requirements.md:30）。
   el.results.replaceChildren();
-  clearInputErrors(); // 条件が変わったら古い入力エラー表示・aria 状態も残さない
   stopWorker();
-  if (options?.silent !== true) {
+  if (hasSearched) {
     setStatus("条件が変更されました。探索ボタンで再検索してください。");
   }
 }
@@ -205,52 +236,69 @@ function readOrigin(): { lat: number; lon: number } {
 }
 
 /**
- * 入力エラーの表示と各欄への aria 付与。エラーが無くなった欄からは属性を外すため、
- * 呼び出しごとに全欄を走査する。
+ * 入力エラーの表示と各欄への aria 付与。
+ * - 各 li に id を振り、欄の aria-describedby は**その欄に係る**エラーの id だけを指す
+ *   （design-review-002 L1: 関係ない欄のエラーまで読み上げさせない）
+ * - エラーが無くなった欄からは属性を外すため、呼び出しごとに全欄を走査する
+ *
+ * @returns 最初のエラー欄（DOM 順）。エラーが無ければ null。
  */
-function applyInputErrors(
-  fields: import("./ui/model").InputFieldErrors,
-  errors: string[],
-): void {
-  const listItems = errors.map((text) => {
-    const li = document.createElement("li");
-    li.textContent = text;
-    return li;
-  });
-  el.inputErrors.replaceChildren(...listItems);
+function applyInputErrors(fields: import("./ui/model").InputFieldErrors): HTMLInputElement | null {
+  // 欄 → その欄に係るエラー文言。範囲条件（1 ≤ 最小 ≤ 最大 ≤ 240）は最小・最大の両方に係る。
+  // この順序がそのまま li の並び（DOM 順）になる。
+  const entries: { input: HTMLInputElement; message: string | null }[] = [
+    { input: el.lat, message: fields.lat },
+    { input: el.lon, message: fields.lon },
+    { input: el.minMinutes, message: fields.minMinutes },
+    { input: el.maxMinutes, message: fields.maxMinutes },
+    { input: el.minMinutes, message: fields.range },
+    { input: el.maxMinutes, message: fields.range },
+  ];
 
-  const messages = new Map<HTMLInputElement, string[]>();
-  const add = (input: HTMLInputElement, message: string | null): void => {
-    if (message === null) {
-      return;
+  // 同一文言は 1 つの li を共有する（範囲条件は最小・最大のどちらからも参照される）。
+  const idByMessage = new Map<string, string>();
+  for (const { message } of entries) {
+    if (message !== null && !idByMessage.has(message)) {
+      idByMessage.set(message, `${ERROR_ID_PREFIX}${String(idByMessage.size + 1)}`);
     }
-    messages.set(input, [...(messages.get(input) ?? []), message]);
-  };
-  add(el.lat, fields.lat);
-  add(el.lon, fields.lon);
-  add(el.minMinutes, fields.minMinutes);
-  add(el.maxMinutes, fields.maxMinutes);
-  // 範囲条件（1 ≤ 最小 ≤ 最大 ≤ 240）は最小・最大の両方の欄に係る。
-  add(el.minMinutes, fields.range);
-  add(el.maxMinutes, fields.range);
+  }
+  el.inputErrors.replaceChildren(
+    ...[...idByMessage].map(([message, id]) => {
+      const li = document.createElement("li");
+      li.id = id;
+      li.textContent = message;
+      return li;
+    }),
+  );
 
-  for (const input of [el.lat, el.lon, el.minMinutes, el.maxMinutes]) {
-    if (messages.has(input)) {
+  const describedBy = new Map<HTMLInputElement, string[]>();
+  for (const { input, message } of entries) {
+    if (message === null) {
+      continue;
+    }
+    const id = idByMessage.get(message);
+    if (id !== undefined) {
+      describedBy.set(input, [...(describedBy.get(input) ?? []), id]);
+    }
+  }
+
+  for (const input of INPUTS) {
+    const errorIds = describedBy.get(input) ?? [];
+    // 静的な注記（例: #time-note）を先に、エラー id を続けて空白区切りで併記する。
+    const describedIds = [...(STATIC_DESCRIBEDBY.get(input) ?? []), ...errorIds];
+    if (errorIds.length > 0) {
       input.setAttribute("aria-invalid", "true");
-      input.setAttribute("aria-describedby", "input-errors");
     } else {
       input.removeAttribute("aria-invalid");
+    }
+    if (describedIds.length > 0) {
+      input.setAttribute("aria-describedby", describedIds.join(" "));
+    } else {
       input.removeAttribute("aria-describedby");
     }
   }
-}
 
-/** 入力エラーの表示と aria 状態を消す（条件変更で失効したとき）。 */
-function clearInputErrors(): void {
-  applyInputErrors(
-    { lat: null, lon: null, minMinutes: null, maxMinutes: null, range: null },
-    [],
-  );
+  return INPUTS.find((input) => describedBy.has(input)) ?? null;
 }
 
 function startSearch(): void {
@@ -260,13 +308,12 @@ function startSearch(): void {
     el.minMinutes.value,
     el.maxMinutes.value,
   );
-  const errors = [fields.lat, fields.lon, fields.minMinutes, fields.maxMinutes, fields.range].filter(
-    (message): message is string => message !== null,
-  );
-  applyInputErrors(fields, errors);
-  if (errors.length > 0) {
+  const firstError = applyInputErrors(fields);
+  if (firstError !== null) {
     // 支援技術にも失敗が伝わるようステータスを更新する（design-review-001 F2）。
     setStatus("入力に誤りがあります");
+    // どの欄を直すべきか即座に分かるよう最初のエラー欄へ移す（design-review-002 L1）。
+    firstError.focus();
     return; // 入力不備では検索しない
   }
 
@@ -301,12 +348,12 @@ function startSearch(): void {
   }, SEARCH_TIMEOUT_MS);
 }
 
-function applyPreset(options?: { silent?: boolean }): void {
+function applyPreset(): void {
   if (el.preset.value === "kandabashi") {
     el.lat.value = String(PRESET_KANDABASHI.lat);
     el.lon.value = String(PRESET_KANDABASHI.lon);
   }
-  invalidateResults({ silent: options?.silent === true });
+  invalidateResults();
 }
 
 // --- 初期化 ---
@@ -321,7 +368,8 @@ for (const input of [el.lat, el.lon, el.minMinutes, el.maxMinutes]) {
 el.search.addEventListener("click", startSearch);
 
 el.preset.value = "kandabashi";
-// ブート時はまだ検索していないため「条件が変更されました…」を出さない（design-review-001 F1）。
-applyPreset({ silent: true });
+// ブート時はまだ検索していないため invalidateResults() はステータスに触らず、
+// 初期文言がそのまま残る（design-review-001 F1 / design-review-002 M1）。
+applyPreset();
 setStatus("成果物を読み込み中…");
 createWorker(); // ブート: ready が来たらステータスへ反映される

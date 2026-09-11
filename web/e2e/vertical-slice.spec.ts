@@ -58,6 +58,18 @@ test("(a) 神田橋プリセット 15〜60 で候補カードと Maps URL が表
   await expect(firstCard).toContainText("300");
   await expect(page.locator("#results .card")).toHaveCount(2);
 
+  // 強調は所要時間の数値だけに当たり、但し書きは別要素の補助テキスト（design-review-002 C2）。
+  await expect(firstCard.locator(".duration")).toHaveText(/^総所要時間: 約\d+分$/);
+  await expect(firstCard.locator(".duration-note")).toHaveText(
+    "一般道での帰着までを含み、休憩は含みません",
+  );
+
+  // 同じ但し書きを時間の入力欄にも併記し、両 input から aria-describedby で結ぶ
+  // （design-review-002 D1 / 修正 6）。
+  await expect(page.locator("#time-note")).toHaveText("一般道での帰着までを含み、休憩は含みません");
+  await expect(page.locator("#min-minutes")).toHaveAttribute("aria-describedby", "time-note");
+  await expect(page.locator("#max-minutes")).toHaveAttribute("aria-describedby", "time-note");
+
   const mapsUrl = await firstCard.getAttribute("data-maps-url");
   expect(mapsUrl, "data-maps-url 属性").not.toBeNull();
   expect(mapsUrl?.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);
@@ -130,4 +142,37 @@ test("(d) graph.json が 11 秒遅延すると TIMEOUT の文言が表示され�
     "探索が 10 秒を超えました。再度検索してください",
     { timeout: 20_000 },
   );
+});
+
+test("(e) 入力エラーを直して探索ボタンを 1 回押すと探索が始まる", async ({ page }) => {
+  await openApp(page);
+  await page.selectOption("#origin-preset", "kandabashi");
+  await page.fill("#min-minutes", "15");
+  await page.fill("#max-minutes", "60");
+
+  // 緯度を不正にして探索 → エラー表示（探索は実行されない）。
+  await page.fill("#lat", "999");
+  await page.click("#search-btn");
+  await expect(page.locator("#input-errors li")).toHaveCount(1);
+  await expect(page.locator("#input-errors")).toContainText("緯度");
+  await expect(page.locator("#status")).toHaveText("入力に誤りがあります");
+  await expect(page.locator("#results .card")).toHaveCount(0);
+
+  // 誤りのある欄へフォーカスが移り、aria-describedby はその欄のエラーだけを指す
+  // （design-review-002 L1）。ol はリストのまま role="alert" の div に包まれている（L2）。
+  await expect(page.locator("#lat")).toBeFocused();
+  const latDescribedBy = await page.locator("#lat").getAttribute("aria-describedby");
+  expect(latDescribedBy).toBe(await page.locator("#input-errors li").first().getAttribute("id"));
+  await expect(page.locator("#lon")).not.toHaveAttribute("aria-describedby", /.+/);
+  await expect(page.locator("#input-errors")).toHaveJSProperty("tagName", "OL");
+  await expect(page.locator("#input-errors-alert")).toHaveAttribute("role", "alert");
+
+  // 緯度を修正 → 探索ボタンを 1 回クリック。エラー一覧はボタンより下にあるため
+  // 消えてもボタンが動かず、この 1 クリックで探索が始まる（design-review-002 N1）。
+  await page.fill("#lat", "35.6896727");
+  await page.click("#search-btn");
+
+  await expect(page.locator("#results .card").first()).toBeVisible();
+  await expect(page.locator("#results .card")).toHaveCount(2);
+  await expect(page.locator("#input-errors li")).toHaveCount(0);
 });

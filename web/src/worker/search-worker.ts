@@ -21,6 +21,8 @@ const ctx = self as unknown as {
 
 let loaded: { releaseId: string; state: LoadedRelease } | null = null;
 let loadPromise: Promise<{ releaseId: string; state: LoadedRelease }> | null = null;
+// 進行中ロードの対象 releaseId。loadPromise を安全に再利用するために保持する。
+let loadingReleaseId: string | null = null;
 let readySent = false;
 
 function post(message: WorkerResponse): void {
@@ -37,15 +39,22 @@ function ensureLoaded(releaseId: string): Promise<{ releaseId: string; state: Lo
       new PipelineError("ARTIFACT_MISMATCH", `未知の releaseId です: ${releaseId}`),
     );
   }
+  // 進行中のロードがあれば共有する（同一成果物の二重取得と WASM 二重 init を防ぐ）。
+  if (loadPromise !== null && loadingReleaseId === releaseId) {
+    return loadPromise;
+  }
+  loadingReleaseId = releaseId;
   // 取得系 fetch は共通の AbortController でまとめられるよう signal を渡す。
   const controller = new AbortController();
   loadPromise = loadRelease(fetch, releaseId, hashes, undefined, controller.signal)
     .then((state) => {
       loaded = { releaseId, state };
+      loadingReleaseId = null;
       return loaded;
     })
     .catch((err: unknown) => {
       loadPromise = null; // 失敗時は再取得できるようにする
+      loadingReleaseId = null;
       throw err;
     });
   return loadPromise;

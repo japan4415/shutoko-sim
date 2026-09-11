@@ -3,6 +3,7 @@ import { Env, HandlerResult } from "./types";
 
 const ALLOWED_ARTIFACTS = new Set([
   "manifest.json",
+  "engine.json",
   "graph.json",
   "snap-index.json",
   "shutoko_routing_bg.wasm",
@@ -102,8 +103,10 @@ export async function handleReleases(
   }
 
   const contentType = getContentType(artifact);
+  // manifest.json と engine.json は「どの版を配るか」を決めるメタデータなので、
+  // 成果物本体（immutable）とは別に短い TTL を持たせる。
   const cacheControl =
-    artifact === "manifest.json"
+    artifact === "manifest.json" || artifact === "engine.json"
       ? "public, max-age=300, stale-while-revalidate=60"
       : "public, max-age=31536000, immutable";
 

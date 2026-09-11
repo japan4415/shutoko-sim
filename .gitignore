@@ -1,6 +1,7 @@
 /target/
 /dist/
 /.workflow-runs/
+/.wrangler/
 /workers/node_modules/
 /workers/.wrangler/
 /workers/.dev.vars

@@ -193,7 +193,9 @@ function renderCard(model: import("./ui/model").CardModel): HTMLElement {
 function invalidateResults(options?: { silent?: boolean }): void {
   // 条件変更時は前回の候補と出発リンクを消す（docs/requirements.md:30）。
   el.results.replaceChildren();
-  clearInputErrors(); // 条件が変わったら古い入力エラー表示・aria 状態も残さない
+  // 入力エラーは消さない（design-review-002 N1）。ここで消すと、欄を直して探索ボタンへ
+  // ポインタを運ぶ途中の change でエラー一覧が縮み、ボタンが指の下から動いて
+  // mouseup が空振りする。消去は探索ボタン押下時の再検証（applyInputErrors）だけに任せる。
   stopWorker();
   if (options?.silent !== true) {
     setStatus("条件が変更されました。探索ボタンで再検索してください。");
@@ -243,14 +245,6 @@ function applyInputErrors(
       input.removeAttribute("aria-describedby");
     }
   }
-}
-
-/** 入力エラーの表示と aria 状態を消す（条件変更で失効したとき）。 */
-function clearInputErrors(): void {
-  applyInputErrors(
-    { lat: null, lon: null, minMinutes: null, maxMinutes: null, range: null },
-    [],
-  );
 }
 
 function startSearch(): void {

@@ -131,3 +131,27 @@ test("(d) graph.json が 11 秒遅延すると TIMEOUT の文言が表示され�
     { timeout: 20_000 },
   );
 });
+
+test("(e) 入力エラーを直して探索ボタンを 1 回押すと探索が始まる", async ({ page }) => {
+  await openApp(page);
+  await page.selectOption("#origin-preset", "kandabashi");
+  await page.fill("#min-minutes", "15");
+  await page.fill("#max-minutes", "60");
+
+  // 緯度を不正にして探索 → エラー表示（探索は実行されない）。
+  await page.fill("#lat", "999");
+  await page.click("#search-btn");
+  await expect(page.locator("#input-errors li")).toHaveCount(1);
+  await expect(page.locator("#input-errors")).toContainText("緯度");
+  await expect(page.locator("#status")).toHaveText("入力に誤りがあります");
+  await expect(page.locator("#results .card")).toHaveCount(0);
+
+  // 緯度を修正 → 探索ボタンを 1 回クリック。エラー一覧はボタンより下にあるため
+  // 消えてもボタンが動かず、この 1 クリックで探索が始まる（design-review-002 N1）。
+  await page.fill("#lat", "35.6896727");
+  await page.click("#search-btn");
+
+  await expect(page.locator("#results .card").first()).toBeVisible();
+  await expect(page.locator("#results .card")).toHaveCount(2);
+  await expect(page.locator("#input-errors li")).toHaveCount(0);
+});

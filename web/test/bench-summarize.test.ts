@@ -228,6 +228,17 @@ describe("aggregate", () => {
     expect(agg.memorySource).toBeNull();
   });
 
+  // #13 第 2 段の代理計測は CDP の JSHeapUsedSize を補助記録する（envelope の memorySource）。
+  it("メモリ出所は最大ピークを出した試行の memorySource を代表とする", () => {
+    const cdp = trial({ memoryPeakMiB: 91.5, memorySource: "cdp-performance-metrics" });
+    const page = trial({ cache: "warm", memoryPeakMiB: 40, memorySource: "performance.memory" });
+    expect(aggregate(envelope([page, cdp])).memorySource).toBe("cdp-performance-metrics");
+    expect(aggregate(envelope([cdp, page])).memorySource).toBe("cdp-performance-metrics");
+    expect(aggregate(envelope([trial({ memoryPeakMiB: 120 }), page])).memorySource).toBe(
+      "performance.memory",
+    );
+  });
+
   it("パターン別にまとめ、パターン index 昇順で返す", () => {
     const trials = [
       trial({ patternIndex: 1, patternId: "takaracho-mid" }),

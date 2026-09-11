@@ -140,6 +140,26 @@ function numbers(values: readonly (number | null)[]): number[] {
   return values.filter((value): value is number => value !== null && Number.isFinite(value));
 }
 
+/**
+ * envelope のメモリ出所を試行から導く。
+ *
+ * 最大ピークを出した試行の出所を代表とする（代理計測の envelope は
+ * `"cdp-performance-metrics"`、ブラウザ単体の envelope は `"performance.memory"`）。
+ * ピークが 1 件も無ければ null（= 判定不能）。
+ */
+function derivedMemorySource(trials: readonly BenchTrial[]): BenchMemorySource {
+  let best: BenchTrial | null = null;
+  for (const trial of trials) {
+    if (trial.memoryPeakMiB === null || trial.memorySource === null) {
+      continue;
+    }
+    if (best === null || trial.memoryPeakMiB > (best.memoryPeakMiB ?? 0)) {
+      best = trial;
+    }
+  }
+  return best === null ? null : best.memorySource;
+}
+
 function buildGroup(
   key: string,
   label: string,
@@ -210,12 +230,7 @@ export function aggregate(input: BenchEnvelope | readonly BenchEnvelope[]): Benc
     trialCount: trials.length,
     timeoutCount: trials.filter((trial) => trial.timeout).length,
     timeoutRate: trials.length === 0 ? 0 : trials.filter((trial) => trial.timeout).length / trials.length,
-    memorySource:
-      manual !== null
-        ? "manual"
-        : trials.some((trial) => trial.memoryPeakMiB !== null)
-          ? "performance.memory"
-          : null,
+    memorySource: manual !== null ? "manual" : derivedMemorySource(trials),
     overall,
     cold,
     warm,

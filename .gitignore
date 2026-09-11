@@ -9,3 +9,5 @@
 /web/dist/
 /web/playwright-report/
 /web/test-results/
+# 代理計測（npm run bench）の生出力。レポートする成果物は docs/bench/ 配下に置く。
+/web/bench/results/

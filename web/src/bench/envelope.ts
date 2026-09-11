@@ -12,8 +12,33 @@ export const BENCH_SCHEMA_VERSION = 1;
 /** 試行のキャッシュ状態。cold = `?bench=<nonce>` 付与でブラウザキャッシュを迂回。 */
 export type BenchCacheState = "cold" | "warm";
 
-/** メモリ値の出所。`performance.memory` が取れない環境では null（不合格ではなく判定不能）。 */
-export type BenchMemorySource = "performance.memory" | "manual" | null;
+/**
+ * メモリ値の出所。`performance.memory` が取れない環境では null（不合格ではなく判定不能）。
+ *
+ * - `"performance.memory"`: ページ内 JS（`performance.memory`）。Chromium は既定で 10 MB 単位に量子化される。
+ * - `"cdp-performance-metrics"`: 代理計測ランナーの CDP `Performance.getMetrics` の `JSHeapUsedSize`
+ *   （250 ms 間隔のサンプルの最大）。量子化が無い代わりに、レンダラプロセス単位の値であり
+ *   計測ページのコンテキスト（同一プロセスの Worker を含む）のピークを表す。
+ * - `"manual"`: 実機の Instruments / Xcode 等で読んだ値を手入力したもの。
+ */
+export type BenchMemorySource =
+  | "performance.memory"
+  | "cdp-performance-metrics"
+  | "manual"
+  | null;
+
+/** 検証エラーの文言に使う memorySource の値域。 */
+const MEMORY_SOURCE_VALUES = '"performance.memory" / "cdp-performance-metrics" / "manual" / null';
+
+/** memorySource の値域（型と validateEnvelope の両方から使う）。 */
+export function isMemorySource(value: unknown): value is BenchMemorySource {
+  return (
+    value === "performance.memory" ||
+    value === "cdp-performance-metrics" ||
+    value === "manual" ||
+    value === null
+  );
+}
 
 /** 性能目標（docs/delivery.md:37-40）。 */
 export interface BenchTargets {
@@ -77,6 +102,8 @@ export interface BenchDevice {
   os: string | null;
   browser: string | null;
   network: string | null;
+  /** CPU スロットル倍率。代理計測（Playwright）のみで、実機は未設定（undefined）。 */
+  cpuThrottle?: number | null;
   note: string | null;
 }
 
@@ -281,6 +308,10 @@ function checkDevice(errors: string[], path: string, value: unknown): void {
   for (const key of ["deviceName", "os", "browser", "network", "note"] as const) {
     checkNullableString(errors, `${path}.${key}`, value[key]);
   }
+  // cpuThrottle は任意（実機の envelope には無い）。あるときだけ型を見る。
+  if (value.cpuThrottle !== undefined && !isNullableNumber(value.cpuThrottle)) {
+    errors.push(`${path}.cpuThrottle: 有限の数値または null である必要があります`);
+  }
 }
 
 function checkTrial(errors: string[], path: string, value: unknown): void {
@@ -327,14 +358,8 @@ function checkTrial(errors: string[], path: string, value: unknown): void {
   for (const key of ["resultStatus", "reason", "errorCode"] as const) {
     checkNullableString(errors, `${path}.${key}`, value[key]);
   }
-  if (
-    value.memorySource !== "performance.memory" &&
-    value.memorySource !== "manual" &&
-    value.memorySource !== null
-  ) {
-    errors.push(
-      `${path}.memorySource: "performance.memory" / "manual" / null のいずれかである必要があります`,
-    );
+  if (!isMemorySource(value.memorySource)) {
+    errors.push(`${path}.memorySource: ${MEMORY_SOURCE_VALUES} のいずれかである必要があります`);
   }
   checkResourceEntries(errors, `${path}.resources`, value.resources);
 }
@@ -357,12 +382,8 @@ export function validateEnvelope(value: unknown): EnvelopeValidation {
   if (typeof value.releaseId !== "string") {
     errors.push("releaseId: string である必要があります");
   }
-  if (
-    value.memorySource !== "performance.memory" &&
-    value.memorySource !== "manual" &&
-    value.memorySource !== null
-  ) {
-    errors.push('memorySource: "performance.memory" / "manual" / null のいずれかである必要があります');
+  if (!isMemorySource(value.memorySource)) {
+    errors.push(`memorySource: ${MEMORY_SOURCE_VALUES} のいずれかである必要があります`);
   }
   if (!isNullableNumber(value.memoryManualMiB)) {
     errors.push("memoryManualMiB: 有限の数値または null である必要があります");

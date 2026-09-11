@@ -175,6 +175,44 @@ describe("validateEnvelope", () => {
     expect(result.valid).toBe(false);
     expect(result.errors.length).toBeGreaterThanOrEqual(5);
   });
+
+  // 以下は #13 第 2 段の代理計測（Playwright ランナー）向けの後方互換な追加分。
+  it("cdp-performance-metrics を memorySource として許容する（代理計測）", () => {
+    const env = envelope({
+      memorySource: "cdp-performance-metrics",
+      trials: [trial({ memoryPeakMiB: 128.25, memorySource: "cdp-performance-metrics" })],
+    });
+    expect(validateEnvelope(env).errors).toEqual([]);
+    expect(validateEnvelope(JSON.parse(JSON.stringify(env)) as unknown).valid).toBe(true);
+  });
+
+  it("memorySource の未知の値は依然として拒否する", () => {
+    const result = validateEnvelope({ ...envelope(), memorySource: "instruments" });
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(" ")).toContain("cdp-performance-metrics");
+  });
+
+  it("device.cpuThrottle は任意で、あるときだけ型を見る", () => {
+    const withThrottle = {
+      ...envelope(),
+      device: {
+        ua: "ua",
+        platform: "p",
+        deviceName: "Pixel 5 emulation",
+        os: "desktop macOS",
+        browser: "Chromium 141.0.0.0",
+        network: "fast4g (CDP)",
+        cpuThrottle: 4,
+        note: null,
+      },
+    };
+    expect(validateEnvelope(withThrottle).errors).toEqual([]);
+    expect(
+      validateEnvelope({ ...withThrottle, device: { ...withThrottle.device, cpuThrottle: "4" } }).valid,
+    ).toBe(false);
+    // 未設定（実機の envelope）はそのまま通る。
+    expect(validateEnvelope(envelope()).errors).toEqual([]);
+  });
 });
 
 describe("resolveMemorySource / buildEnvelope", () => {

@@ -1,0 +1,375 @@
+// 最小 UI の配線本体。描画ロジックの純粋部分は src/ui/model.ts に置く。
+// - 探索押下時に pricingAt を 1 回取得し、requestId を採番して Worker へ search を送る
+// - in-flight の requestId 以外の応答は無視し、再押下時は旧を無効化してから新を送る
+// - 10 秒で setTimeout → worker.terminate() → TIMEOUT 文言 → 次回検索時に Worker を再生成し、
+//   ready を待ってから送信する
+import {
+  PRESET_KANDABASHI,
+  RELEASE_ID,
+  SEARCH_TIMEOUT_MS,
+  VEHICLE_PROFILE,
+  errorMessage,
+  statusMessage,
+  toCardModel,
+  validateInputFields,
+} from "./ui/model";
+import type { UiSearchMessage, WorkerResponse } from "./worker/types";
+
+const el = {
+  preset: mustGet<HTMLSelectElement>("origin-preset"),
+  lat: mustGet<HTMLInputElement>("lat"),
+  lon: mustGet<HTMLInputElement>("lon"),
+  minMinutes: mustGet<HTMLInputElement>("min-minutes"),
+  maxMinutes: mustGet<HTMLInputElement>("max-minutes"),
+  search: mustGet<HTMLButtonElement>("search-btn"),
+  inputErrors: mustGet<HTMLOListElement>("input-errors"),
+  status: mustGet<HTMLParagraphElement>("status"),
+  results: mustGet<HTMLDivElement>("results"),
+};
+
+function mustGet<T extends Element>(id: string): T {
+  const node = document.getElementById(id);
+  if (node === null) {
+    throw new Error(`missing element: ${id}`);
+  }
+  return node as unknown as T;
+}
+
+/** 入力欄を DOM 順に並べたもの。エラー表示・aria 付与・フォーカス移動の走査順。 */
+const INPUTS = [el.lat, el.lon, el.minMinutes, el.maxMinutes];
+
+/** エラー文言の li に振る id の接頭辞。欄の aria-describedby から参照する。 */
+const ERROR_ID_PREFIX = "input-error-";
+
+/**
+ * 欄に静的に紐づく説明文の id。index.html が付けた aria-describedby を起動時に控え、
+ * エラー id と空白区切りで併記する（例: 時間欄の #time-note）。
+ */
+const STATIC_DESCRIBEDBY = new Map<HTMLInputElement, string[]>(
+  INPUTS.map((input) => [
+    input,
+    (input.getAttribute("aria-describedby") ?? "").split(" ").filter((id) => id !== ""),
+  ]),
+);
+
+let worker: Worker | null = null;
+let workerReady = false;
+// ブート初期化が失敗済みなら true。ready は来ないので送信を保留せず即再試行させる。
+let bootFailed = false;
+// 一度でも探索を開始したか。遅れて届いた ready で結果・探索中の文言を上書きしないためのフラグ。
+let hasSearched = false;
+let inflightRequestId: string | null = null;
+let pending: UiSearchMessage | null = null;
+let timeoutId: ReturnType<typeof setTimeout> | null = null;
+let requestCounter = 0;
+
+function createWorker(): Worker {
+  const next = new Worker(new URL("./worker/search-worker.ts", import.meta.url), {
+    type: "module",
+  });
+  workerReady = false;
+  bootFailed = false;
+  next.onmessage = (event: MessageEvent<WorkerResponse>) => handleWorkerMessage(event.data);
+  worker = next;
+  return next;
+}
+
+function clearTimer(): void {
+  if (timeoutId !== null) {
+    clearTimeout(timeoutId);
+    timeoutId = null;
+  }
+}
+
+function stopWorker(): void {
+  clearTimer();
+  if (worker !== null) {
+    worker.terminate();
+    worker = null;
+  }
+  workerReady = false;
+  inflightRequestId = null;
+}
+
+function sendMessage(msg: UiSearchMessage): void {
+  if (worker === null) {
+    worker = createWorker();
+  }
+  // ready（または初期化失敗）を待ってから送信するため保持する。
+  pending = msg;
+  if (workerReady || bootFailed) {
+    flushPending();
+  }
+}
+
+function flushPending(): void {
+  if (pending !== null && worker !== null && (workerReady || bootFailed)) {
+    const msg = pending;
+    pending = null;
+    worker.postMessage(msg);
+  }
+}
+
+function handleWorkerMessage(msg: WorkerResponse): void {
+  switch (msg.type) {
+    case "ready": {
+      workerReady = true;
+      bootFailed = false;
+      // 探索開始後に届いた ready は「探索中…」や結果の文言を上書きしない。
+      if (!hasSearched) {
+        setStatus("準備完了");
+      }
+      flushPending();
+      return;
+    }
+    case "result": {
+      if (msg.requestId !== inflightRequestId) {
+        return; // 古い requestId の応答は無視
+      }
+      clearTimer();
+      inflightRequestId = null;
+      renderResult(msg.result);
+      return;
+    }
+    case "error": {
+      if (msg.requestId === "") {
+        // ブート時の初期化失敗。以後の送信は保留せず再試行させる。
+        bootFailed = true;
+        setStatus(errorMessage(msg.code));
+        flushPending();
+        return;
+      }
+      if (msg.requestId !== inflightRequestId) {
+        return; // 古い requestId の応答は無視
+      }
+      clearTimer();
+      inflightRequestId = null;
+      el.results.replaceChildren();
+      setStatus(errorMessage(msg.code));
+      return;
+    }
+  }
+}
+
+function setStatus(text: string): void {
+  el.status.textContent = text;
+}
+
+function renderResult(result: import("./worker/types").SearchResult): void {
+  const min = Number(el.minMinutes.value);
+  const max = Number(el.maxMinutes.value);
+  setStatus(statusMessage(result, min, max));
+  const fragment = document.createDocumentFragment();
+  for (const candidate of result.candidates.slice(0, 3)) {
+    fragment.appendChild(renderCard(toCardModel(candidate)));
+  }
+  el.results.replaceChildren(fragment);
+}
+
+function renderCard(model: import("./ui/model").CardModel): HTMLElement {
+  const card = document.createElement("article");
+  card.className = "card";
+  card.dataset.mapsUrl = model.mapsUrl;
+
+  // 所要時間は候補比較の主要指標なので class を付けて強調する（design-review-001 F4）。
+  // 強調は数値だけに当て、但し書きは別要素の補助テキストへ落とす（design-review-002 C2）。
+  const duration = document.createElement("p");
+  duration.className = "duration";
+  duration.textContent = `総所要時間: 約${String(model.planMinutes)}分`;
+  card.appendChild(duration);
+
+  // 同じ但し書きを時間の入力欄直下にも置く（index.html の #time-note）。
+  const durationNote = document.createElement("p");
+  durationNote.className = "duration-note";
+  durationNote.textContent = "一般道での帰着までを含み、休憩は含みません";
+  card.appendChild(durationNote);
+
+  const items: string[] = [
+    model.toll,
+    `経路: ${model.route}`,
+    `通過路線: ${model.roadNames.join(" / ")}`,
+    model.chargedSection,
+  ];
+  for (const text of items) {
+    const p = document.createElement("p");
+    p.textContent = text;
+    card.appendChild(p);
+  }
+  if (model.warnings.length > 0) {
+    const ul = document.createElement("ul");
+    for (const warning of model.warnings) {
+      const li = document.createElement("li");
+      li.textContent = warning;
+      ul.appendChild(li);
+    }
+    card.appendChild(ul);
+  }
+
+  const button = document.createElement("button");
+  button.textContent = "出発する（Google マップを開く）";
+  button.addEventListener("click", () => {
+    window.open(model.mapsUrl, "_blank", "noopener");
+  });
+  card.appendChild(button);
+  return card;
+}
+
+/**
+ * 条件変更時に前回の候補・出発リンクを無効化する。
+ * 入力エラーは消さない（design-review-002 N1）。ここで消すと、欄を直して探索ボタンへ
+ * ポインタを運ぶ途中の change でエラー一覧が縮み、ボタンが指の下から動いて
+ * mouseup が空振りする。消去は探索ボタン押下時の再検証（applyInputErrors）だけに任せる。
+ * まだ一度も探索していないときはステータスに触らない（design-review-002 M1:
+ * 未検索の利用者に「再検索」を促さない）。
+ */
+function invalidateResults(): void {
+  // 条件変更時は前回の候補と出発リンクを消す（docs/requirements.md:30）。
+  el.results.replaceChildren();
+  stopWorker();
+  if (hasSearched) {
+    setStatus("条件が変更されました。探索ボタンで再検索してください。");
+  }
+}
+
+function readOrigin(): { lat: number; lon: number } {
+  return { lat: Number(el.lat.value), lon: Number(el.lon.value) };
+}
+
+/**
+ * 入力エラーの表示と各欄への aria 付与。
+ * - 各 li に id を振り、欄の aria-describedby は**その欄に係る**エラーの id だけを指す
+ *   （design-review-002 L1: 関係ない欄のエラーまで読み上げさせない）
+ * - エラーが無くなった欄からは属性を外すため、呼び出しごとに全欄を走査する
+ *
+ * @returns 最初のエラー欄（DOM 順）。エラーが無ければ null。
+ */
+function applyInputErrors(fields: import("./ui/model").InputFieldErrors): HTMLInputElement | null {
+  // 欄 → その欄に係るエラー文言。範囲条件（1 ≤ 最小 ≤ 最大 ≤ 240）は最小・最大の両方に係る。
+  // この順序がそのまま li の並び（DOM 順）になる。
+  const entries: { input: HTMLInputElement; message: string | null }[] = [
+    { input: el.lat, message: fields.lat },
+    { input: el.lon, message: fields.lon },
+    { input: el.minMinutes, message: fields.minMinutes },
+    { input: el.maxMinutes, message: fields.maxMinutes },
+    { input: el.minMinutes, message: fields.range },
+    { input: el.maxMinutes, message: fields.range },
+  ];
+
+  // 同一文言は 1 つの li を共有する（範囲条件は最小・最大のどちらからも参照される）。
+  const idByMessage = new Map<string, string>();
+  for (const { message } of entries) {
+    if (message !== null && !idByMessage.has(message)) {
+      idByMessage.set(message, `${ERROR_ID_PREFIX}${String(idByMessage.size + 1)}`);
+    }
+  }
+  el.inputErrors.replaceChildren(
+    ...[...idByMessage].map(([message, id]) => {
+      const li = document.createElement("li");
+      li.id = id;
+      li.textContent = message;
+      return li;
+    }),
+  );
+
+  const describedBy = new Map<HTMLInputElement, string[]>();
+  for (const { input, message } of entries) {
+    if (message === null) {
+      continue;
+    }
+    const id = idByMessage.get(message);
+    if (id !== undefined) {
+      describedBy.set(input, [...(describedBy.get(input) ?? []), id]);
+    }
+  }
+
+  for (const input of INPUTS) {
+    const errorIds = describedBy.get(input) ?? [];
+    // 静的な注記（例: #time-note）を先に、エラー id を続けて空白区切りで併記する。
+    const describedIds = [...(STATIC_DESCRIBEDBY.get(input) ?? []), ...errorIds];
+    if (errorIds.length > 0) {
+      input.setAttribute("aria-invalid", "true");
+    } else {
+      input.removeAttribute("aria-invalid");
+    }
+    if (describedIds.length > 0) {
+      input.setAttribute("aria-describedby", describedIds.join(" "));
+    } else {
+      input.removeAttribute("aria-describedby");
+    }
+  }
+
+  return INPUTS.find((input) => describedBy.has(input)) ?? null;
+}
+
+function startSearch(): void {
+  const fields = validateInputFields(
+    el.lat.value,
+    el.lon.value,
+    el.minMinutes.value,
+    el.maxMinutes.value,
+  );
+  const firstError = applyInputErrors(fields);
+  if (firstError !== null) {
+    // 支援技術にも失敗が伝わるようステータスを更新する（design-review-001 F2）。
+    setStatus("入力に誤りがあります");
+    // どの欄を直すべきか即座に分かるよう最初のエラー欄へ移す（design-review-002 L1）。
+    firstError.focus();
+    return; // 入力不備では検索しない
+  }
+
+  requestCounter += 1;
+  const requestId = `request-${String(requestCounter)}`;
+  const msg: UiSearchMessage = {
+    type: "search",
+    requestId,
+    releaseId: RELEASE_ID,
+    pricingAt: new Date().toISOString(), // 押下時に 1 回だけ取得
+    origin: readOrigin(),
+    minMinutes: Number(el.minMinutes.value),
+    maxMinutes: Number(el.maxMinutes.value),
+    vehicleProfile: VEHICLE_PROFILE,
+  };
+
+  // 二重送信防止: 旧 in-flight を無効化してから新 requestId で送る。
+  clearTimer();
+  inflightRequestId = requestId;
+  hasSearched = true;
+  setStatus("探索中…");
+  sendMessage(msg);
+
+  timeoutId = setTimeout(() => {
+    if (inflightRequestId !== requestId) {
+      return;
+    }
+    stopWorker();
+    pending = null;
+    el.results.replaceChildren();
+    setStatus(errorMessage("TIMEOUT"));
+  }, SEARCH_TIMEOUT_MS);
+}
+
+function applyPreset(): void {
+  if (el.preset.value === "kandabashi") {
+    el.lat.value = String(PRESET_KANDABASHI.lat);
+    el.lon.value = String(PRESET_KANDABASHI.lon);
+  }
+  invalidateResults();
+}
+
+// --- 初期化 ---
+el.preset.addEventListener("change", () => {
+  applyPreset();
+});
+for (const input of [el.lat, el.lon, el.minMinutes, el.maxMinutes]) {
+  input.addEventListener("change", () => {
+    invalidateResults();
+  });
+}
+el.search.addEventListener("click", startSearch);
+
+el.preset.value = "kandabashi";
+// ブート時はまだ検索していないため invalidateResults() はステータスに触らず、
+// 初期文言がそのまま残る（design-review-001 F1 / design-review-002 M1）。
+applyPreset();
+setStatus("成果物を読み込み中…");
+createWorker(); // ブート: ready が来たらステータスへ反映される

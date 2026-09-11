@@ -7,6 +7,8 @@ ALLOWED_RELEASES = "c1-real-v1"
 
 [[r2_buckets]]
 binding = "ARTIFACTS_BUCKET"
+# preview（wrangler dev のローカル miniflare 状態ディレクトリ / --remote preview）は
+# 本番バケットを指さない。ローカルへの投入先は seed-local-r2.mjs が preview 名に合わせる。
 bucket_name = "shutoko-artifacts"
 preview_bucket_name = "shutoko-artifacts-preview"
 
@@ -19,3 +21,9 @@ simple = { limit = 10, period = 60 }
 name = "GLOBAL_RATE_LIMITER"
 namespace_id = "1002"
 simple = { limit = 600, period = 60 }
+
+# 静的 SPA と Worker API を同一オリジンで配信する（full-stack 構成）。
+# assets に一致が無いパス（/releases、/api）は通常の Worker fetch にフォールバックする。
+[assets]
+directory = "../web/dist"
+not_found_handling = "single-page-application"

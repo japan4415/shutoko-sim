@@ -53,3 +53,41 @@ jobs:
         working-directory: workers
       - run: npm test
         working-directory: workers
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # web の typecheck / 単体テストは dist/wasm（git 管理外）を import するため、
+      # 依存インストールと検査より前に WASM 成果物をビルドしておく必要がある。
+      - name: Install Rust toolchain and wasm-bindgen CLI
+        run: |
+          rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
+          rustup default stable
+          cargo install wasm-bindgen-cli --version 0.2.128 --locked
+      - name: Build WASM artifacts
+        run: bash scripts/build-wasm.sh
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            web/package-lock.json
+            workers/package-lock.json
+      - name: Install deps (web + workers)
+        run: |
+          npm ci
+          npm --prefix ../workers ci
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      - run: npm test
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      - name: Seed local R2 (Miniflare preview bucket)
+        run: npm run seed:local
+        working-directory: workers
+      - name: E2E (vite build → wrangler dev 8787 → Playwright)
+        run: npm run e2e
+        working-directory: web

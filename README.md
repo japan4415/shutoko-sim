@@ -49,7 +49,7 @@
    ```
 3. **ローカル R2 エミュレータへの成果物シードと開発サーバー起動**:
    ```bash
-   npm run seed:local  # fixtures/generated と dist/wasm のハッシュ照合・R2 投入
+   npm run seed:local  # fixtures/generated と dist/wasm のハッシュ照合・R2 投入（engine.json も生成して投入）
    npx wrangler dev    # ローカル開発サーバー起動（http://localhost:8787）
    ```
 
@@ -65,12 +65,14 @@
    bash scripts/build-wasm.sh                # dist/wasm/ を生成
    cd workers && node scripts/seed-local-r2.mjs --remote
    ```
+   このスクリプトは `manifest.json` / `graph.json` / `snap-index.json` / WASM ビルド成果物に加えて、`dist/wasm/` の実ファイルから計算した wasm / JS glue の `sha256`・`byteLength` を `releases/<releaseId>/engine.json` として同時に投入します。Web Worker はこの `engine.json` を取得して wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になります**。
+   > **既存リリースへの追加入手**: `engine.json` は 2026-09-11 の CI 失敗修正（PR #24）で追加した成果物です。それ以前にデプロイ済みの版（`c1-real-v1` を含む）へ反映するには、`bash scripts/build-wasm.sh` の後に `cd workers && node scripts/seed-local-r2.mjs --remote` を再実行して `engine.json` を投入し直してください。`wrangler deploy` だけでは投入されません。
 3. **デプロイ**:
    ```bash
    cd workers && npx wrangler deploy
    ```
    デプロイ完了時に表示される `https://<worker>.<subdomain>.workers.dev` が配信 URL です。
-4. **疎通確認**: `GET /releases/{releaseId}/manifest.json` が `200`・`application/json`・`Cache-Control: max-age=300` で返ること、`GET /releases/{releaseId}/graph.json` が `immutable` キャッシュと `ETag` 付きで返り本文の `sha256` が `manifest.json` と一致すること、存在しない release / 二重スラッシュが `404` になること、`POST /api/geocode` が正常クエリで `200`、空クエリで `400 INVALID_QUERY` を返すことを確認する。
+4. **疎通確認**: `GET /releases/{releaseId}/manifest.json` と `GET /releases/{releaseId}/engine.json` が `200`・`application/json`・`Cache-Control: max-age=300` で返ること、`GET /releases/{releaseId}/graph.json` が `immutable` キャッシュと `ETag` 付きで返り本文の `sha256` が `manifest.json` と一致すること、存在しない release / 二重スラッシュが `404` になること、`POST /api/geocode` が正常クエリで `200`、空クエリで `400 INVALID_QUERY` を返すことを確認する。
 
 現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-11 デプロイ, wrangler 4.131.0）。
 
@@ -93,6 +95,42 @@
   - C1 の他ランプ区間（新富町、京橋、北の丸等）や他の首都高速路線（湾岸線・羽田線等）は未検証であり、`manifest.json` の `unverifiedSections` に未検証エッジおよび除外路線注記として自動列挙されます。
   - Google マップへの経由地引き継ぎ（経由地3点による周回再現）の実機検証は未完了です。
   - リアルタイム渋滞情報、交通規制、天候による所要時間変動、中型・大型車等の料金区分は対象外です。
+
+## Web アプリ（`web/`）
+
+Vite + Vanilla TypeScript の最小 UI。探索はブラウザの専用 Web Worker 内で WASM を実行する。`workers/wrangler.toml` の `[assets]` により、`wrangler dev` 1 台（ポート 8787）で静的ファイルと `/releases`・`/api` を同一オリジン配信する。
+
+### 起動手順（ローカル）
+
+1. **WASM 成果物と依存の準備**（リポジトリルートで実行）:
+   ```bash
+   bash scripts/build-wasm.sh          # dist/wasm/ を生成（wasm-bindgen 0.2.128 が必要）
+   npm --prefix workers ci
+   npm --prefix workers run seed:local # Miniflare のローカル R2 へ成果物を投入
+   ```
+2. **配信サーバー起動**（静的 + API、ポート 8787）:
+   ```bash
+   cd workers && npx wrangler dev --port 8787
+   ```
+   `http://localhost:8787/` を直接開くとビルド済み UI が表示される。
+3. **開発用 Vite サーバー**（任意。5173 から `/releases`・`/api` を 8787 へ proxy 中継）:
+   ```bash
+   cd web && npm ci && npm run dev
+   ```
+4. **単体テスト・型検査**（`dist/wasm/` が必要。未生成なら先に 1 の `bash scripts/build-wasm.sh` を実行する）:
+   ```bash
+   bash scripts/build-wasm.sh           # dist/wasm/ が無いと typecheck/test は失敗する
+   cd web && npm ci && npm run typecheck && npm test
+   ```
+   `web/test/integration-wasm.test.ts` は `dist/wasm/shutoko_routing.js` を import するため、
+   `dist/` が git 管理外（`.gitignore`）のクリーンチェックアウトでは WASM ビルドが先に必要になる。
+   CI の `web` job も同じ理由で、`bash scripts/build-wasm.sh` を `npm ci` / `npm run typecheck` / `npm test` より前に置いている。
+5. **E2E（Playwright + chromium）**: 上記 1 の準備が終わっている状態で、
+   ```bash
+   cd web && npm run e2e   # vite build → wrangler dev(8787) 起動 → 4 シナリオ
+   ```
+
+UI の操作: 出発地プリセット「神田橋」（または lat/lon 直接入力）→ 最小/最大分（既定 15〜60、`1 ≤ 最小 ≤ 最大 ≤ 240`）→「ルートを探す」→ 候補カード（総所要時間・料金・入口→出口・通過路線・課金対象 1 区間・警告）→「出発する（Google マップを開く）」。探索は 10 秒でタイムアウトし、その場合は再検索ボタンで Worker を再生成する。
 
 ## ドキュメント
 

@@ -36,9 +36,13 @@ flowchart LR
   GB --> G["graph.json<br/>(道路網・課金ペア・禁止規則)"]
   GB --> S["snap-index.json<br/>(一般道スナップインデックス)"]
   GB --> M["manifest.json<br/>(SHA-256・メタデータ・ODbL帰属)"]
+  GB --> W["dist/wasm/<br/>(WASM・JS glue)"]
   G --> R2["R2: releases/releaseId/"]
   S --> R2
   M --> R2
+  W -->|"実ファイルから sha256 を計算"| SEED["seed-local-r2.mjs"]
+  SEED --> E["engine.json<br/>(wasm/glue の期待値)"]
+  E --> R2
 ```
 
 1. **トポロジ抽出と立体交差**:
@@ -50,7 +54,7 @@ flowchart LR
 4. **スナップインデックス**:
    ユーザーが指定した出発座標を一般道へ投影するため、近傍一般道ノードの空間検索インデックス（`snap-index.json`）を構築する。
 5. **完全決定論的成果物ビルド**:
-   エッジ・ノード・ペアのソート順序を固定し、同一入力から SHA-256 チェックサムがバイト完全一致する成果物を生成する。各成果物のサイズとハッシュは `manifest.json` に記録され、クライアント側 Web Worker による改ざん・破損検出を可能にする。
+   エッジ・ノード・ペアのソート順序を固定し、同一入力から SHA-256 チェックサムがバイト完全一致する成果物を生成する。各成果物のサイズとハッシュは `manifest.json` に記録され、クライアント側 Web Worker による改ざん・破損検出を可能にする。WASM 本体と JS glue は Rust ツールチェーンでビルドされ環境をまたいでバイト一致しないため、`manifest.json` には載せず、投入時に実ファイルから計算した `engine.json` を配信して同じ照合を行う（`workers/scripts/seed-local-r2.mjs`）。
 
 ## WASM の実行場所を明確にする理由
 
@@ -70,16 +74,20 @@ Cloudflare Workers の通常の WASM 利用は事前コンパイル済みモジ�
 
 ## 公開と更新（R2 成果物配信）
 
-静的成果物（WASM, graph.json, snap-index.json, manifest.json 等）は Cloudflare R2 バケット（バインディング名: `ARTIFACTS_BUCKET`、バケット名: `shutoko-artifacts`）を介して配信する。成果物は `releases/<releaseId>/<artifact>` に配置し、Workers は環境変数 `ALLOWED_RELEASES` で許可された版かつ `releases/<releaseId>/manifest.json` が R2 上に実在する版のみを公開する。公開済みファイルを上書きしない。新旧バージョンを混ぜないよう、キャッシュキーは完全なバージョン付きパスとする。マニフェストに載らないパスや成果物 allowlist 外の要求、任意 URL の代理取得は 404 で拒否する。
+静的成果物（WASM, graph.json, snap-index.json, manifest.json, engine.json 等）は Cloudflare R2 バケット（バインディング名: `ARTIFACTS_BUCKET`、バケット名: `shutoko-artifacts`）を介して配信する。成果物は `releases/<releaseId>/<artifact>` に配置し、Workers は環境変数 `ALLOWED_RELEASES` で許可された版かつ `releases/<releaseId>/manifest.json` が R2 上に実在する版のみを公開する。公開済みファイルを上書きしない。新旧バージョンを混ぜないよう、キャッシュキーは完全なバージョン付きパスとする。マニフェストに載らないパスや成果物 allowlist 外の要求、任意 URL の代理取得は 404 で拒否する。
 
-R2 は非公開バケットとし、Workers が配信用の許可パスだけ公開する。データはクライアントが取得できる公開情報として扱い、秘密を格納しない。WASM は `application/wasm`、JSON は `application/json; charset=utf-8`、JS は `text/javascript; charset=utf-8`、型定義は `text/plain; charset=utf-8` で返す。Cache-Control は `manifest.json` に `public, max-age=300, stale-while-revalidate=60`、その他成果物に `public, max-age=31536000, immutable` を設定し、`ETag` および `If-None-Match`（304 Not Modified）に対応する。失敗時はアプリの参照 release を直前の正常版に戻す。キャッシュ済み旧クライアント向けに旧成果物を最低30日保持する。
+R2 は非公開バケットとし、Workers が配信用の許可パスだけ公開する。データはクライアントが取得できる公開情報として扱い、秘密を格納しない。WASM は `application/wasm`、JSON は `application/json; charset=utf-8`、JS は `text/javascript; charset=utf-8`、型定義は `text/plain; charset=utf-8` で返す。Cache-Control は `manifest.json` と `engine.json` に `public, max-age=300, stale-while-revalidate=60`、その他成果物に `public, max-age=31536000, immutable` を設定し、`ETag` および `If-None-Match`（304 Not Modified）に対応する。失敗時はアプリの参照 release を直前の正常版に戻す。キャッシュ済み旧クライアント向けに旧成果物を最低30日保持する。
+
+### 静的 SPA と Worker の同一オリジン配信（`[assets]`）
+
+`workers/wrangler.toml` の `[assets] directory = "../web/dist"` により、同一 Worker が静的ファイル（Vite ビルド後の `web/dist`）と Worker API（`/releases`・`/api`）を同一オリジンで配信する（full-stack 構成）。リクエストはまず assets に一致を試し、不一致（`/releases/...`、`/api/geocode` など）は従来どおり Worker の fetch ハンドラへフォールバックする。`not_found_handling = "single-page-application"` で 1 ページ構成の SPA とし、未一致パスは index.html を返す。ローカルでは `npm --prefix workers run seed:local` 後に `npx wrangler dev` を 1 台起動すれば 8787 で静的 + API が揃い、E2E もこの単一ポートで行う。開発時は Vite(5173) の `server.proxy` 中継も維持する。
 
 ### ローカル開発用シード手順
-ローカル開発時（wrangler dev）は、`workers/scripts/seed-local-r2.mjs`（`npm --prefix workers run seed:local`）により、`fixtures/generated/*.json` の SHA-256 チェックサムおよびバイト長を `manifest.json` と照合した上で、Miniflare のローカル R2 エミュレータへ成果物一式（および WASM ビルド成果物）を一括投入できる。同スクリプトは `--remote` フラグを渡すことで、同じチェックサム照合を行った上で本番 R2 バケットへ直接投入できる（`npx wrangler r2 object put ... --remote`）。
+ローカル開発時（wrangler dev）は、`workers/scripts/seed-local-r2.mjs`（`npm --prefix workers run seed:local`）により、`fixtures/generated/*.json` の SHA-256 チェックサムおよびバイト長を `manifest.json` と照合した上で、Miniflare のローカル R2 エミュレータへ成果物一式（および WASM ビルド成果物）を一括投入できる。同時に `dist/wasm/` の実ファイルから wasm / JS glue の `sha256`・`byteLength` を計算し、`releases/<releaseId>/engine.json` として投入する（`--local` / `--remote` 共通）。同スクリプトは `--remote` フラグを渡すことで、同じチェックサム照合を行った上で本番 R2 バケットへ直接投入できる（`npx wrangler r2 object put ... --remote`）。
 
 ### 実際の本番デプロイ（2026-09-11 実施）
 - R2 バケット: `shutoko-artifacts`（本番）/ `shutoko-artifacts-preview`（`wrangler.toml` の `preview_bucket_name`、`wrangler dev` 用）。いずれも `wrangler r2 bucket create` で新規作成。
-- キー配置: `releases/c1-real-v1/{manifest.json, graph.json, snap-index.json, shutoko_routing_bg.wasm, shutoko_routing.js, shutoko_routing.d.ts, index.d.ts}`（`workers/src/releases.ts` が読む `releases/<releaseId>/<artifact>` と一致。バケット名はキーに含めない）。
+- キー配置: `releases/c1-real-v1/{manifest.json, engine.json, graph.json, snap-index.json, shutoko_routing_bg.wasm, shutoko_routing.js, shutoko_routing.d.ts, index.d.ts}`（`workers/src/releases.ts` が読む `releases/<releaseId>/<artifact>` と一致。バケット名はキーに含めない）。`engine.json` は 2026-09-11 の CI 失敗修正（PR #24）で追加したため、**既存の本番 R2 には未投入**。`node scripts/seed-local-r2.mjs --remote` を再実行して投入する必要がある。
 - デプロイコマンド: `cd workers && npm ci && node scripts/seed-local-r2.mjs --remote && npx wrangler deploy`（pinned wrangler 4.131.0 を使用）。
 - 配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（workers.dev サブドメインは既に有効化済みだったため追加設定不要）。
 

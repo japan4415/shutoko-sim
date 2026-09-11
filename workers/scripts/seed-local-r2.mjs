@@ -67,20 +67,56 @@ const wasmFiles = [
   "index.d.ts",
 ];
 
+// engine.json は「投入する実ファイル」から計算する。wasm のビルドは環境をまたいで
+// バイト一致しないため、ハッシュをソースに固定値で持つと CI とローカルで食い違う。
+// クライアント（Web Worker）はこの engine.json を取得して wasm / glue を照合する。
+const engineArtifacts = [];
+
 for (const wasmFile of wasmFiles) {
   const p = path.join(wasmDir, wasmFile);
   if (fs.existsSync(p)) {
     filesToUpload.push({ name: wasmFile, path: p });
+    const content = fs.readFileSync(p);
+    engineArtifacts.push({
+      path: wasmFile,
+      sha256: crypto.createHash("sha256").update(content).digest("hex"),
+      byteLength: content.length,
+    });
   } else {
     console.warn(`  ! Note: WASM artifact ${wasmFile} not found at ${p} (skip if not built yet)`);
   }
 }
 
+for (const required of ["shutoko_routing_bg.wasm", "shutoko_routing.js"]) {
+  if (!engineArtifacts.some((a) => a.path === required)) {
+    console.warn(
+      `  ! Warning: ${required} is missing, so engine.json cannot describe it and the web client will stop with ARTIFACT_MISMATCH. Run scripts/build-wasm.sh first.`
+    );
+  }
+}
+
+const engineJsonPath = path.join(wasmDir, "engine.json");
+const engineJson = {
+  schemaVersion: 1,
+  releaseId,
+  artifacts: engineArtifacts,
+};
+fs.writeFileSync(engineJsonPath, `${JSON.stringify(engineJson, null, 2)}\n`, "utf-8");
+console.log(`  ✓ Generated engine.json (${engineArtifacts.length} artifacts)`);
+for (const artifact of engineArtifacts) {
+  console.log(`      ${artifact.path}: sha256=${artifact.sha256} byteLength=${artifact.byteLength}`);
+}
+filesToUpload.push({ name: "engine.json", path: engineJsonPath });
+
 const modeFlag = isRemote ? "--remote" : "--local";
 const modeLabel = isRemote ? "remote" : "local";
-console.log(`Seeding ${modeLabel} R2 bucket 'shutoko-artifacts' for release '${releaseId}'...`);
+// wrangler のローカル miniflare は preview_bucket_name を状態ディレクトリ名に使うため、
+// --local の投入先は preview バケットへ合わせる（本番名 shutoko-artifacts は使わない）。
+// --remote は本番バケットへの明示的な投入なので bucket_name を使う。
+const bucketName = isRemote ? "shutoko-artifacts" : "shutoko-artifacts-preview";
+console.log(`Seeding ${modeLabel} R2 bucket '${bucketName}' for release '${releaseId}'...`);
 for (const file of filesToUpload) {
-  const r2Key = `shutoko-artifacts/releases/${releaseId}/${file.name}`;
+  const r2Key = `${bucketName}/releases/${releaseId}/${file.name}`;
   const contentType = contentTypeFor(file.name);
   console.log(`Uploading ${file.path} to ${modeLabel} ${r2Key} (${contentType})...`);
   try {

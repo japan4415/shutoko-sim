@@ -83,3 +83,38 @@ Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `sear
 全候補で料金が分かる場合の `rankingMode` は `time_per_yen`、未確認額を含む場合は `shutoko_time`。`loop.validated` は入力グラフ内で非空の一周が成立した意味で、実際の道路やナビの検証済みを意味しない。候補に `HANDOFF_WAYPOINTS_UNVERIFIED` と `STATIC_TRAVEL_TIME` の警告コードを付ける。
 
 実道路網に対するブラウザの処理時間・ピークメモリ目標は未検証で、人工グラフのテスト成功から実道路網での性能を推定しない。同期呼び出しの10秒キャンセルはこのコアではなく、今後の Web Worker 呼び出し元で実装する。
+
+## ブラウザ Web Worker 側の実装範囲（#12）
+
+`web/`（Vite + Vanilla TypeScript）の実装範囲は次のとおり。
+
+- 取得順は `manifest.json` → `engine.json` → `graph.json` → `shutoko_routing_bg.wasm` → `shutoko_routing.js`。`snap-index.json` は検索に不要なため取得しない。
+- 照合は 2 段階。`graph.json` は manifest の `artifacts`（sha256・byteLength）と照合し、`wasm` / glue は配信側 `engine.json` の `artifacts`（sha256・byteLength）と照合する。不一致は `ARTIFACT_MISMATCH`、取得失敗は `FETCH_FAILED` で停止し、以降の取得は行わない。
+  - **期待値をソースに固定値で持たない理由**: wasm のビルドは環境をまたいでバイト一致しない（ローカル macOS と CI の ubuntu で sha256 が変わる）。固定定数だと CI だけが落ちるため、`engine.json` は `workers/scripts/seed-local-r2.mjs` が投入時に実ファイルから計算する。
+  - `engine.json` の形式不正（JSON デコード失敗、`schemaVersion` が 1 以外、`releaseId` 不一致、`artifacts` に `shutoko_routing_bg.wasm` / `shutoko_routing.js` の有効なエントリが無い）も `ARTIFACT_MISMATCH` として停止する。
+  - `web/src/worker/artifact-hashes.ts` は wasm/glue のハッシュを持たず、`KNOWN_RELEASES = ["c1-real-v1"]` の releaseId allowlist だけを持つ。
+- glue はテキスト取得・照合後に同一 URL を `import()` し、`init({ module_or_path: wasmBytes })` で初期化する。`graph.json` は文字列のまま Worker のモジュール変数に保持し、検索ごとに `search(graphJson, requestJson, "{}")` へ渡す。
+- メッセージ契約は [インターフェース設計](interfaces.md) の「ブラウザの探索境界」のとおり。初期化完了で `ready`、検索応答は `requestId` 付きの `result` / `error` を返す。
+- 10 秒タイムアウトと `terminate()` は UI 側の実装。押下時に `setTimeout(10000)` を開始し、超過で Worker を terminate して `TIMEOUT` 文言を表示、次回検索時に Worker を再生成して `ready` を待ってから送信する。古い `requestId` の応答は無視する。
+- E2E は `cd web && npm run e2e`（vite build → `npx wrangler dev` 8787 の `[assets]` 同一オリジン → Playwright、4 シナリオ: 候補表示 / TIME_WINDOW / ARTIFACT_MISMATCH / TIMEOUT）。
+
+### ビルド順序の依存（CI とローカルで共通）
+
+`web/` の typecheck（`tsc --noEmit`）と単体テスト（vitest）は `dist/wasm/shutoko_routing.js` を
+import するため、**`bash scripts/build-wasm.sh` を先に実行していないと必ず失敗する**
+（`TS2307: Cannot find module '../../dist/wasm/shutoko_routing.js'`）。
+`dist/` は `.gitignore` 対象でクリーンチェックアウトには存在しないため、CI の `web` job は次の順序で組む。
+
+```
+checkout → Rust toolchain + wasm-bindgen-cli 0.2.128 → bash scripts/build-wasm.sh
+        → actions/setup-node → npm ci (web) + npm ci (workers)
+        → npm run typecheck → npm test → npx playwright install --with-deps chromium
+        → npm --prefix workers run seed:local → npm run e2e
+```
+
+ローカルでも同じ順序（先に `bash scripts/build-wasm.sh`、その後に `npm run typecheck` / `npm test`）。
+なお `npm run e2e` は内部で `vite build` を行うため、E2E だけなら WASM ビルドは e2e の前提として別途必要。
+
+`npm --prefix workers run seed:local` は `dist/wasm/` の実ファイルから `engine.json` を生成して
+同時に投入するため、**WASM ビルド後に実行する必要がある**（ビルド前に実行すると
+`engine.json` に wasm / glue のエントリが入らず、Web Worker が `ARTIFACT_MISMATCH` で停止する）。

@@ -1,0 +1,21 @@
+name = "shutoko-sim-workers"
+main = "src/index.ts"
+compatibility_date = "2026-08-22"
+
+[vars]
+ALLOWED_RELEASES = "c1-real-v1"
+
+[[r2_buckets]]
+binding = "ARTIFACTS_BUCKET"
+bucket_name = "shutoko-artifacts"
+preview_bucket_name = "shutoko-artifacts-preview"
+
+[[ratelimits]]
+name = "IP_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "GLOBAL_RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 600, period = 60 }

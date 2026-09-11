@@ -2,7 +2,7 @@
 
 ## 現在地
 
-Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。実データパイプライン（`scripts/fetch-osm.sh`, `scripts/generate-fixtures.sh`）により、首都高速都心環状線（C1）および接続ランプ・周辺一般道の決定論的な道路グラフ・スナップインデックス・マニフェスト（`fixtures/generated/`）を生成し、`routing-core` において実データに基づく周回探索の成立性を検証済みである。CI にて成果物の決定論的再生成チェックを自動実行している。Web アプリケーションの公開、地図描画、住所検索、および Google マップ実機引き継ぎは後続段階で行う。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。以下は全体の実装計画と受け入れ基準である。原案の内容は変更しない。
+Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。実データパイプライン（`scripts/fetch-osm.sh`, `scripts/generate-fixtures.sh`）により、首都高速都心環状線（C1）および接続ランプ・周辺一般道の決定論的な道路グラフ・スナップインデックス・マニフェスト（`fixtures/generated/`）を生成し、`routing-core` において実データに基づく周回探索の成立性を検証済みである。さらに Cloudflare Workers プロジェクト（`workers/`）により、R2 バケットバインディング経由のバージョン付き成果物配信（`GET /releases/{releaseId}/...`）および国土地理院住所検索 API を用いた住所検索プロキシ（`POST /api/geocode`、レート制限・5秒タイムアウト・秘密漏洩防止）を実装し、Vitest pool-workers 統合テストおよび CI ワークフローを追加した。Web UI、地図描画、および Google マップ実機引き継ぎは後続段階（#12）で行う。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。以下は全体の実装計画と受け入れ基準である。原案の内容は変更しない。
 
 ## 実装順序と完了条件
 

@@ -31,6 +31,28 @@
    ```
    コミット済みの OSM データと課金シードから `fixtures/generated/` 以下の成果物をバイト完全一致（SHA-256 一致）で再生成します。CI でもこの再生成チェックを実行し、差分がないことを自動検証しています。
 
+## Cloudflare Workers（成果物配信・住所検索プロキシ）
+
+`workers/` は、R2 バケットからのバージョン付き静的成果物配信（`GET /releases/{releaseId}/...`）および国土地理院 住所検索 API を用いた住所検索プロキシ（`POST /api/geocode`）を提供する Cloudflare Workers プロジェクトです。
+
+### 起動・テスト手順
+
+1. **依存関係のインストール**:
+   ```bash
+   cd workers
+   npm ci
+   ```
+2. **型検査と自動テスト**:
+   ```bash
+   npm run typecheck   # tsc --noEmit
+   npm test            # vitest run（@cloudflare/vitest-pool-workers）
+   ```
+3. **ローカル R2 エミュレータへの成果物シードと開発サーバー起動**:
+   ```bash
+   npm run seed:local  # fixtures/generated と dist/wasm のハッシュ照合・R2 投入
+   npx wrangler dev    # ローカル開発サーバー起動（http://localhost:8787）
+   ```
+
 ### ライセンスとデータ帰属（ODbL）
 
 - 本プロジェクトで利用している実道路データは OpenStreetMap から提供されています。

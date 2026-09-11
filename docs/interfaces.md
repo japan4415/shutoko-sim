@@ -32,13 +32,40 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 
 | インターフェース | 入出力・挙動 |
 | --- | --- |
-| `GET /releases/{releaseId}/manifest.json` | 許可された公開版のマニフェスト |
-| `GET /releases/{releaseId}/{artifact}` | マニフェスト記載の成果物のみ。未知版・ファイルは404 |
-| `POST /api/geocode` | `{ "query": "住所" }` → `{ "candidates": [{ "label": "住所", "lat": 35.0, "lon": 139.0 }] }` |
+| `GET /releases/{releaseId}/manifest.json` | 許可された公開版のマニフェスト（200 OK、`application/json; charset=utf-8`、`Cache-Control: public, max-age=300, stale-while-revalidate=60`、ETag 付与、`If-None-Match` 一致時 304、HEAD 対応）。未知版・manifest 未配置は 404 |
+| `GET /releases/{releaseId}/{artifact}` | 成果物 allowlist に含まれるファイルのみ配信（`.wasm` は `application/wasm`、`.json` は `application/json; charset=utf-8`、`.js` は `text/javascript; charset=utf-8`、`.d.ts` は `text/plain; charset=utf-8`。`Cache-Control: public, max-age=31536000, immutable`、ETag 付与、`If-None-Match` 一致時 304、HEAD 対応）。未知版・allowlist 外・パストラバーサル（`..`、`%2e`）・manifest 未配置版はすべて 404 |
+| `POST /api/geocode` | `{ "query": "住所" }` → `{ "candidates": [{ "label": "住所", "lat": 35.0, "lon": 139.0 }] }`。0 件ヒット時は 200 で `{ "candidates": [] }`。全応答（成功・エラー問わず）`Cache-Control: no-store` |
 
-住所検索は本文4KiB以下、query は空白を除いて1〜200文字、応答は最大5候補。確定検索に限定し、ブラウザと API 応答は `Cache-Control: no-store` とする。プロバイダーが要求する内部キャッシュの扱いは選定時に確定し、保存方針と矛盾するサービスは採用しない。400は入力不備、429は制限超過、502は上流失敗、504は上流5秒タイムアウト。エラー本文は `{ "error": { "code": "GEOCODER_UNAVAILABLE", "retryable": true } }` の形とし、検索語や上流の本文は含めない。
+### 成果物 allowlist
+成果物配信（`/releases/{releaseId}/{artifact}`）で許可されるファイル名は以下の固定リストに限定される:
+- `manifest.json`
+- `graph.json`
+- `snap-index.json`
+- `shutoko_routing_bg.wasm`
+- `shutoko_routing.js`
+- `shutoko_routing.d.ts`
+- `index.d.ts`
 
-初期の住所検索制限案は送信元ごとに毎分10回に加え、サービス全体でプロバイダー契約の上限以下に制限する。具体値は提供元選定時に更新する。公開住所検索 API の無制限な代理にはしない。
+### 住所検索仕様と制約
+- **対象データ**: 国土地理院 住所検索 API をプロバイダーとして利用。行政地名・街区・住居表示レベルの**住所・地名検索専用**であり、駅名・施設名（POI）の検索には非対応。該当なしの場合は 404 ではなく 200 で空配列 `{ "candidates": [] }` を返す。
+- **入力バリデーション**: 本文 4,096 バイト以下、`query` は空白を除いて 1〜200 文字、確定検索に限定。
+- **レート制限**: Cloudflare Rate Limiting binding により、送信元 IP ごとに毎分 10 回（`IP_RATE_LIMITER`、超過時 429 と `Retry-After: 60`）、サービス全体で毎分 600 回（`GLOBAL_RATE_LIMITER`）に制限。
+- **タイムアウト**: 上流呼び出しは 5 秒でタイムアウト（AbortController 連携、超過時 504）。
+- **プライバシー・秘密保護**: 全応答に `Cache-Control: no-store` を設定。エラー本文・レスポンスヘッダ・アクセスログに検索クエリ、座標、上流エラー本文、上流 URL、API キーを含めない。
+
+### エラーコード一覧
+すべてのエラー応答はステータスコードに応じた HTTP レスポンスとともに、以下の JSON スキーマ `{ "error": { "code": string, "retryable": boolean } }` を返す:
+
+| HTTP ステータス | エラーコード (`code`) | `retryable` | 発生条件 |
+| --- | --- | --- | --- |
+| 400 Bad Request | `INVALID_QUERY` | `false` | JSON デコード失敗、`query` フィールド欠落/非文字列、空白除去後 1〜200 文字の範囲外 |
+| 400 Bad Request | `PAYLOAD_TOO_LARGE` | `false` | リクエスト本文が 4,096 バイト (4KiB) を超過 |
+| 404 Not Found | `NOT_FOUND` | `false` | 未知の URL パス、未知の releaseId、成果物 allowlist 外のファイル要求、パストラバーサル検出、または R2 上に `manifest.json` が存在しない版への要求 |
+| 405 Method Not Allowed | `METHOD_NOT_ALLOWED` | `false` | `/releases/...` に対する GET/HEAD 以外のメソッド、または `/api/geocode` に対する POST 以外のメソッド |
+| 429 Too Many Requests | `RATE_LIMITED` | `true` | IP 毎分 10 回、または全体毎分 600 回のレート制限超過（`Retry-After: 60` ヘッダ付与） |
+| 502 Bad Gateway | `GEOCODER_UNAVAILABLE` | `true` | 上流ジオコーダーの非 2xx 応答、ネットワーク通信失敗、または不正 JSON 応答 |
+| 504 Gateway Timeout | `GEOCODER_TIMEOUT` | `true` | 上流ジオコーダー呼び出しが 5 秒以内に完了せずタイムアウト |
+
 
 ## ブラウザの探索境界
 

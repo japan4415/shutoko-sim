@@ -2,11 +2,51 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://msearch.gsi.go.jp https://*.tile.openstreetmap.org; img-src 'self' data: https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Shutoko Sim</title>
+    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <main id="app">
+      <h1>首都高 周回ルート探索</h1>
+
+      <section class="panel">
+        <label for="origin-preset">出発地プリセット</label>
+        <select id="origin-preset">
+          <option value="kandabashi">神田橋（35.6896727, 139.7644248）</option>
+          <option value="manual">座標を直接入力</option>
+        </select>
+
+        <div class="grid">
+          <div>
+            <label for="lat">緯度 lat</label>
+            <input id="lat" type="number" step="any" inputmode="decimal" />
+          </div>
+          <div>
+            <label for="lon">経度 lon</label>
+            <input id="lon" type="number" step="any" inputmode="decimal" />
+          </div>
+          <div>
+            <label for="min-minutes">最小時間（分）</label>
+            <input id="min-minutes" type="number" step="1" min="1" max="240" value="15" />
+          </div>
+          <div>
+            <label for="max-minutes">最大時間（分）</label>
+            <input id="max-minutes" type="number" step="1" min="1" max="240" value="60" />
+          </div>
+        </div>
+        <ol id="input-errors" class="errors"></ol>
+
+        <button id="search-btn" type="button">ルートを探す</button>
+      </section>
+
+      <p id="status" role="status">読み込み中…</p>
+      <div id="results"></div>
+    </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

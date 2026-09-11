@@ -1,7 +1,19 @@
 // UI ↔ Web Worker のメッセージ契約（docs/interfaces.md「ブラウザの探索境界」）。
 import type { LatLng, SearchResult, SearchRequest } from "../../../crates/routing-wasm/types/index.d";
 
-export type { LatLng, SearchResult, SearchRequest };
+export type {
+  Candidate,
+  Duration,
+  GeoJsonLineString,
+  Handoff,
+  LatLng,
+  Loop,
+  RampInfo,
+  SearchResult,
+  SearchRequest,
+  SnappedOrigin,
+  Toll,
+} from "../../../crates/routing-wasm/types/index.d";
 
 /** UI → Worker の検索依頼エンベロープ。`type` は SearchRequest JSON には含めない。 */
 export interface UiSearchMessage {

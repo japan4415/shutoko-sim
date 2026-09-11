@@ -85,7 +85,17 @@ UI → Web Worker のリクエスト例（値は形式を示す架空例）:
 }
 ```
 
-Web Worker は `ready`、`result`、`error` を返し、各探索応答に request ID を付ける。WASM 呼出は `search(graph, request, limits)` に相当する純粋な境界とし、JS glue が型とメモリ管理を担う。UI の制限を信用せず Rust 側でも座標の有限性・範囲（`-90.0..=90.0`, `-180.0..=180.0`）、`origin` と `originNodeId` の排他性、分の整数・大小関係、版・車両の一致、`pricingAt` の有効な UTC 時刻を検証する。構造や値の不正は `Err(RoutingError { code: "INVALID_INPUT", message })` を返し、WASM 境界で JSON シリアライズされた `RoutingErrorPayload` として JS 例外をスローする。
+Web Worker は `ready`、`result`、`error` を返し、各探索応答に request ID を付ける。`ready` の payload は `{ "type": "ready", "releaseId": "c1-real-v1" }` で、初期化（取得・照合・WASM init）完了時に 1 度だけ送る。`error` の `code` 一覧は次のとおり。
+
+| `error.code` | 発生箇所 | 意味 |
+| --- | --- | --- |
+| `ARTIFACT_MISMATCH` | Worker（パイプライン） | manifest/固定ハッシュとの sha256・バイト長不一致。部分データでは探索せず停止 |
+| `FETCH_FAILED` | Worker（パイプライン） | 成果物取得の HTTP 失敗・通信失敗 |
+| `INVALID_INPUT` | WASM 境界（`RoutingErrorPayload`） | 座標・時間・版などの入力検証失敗。理由を入力欄付近に表示 |
+| `WASM_ERROR` | WASM 境界 | `RoutingErrorPayload` JSON でない例外メッセージのフォールバック |
+| `TIMEOUT` | UI 側 | 探索押下から 10 秒以内に `result` / `error` が返らず、UI が Worker を terminate した |
+
+`TIMEOUT` は Worker が送る応答ではなく UI 側が生成する状態であり、次回検索時に新しい Worker を再生成して `ready` を待ってから再送する。ブート時の初期化失敗の `error` は `requestId: ""` で送られ、UI は再読み込みを案内する。WASM 呼出は `search(graph, request, limits)` に相当する純粋な境界とし、JS glue が型とメモリ管理を担う。UI の制限を信用せず Rust 側でも座標の有限性・範囲（`-90.0..=90.0`, `-180.0..=180.0`）、`origin` と `originNodeId` の排他性、分の整数・大小関係、版・車両の一致、`pricingAt` の有効な UTC 時刻を検証する。構造や値の不正は `Err(RoutingError { code: "INVALID_INPUT", message })` を返し、WASM 境界で JSON シリアライズされた `RoutingErrorPayload` として JS 例外をスローする。
 
 ### 空間スナップ契約
 - スナップ対象: 一般道（`EdgeKind::Local`）に接する（from / to のいずれか）ノードのみ。

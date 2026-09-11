@@ -94,6 +94,38 @@
   - Google マップへの経由地引き継ぎ（経由地3点による周回再現）の実機検証は未完了です。
   - リアルタイム渋滞情報、交通規制、天候による所要時間変動、中型・大型車等の料金区分は対象外です。
 
+## Web アプリ（`web/`）
+
+Vite + Vanilla TypeScript の最小 UI。探索はブラウザの専用 Web Worker 内で WASM を実行する。`workers/wrangler.toml` の `[assets]` により、`wrangler dev` 1 台（ポート 8787）で静的ファイルと `/releases`・`/api` を同一オリジン配信する。
+
+### 起動手順（ローカル）
+
+1. **WASM 成果物と依存の準備**（リポジトリルートで実行）:
+   ```bash
+   bash scripts/build-wasm.sh          # dist/wasm/ を生成（wasm-bindgen 0.2.128 が必要）
+   npm --prefix workers ci
+   npm --prefix workers run seed:local # Miniflare のローカル R2 へ成果物を投入
+   ```
+2. **配信サーバー起動**（静的 + API、ポート 8787）:
+   ```bash
+   cd workers && npx wrangler dev --port 8787
+   ```
+   `http://localhost:8787/` を直接開くとビルド済み UI が表示される。
+3. **開発用 Vite サーバー**（任意。5173 から `/releases`・`/api` を 8787 へ proxy 中継）:
+   ```bash
+   cd web && npm ci && npm run dev
+   ```
+4. **単体テスト・型検査**:
+   ```bash
+   cd web && npm run typecheck && npm test
+   ```
+5. **E2E（Playwright + chromium）**: 上記 1 の準備が終わっている状態で、
+   ```bash
+   cd web && npm run e2e   # vite build → wrangler dev(8787) 起動 → 4 シナリオ
+   ```
+
+UI の操作: 出発地プリセット「神田橋」（または lat/lon 直接入力）→ 最小/最大分（既定 15〜60、`1 ≤ 最小 ≤ 最大 ≤ 240`）→「ルートを探す」→ 候補カード（総所要時間・料金・入口→出口・通過路線・課金対象 1 区間・警告）→「出発する（Google マップを開く）」。探索は 10 秒でタイムアウトし、その場合は再検索ボタンで Worker を再生成する。
+
 ## ドキュメント
 
 | 読みたいこと | ドキュメント |

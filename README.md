@@ -53,6 +53,29 @@
    npx wrangler dev    # ローカル開発サーバー起動（http://localhost:8787）
    ```
 
+### 本番デプロイ手順
+
+1. **R2 バケットの作成**（初回のみ。既存なら再利用）:
+   ```bash
+   npx wrangler r2 bucket create shutoko-artifacts
+   npx wrangler r2 bucket create shutoko-artifacts-preview
+   ```
+2. **成果物のビルドと本番 R2 への投入**（`sha256`・`byteLength` を `manifest.json` と照合してからアップロード）:
+   ```bash
+   bash scripts/build-wasm.sh                # dist/wasm/ を生成
+   cd workers && node scripts/seed-local-r2.mjs --remote
+   ```
+3. **デプロイ**:
+   ```bash
+   cd workers && npx wrangler deploy
+   ```
+   デプロイ完了時に表示される `https://<worker>.<subdomain>.workers.dev` が配信 URL です。
+4. **疎通確認**: `GET /releases/{releaseId}/manifest.json` が `200`・`application/json`・`Cache-Control: max-age=300` で返ること、`GET /releases/{releaseId}/graph.json` が `immutable` キャッシュと `ETag` 付きで返り本文の `sha256` が `manifest.json` と一致すること、存在しない release / 二重スラッシュが `404` になること、`POST /api/geocode` が正常クエリで `200`、空クエリで `400 INVALID_QUERY` を返すことを確認する。
+
+現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-11 デプロイ, wrangler 4.131.0）。
+
+> **レート制限の本番挙動に関する注記**: `wrangler.toml` の `[[ratelimits]]`（IP: 10 req/60s、Global: 600 req/60s）は Cloudflare Workers Rate Limiting binding のベストエフォート仕様であり、`wrangler dev --local` の決定論的シミュレーションと異なり本番環境では正確な即時遮断を保証しない（同一 IP から短時間に 15 リクエストを送っても `429` が発生しない場合がある）。アプリケーション側の防御としては機能するが、厳密なレート保証が必要な用途には追加の対策を検討すること。
+
 ### ライセンスとデータ帰属（ODbL）
 
 - 本プロジェクトで利用している実道路データは OpenStreetMap から提供されています。

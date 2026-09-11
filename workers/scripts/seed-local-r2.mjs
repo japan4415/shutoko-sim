@@ -9,6 +9,16 @@ const repoRoot = path.resolve(__dirname, "../..");
 const fixturesDir = path.join(repoRoot, "fixtures/generated");
 const wasmDir = path.join(repoRoot, "dist/wasm");
 
+const isRemote = process.argv.includes("--remote");
+
+function contentTypeFor(fileName) {
+  if (fileName.endsWith(".wasm")) return "application/wasm";
+  if (fileName.endsWith(".json")) return "application/json";
+  if (fileName.endsWith(".d.ts")) return "text/plain";
+  if (fileName.endsWith(".js")) return "text/javascript";
+  return "application/octet-stream";
+}
+
 const manifestPath = path.join(fixturesDir, "manifest.json");
 if (!fs.existsSync(manifestPath)) {
   console.error(`manifest.json not found at ${manifestPath}`);
@@ -66,22 +76,25 @@ for (const wasmFile of wasmFiles) {
   }
 }
 
-console.log(`Seeding local R2 bucket 'shutoko-artifacts' for release '${releaseId}'...`);
+const modeFlag = isRemote ? "--remote" : "--local";
+const modeLabel = isRemote ? "remote" : "local";
+console.log(`Seeding ${modeLabel} R2 bucket 'shutoko-artifacts' for release '${releaseId}'...`);
 for (const file of filesToUpload) {
   const r2Key = `shutoko-artifacts/releases/${releaseId}/${file.name}`;
-  console.log(`Uploading ${file.path} to local ${r2Key}...`);
+  const contentType = contentTypeFor(file.name);
+  console.log(`Uploading ${file.path} to ${modeLabel} ${r2Key} (${contentType})...`);
   try {
     execSync(
-      `npx wrangler r2 object put "${r2Key}" --file "${file.path}" --local`,
+      `npx wrangler r2 object put "${r2Key}" --file "${file.path}" --content-type "${contentType}" ${modeFlag}`,
       {
         cwd: path.resolve(__dirname, ".."),
         stdio: "inherit",
       }
     );
   } catch (err) {
-    console.error(`Failed to upload ${file.name} to local R2:`, err);
+    console.error(`Failed to upload ${file.name} to ${modeLabel} R2:`, err);
     process.exit(1);
   }
 }
 
-console.log("Local R2 seeding completed successfully.");
+console.log(`${modeLabel[0].toUpperCase()}${modeLabel.slice(1)} R2 seeding completed successfully.`);

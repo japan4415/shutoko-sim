@@ -11,7 +11,7 @@ import {
   errorMessage,
   statusMessage,
   toCardModel,
-  validateInputs,
+  validateInputFields,
 } from "./ui/model";
 import type { UiSearchMessage, WorkerResponse } from "./worker/types";
 
@@ -188,6 +188,7 @@ function renderCard(model: import("./ui/model").CardModel): HTMLElement {
 function invalidateResults(options?: { silent?: boolean }): void {
   // 条件変更時は前回の候補と出発リンクを消す（docs/requirements.md:30）。
   el.results.replaceChildren();
+  clearInputErrors(); // 条件が変わったら古い入力エラー表示・aria 状態も残さない
   stopWorker();
   if (options?.silent !== true) {
     setStatus("条件が変更されました。探索ボタンで再検索してください。");
@@ -198,20 +199,69 @@ function readOrigin(): { lat: number; lon: number } {
   return { lat: Number(el.lat.value), lon: Number(el.lon.value) };
 }
 
-function startSearch(): void {
-  const errors = validateInputs(
-    el.lat.value,
-    el.lon.value,
-    el.minMinutes.value,
-    el.maxMinutes.value,
-  );
+/**
+ * 入力エラーの表示と各欄への aria 付与。エラーが無くなった欄からは属性を外すため、
+ * 呼び出しごとに全欄を走査する。
+ */
+function applyInputErrors(
+  fields: import("./ui/model").InputFieldErrors,
+  errors: string[],
+): void {
   const listItems = errors.map((text) => {
     const li = document.createElement("li");
     li.textContent = text;
     return li;
   });
   el.inputErrors.replaceChildren(...listItems);
+
+  const messages = new Map<HTMLInputElement, string[]>();
+  const add = (input: HTMLInputElement, message: string | null): void => {
+    if (message === null) {
+      return;
+    }
+    messages.set(input, [...(messages.get(input) ?? []), message]);
+  };
+  add(el.lat, fields.lat);
+  add(el.lon, fields.lon);
+  add(el.minMinutes, fields.minMinutes);
+  add(el.maxMinutes, fields.maxMinutes);
+  // 範囲条件（1 ≤ 最小 ≤ 最大 ≤ 240）は最小・最大の両方の欄に係る。
+  add(el.minMinutes, fields.range);
+  add(el.maxMinutes, fields.range);
+
+  for (const input of [el.lat, el.lon, el.minMinutes, el.maxMinutes]) {
+    if (messages.has(input)) {
+      input.setAttribute("aria-invalid", "true");
+      input.setAttribute("aria-describedby", "input-errors");
+    } else {
+      input.removeAttribute("aria-invalid");
+      input.removeAttribute("aria-describedby");
+    }
+  }
+}
+
+/** 入力エラーの表示と aria 状態を消す（条件変更で失効したとき）。 */
+function clearInputErrors(): void {
+  applyInputErrors(
+    { lat: null, lon: null, minMinutes: null, maxMinutes: null, range: null },
+    [],
+  );
+}
+
+function startSearch(): void {
+  const fields = validateInputFields(
+    el.lat.value,
+    el.lon.value,
+    el.minMinutes.value,
+    el.maxMinutes.value,
+  );
+  const errors = [fields.lat, fields.lon, fields.minMinutes, fields.maxMinutes, fields.range].filter(
+    (message): message is string => message !== null,
+  );
+  applyInputErrors(fields, errors);
   if (errors.length > 0) {
+    // 支援技術にも失敗が伝わるようステータスを更新する（design-review-001 F2）。
+    setStatus("入力に誤りがあります");
     return; // 入力不備では検索しない
   }
 

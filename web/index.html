@@ -39,7 +39,9 @@
             <input id="max-minutes" type="number" step="1" min="1" max="240" value="60" />
           </div>
         </div>
-        <ol id="input-errors" class="errors"></ol>
+        <!-- 入力エラーは支援技術へ即時通知する（role="alert"）。
+             各 input は aria-invalid / aria-describedby="input-errors" でこの一覧に紐づく。 -->
+        <ol id="input-errors" class="errors" role="alert"></ol>
 
         <button id="search-btn" type="button">ルートを探す</button>
       </section>

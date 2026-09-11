@@ -13,6 +13,63 @@ export const SEARCH_TIMEOUT_MS = 10_000;
 
 export const TIMEOUT_TEXT = "探索が 10 秒を超えました。再度検索してください。";
 
+/** 入力欄ごとのエラー文言。null は正常。range は最小・最大の両方に係る条件エラー。 */
+export interface InputFieldErrors {
+  lat: string | null;
+  lon: string | null;
+  minMinutes: string | null;
+  maxMinutes: string | null;
+  /** 複数欄にまたがる条件エラー（1 ≤ 最小 ≤ 最大 ≤ 240）。 */
+  range: string | null;
+}
+
+/**
+ * 座標・時間入力の検査（欄単位）。aria-invalid / aria-describedby の付与先を
+ * 特定するため、どの欄の誤りかを失わずに返す。
+ */
+export function validateInputFields(
+  latText: string,
+  lonText: string,
+  minText: string,
+  maxText: string,
+): InputFieldErrors {
+  const lat = Number(latText);
+  const lon = Number(lonText);
+  const min = Number(minText);
+  const max = Number(maxText);
+  const latError =
+    latText.trim() === "" || !Number.isFinite(lat) || lat < -90 || lat > 90
+      ? "緯度は -90〜90 の有限の数値で入力してください。"
+      : null;
+  const lonError =
+    lonText.trim() === "" || !Number.isFinite(lon) || lon < -180 || lon > 180
+      ? "経度は -180〜180 の有限の数値で入力してください。"
+      : null;
+  const minError =
+    minText.trim() === "" || !Number.isInteger(min)
+      ? "最小時間は整数（分）で入力してください。"
+      : null;
+  const maxError =
+    maxText.trim() === "" || !Number.isInteger(max)
+      ? "最大時間は整数（分）で入力してください。"
+      : null;
+  const rangeError =
+    latError === null &&
+    lonError === null &&
+    minError === null &&
+    maxError === null &&
+    !(1 <= min && min <= max && max <= 240)
+      ? "時間の条件は 1 ≤ 最小 ≤ 最大 ≤ 240 の範囲で指定してください。"
+      : null;
+  return {
+    lat: latError,
+    lon: lonError,
+    minMinutes: minError,
+    maxMinutes: maxError,
+    range: rangeError,
+  };
+}
+
 /** 座標・時間入力の検査。理由付きで不正な項目を返す（空欄・非有限・範囲外）。 */
 export function validateInputs(
   latText: string,
@@ -20,30 +77,10 @@ export function validateInputs(
   minText: string,
   maxText: string,
 ): string[] {
-  const errors: string[] = [];
-  const lat = Number(latText);
-  const lon = Number(lonText);
-  if (latText.trim() === "" || !Number.isFinite(lat) || lat < -90 || lat > 90) {
-    errors.push("緯度は -90〜90 の有限の数値で入力してください。");
-  }
-  if (lonText.trim() === "" || !Number.isFinite(lon) || lon < -180 || lon > 180) {
-    errors.push("経度は -180〜180 の有限の数値で入力してください。");
-  }
-  const min = Number(minText);
-  const max = Number(maxText);
-  if (minText.trim() === "" || !Number.isInteger(min)) {
-    errors.push("最小時間は整数（分）で入力してください。");
-  }
-  if (maxText.trim() === "" || !Number.isInteger(max)) {
-    errors.push("最大時間は整数（分）で入力してください。");
-  }
-  if (
-    errors.length === 0 &&
-    !(1 <= min && min <= max && max <= 240)
-  ) {
-    errors.push("時間の条件は 1 ≤ 最小 ≤ 最大 ≤ 240 の範囲で指定してください。");
-  }
-  return errors;
+  const fields = validateInputFields(latText, lonText, minText, maxText);
+  return [fields.lat, fields.lon, fields.minMinutes, fields.maxMinutes, fields.range].filter(
+    (message): message is string => message !== null,
+  );
 }
 
 /** 秒を分の整数へ換算する（表示用、四捨五入）。 */

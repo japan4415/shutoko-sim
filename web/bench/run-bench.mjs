@@ -245,6 +245,7 @@ async function main() {
   let deviceUa = null;
   let devicePlatform = null;
   let cdpSampledContexts = 0;
+  const cdpPeaksMiB = [];
   let done = 0;
 
   try {
@@ -277,11 +278,18 @@ async function main() {
           const contextsCdpPeakMiB = result.cdpPeakMiB;
           if (contextsCdpPeakMiB !== null) {
             cdpSampledContexts += 1;
+            cdpPeaksMiB.push(contextsCdpPeakMiB);
           }
           for (const trial of envelope.trials) {
             // 各コンテキストは repeat=1 で 1 回だけ実行するため、通しの試行番号に振り直す。
             trial.repeat = repeat;
-            if (contextsCdpPeakMiB !== null) {
+            // ページの memoryPeakMiB はメインスレッドと Worker の performance.memory の
+            // 最大（= 両アイソレートを覆う）。CDP の JSHeapUsedSize はメインアイソレート
+            // のみなので通常はページ値より小さい。過小評価を避けるため大きい方を採り、
+            // 出所はその値をもたらした計測を書く（CDP が使われるのはページ値が
+            // 取れない環境か、CDP が上回ったときだけ）。
+            const pagePeak = trial.memoryPeakMiB;
+            if (contextsCdpPeakMiB !== null && (pagePeak === null || contextsCdpPeakMiB > pagePeak)) {
               trial.memoryPeakMiB = contextsCdpPeakMiB;
               trial.memorySource = "cdp-performance-metrics";
             }
@@ -350,7 +358,14 @@ async function main() {
         `upload ${cli.preset.uploadThroughput.toLocaleString("en-US")} B/s / ` +
         `latency ${String(cli.preset.latency)} ms. ` +
         `CPU ×${String(cli.cpu)} は暫定値で、実機機種の確定後に較正する。` +
-        `cold はコンテキストごとに newContext で分離し、warm は同一コンテキストで cold の直後に 1 回。`,
+        `なお Emulation.setCPUThrottlingRate はレンダラのメインスレッドにのみ作用し、` +
+        `探索（WASM）が走る Web Worker には効かない（rate 1 と 20 で tSearch が変わらないことを実測）。` +
+        `cold はコンテキストごとに newContext で分離し、warm は同一コンテキストで cold の直後に 1 回。` +
+        (cdpPeaksMiB.length === 0
+          ? ""
+          : ` CDP JSHeapUsedSize のピーク（メインアイソレートのみ。参考値）: ` +
+            `${Math.min(...cdpPeaksMiB).toFixed(2)}〜${Math.max(...cdpPeaksMiB).toFixed(2)} MiB` +
+            `（${String(cdpPeaksMiB.length)} コンテキストで取得）。`),
     },
     memorySource,
     memoryManualMiB: null,

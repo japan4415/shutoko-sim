@@ -39,6 +39,8 @@ let worker: Worker | null = null;
 let workerReady = false;
 // ブート初期化が失敗済みなら true。ready は来ないので送信を保留せず即再試行させる。
 let bootFailed = false;
+// 一度でも探索を開始したか。遅れて届いた ready で結果・探索中の文言を上書きしないためのフラグ。
+let hasSearched = false;
 let inflightRequestId: string | null = null;
 let pending: UiSearchMessage | null = null;
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -96,7 +98,10 @@ function handleWorkerMessage(msg: WorkerResponse): void {
     case "ready": {
       workerReady = true;
       bootFailed = false;
-      setStatus(`準備完了（release: ${msg.releaseId}）`);
+      // 探索開始後に届いた ready は「探索中…」や結果の文言を上書きしない。
+      if (!hasSearched) {
+        setStatus("準備完了");
+      }
       flushPending();
       return;
     }
@@ -180,11 +185,13 @@ function renderCard(model: import("./ui/model").CardModel): HTMLElement {
   return card;
 }
 
-function invalidateResults(): void {
+function invalidateResults(options?: { silent?: boolean }): void {
   // 条件変更時は前回の候補と出発リンクを消す（docs/requirements.md:30）。
   el.results.replaceChildren();
   stopWorker();
-  setStatus("条件が変更されました。探索ボタンで再検索してください。");
+  if (options?.silent !== true) {
+    setStatus("条件が変更されました。探索ボタンで再検索してください。");
+  }
 }
 
 function readOrigin(): { lat: number; lon: number } {
@@ -224,6 +231,7 @@ function startSearch(): void {
   // 二重送信防止: 旧 in-flight を無効化してから新 requestId で送る。
   clearTimer();
   inflightRequestId = requestId;
+  hasSearched = true;
   setStatus("探索中…");
   sendMessage(msg);
 
@@ -238,21 +246,27 @@ function startSearch(): void {
   }, SEARCH_TIMEOUT_MS);
 }
 
-function applyPreset(): void {
+function applyPreset(options?: { silent?: boolean }): void {
   if (el.preset.value === "kandabashi") {
     el.lat.value = String(PRESET_KANDABASHI.lat);
     el.lon.value = String(PRESET_KANDABASHI.lon);
   }
-  invalidateResults();
+  invalidateResults({ silent: options?.silent === true });
 }
 
 // --- 初期化 ---
-el.preset.addEventListener("change", applyPreset);
+el.preset.addEventListener("change", () => {
+  applyPreset();
+});
 for (const input of [el.lat, el.lon, el.minMinutes, el.maxMinutes]) {
-  input.addEventListener("change", invalidateResults);
+  input.addEventListener("change", () => {
+    invalidateResults();
+  });
 }
 el.search.addEventListener("click", startSearch);
 
 el.preset.value = "kandabashi";
-applyPreset();
+// ブート時はまだ検索していないため「条件が変更されました…」を出さない（design-review-001 F1）。
+applyPreset({ silent: true });
+setStatus("成果物を読み込み中…");
 createWorker(); // ブート: ready が来たらステータスへ反映される

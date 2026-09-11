@@ -49,7 +49,7 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 ### 住所検索仕様と制約
 - **対象データ**: 国土地理院 住所検索 API をプロバイダーとして利用。行政地名・街区・住居表示レベルの**住所・地名検索専用**であり、駅名・施設名（POI）の検索には非対応。該当なしの場合は 404 ではなく 200 で空配列 `{ "candidates": [] }` を返す。
 - **入力バリデーション**: 本文 4,096 バイト以下、`query` は空白を除いて 1〜200 文字、確定検索に限定。
-- **レート制限**: Cloudflare Rate Limiting binding により、送信元 IP ごとに毎分 10 回（`IP_RATE_LIMITER`、超過時 429 と `Retry-After: 60`）、サービス全体で毎分 600 回（`GLOBAL_RATE_LIMITER`）に制限。
+- **レート制限**: Cloudflare Rate Limiting binding により、送信元 IP ごとに毎分 10 回（`IP_RATE_LIMITER`、超過時 429 と `Retry-After: 60`）、サービス全体で毎分 600 回（`GLOBAL_RATE_LIMITER`）に制限。バインディング不在時または例外発生時は fail-closed とし、上流を呼ばずに 503 `RATE_LIMITER_UNAVAILABLE` を返す。
 - **タイムアウト**: 上流呼び出しは 5 秒でタイムアウト（AbortController 連携、超過時 504）。
 - **プライバシー・秘密保護**: 全応答に `Cache-Control: no-store` を設定。エラー本文・レスポンスヘッダ・アクセスログに検索クエリ、座標、上流エラー本文、上流 URL、API キーを含めない。
 
@@ -64,6 +64,7 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 | 405 Method Not Allowed | `METHOD_NOT_ALLOWED` | `false` | `/releases/...` に対する GET/HEAD 以外のメソッド、または `/api/geocode` に対する POST 以外のメソッド |
 | 429 Too Many Requests | `RATE_LIMITED` | `true` | IP 毎分 10 回、または全体毎分 600 回のレート制限超過（`Retry-After: 60` ヘッダ付与） |
 | 502 Bad Gateway | `GEOCODER_UNAVAILABLE` | `true` | 上流ジオコーダーの非 2xx 応答、ネットワーク通信失敗、または不正 JSON 応答 |
+| 503 Service Unavailable | `RATE_LIMITER_UNAVAILABLE` | `true` | レート制限バインディング不在、またはレート制限呼び出しの例外発生（上流ジオコーダーを呼ばず即時返却） |
 | 504 Gateway Timeout | `GEOCODER_TIMEOUT` | `true` | 上流ジオコーダー呼び出しが 5 秒以内に完了せずタイムアウト |
 
 

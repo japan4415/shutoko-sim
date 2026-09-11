@@ -44,3 +44,16 @@ export interface StructuredLog {
   candidateCount?: number;
   errorCode?: string;
 }
+
+export interface HandlerLogMeta {
+  releaseId?: string;
+  artifact?: string;
+  candidateCount?: number;
+  errorCode?: string;
+}
+
+export interface HandlerResult {
+  response: Response;
+  logMeta?: HandlerLogMeta;
+}
+

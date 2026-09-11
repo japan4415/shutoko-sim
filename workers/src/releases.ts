@@ -1,5 +1,5 @@
 import { createErrorResponse } from "./errors";
-import { Env } from "./types";
+import { Env, HandlerResult } from "./types";
 
 const ALLOWED_ARTIFACTS = new Set([
   "manifest.json",
@@ -38,30 +38,23 @@ function matchEtag(clientEtag: string, serverEtag: string): boolean {
 export async function handleReleases(
   request: Request,
   env: Env,
-  pathname: string
-): Promise<Response> {
+  releaseId: string,
+  artifact: string
+): Promise<HandlerResult> {
+  const logMeta = { releaseId, artifact };
+
   if (request.method !== "GET" && request.method !== "HEAD") {
-    return createErrorResponse("METHOD_NOT_ALLOWED", 405, false);
+    return {
+      response: createErrorResponse("METHOD_NOT_ALLOWED", 405, false),
+      logMeta: { ...logMeta, errorCode: "METHOD_NOT_ALLOWED" },
+    };
   }
-
-  // Check path traversal in raw pathname
-  if (
-    pathname.includes("..") ||
-    pathname.toLowerCase().includes("%2e") ||
-    pathname.toLowerCase().includes("%2f")
-  ) {
-    return createErrorResponse("NOT_FOUND", 404, false);
-  }
-
-  const segments = pathname.split("/").filter(Boolean);
-  if (segments.length !== 3 || segments[0] !== "releases") {
-    return createErrorResponse("NOT_FOUND", 404, false);
-  }
-
-  const [, releaseId, artifact] = segments;
 
   if (!RELEASE_ID_REGEX.test(releaseId)) {
-    return createErrorResponse("NOT_FOUND", 404, false);
+    return {
+      response: createErrorResponse("NOT_FOUND", 404, false),
+      logMeta: { ...logMeta, errorCode: "NOT_FOUND" },
+    };
   }
 
   const allowedReleases = (env.ALLOWED_RELEASES || "")
@@ -70,11 +63,17 @@ export async function handleReleases(
     .filter(Boolean);
 
   if (!allowedReleases.includes(releaseId)) {
-    return createErrorResponse("NOT_FOUND", 404, false);
+    return {
+      response: createErrorResponse("NOT_FOUND", 404, false),
+      logMeta: { ...logMeta, errorCode: "NOT_FOUND" },
+    };
   }
 
   if (!ALLOWED_ARTIFACTS.has(artifact)) {
-    return createErrorResponse("NOT_FOUND", 404, false);
+    return {
+      response: createErrorResponse("NOT_FOUND", 404, false),
+      logMeta: { ...logMeta, errorCode: "NOT_FOUND" },
+    };
   }
 
   // Check that manifest.json exists in R2 for this release
@@ -82,7 +81,10 @@ export async function handleReleases(
     const manifestKey = `releases/${releaseId}/manifest.json`;
     const manifestObj = await env.ARTIFACTS_BUCKET.head(manifestKey);
     if (!manifestObj) {
-      return createErrorResponse("NOT_FOUND", 404, false);
+      return {
+        response: createErrorResponse("NOT_FOUND", 404, false),
+        logMeta: { ...logMeta, errorCode: "NOT_FOUND" },
+      };
     }
   }
 
@@ -93,7 +95,10 @@ export async function handleReleases(
     : await env.ARTIFACTS_BUCKET.get(targetKey);
 
   if (!obj) {
-    return createErrorResponse("NOT_FOUND", 404, false);
+    return {
+      response: createErrorResponse("NOT_FOUND", 404, false),
+      logMeta: { ...logMeta, errorCode: "NOT_FOUND" },
+    };
   }
 
   const contentType = getContentType(artifact);
@@ -111,21 +116,30 @@ export async function handleReleases(
 
   const ifNoneMatch = request.headers.get("if-none-match");
   if (ifNoneMatch && matchEtag(ifNoneMatch, etag)) {
-    return new Response(null, {
-      status: 304,
-      headers,
-    });
+    return {
+      response: new Response(null, {
+        status: 304,
+        headers,
+      }),
+      logMeta,
+    };
   }
 
   if (isHead) {
-    return new Response(null, {
-      status: 200,
-      headers,
-    });
+    return {
+      response: new Response(null, {
+        status: 200,
+        headers,
+      }),
+      logMeta,
+    };
   }
 
-  return new Response((obj as R2ObjectBody).body, {
-    status: 200,
-    headers,
-  });
+  return {
+    response: new Response((obj as R2ObjectBody).body, {
+      status: 200,
+      headers,
+    }),
+    logMeta,
+  };
 }

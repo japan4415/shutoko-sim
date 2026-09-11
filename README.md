@@ -115,10 +115,14 @@ Vite + Vanilla TypeScript の最小 UI。探索はブラウザの専用 Web Work
    ```bash
    cd web && npm ci && npm run dev
    ```
-4. **単体テスト・型検査**:
+4. **単体テスト・型検査**（`dist/wasm/` が必要。未生成なら先に 1 の `bash scripts/build-wasm.sh` を実行する）:
    ```bash
-   cd web && npm run typecheck && npm test
+   bash scripts/build-wasm.sh           # dist/wasm/ が無いと typecheck/test は失敗する
+   cd web && npm ci && npm run typecheck && npm test
    ```
+   `web/test/integration-wasm.test.ts` は `dist/wasm/shutoko_routing.js` を import するため、
+   `dist/` が git 管理外（`.gitignore`）のクリーンチェックアウトでは WASM ビルドが先に必要になる。
+   CI の `web` job も同じ理由で、`bash scripts/build-wasm.sh` を `npm ci` / `npm run typecheck` / `npm test` より前に置いている。
 5. **E2E（Playwright + chromium）**: 上記 1 の準備が終わっている状態で、
    ```bash
    cd web && npm run e2e   # vite build → wrangler dev(8787) 起動 → 4 シナリオ

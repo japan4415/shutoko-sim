@@ -7,10 +7,43 @@ import { expect, test } from "@playwright/test";
 
 const GRAPH_URL = "**/releases/c1-real-v1/graph.json";
 
+/**
+ * (d) の 11 秒遅延をテスト終了時に解除するためのコントローラ。
+ * 遅延中の route ハンドラがテスト終了後まで残ると、フルスイート実行時に
+ * "route.fetch: Test ended." で (d) が不安定に落ちる（verify-001 F2）。
+ */
+let delayAbort: AbortController | null = null;
+
+/** abort 可能な待機。abort されたら即座に resolve する。 */
+function delayUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    function onAbort(): void {
+      clearTimeout(timer);
+      resolve();
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 async function openApp(page: import("@playwright/test").Page): Promise<void> {
   await page.goto("/");
   await expect(page.locator("#search-btn")).toBeVisible();
 }
+
+// 各テストの後に route ハンドラを確実に破棄する（pending は ignoreErrors で待たない）。
+test.afterEach(async ({ page }) => {
+  delayAbort?.abort();
+  delayAbort = null;
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
 
 test("(a) 神田橋プリセット 15〜60 で候補カードと Maps URL が表示される", async ({ page }) => {
   await openApp(page);
@@ -76,10 +109,19 @@ test("(c) graph.json 改ざんは ARTIFACT_MISMATCH で停止する", async ({ p
 });
 
 test("(d) graph.json が 11 秒遅延すると TIMEOUT の文言が表示される", async ({ page }) => {
+  // 11 秒遅延はテスト終了時に afterEach の abort で解除できる形にする。
+  const abort = new AbortController();
+  delayAbort = abort;
+
   await page.route(GRAPH_URL, async (route) => {
     const res = await route.fetch();
     const body = await res.text();
-    await new Promise((resolve) => setTimeout(resolve, 11_000));
+    await delayUnlessAborted(11_000, abort.signal);
+    if (abort.signal.aborted) {
+      // テストは TIMEOUT 文言を確認して終了済み。ページ破棄後に fulfill すると
+      // 例外になるため、保留のまま route を破棄する（unrouteAll が ignoreErrors で処理）。
+      return;
+    }
     await route.fulfill({ response: res, body });
   });
   await openApp(page);

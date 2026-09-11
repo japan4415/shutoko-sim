@@ -94,3 +94,20 @@ Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `sear
 - メッセージ契約は [インターフェース設計](interfaces.md) の「ブラウザの探索境界」のとおり。初期化完了で `ready`、検索応答は `requestId` 付きの `result` / `error` を返す。
 - 10 秒タイムアウトと `terminate()` は UI 側の実装。押下時に `setTimeout(10000)` を開始し、超過で Worker を terminate して `TIMEOUT` 文言を表示、次回検索時に Worker を再生成して `ready` を待ってから送信する。古い `requestId` の応答は無視する。
 - E2E は `cd web && npm run e2e`（vite build → `npx wrangler dev` 8787 の `[assets]` 同一オリジン → Playwright、4 シナリオ: 候補表示 / TIME_WINDOW / ARTIFACT_MISMATCH / TIMEOUT）。
+
+### ビルド順序の依存（CI とローカルで共通）
+
+`web/` の typecheck（`tsc --noEmit`）と単体テスト（vitest）は `dist/wasm/shutoko_routing.js` を
+import するため、**`bash scripts/build-wasm.sh` を先に実行していないと必ず失敗する**
+（`TS2307: Cannot find module '../../dist/wasm/shutoko_routing.js'`）。
+`dist/` は `.gitignore` 対象でクリーンチェックアウトには存在しないため、CI の `web` job は次の順序で組む。
+
+```
+checkout → Rust toolchain + wasm-bindgen-cli 0.2.128 → bash scripts/build-wasm.sh
+        → actions/setup-node → npm ci (web) + npm ci (workers)
+        → npm run typecheck → npm test → npx playwright install --with-deps chromium
+        → npm --prefix workers run seed:local → npm run e2e
+```
+
+ローカルでも同じ順序（先に `bash scripts/build-wasm.sh`、その後に `npm run typecheck` / `npm test`）。
+なお `npm run e2e` は内部で `vite build` を行うため、E2E だけなら WASM ビルドは e2e の前提として別途必要。

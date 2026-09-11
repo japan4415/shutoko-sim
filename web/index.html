@@ -2,9 +2,11 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
+    <!-- #15（住所検索・地図描画）で connect-src に https://msearch.gsi.go.jp、
+         img-src に https://*.tile.openstreetmap.org を追加する。現状は未使用のため許可しない。 -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://msearch.gsi.go.jp https://*.tile.openstreetmap.org; img-src 'self' data: https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Shutoko Sim</title>
@@ -39,12 +41,14 @@
             <input id="max-minutes" type="number" step="1" min="1" max="240" value="60" />
           </div>
         </div>
-        <ol id="input-errors" class="errors"></ol>
+        <!-- 入力エラーは支援技術へ即時通知する（role="alert"）。
+             各 input は aria-invalid / aria-describedby="input-errors" でこの一覧に紐づく。 -->
+        <ol id="input-errors" class="errors" role="alert"></ol>
 
         <button id="search-btn" type="button">ルートを探す</button>
       </section>
 
-      <p id="status" role="status">読み込み中…</p>
+      <p id="status" role="status">成果物を読み込み中…</p>
       <div id="results"></div>
     </main>
     <script type="module" src="/src/main.ts"></script>

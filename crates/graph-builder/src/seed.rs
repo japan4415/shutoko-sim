@@ -63,8 +63,16 @@ pub struct BillingPairSeed {
     /// OSM way ID representing the entry ramp.
     pub entry_osm_way_id: i64,
 
+    /// Official (human-verified) entrance ramp name, e.g. "神田橋入口".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_name: Option<String>,
+
     /// OSM way ID representing the exit ramp.
     pub exit_osm_way_id: i64,
+
+    /// Official (human-verified) exit ramp name, e.g. "宝町出口".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_name: Option<String>,
 
     /// OSM node ID representing the loop anchor on the Shutoko mainline.
     pub anchor_osm_node_id: i64,

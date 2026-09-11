@@ -6,7 +6,7 @@
 
 `crates/routing-core` は Rust の純粋な探索処理、`crates/routing-wasm` は JSON 文字列を受け渡す JavaScript 向け境界。ネットワーク、DOM、住所検索には依存しない。`fixtures` は架空の道路・料金データで、実走行案内には使わない。
 
-現段階では出発地点を `originNodeId` で指定する。座標から道路への投影、OSM の取り込み、Google マップでの経路再現判定、R2 配信・マニフェストの検証、ブラウザ Web Worker の制御は後続とする。[インターフェース設計](interfaces.md)は完成時の契約案で、このコアの JSON とは区別する。
+出発地点は `origin: { lat, lon }` または `originNodeId` のどちらかで指定する（排他）。座標指定時は WASM 内部で 200m 以内の一般道ノードへ空間スナップされる。OSM 実データからのグラフ生成、幾何データ合成、Google マップ引き継ぎ URL 生成に対応している。ブラウザ Web Worker の制御や実機検証（#8）は後続とする。[インターフェース設計](interfaces.md)に詳細な契約表を記載している。
 
 ## 準備
 
@@ -30,9 +30,18 @@ bash scripts/build-wasm.sh
 node scripts/test-wasm.mjs
 ```
 
-`dist/wasm/` に `.wasm`、ES module の JS glue、TypeScript 型定義を生成する。生成物は Git に含めず、CI の `routing-wasm` artifact として保存する。ビルドスクリプトは配布や R2 へのアップロードを行わない。
+`dist/wasm/` に `.wasm`、ES module の JS glue、および TypeScript 型定義を生成する。
+- TypeScript 正典型定義: `crates/routing-wasm/types/index.d.ts`
+- ビルドスクリプト（`scripts/build-wasm.sh`）がビルド完了時に `dist/wasm/index.d.ts` へコピーし、npm パッケージ / Web Worker から直接型参照可能にする。
+- 定義される主要型: `SearchRequest`, `SearchLimits`, `SearchResult`, `Candidate`, `Handoff`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
 
-`test-wasm.mjs` は配信用と同じ `--target web` の glue と WASM を Node でロードし、人工グラフの探索と異常入力を検証する。ブラウザ実機・通信・画面操作の検証を代替するものではない。[wasm-bindgen の出力形式](https://wasm-bindgen.github.io/wasm-bindgen/reference/deployment.html)
+`test-wasm.mjs` は配信用と同じ `--target web` の glue と WASM を Node.js でロードし、以下を自動検証する:
+1. 合成グラフに対する `originNodeId` 探索および期待されるエッジ列・時間・料金の算出
+2. 決定論性（同一入力による連続実行でバイト完全一致）
+3. 候補の新フィールド構造（GeoJSON `LineString` 幾何、`mapsUrl` 形式および長さ ≤ 2,048、`snappedOrigin`、`warnings` への `HANDOFF_WAYPOINTS_UNVERIFIED` の包含）
+4. 座標入力（`origin: { lat, lon }`）による空間スナップ探索
+5. 200m 超過座標における接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
+6. 異常入力の拒否と JavaScript Error（Error の `message` に `RoutingErrorPayload { code: "INVALID_INPUT", message }` の JSON 文字列）のスロー検証
 
 ## 呼び出し
 
@@ -44,13 +53,13 @@ await init();
 const result = JSON.parse(search(graphJson, requestJson, '{}'));
 ```
 
-引数は順にグラフ JSON、検索条件 JSON、探索上限 JSON の文字列。`{}` は既定の探索上限を選ぶ。入力不備は例外として返るため、呼び出し元で捕捉する。戻り値も JSON 文字列で、候補なしや探索打ち切りは正常な探索結果として扱う。
+引数は順にグラフ JSON、検索条件 JSON、探索上限 JSON の文字列。`{}` は既定の探索上限を選ぶ。入力不備は JavaScript `Error`（`message` に `RoutingErrorPayload` JSON 文字列）としてスローされるため、呼び出し元で捕捉する。戻り値も JSON 文字列で、候補なしや探索打ち切りは正常な探索結果として扱う。
 
 Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `search_json` を利用できる。動作する入力例は [人工グラフ](../fixtures/synthetic-graph.json) と [検索条件](../fixtures/synthetic-request.json) を参照する。
 
 ## 初期データ契約
 
-グラフには `schemaVersion: 1`、`releaseId`、`vehicleProfile`、ノード、エッジ、課金ペア、禁止エッジ列を格納する。エッジ種別は `local` / `entry` / `shutoko` / `exit`。上下線は異なるノード・エッジで表す。料金ペアは入口から基準点への経路、基準点から出口への経路を明示し、間に非空の一周を挿入する。`entryId` / `exitId` はこの初期契約では実際の入退出エッジ ID と一致させる。二つの接続路を結んだ直接経路は単純路とし、そこに追加の周回を埋め込めない。一方、挿入する一周と接続路のエッジ共有は許す。
+グラフには `schemaVersion: 2`、`releaseId`、`vehicleProfile`、ノード、エッジ、課金ペア、禁止エッジ列を格納する。エッジ種別は `local` / `entry` / `shutoko` / `exit`。上下線は異なるノード・エッジで表す。料金ペアは入口から基準点への経路、基準点から出口への経路を明示し、間に非空の一周を挿入する。`entryId` / `exitId` はこの初期契約では実際の入退出エッジ ID と一致させる。二つの接続路を結んだ直接経路は単純路とし、そこに追加の周回を埋め込めない。一方、挿入する一周と接続路のエッジ共有は許す。
 
 時間と距離は正の整数で秒・mを用いる。料金は実走行距離から計算せず、ペアに登録された有効期間の金額を使う。期間は開始を含み終了を含まない。検索入力の `pricingAt` に固定して判定する。入力検証はデータの構造を検証するもので、実際の道路や課金関係を認定しない。
 
@@ -71,6 +80,6 @@ Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `sear
 
 現段階の列挙順は安定したエッジ ID 順、課金ペアの絞り込みはペア ID 順。完成版で予定する一般道往復時間順のペア選択と、帰還時間の下界による枝刈りは未実装。前後の一般道も幅制限付きの単純パス列挙を用いるため、大規模道路網では候補欠落・打ち切りが起きやすい。上限内に保存できた集合を評価する初期実装で、全経路の最良を保証しない。
 
-全候補で料金が分かる場合の `rankingMode` は `time_per_yen`、未確認額を含む場合は `shutoko_time`。`loop.validated` は入力グラフ内で非空の一周が成立した意味で、実際の道路やナビの検証済みを意味しない。候補に `EXPERIMENTAL_NO_HANDOFF` と `STATIC_TRAVEL_TIME` の警告コードを付ける。
+全候補で料金が分かる場合の `rankingMode` は `time_per_yen`、未確認額を含む場合は `shutoko_time`。`loop.validated` は入力グラフ内で非空の一周が成立した意味で、実際の道路やナビの検証済みを意味しない。候補に `HANDOFF_WAYPOINTS_UNVERIFIED` と `STATIC_TRAVEL_TIME` の警告コードを付ける。
 
 実道路網に対するブラウザの処理時間・ピークメモリ目標は未検証で、人工グラフのテスト成功から実道路網での性能を推定しない。同期呼び出しの10秒キャンセルはこのコアではなく、今後の Web Worker 呼び出し元で実装する。

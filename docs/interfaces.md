@@ -57,30 +57,57 @@ UI → Web Worker のリクエスト例（値は形式を示す架空例）:
 }
 ```
 
-Web Worker は `ready`、`result`、`error` を返し、各探索応答に request ID を付ける。WASM 呼出は `search(graph, request, limits)` に相当する純粋な境界とし、JS glue が型とメモリ管理を担う。UI の制限を信用せず Rust 側でも座標の有限性・範囲、分の整数・大小関係、版・車両の一致、`pricingAt` の有効な UTC 時刻を検証する。UI は検索開始時刻を一度取得して `pricingAt` として渡し、探索中の時計の変化を参照しない。
+Web Worker は `ready`、`result`、`error` を返し、各探索応答に request ID を付ける。WASM 呼出は `search(graph, request, limits)` に相当する純粋な境界とし、JS glue が型とメモリ管理を担う。UI の制限を信用せず Rust 側でも座標の有限性・範囲（`-90.0..=90.0`, `-180.0..=180.0`）、`origin` と `originNodeId` の排他性、分の整数・大小関係、版・車両の一致、`pricingAt` の有効な UTC 時刻を検証する。構造や値の不正は `Err(RoutingError { code: "INVALID_INPUT", message })` を返し、WASM 境界で JSON シリアライズされた `RoutingErrorPayload` として JS 例外をスローする。
 
-結果は `requestId`、`releaseId`、`status`（`ok` / `no_candidates` / `truncated`）、`reason`、`candidates` を持つ。`reason` は該当時のみ `TIME_WINDOW` / `NO_CONNECTION` / `NO_HANDOFF` / `NO_BILLING_PAIR` / `NO_LOOP` / `SEARCH_LIMIT`。複数の除外要因がある場合は件数内訳を別に持ち、経路が存在しないと断言しない。ロード失敗等は `error` メッセージの `code` で返す。
+### 空間スナップ契約
+- スナップ対象: 一般道（`EdgeKind::Local`）に接する（from / to のいずれか）ノードのみ。
+- スナップ距離計算: 等距円筒近似（Equirectangular approximation、東京付近 `cos(lat)` 補正）。
+- スナップ半径: `SNAP_RADIUS_METERS = 200.0`（200m）。
+- 200m 以内に Local ノードが存在しない場合: エラーとせず、`status: "no_candidates"`, `reason: "NO_CONNECTION"`, `candidates: []` を正常返却する。
 
-候補の必須フィールド:
+### 探索結果の status と reason コード
+結果は `requestId`、`releaseId`、`status`（`ok` / `no_candidates` / `truncated`）、`reason`、`candidates` を持つ。`reason` は該当時のみ以下のコードをとる:
+- `NO_CONNECTION`: スナップ対象の一般道ノードが 200m 以内に存在しない、または一般道から入口・出口への接続経路がない
+- `NO_BILLING_PAIR`: 有効な課金ペアが 1 件も存在しない
+- `NO_LOOP`: 周回ループが見つからない、または進入不可
+- `TIME_WINDOW`: 指定所要時間枠（minMinutes〜maxMinutes）に収まる候補がない
+- `NO_HANDOFF`: Maps URL 長が 2,048 文字を超過したため候補が除外された
+- `SEARCH_LIMIT`: 探索状態数・候補数の上限に達した（`status: "truncated"`）
 
-| フィールド | 内容 |
-| --- | --- |
-| `id`, `releaseId` | 条件と経路列から安定生成する検索内 ID と版。利用履歴として保存しない |
-| `origin`, `snappedOrigin` | 入力座標と接続した一般道上の点 |
-| `entry`, `exit`, `roadNames` | 入出口 ID・名称と主な通過路線 |
-| `edgeIds`, `geometry` | 順序付き走行エッジ、全経路の GeoJSON LineString |
-| `duration` | `accessSeconds`, `shutokoSeconds`, `returnSeconds`, `baseSeconds`, `bufferSeconds`, `planSeconds` |
-| `distanceMeters`, `shutokoDistanceMeters` | 総距離と首都高部分 |
-| `toll` | `billingPairId`, `chargedSectionCount: 1`, `amountYen`（未確認なら null）, `basis`, `verifiedAt`, `pricingAt`, `effectiveFrom`, `effectiveTo`。実走行距離で算出しない |
-| `loop` | 基準点、一周部分の順序付きエッジ、周回距離・時間、成立検証結果 |
-| `reasons`, `warnings` | 推薦理由と推定条件 |
-| `handoff` | 出発・帰着点、順序付き最大3経由地点、検証セットの版 |
+### 候補の必須フィールド
+
+| フィールド | 型 | 内容 |
+| --- | --- | --- |
+| `id`, `releaseId` | `string` | 条件と経路列から安定生成する検索内 ID と版。利用履歴として保存しない |
+| `origin` | `LatLng \| null` | 入力座標（`{ lat, lon }`）。`originNodeId` 指定時は `null` |
+| `snappedOrigin` | `SnappedOrigin` | 接続した一般道ノード（`{ nodeId, lat, lon, distanceMeters }`）。`originNodeId` 指定時はそのノードで `distanceMeters: 0` |
+| `entry`, `exit` | `RampInfo` | 入出口情報（`{ edgeId, name }`。`name` は課金ペア公式ランプ名、無ければ `null`） |
+| `entryId`, `exitId` | `string` | 入出口エッジ ID（後方互換用） |
+| `roadNames` | `string[]` | 首都高部分で通過したエッジ名の重複除去済み順序付きリスト（名前のないエッジはスキップ） |
+| `edgeIds` | `string[]` | 順序付き走行エッジ ID 列（access → loop → return） |
+| `geometry` | `GeoJsonLineString` | 全経路の GeoJSON LineString（`{ type: "LineString", coordinates: [[lon, lat], ...] }`）。重複端点なし |
+| `duration` | `Duration` | `accessSeconds`, `shutokoSeconds`, `returnSeconds`, `baseSeconds`, `bufferSeconds`, `planSeconds` |
+| `distanceMeters`, `shutokoDistanceMeters` | `number` | 総距離と首都高部分の距離（メートル） |
+| `toll` | `Toll` | `billingPairId`, `chargedSectionCount: 1`, `amountYen`（未確認なら `null`）, `pricingAt`, `effectiveFrom`, `effectiveTo` |
+| `loop` | `Loop` | `anchorNodeId`, `edgeIds`, `durationSeconds`, `distanceMeters`, `validated: true` |
+| `reasons` | `string[]` | 機械可読推薦理由コード（先頭候補: 料金確定時は `BEST_TIME_PER_YEN`、時間ソート時は `BEST_SHUTOKO_TIME`。全候補共通: `ONE_SECTION_TOLL`） |
+| `warnings` | `string[]` | 警告コード（常時付与: `HANDOFF_WAYPOINTS_UNVERIFIED`（#8 実機検証未了）、`STATIC_TRAVEL_TIME`） |
+| `handoff` | `Handoff` | Google Maps 引き継ぎ情報（`{ origin, destination, waypoints, mapsUrl, verificationSetVersion }`） |
+
+### 推薦理由コード（`reasons`）一覧
+- `BEST_TIME_PER_YEN`: 時間あたり料金効率が最も高い最優先候補（料金確定時）
+- `BEST_SHUTOKO_TIME`: 首都高滞在時間が最も長い最優先候補（料金未確定時等の時間ソート時）
+- `ONE_SECTION_TOLL`: 1区間料金（最低料金）が適用される周回経路
+
+### 警告コード（`warnings`）一覧
+- `HANDOFF_WAYPOINTS_UNVERIFIED`: Google Maps 引き継ぎ経由地選定ルールが暫定であり実機検証未了であることを示す（#8 完了まで常時付与）
+- `STATIC_TRAVEL_TIME`: 渋滞・規制を含まない静的制限速度に基づく推定時間であることを示す
 
 ## Google マップへの引き継ぎ
 
 公式 Maps URLs を使い、`https://www.google.com/maps/dir/` に `api=1`、`origin`、`destination`（出発地点）、`travelmode=driving`、`waypoints` を設定する。出発ボタンは経路の確認画面を開く意味とし、自動的にナビを開始する保証はしない。
 
-URL は標準の URL ビルダーでエンコードし、2,048文字以内にする。モバイルブラウザの上限に合わせ最大3経由地点とする。経由地点が非対応の製品もある。[Google Maps URLs](https://developers.google.com/maps/documentation/urls/get-started)
+URL は座標のみの固定形式を `format!` で組み立て（区切りは `%7C`）、2,048文字以内にする。モバイルブラウザの上限に合わせ最大3経由地点とする。経由地点が非対応の製品もある。[Google Maps URLs](https://developers.google.com/maps/documentation/urls/get-started)
 
 本線上の座標が別道路や停車地点に解釈される可能性を先行検証する。一周を省略せず入口・主要通過点・出口を最大3点で表現でき、代表端末で確認済みの経路系列だけを初期の公開候補とする。入口と1区間先の出口だけでは周回を省略した短い経路になり得るため、周回の再現を必ず確認する。上限超過時に黙って地点を削除したり、走行中の手動区間切替を要求したりしない。
 

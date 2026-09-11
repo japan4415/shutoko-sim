@@ -112,10 +112,17 @@ cargo run --bin shutoko-graph-builder --locked -- \
 ```
 ※ 検証済み課金ペアが1件以上生成されていることを強制したい場合は `--strict` フラグを付与して実行可能（検証済みペアが0件の場合に非ゼロで終了）。
 
+### 成果物スキーマの拡張（Node 座標・Edge 名称・ランプ名）
+issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `graph.json` に追加された:
+- **Node の地理座標 (`lat`, `lon`)**: `graph.json` 内の全 8,803 ノードに f64 の `lat` および `lon` を必須フィールドとして出力。WASM 内部での空間スナップおよび GeoJSON LineString 幾何データ合成に使用される。
+- **Edge の日本語道路名 (`name`)**: OSM ウェイの `name`（存在しない場合は `name:ja`）を `Edge.name: Option<String>` として伝播。名前のないエッジは `serde(skip_serializing_if = "Option::is_none")` により JSON 出力からキーが省略される。
+- **課金ペアの公式ランプ名 (`entryName`, `exitName`)**: `data/billing-pairs-seed.json` の各ペアに公式ランプ名（例: `"神田橋入口"`, `"宝町出口"`）が定義され、グラフビルダーにより `graph.json` の `billingPairs[]` へそのまま伝播される。
+- **ファイルサイズと転送量予算**: ノード座標とエッジ名称の追加により、`fixtures/generated/graph.json` のファイルサイズは旧 2,144,366 bytes から実測 2,907,908 bytes（≈ 2.77MiB）に増加したが、プロジェクトのネットワーク転送量上限である 10MiB に対して十分に安全な範囲に収まっている。
+
 ### 再現性・決定論的検証
 同一入力から 2 回実行し、`diff -r` によりバイト完全一致（SHA-256 一致）が確認されている。
 - `graph.json`: 禁止遷移（65件、`only_*` および `via=way` を含む）やソート順を決定論的に出力
-- `snap-index.json`: 一般道ノードの空間投影インデックス
+- `snap-index.json`: 一般道ノードの空間投影インデックス（後方互換・JS 側任意利用のため維持）
 - `manifest.json`: 全成果物の SHA-256、未検証区間一覧、検証済みペア出典情報（`provenance`）を記録
 
 ## 5. 未検証区間（Unverified Sections）

@@ -19,3 +19,9 @@ simple = { limit = 10, period = 60 }
 name = "GLOBAL_RATE_LIMITER"
 namespace_id = "1002"
 simple = { limit = 600, period = 60 }
+
+# 静的 SPA と Worker API を同一オリジンで配信する（full-stack 構成）。
+# assets に一致が無いパス（/releases、/api）は通常の Worker fetch にフォールバックする。
+[assets]
+directory = "../web/dist"
+not_found_handling = "single-page-application"

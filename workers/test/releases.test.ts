@@ -17,6 +17,16 @@ describe("Releases delivery", () => {
     );
 
     await env.ARTIFACTS_BUCKET.put(
+      "releases/c1-real-v1/engine.json",
+      JSON.stringify({ schemaVersion: 1, releaseId: "c1-real-v1", artifacts: [] }),
+      {
+        httpMetadata: {
+          contentType: "application/json; charset=utf-8",
+        },
+      }
+    );
+
+    await env.ARTIFACTS_BUCKET.put(
       "releases/c1-real-v1/graph.json",
       JSON.stringify({ nodes: [], edges: [] })
     );
@@ -106,6 +116,48 @@ describe("Releases delivery", () => {
     expect(dtsRes.headers.get("Cache-Control")).toBe(
       "public, max-age=31536000, immutable"
     );
+    await waitOnExecutionContext(ctx);
+  });
+
+  it("gets engine.json with 200, JSON Content-Type, and manifest-equivalent Cache-Control", async () => {
+    const ctx = createExecutionContext();
+    const req = new Request("http://localhost/releases/c1-real-v1/engine.json", {
+      method: "GET",
+    });
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+    expect(res.headers.get("Cache-Control")).toBe(
+      "public, max-age=300, stale-while-revalidate=60"
+    );
+    expect(res.headers.get("ETag")).toBeTruthy();
+
+    const data: any = await res.json();
+    expect(data.schemaVersion).toBe(1);
+    expect(data.releaseId).toBe("c1-real-v1");
+  });
+
+  it("returns 404 for engine.json when the release has no engine.json in R2", async () => {
+    // c1-real-v3 は manifest だけを置き engine.json を置かない（manifest 実在ゲートを
+    // 通過したうえで、engine.json 自体の不在が 404 になることを確認する）。
+    const customEnv = {
+      ...env,
+      ALLOWED_RELEASES: "c1-real-v1,c1-real-v3",
+    };
+    await env.ARTIFACTS_BUCKET.put(
+      "releases/c1-real-v3/manifest.json",
+      JSON.stringify({ schemaVersion: 1, releaseId: "c1-real-v3" })
+    );
+
+    const ctx = createExecutionContext();
+    const req = new Request("http://localhost/releases/c1-real-v3/engine.json");
+    const res = await worker.fetch(req, customEnv, ctx);
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const data: any = await res.json();
+    expect(data.error.code).toBe("NOT_FOUND");
     await waitOnExecutionContext(ctx);
   });
 

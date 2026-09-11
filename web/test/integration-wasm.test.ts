@@ -5,11 +5,12 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { beforeAll, describe, expect, it } from "vitest";
-import { ARTIFACT_HASHES } from "../src/worker/artifact-hashes";
 import {
   buildSearchRequest,
+  hexDigest,
   loadRelease,
   parseSearchResult,
+  type ArtifactExpectation,
   type FetchLike,
   type FetchResponseLike,
 } from "../src/worker/pipeline";
@@ -43,9 +44,32 @@ function fileURLToPathSafe(url: URL): string {
 
 describe("実 WASM 統合（fetch モック → loadRelease → search）", () => {
   it("神田橋近傍・15〜60 分で status ok と候補（mapsUrl プレフィックス付き）が返る", async () => {
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    const glueBytes = toBytes(await readFile(gluePath, "utf8"));
+
+    // engine.json の期待値は固定値ではなく、配信する実ファイルから計算する。
+    // こうしておくと wasm のビルドが環境をまたいでバイト一致しなくても CI で通る。
+    const expectationOf = async (bytes: Uint8Array): Promise<ArtifactExpectation> => ({
+      sha256: await hexDigest(bytes.slice().buffer as ArrayBuffer),
+      byteLength: bytes.byteLength,
+    });
+
     const files: Record<string, { bytes: Uint8Array; kind: "text" | "binary" }> = {
       "/releases/c1-real-v1/manifest.json": {
         bytes: toBytes(await readFile(new URL("fixtures/generated/manifest.json", root), "utf8")),
+        kind: "text",
+      },
+      "/releases/c1-real-v1/engine.json": {
+        bytes: toBytes(
+          JSON.stringify({
+            schemaVersion: 1,
+            releaseId: "c1-real-v1",
+            artifacts: [
+              { path: "shutoko_routing_bg.wasm", ...(await expectationOf(wasmBytes)) },
+              { path: "shutoko_routing.js", ...(await expectationOf(glueBytes)) },
+            ],
+          }),
+        ),
         kind: "text",
       },
       "/releases/c1-real-v1/graph.json": {
@@ -53,11 +77,11 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         kind: "text",
       },
       "/releases/c1-real-v1/shutoko_routing_bg.wasm": {
-        bytes: new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir))),
+        bytes: wasmBytes,
         kind: "binary",
       },
       "/releases/c1-real-v1/shutoko_routing.js": {
-        bytes: toBytes(await readFile(gluePath, "utf8")),
+        bytes: glueBytes,
         kind: "text",
       },
     };
@@ -81,15 +105,12 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       } satisfies FetchResponseLike & { status: number };
     };
 
-    const hashes = ARTIFACT_HASHES["c1-real-v1"];
-    if (hashes === undefined) {
-      throw new Error("hash table missing for c1-real-v1");
-    }
     const glue = await import("../../dist/wasm/shutoko_routing.js");
-    const state = await loadRelease(fetchImpl, "c1-real-v1", hashes, async () => glue);
+    const state = await loadRelease(fetchImpl, "c1-real-v1", async () => glue);
 
     expect(calls).toEqual([
       "/releases/c1-real-v1/manifest.json",
+      "/releases/c1-real-v1/engine.json",
       "/releases/c1-real-v1/graph.json",
       "/releases/c1-real-v1/shutoko_routing_bg.wasm",
       "/releases/c1-real-v1/shutoko_routing.js",

@@ -49,7 +49,7 @@
    ```
 3. **ローカル R2 エミュレータへの成果物シードと開発サーバー起動**:
    ```bash
-   npm run seed:local  # fixtures/generated と dist/wasm のハッシュ照合・R2 投入
+   npm run seed:local  # fixtures/generated と dist/wasm のハッシュ照合・R2 投入（engine.json も生成して投入）
    npx wrangler dev    # ローカル開発サーバー起動（http://localhost:8787）
    ```
 
@@ -65,12 +65,14 @@
    bash scripts/build-wasm.sh                # dist/wasm/ を生成
    cd workers && node scripts/seed-local-r2.mjs --remote
    ```
+   このスクリプトは `manifest.json` / `graph.json` / `snap-index.json` / WASM ビルド成果物に加えて、`dist/wasm/` の実ファイルから計算した wasm / JS glue の `sha256`・`byteLength` を `releases/<releaseId>/engine.json` として同時に投入します。Web Worker はこの `engine.json` を取得して wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になります**。
+   > **既存リリースへの追加入手**: `engine.json` は 2026-09-11 の CI 失敗修正（PR #24）で追加した成果物です。それ以前にデプロイ済みの版（`c1-real-v1` を含む）へ反映するには、`bash scripts/build-wasm.sh` の後に `cd workers && node scripts/seed-local-r2.mjs --remote` を再実行して `engine.json` を投入し直してください。`wrangler deploy` だけでは投入されません。
 3. **デプロイ**:
    ```bash
    cd workers && npx wrangler deploy
    ```
    デプロイ完了時に表示される `https://<worker>.<subdomain>.workers.dev` が配信 URL です。
-4. **疎通確認**: `GET /releases/{releaseId}/manifest.json` が `200`・`application/json`・`Cache-Control: max-age=300` で返ること、`GET /releases/{releaseId}/graph.json` が `immutable` キャッシュと `ETag` 付きで返り本文の `sha256` が `manifest.json` と一致すること、存在しない release / 二重スラッシュが `404` になること、`POST /api/geocode` が正常クエリで `200`、空クエリで `400 INVALID_QUERY` を返すことを確認する。
+4. **疎通確認**: `GET /releases/{releaseId}/manifest.json` と `GET /releases/{releaseId}/engine.json` が `200`・`application/json`・`Cache-Control: max-age=300` で返ること、`GET /releases/{releaseId}/graph.json` が `immutable` キャッシュと `ETag` 付きで返り本文の `sha256` が `manifest.json` と一致すること、存在しない release / 二重スラッシュが `404` になること、`POST /api/geocode` が正常クエリで `200`、空クエリで `400 INVALID_QUERY` を返すことを確認する。
 
 現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-11 デプロイ, wrangler 4.131.0）。
 

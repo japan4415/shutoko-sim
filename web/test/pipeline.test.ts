@@ -1,6 +1,5 @@
 // パイプライン純粋関数のユニットテスト（node 環境、fetch/import はモック注入）。
 import { describe, expect, it } from "vitest";
-import { ARTIFACT_HASHES } from "../src/worker/artifact-hashes";
 import {
   buildSearchRequest,
   hexDigest,
@@ -177,34 +176,57 @@ describe("loadRelease（モック fetch）", () => {
   const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
   const glueText = "export default function(){};export function search(){return '{}'}";
 
-  async function buildFiles(tamperGraph = false): Promise<Record<string, Uint8Array>> {
+  const glueBytes = encoder.encode(glueText);
+
+  interface BuildOptions {
+    tamperGraph?: boolean;
+    /** 配信する wasm を別バイト列に差し替える（engine.json の期待値は正しいまま）。 */
+    tamperWasm?: boolean;
+    /** engine.json の中身を差し替える（形式不正・エントリ欠落などの異常系用）。 */
+    engineOverride?: string;
+    /** engine.json 自体を配信しない（404 相当）。 */
+    omitEngine?: boolean;
+  }
+
+  async function buildFiles(options: BuildOptions = {}): Promise<Record<string, Uint8Array>> {
+    const { tamperGraph = false, tamperWasm = false } = options;
     const servedGraph = tamperGraph ? encoder.encode('{"nodes":[],"edges":[],}') : graphBytes;
+    const servedWasm = tamperWasm ? new Uint8Array([0, 0x61, 0x73, 0x6e]) : wasmBytes;
     const graphExpected = await expectationOf(graphBytes);
     const manifest = JSON.stringify({
       releaseId: "c1-real-v1",
       artifacts: [{ path: "graph.json", sha256: graphExpected.sha256, byteLength: graphExpected.byteLength }],
     });
-    return {
+    // engine.json は実ファイルから計算する（固定値を書かない）。
+    const engine = JSON.stringify({
+      schemaVersion: 1,
+      releaseId: "c1-real-v1",
+      artifacts: [
+        { path: "shutoko_routing_bg.wasm", ...(await expectationOf(wasmBytes)) },
+        { path: "shutoko_routing.js", ...(await expectationOf(glueBytes)) },
+      ],
+    });
+    const files: Record<string, Uint8Array> = {
       "/releases/c1-real-v1/manifest.json": encoder.encode(manifest),
       "/releases/c1-real-v1/graph.json": servedGraph,
-      "/releases/c1-real-v1/shutoko_routing_bg.wasm": wasmBytes,
-      "/releases/c1-real-v1/shutoko_routing.js": encoder.encode(glueText),
+      "/releases/c1-real-v1/shutoko_routing_bg.wasm": servedWasm,
+      "/releases/c1-real-v1/shutoko_routing.js": glueBytes,
     };
+    if (!options.omitEngine) {
+      files["/releases/c1-real-v1/engine.json"] = encoder.encode(options.engineOverride ?? engine);
+    }
+    return files;
   }
 
-  it("manifest → graph → wasm → glue の順で取得し、初期化して検索境界を返す", async () => {
+  it("manifest → engine.json → graph → wasm → glue の順で取得し、初期化して検索境界を返す", async () => {
     const files = await buildFiles();
-    // wasm/glue の期待ハッシュはモック内容に合わせ、注入用のハッシュ表を作る
-    const hashes = {
-      wasm: await expectationOf(wasmBytes),
-      glue: await expectationOf(encoder.encode(glueText)),
-    };
     const { fetch, calls } = mockFetch(files);
     const initCalls: unknown[] = [];
-    const state = await loadRelease(fetch, "c1-real-v1", hashes, async () => stubGlue(initCalls));
+    const state = await loadRelease(fetch, "c1-real-v1", async () => stubGlue(initCalls));
 
     expect(calls).toEqual([
       "/releases/c1-real-v1/manifest.json",
+      "/releases/c1-real-v1/engine.json",
       "/releases/c1-real-v1/graph.json",
       "/releases/c1-real-v1/shutoko_routing_bg.wasm",
       "/releases/c1-real-v1/shutoko_routing.js",
@@ -219,38 +241,95 @@ describe("loadRelease（モック fetch）", () => {
   });
 
   it("graph.json 改ざん時は ARTIFACT_MISMATCH で停止し、以降の fetch を呼ばない", async () => {
-    const files = await buildFiles(true);
-    const hashes = {
-      wasm: await expectationOf(wasmBytes),
-      glue: await expectationOf(encoder.encode(glueText)),
-    };
+    const files = await buildFiles({ tamperGraph: true });
     const { fetch, calls } = mockFetch(files);
     const initCalls: unknown[] = [];
     await expect(
-      loadRelease(fetch, "c1-real-v1", hashes, async () => stubGlue(initCalls)),
+      loadRelease(fetch, "c1-real-v1", async () => stubGlue(initCalls)),
     ).rejects.toMatchObject({ code: "ARTIFACT_MISMATCH" });
     expect(calls).toEqual([
       "/releases/c1-real-v1/manifest.json",
+      "/releases/c1-real-v1/engine.json",
       "/releases/c1-real-v1/graph.json",
     ]);
     expect(initCalls).toHaveLength(0);
   });
 
-  it("wasm 固定ハッシュ不一致でも ARTIFACT_MISMATCH で停止する", async () => {
-    const files = await buildFiles();
-    const wrongHashes = {
-      wasm: { sha256: "0".repeat(64), byteLength: wasmBytes.byteLength },
-      glue: await expectationOf(encoder.encode(glueText)),
-    };
+  it("engine.json の wasm 期待値と不一致なら ARTIFACT_MISMATCH で停止する", async () => {
+    const files = await buildFiles({ tamperWasm: true });
     const { fetch, calls } = mockFetch(files);
     const initCalls: unknown[] = [];
     await expect(
-      loadRelease(fetch, "c1-real-v1", wrongHashes, async () => stubGlue(initCalls)),
+      loadRelease(fetch, "c1-real-v1", async () => stubGlue(initCalls)),
     ).rejects.toMatchObject({ code: "ARTIFACT_MISMATCH" });
     expect(calls).toEqual([
       "/releases/c1-real-v1/manifest.json",
+      "/releases/c1-real-v1/engine.json",
       "/releases/c1-real-v1/graph.json",
       "/releases/c1-real-v1/shutoko_routing_bg.wasm",
+    ]);
+    expect(initCalls).toHaveLength(0);
+  });
+
+  it("engine.json が 404 なら FETCH_FAILED", async () => {
+    const files = await buildFiles({ omitEngine: true });
+    const { fetch, calls } = mockFetch(files);
+    await expect(loadRelease(fetch, "c1-real-v1")).rejects.toMatchObject({
+      code: "FETCH_FAILED",
+    });
+    expect(calls).toEqual([
+      "/releases/c1-real-v1/manifest.json",
+      "/releases/c1-real-v1/engine.json",
+    ]);
+  });
+
+  it("engine.json が JSON でなければ ARTIFACT_MISMATCH", async () => {
+    const files = await buildFiles({ engineOverride: "not json" });
+    const { fetch, calls } = mockFetch(files);
+    await expect(loadRelease(fetch, "c1-real-v1")).rejects.toMatchObject({
+      code: "ARTIFACT_MISMATCH",
+    });
+    expect(calls).toEqual([
+      "/releases/c1-real-v1/manifest.json",
+      "/releases/c1-real-v1/engine.json",
+    ]);
+  });
+
+  it("engine.json の releaseId/schemaVersion 不一致は ARTIFACT_MISMATCH", async () => {
+    const files = await buildFiles({
+      engineOverride: JSON.stringify({
+        schemaVersion: 1,
+        releaseId: "c1-real-v2",
+        artifacts: [],
+      }),
+    });
+    const { fetch, calls } = mockFetch(files);
+    await expect(loadRelease(fetch, "c1-real-v1")).rejects.toMatchObject({
+      code: "ARTIFACT_MISMATCH",
+    });
+    expect(calls).toEqual([
+      "/releases/c1-real-v1/manifest.json",
+      "/releases/c1-real-v1/engine.json",
+    ]);
+  });
+
+  it("engine.json に glue のエントリが無ければ ARTIFACT_MISMATCH（graph 以降は取得しない）", async () => {
+    const files = await buildFiles({
+      engineOverride: JSON.stringify({
+        schemaVersion: 1,
+        releaseId: "c1-real-v1",
+        artifacts: [
+          { path: "shutoko_routing_bg.wasm", ...(await expectationOf(wasmBytes)) },
+        ],
+      }),
+    });
+    const { fetch, calls } = mockFetch(files);
+    await expect(loadRelease(fetch, "c1-real-v1")).rejects.toMatchObject({
+      code: "ARTIFACT_MISMATCH",
+    });
+    expect(calls).toEqual([
+      "/releases/c1-real-v1/manifest.json",
+      "/releases/c1-real-v1/engine.json",
     ]);
   });
 
@@ -258,13 +337,9 @@ describe("loadRelease（モック fetch）", () => {
     const failing: FetchLike = async (url: string) => {
       throw new Error(`offline: ${url}`);
     };
-    const hashes = ARTIFACT_HASHES["c1-real-v1"];
-    if (hashes === undefined) {
-      throw new Error("hash table missing");
-    }
-    await expect(loadRelease(failing, "c1-real-v1", hashes)).rejects.toBeInstanceOf(PipelineError);
-    await expect(
-      loadRelease(failing, "c1-real-v1", hashes),
-    ).rejects.toMatchObject({ code: "FETCH_FAILED" });
+    await expect(loadRelease(failing, "c1-real-v1")).rejects.toBeInstanceOf(PipelineError);
+    await expect(loadRelease(failing, "c1-real-v1")).rejects.toMatchObject({
+      code: "FETCH_FAILED",
+    });
   });
 });

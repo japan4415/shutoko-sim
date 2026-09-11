@@ -1,7 +1,7 @@
 // 探索用 Web Worker 本体。パイプラインのロジックは pipeline.ts の純粋関数に置き、
 // ここはメッセージ配線のみを行う。
 // 10 秒タイムアウトと terminate は UI 側（第 2 段）の責務のためここでは持たない。
-import { ARTIFACT_HASHES } from "./artifact-hashes";
+import { KNOWN_RELEASES } from "./artifact-hashes";
 import {
   buildSearchRequest,
   loadRelease,
@@ -33,8 +33,7 @@ function ensureLoaded(releaseId: string): Promise<{ releaseId: string; state: Lo
   if (loaded !== null && loaded.releaseId === releaseId) {
     return Promise.resolve(loaded);
   }
-  const hashes = ARTIFACT_HASHES[releaseId];
-  if (hashes === undefined) {
+  if (!KNOWN_RELEASES.includes(releaseId)) {
     return Promise.reject(
       new PipelineError("ARTIFACT_MISMATCH", `未知の releaseId です: ${releaseId}`),
     );
@@ -46,7 +45,7 @@ function ensureLoaded(releaseId: string): Promise<{ releaseId: string; state: Lo
   loadingReleaseId = releaseId;
   // 取得系 fetch は共通の AbortController でまとめられるよう signal を渡す。
   const controller = new AbortController();
-  loadPromise = loadRelease(fetch, releaseId, hashes, undefined, controller.signal)
+  loadPromise = loadRelease(fetch, releaseId, undefined, controller.signal)
     .then((state) => {
       loaded = { releaseId, state };
       loadingReleaseId = null;

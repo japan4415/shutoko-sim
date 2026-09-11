@@ -1,7 +1,18 @@
 // 探索パイプラインの純粋関数群。Worker 本体（search-worker.ts）はこれらを配線するだけ。
 // fetch と import は引数注入にし、Vitest からモックで決定論的に検証できるようにする。
-import type { ArtifactExpectation, ReleaseArtifactHashes } from "./artifact-hashes";
 import type { SearchResult, SearchRequest, UiSearchMessage } from "./types";
+
+/** 成果物 1 件の期待値（sha256 hex 小文字 / バイト長）。 */
+export interface ArtifactExpectation {
+  sha256: string;
+  byteLength: number;
+}
+
+/** 配信側 engine.json のスキーマ版。 */
+export const ENGINE_SCHEMA_VERSION = 1;
+/** engine.json で期待値を持つ成果物（照合対象）。 */
+export const WASM_ARTIFACT_PATH = "shutoko_routing_bg.wasm";
+export const GLUE_ARTIFACT_PATH = "shutoko_routing.js";
 
 /** パイプライン停止理由。code は UI へそのまま error メッセージで返す。 */
 export class PipelineError extends Error {
@@ -135,20 +146,46 @@ interface ManifestLike {
   artifacts?: { path: string; sha256: string; byteLength: number }[];
 }
 
+/** 配信側 engine.json の形。期待値は投入時に実ファイルから計算される。 */
+interface EngineLike {
+  schemaVersion?: unknown;
+  releaseId?: unknown;
+  artifacts?: { path?: unknown; sha256?: unknown; byteLength?: unknown }[];
+}
+
 /**
- * 1 リリース分の成果物を manifest → graph → wasm → glue の順で取得・照合し、
- * WASM を初期化して検索境界を返す。
+ * engine.json（配信側が実ファイルから計算した期待値）から 1 件分の期待値を取り出す。
+ * 形式不正（エントリ欠落・型違い）は ARTIFACT_MISMATCH で停止する。
+ */
+function engineExpectation(engine: EngineLike, path: string, engineUrl: string): ArtifactExpectation {
+  const entry = (engine.artifacts ?? []).find((a) => a.path === path);
+  if (
+    entry === undefined ||
+    typeof entry.sha256 !== "string" ||
+    typeof entry.byteLength !== "number"
+  ) {
+    throw new PipelineError(
+      "ARTIFACT_MISMATCH",
+      `${engineUrl}: artifacts に ${path} の有効なエントリが無い`,
+    );
+  }
+  return { sha256: entry.sha256, byteLength: entry.byteLength };
+}
+
+/**
+ * 1 リリース分の成果物を manifest → engine.json → graph.json → wasm → glue の順で
+ * 取得・照合し、WASM を初期化して検索境界を返す。
  *
  * - graph.json の期待ハッシュは manifest の artifacts から取る
- * - wasm / glue は Worker 側固定ハッシュ（artifact-hashes.ts）と照合
- * - 照合不一致は PipelineError("ARTIFACT_MISMATCH") で停止（以降の fetch は呼ばれない）
+ * - wasm / glue の期待ハッシュは配信側 engine.json から取る（固定定数は持たない）
+ * - engine.json の取得失敗は FETCH_FAILED、形式不正・照合不一致は ARTIFACT_MISMATCH で停止
+ *   （以降の fetch は呼ばれない）
  * - glue は text 取得して照合後、同じ URL を importImpl で import し、
  *   init({ module_or_path: wasmBytes }) で初期化する
  */
 export async function loadRelease(
   fetchImpl: FetchLike,
   releaseId: string,
-  hashes: ReleaseArtifactHashes,
   importImpl: ImportLike = (url: string) => import(url),
   signal?: AbortSignal,
 ): Promise<LoadedRelease> {
@@ -166,16 +203,39 @@ export async function loadRelease(
     throw new PipelineError("ARTIFACT_MISMATCH", `${base}/manifest.json: artifacts に graph.json 無し`);
   }
 
+  const engineUrl = `${base}/engine.json`;
+  const engineText = await fetchText(fetchImpl, engineUrl, signal);
+  let engine: EngineLike;
+  try {
+    engine = JSON.parse(engineText) as EngineLike;
+  } catch {
+    throw new PipelineError("ARTIFACT_MISMATCH", `${engineUrl}: JSON デコード失敗`);
+  }
+  if (
+    engine === null ||
+    typeof engine !== "object" ||
+    engine.schemaVersion !== ENGINE_SCHEMA_VERSION ||
+    engine.releaseId !== releaseId
+  ) {
+    throw new PipelineError(
+      "ARTIFACT_MISMATCH",
+      `${engineUrl}: schemaVersion/releaseId が不正（expected ${String(ENGINE_SCHEMA_VERSION)}/${releaseId}）`,
+    );
+  }
+  const wasmExpected = engineExpectation(engine, WASM_ARTIFACT_PATH, engineUrl);
+  const glueExpected = engineExpectation(engine, GLUE_ARTIFACT_PATH, engineUrl);
+
   const graphBytes = await fetchBytes(fetchImpl, `${base}/graph.json`, signal);
   await verifyOrStop(`${base}/graph.json`, graphBytes, graphEntry);
   const graphJson = new TextDecoder().decode(graphBytes);
 
-  const wasmBytes = await fetchBytes(fetchImpl, `${base}/shutoko_routing_bg.wasm`, signal);
-  await verifyOrStop(`${base}/shutoko_routing_bg.wasm`, wasmBytes, hashes.wasm);
+  const wasmUrl = `${base}/${WASM_ARTIFACT_PATH}`;
+  const wasmBytes = await fetchBytes(fetchImpl, wasmUrl, signal);
+  await verifyOrStop(wasmUrl, wasmBytes, wasmExpected);
 
-  const glueUrl = `${base}/shutoko_routing.js`;
+  const glueUrl = `${base}/${GLUE_ARTIFACT_PATH}`;
   const glueText = await fetchText(fetchImpl, glueUrl, signal);
-  await verifyOrStop(glueUrl, new TextEncoder().encode(glueText), hashes.glue);
+  await verifyOrStop(glueUrl, new TextEncoder().encode(glueText), glueExpected);
   const glue = await importImpl(glueUrl);
 
   await glue.default({ module_or_path: wasmBytes });

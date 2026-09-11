@@ -106,10 +106,17 @@ select {
   font-size: 0.9rem;
 }
 
-/* 比較の起点になる所要時間だけを大きく強くする（design-review-001 F4）。 */
+/* 比較の起点になる所要時間だけを大きく強くする（design-review-001 F4）。
+   強調は数値だけに当てる（design-review-002 C2）。 */
 .card .duration {
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+/* 所要時間の但し書きは補助テキストに落とす（design-review-002 C2）。 */
+.card .duration-note {
+  font-size: 0.8rem;
+  color: #5a5f66;
 }
 
 .card ul {

@@ -155,10 +155,17 @@ function renderCard(model: import("./ui/model").CardModel): HTMLElement {
   card.dataset.mapsUrl = model.mapsUrl;
 
   // 所要時間は候補比較の主要指標なので class を付けて強調する（design-review-001 F4）。
+  // 強調は数値だけに当て、但し書きは別要素の補助テキストへ落とす（design-review-002 C2）。
   const duration = document.createElement("p");
   duration.className = "duration";
-  duration.textContent = `総所要時間: 約${String(model.planMinutes)}分（一般道での帰着まで含み、休憩は含まない）`;
+  duration.textContent = `総所要時間: 約${String(model.planMinutes)}分`;
   card.appendChild(duration);
+
+  // 同じ但し書きを時間の入力欄直下にも置く（index.html の #time-note）。
+  const durationNote = document.createElement("p");
+  durationNote.className = "duration-note";
+  durationNote.textContent = "一般道での帰着までを含み、休憩は含みません";
+  card.appendChild(durationNote);
 
   const items: string[] = [
     model.toll,

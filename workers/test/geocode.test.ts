@@ -307,4 +307,145 @@ describe("Geocode proxy (POST /api/geocode)", () => {
       retryable: true,
     });
   });
+
+  describe("Fail-closed rate limiter behavior", () => {
+    it("returns 503 RATE_LIMITER_UNAVAILABLE when IP_RATE_LIMITER is undefined and does not call upstream", async () => {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const mockEnv = {
+        ...testEnv,
+        IP_RATE_LIMITER: undefined as unknown as RateLimit,
+      };
+
+      const ctx = createExecutionContext();
+      const req = new Request("http://localhost/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "東京都千代田区" }),
+      });
+
+      const res = await worker.fetch(req, mockEnv, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(503);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+
+      const text = await res.text();
+      await assertNoSecretLeak(res, text);
+
+      const data = JSON.parse(text);
+      expect(data.error).toEqual({
+        code: "RATE_LIMITER_UNAVAILABLE",
+        retryable: true,
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("returns 503 RATE_LIMITER_UNAVAILABLE when GLOBAL_RATE_LIMITER is undefined and does not call upstream", async () => {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const mockEnv = {
+        ...testEnv,
+        GLOBAL_RATE_LIMITER: undefined as unknown as RateLimit,
+      };
+
+      const ctx = createExecutionContext();
+      const req = new Request("http://localhost/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "東京都千代田区" }),
+      });
+
+      const res = await worker.fetch(req, mockEnv, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(503);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+
+      const text = await res.text();
+      await assertNoSecretLeak(res, text);
+
+      const data = JSON.parse(text);
+      expect(data.error).toEqual({
+        code: "RATE_LIMITER_UNAVAILABLE",
+        retryable: true,
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("returns 503 RATE_LIMITER_UNAVAILABLE when limit() throws/rejects and does not call upstream", async () => {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const mockEnv = {
+        ...testEnv,
+        IP_RATE_LIMITER: {
+          limit: vi.fn().mockRejectedValue(new Error("Rate limit service connection error")),
+        } as unknown as RateLimit,
+      };
+
+      const ctx = createExecutionContext();
+      const req = new Request("http://localhost/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "東京都千代田区" }),
+      });
+
+      const res = await worker.fetch(req, mockEnv, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(503);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+
+      const text = await res.text();
+      await assertNoSecretLeak(res, text);
+
+      const data = JSON.parse(text);
+      expect(data.error).toEqual({
+        code: "RATE_LIMITER_UNAVAILABLE",
+        retryable: true,
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("returns 503 RATE_LIMITER_UNAVAILABLE when GLOBAL_RATE_LIMITER.limit() throws/rejects", async () => {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const mockEnv = {
+        ...testEnv,
+        IP_RATE_LIMITER: {
+          limit: vi.fn().mockResolvedValue({ success: true }),
+        } as unknown as RateLimit,
+        GLOBAL_RATE_LIMITER: {
+          limit: vi.fn().mockRejectedValue(new Error("Global rate limit service error")),
+        } as unknown as RateLimit,
+      };
+
+      const ctx = createExecutionContext();
+      const req = new Request("http://localhost/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "東京都千代田区" }),
+      });
+
+      const res = await worker.fetch(req, mockEnv, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(503);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+
+      const text = await res.text();
+      await assertNoSecretLeak(res, text);
+
+      const data = JSON.parse(text);
+      expect(data.error).toEqual({
+        code: "RATE_LIMITER_UNAVAILABLE",
+        retryable: true,
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
+import realGraphJsonText from "../../fixtures/generated/graph.json?raw";
 import worker from "../src/index";
 
 describe("Releases delivery", () => {
@@ -217,5 +218,34 @@ describe("Releases delivery", () => {
     const body = await headRes.text();
     expect(body).toBe("");
     await waitOnExecutionContext(ctx);
+  });
+
+  it("streams real graph.json (approx 2.9MB) without buffering body in handler", async () => {
+    // Seed real graph.json
+    await env.ARTIFACTS_BUCKET.put(
+      "releases/c1-real-v1/graph.json",
+      realGraphJsonText,
+      {
+        httpMetadata: {
+          contentType: "application/json; charset=utf-8",
+        },
+      }
+    );
+
+    const ctx = createExecutionContext();
+    const req = new Request("http://localhost/releases/c1-real-v1/graph.json");
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+    // Verify that response body is a ReadableStream and has NOT been read by worker fetch/handler
+    expect(res.body).toBeInstanceOf(ReadableStream);
+    expect(res.bodyUsed).toBe(false);
+
+    // Consume body and check byte equality
+    const responseText = await res.text();
+    expect(responseText.length).toBe(realGraphJsonText.length);
+    expect(responseText).toBe(realGraphJsonText);
   });
 });

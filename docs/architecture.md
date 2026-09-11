@@ -105,6 +105,9 @@ Cloudflare Workers 公式の Rate Limiting binding（`[[ratelimits]]`）を採�
 - **CORS 方針**: 本番環境ではフロントエンド静的ファイルと Workers API は同一オリジンで配信されるため、Workers 側に不要なワイルドカード CORS ヘッダは付与しない。ローカル開発時は Vite の開発サーバー（ポート 5173）から Workers（ポート 8787）へ `server.proxy`（`/api`, `/releases`）を用いて同一オリジン中継を行う。
 - **CSP ヘッダ方針**: HTML を配信する Web アプリ層（#12）で付与する。方針: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://msearch.gsi.go.jp https://*.tile.openstreetmap.org; img-src 'self' data: https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'`。WASM 実行のために `'wasm-unsafe-eval'` を許容する。
 
+### 監視・保存期間
+集計対象は成否コード、処理時間、成果物バージョン、候補数だけとする。保存期間は暫定14日、プロバイダー側の保存方針も選定時に確認する。通信失敗率、データ不整合、探索失敗率を監視し、住所検索障害時も既に確定した座標でのローカル探索は可能にする。
+
 
 ## 実走行経路と課金対象の分離
 

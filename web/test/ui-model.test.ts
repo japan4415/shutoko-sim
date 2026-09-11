@@ -139,6 +139,22 @@ describe("toCardModel", () => {
     expect(model.mapsUrl.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);
   });
 
+  it("4 桁以上の料金は 3 桁区切りで表示する（design-review-002 C3）", () => {
+    const model = toCardModel(
+      sampleCandidate({
+        toll: {
+          billingPairId: "bp:x",
+          chargedSectionCount: 2,
+          amountYen: 1320,
+          pricingAt: "2026-09-10T00:00:00Z",
+          effectiveFrom: null,
+          effectiveTo: null,
+        },
+      }),
+    );
+    expect(model.toll).toBe("料金額: 1,320 円");
+  });
+
   it("料金 null は「料金額: 未算出」", () => {
     const model = toCardModel(
       sampleCandidate({

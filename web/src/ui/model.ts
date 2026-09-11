@@ -145,9 +145,14 @@ export function warningText(code: string): string {
   }
 }
 
-/** 料金表示。amountYen が null なら「料金額: 未算出」（docs/requirements.md:28）。 */
+/**
+ * 料金表示。amountYen が null なら「料金額: 未算出」（docs/requirements.md:28）。
+ * 桁数の異なる金額を比較しやすいよう 3 桁区切りにする（design-review-002 C3）。
+ */
 export function tollText(toll: Toll): string {
-  return toll.amountYen === null ? "料金額: 未算出" : `料金額: ${String(toll.amountYen)} 円`;
+  return toll.amountYen === null
+    ? "料金額: 未算出"
+    : `料金額: ${toll.amountYen.toLocaleString("ja-JP")} 円`;
 }
 
 /** 候補カードの描画モデル。 */

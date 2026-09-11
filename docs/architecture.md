@@ -74,6 +74,10 @@ Cloudflare Workers の通常の WASM 利用は事前コンパイル済みモジ�
 
 R2 は非公開バケットとし、Workers が配信用の許可パスだけ公開する。データはクライアントが取得できる公開情報として扱い、秘密を格納しない。WASM は `application/wasm`、JSON は `application/json; charset=utf-8`、JS は `text/javascript; charset=utf-8`、型定義は `text/plain; charset=utf-8` で返す。Cache-Control は `manifest.json` に `public, max-age=300, stale-while-revalidate=60`、その他成果物に `public, max-age=31536000, immutable` を設定し、`ETag` および `If-None-Match`（304 Not Modified）に対応する。失敗時はアプリの参照 release を直前の正常版に戻す。キャッシュ済み旧クライアント向けに旧成果物を最低30日保持する。
 
+### 静的 SPA と Worker の同一オリジン配信（`[assets]`）
+
+`workers/wrangler.toml` の `[assets] directory = "../web/dist"` により、同一 Worker が静的ファイル（Vite ビルド後の `web/dist`）と Worker API（`/releases`・`/api`）を同一オリジンで配信する（full-stack 構成）。リクエストはまず assets に一致を試し、不一致（`/releases/...`、`/api/geocode` など）は従来どおり Worker の fetch ハンドラへフォールバックする。`not_found_handling = "single-page-application"` で 1 ページ構成の SPA とし、未一致パスは index.html を返す。ローカルでは `npm --prefix workers run seed:local` 後に `npx wrangler dev` を 1 台起動すれば 8787 で静的 + API が揃い、E2E もこの単一ポートで行う。開発時は Vite(5173) の `server.proxy` 中継も維持する。
+
 ### ローカル開発用シード手順
 ローカル開発時（wrangler dev）は、`workers/scripts/seed-local-r2.mjs`（`npm --prefix workers run seed:local`）により、`fixtures/generated/*.json` の SHA-256 チェックサムおよびバイト長を `manifest.json` と照合した上で、Miniflare のローカル R2 エミュレータへ成果物一式（および WASM ビルド成果物）を一括投入できる。同スクリプトは `--remote` フラグを渡すことで、同じチェックサム照合を行った上で本番 R2 バケットへ直接投入できる（`npx wrangler r2 object put ... --remote`）。
 

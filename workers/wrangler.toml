@@ -7,8 +7,10 @@ ALLOWED_RELEASES = "c1-real-v1"
 
 [[r2_buckets]]
 binding = "ARTIFACTS_BUCKET"
+# ローカル（wrangler dev / seed:local の --local）と同じ状態ディレクトリを使うため
+# preview も本番と同じバケット名にする（remote デプロイ時のみ shutoko-artifacts を使用）。
 bucket_name = "shutoko-artifacts"
-preview_bucket_name = "shutoko-artifacts-preview"
+preview_bucket_name = "shutoko-artifacts"
 
 [[ratelimits]]
 name = "IP_RATE_LIMITER"

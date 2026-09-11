@@ -4,3 +4,5 @@
 /workers/node_modules/
 /workers/.wrangler/
 /workers/.dev.vars
+/web/node_modules/
+/web/dist/

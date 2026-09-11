@@ -154,8 +154,13 @@ function renderCard(model: import("./ui/model").CardModel): HTMLElement {
   card.className = "card";
   card.dataset.mapsUrl = model.mapsUrl;
 
+  // 所要時間は候補比較の主要指標なので class を付けて強調する（design-review-001 F4）。
+  const duration = document.createElement("p");
+  duration.className = "duration";
+  duration.textContent = `総所要時間: 約${String(model.planMinutes)}分（一般道での帰着まで含み、休憩は含まない）`;
+  card.appendChild(duration);
+
   const items: string[] = [
-    `総所要時間: 約${String(model.planMinutes)}分（一般道での帰着まで含み、休憩は含まない）`,
     model.toll,
     `経路: ${model.route}`,
     `通過路線: ${model.roadNames.join(" / ")}`,

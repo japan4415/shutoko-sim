@@ -197,14 +197,19 @@ function renderCard(model: import("./ui/model").CardModel): HTMLElement {
   return card;
 }
 
-function invalidateResults(options?: { silent?: boolean }): void {
+/**
+ * 条件変更時に前回の候補・出発リンクを無効化する。
+ * 入力エラーは消さない（design-review-002 N1）。ここで消すと、欄を直して探索ボタンへ
+ * ポインタを運ぶ途中の change でエラー一覧が縮み、ボタンが指の下から動いて
+ * mouseup が空振りする。消去は探索ボタン押下時の再検証（applyInputErrors）だけに任せる。
+ * まだ一度も探索していないときはステータスに触らない（design-review-002 M1:
+ * 未検索の利用者に「再検索」を促さない）。
+ */
+function invalidateResults(): void {
   // 条件変更時は前回の候補と出発リンクを消す（docs/requirements.md:30）。
   el.results.replaceChildren();
-  // 入力エラーは消さない（design-review-002 N1）。ここで消すと、欄を直して探索ボタンへ
-  // ポインタを運ぶ途中の change でエラー一覧が縮み、ボタンが指の下から動いて
-  // mouseup が空振りする。消去は探索ボタン押下時の再検証（applyInputErrors）だけに任せる。
   stopWorker();
-  if (options?.silent !== true) {
+  if (hasSearched) {
     setStatus("条件が変更されました。探索ボタンで再検索してください。");
   }
 }
@@ -302,12 +307,12 @@ function startSearch(): void {
   }, SEARCH_TIMEOUT_MS);
 }
 
-function applyPreset(options?: { silent?: boolean }): void {
+function applyPreset(): void {
   if (el.preset.value === "kandabashi") {
     el.lat.value = String(PRESET_KANDABASHI.lat);
     el.lon.value = String(PRESET_KANDABASHI.lon);
   }
-  invalidateResults({ silent: options?.silent === true });
+  invalidateResults();
 }
 
 // --- 初期化 ---
@@ -322,7 +327,8 @@ for (const input of [el.lat, el.lon, el.minMinutes, el.maxMinutes]) {
 el.search.addEventListener("click", startSearch);
 
 el.preset.value = "kandabashi";
-// ブート時はまだ検索していないため「条件が変更されました…」を出さない（design-review-001 F1）。
-applyPreset({ silent: true });
+// ブート時はまだ検索していないため invalidateResults() はステータスに触らず、
+// 初期文言がそのまま残る（design-review-001 F1 / design-review-002 M1）。
+applyPreset();
 setStatus("成果物を読み込み中…");
 createWorker(); // ブート: ready が来たらステータスへ反映される

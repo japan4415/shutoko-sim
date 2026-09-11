@@ -146,6 +146,15 @@ test("(e) 入力エラーを直して探索ボタンを 1 回押すと探索が�
   await expect(page.locator("#status")).toHaveText("入力に誤りがあります");
   await expect(page.locator("#results .card")).toHaveCount(0);
 
+  // 誤りのある欄へフォーカスが移り、aria-describedby はその欄のエラーだけを指す
+  // （design-review-002 L1）。ol はリストのまま role="alert" の div に包まれている（L2）。
+  await expect(page.locator("#lat")).toBeFocused();
+  const latDescribedBy = await page.locator("#lat").getAttribute("aria-describedby");
+  expect(latDescribedBy).toBe(await page.locator("#input-errors li").first().getAttribute("id"));
+  await expect(page.locator("#lon")).not.toHaveAttribute("aria-describedby", /.+/);
+  await expect(page.locator("#input-errors")).toHaveJSProperty("tagName", "OL");
+  await expect(page.locator("#input-errors-alert")).toHaveAttribute("role", "alert");
+
   // 緯度を修正 → 探索ボタンを 1 回クリック。エラー一覧はボタンより下にあるため
   // 消えてもボタンが動かず、この 1 クリックで探索が始まる（design-review-002 N1）。
   await page.fill("#lat", "35.6896727");

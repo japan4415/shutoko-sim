@@ -35,6 +35,12 @@ function mustGet<T extends Element>(id: string): T {
   return node as unknown as T;
 }
 
+/** 入力欄を DOM 順に並べたもの。エラー表示・aria 付与・フォーカス移動の走査順。 */
+const INPUTS = [el.lat, el.lon, el.minMinutes, el.maxMinutes];
+
+/** エラー文言の li に振る id の接頭辞。欄の aria-describedby から参照する。 */
+const ERROR_ID_PREFIX = "input-error-";
+
 let worker: Worker | null = null;
 let workerReady = false;
 // ブート初期化が失敗済みなら true。ready は来ないので送信を保留せず即再試行させる。
@@ -219,44 +225,64 @@ function readOrigin(): { lat: number; lon: number } {
 }
 
 /**
- * 入力エラーの表示と各欄への aria 付与。エラーが無くなった欄からは属性を外すため、
- * 呼び出しごとに全欄を走査する。
+ * 入力エラーの表示と各欄への aria 付与。
+ * - 各 li に id を振り、欄の aria-describedby は**その欄に係る**エラーの id だけを指す
+ *   （design-review-002 L1: 関係ない欄のエラーまで読み上げさせない）
+ * - エラーが無くなった欄からは属性を外すため、呼び出しごとに全欄を走査する
+ *
+ * @returns 最初のエラー欄（DOM 順）。エラーが無ければ null。
  */
-function applyInputErrors(
-  fields: import("./ui/model").InputFieldErrors,
-  errors: string[],
-): void {
-  const listItems = errors.map((text) => {
-    const li = document.createElement("li");
-    li.textContent = text;
-    return li;
-  });
-  el.inputErrors.replaceChildren(...listItems);
+function applyInputErrors(fields: import("./ui/model").InputFieldErrors): HTMLInputElement | null {
+  // 欄 → その欄に係るエラー文言。範囲条件（1 ≤ 最小 ≤ 最大 ≤ 240）は最小・最大の両方に係る。
+  // この順序がそのまま li の並び（DOM 順）になる。
+  const entries: { input: HTMLInputElement; message: string | null }[] = [
+    { input: el.lat, message: fields.lat },
+    { input: el.lon, message: fields.lon },
+    { input: el.minMinutes, message: fields.minMinutes },
+    { input: el.maxMinutes, message: fields.maxMinutes },
+    { input: el.minMinutes, message: fields.range },
+    { input: el.maxMinutes, message: fields.range },
+  ];
 
-  const messages = new Map<HTMLInputElement, string[]>();
-  const add = (input: HTMLInputElement, message: string | null): void => {
-    if (message === null) {
-      return;
-    }
-    messages.set(input, [...(messages.get(input) ?? []), message]);
-  };
-  add(el.lat, fields.lat);
-  add(el.lon, fields.lon);
-  add(el.minMinutes, fields.minMinutes);
-  add(el.maxMinutes, fields.maxMinutes);
-  // 範囲条件（1 ≤ 最小 ≤ 最大 ≤ 240）は最小・最大の両方の欄に係る。
-  add(el.minMinutes, fields.range);
-  add(el.maxMinutes, fields.range);
-
-  for (const input of [el.lat, el.lon, el.minMinutes, el.maxMinutes]) {
-    if (messages.has(input)) {
-      input.setAttribute("aria-invalid", "true");
-      input.setAttribute("aria-describedby", "input-errors");
-    } else {
-      input.removeAttribute("aria-invalid");
-      input.removeAttribute("aria-describedby");
+  // 同一文言は 1 つの li を共有する（範囲条件は最小・最大のどちらからも参照される）。
+  const idByMessage = new Map<string, string>();
+  for (const { message } of entries) {
+    if (message !== null && !idByMessage.has(message)) {
+      idByMessage.set(message, `${ERROR_ID_PREFIX}${String(idByMessage.size + 1)}`);
     }
   }
+  el.inputErrors.replaceChildren(
+    ...[...idByMessage].map(([message, id]) => {
+      const li = document.createElement("li");
+      li.id = id;
+      li.textContent = message;
+      return li;
+    }),
+  );
+
+  const describedBy = new Map<HTMLInputElement, string[]>();
+  for (const { input, message } of entries) {
+    if (message === null) {
+      continue;
+    }
+    const id = idByMessage.get(message);
+    if (id !== undefined) {
+      describedBy.set(input, [...(describedBy.get(input) ?? []), id]);
+    }
+  }
+
+  for (const input of INPUTS) {
+    const ids = describedBy.get(input);
+    if (ids === undefined) {
+      input.removeAttribute("aria-invalid");
+      input.removeAttribute("aria-describedby");
+    } else {
+      input.setAttribute("aria-invalid", "true");
+      input.setAttribute("aria-describedby", ids.join(" "));
+    }
+  }
+
+  return INPUTS.find((input) => describedBy.has(input)) ?? null;
 }
 
 function startSearch(): void {
@@ -266,13 +292,12 @@ function startSearch(): void {
     el.minMinutes.value,
     el.maxMinutes.value,
   );
-  const errors = [fields.lat, fields.lon, fields.minMinutes, fields.maxMinutes, fields.range].filter(
-    (message): message is string => message !== null,
-  );
-  applyInputErrors(fields, errors);
-  if (errors.length > 0) {
+  const firstError = applyInputErrors(fields);
+  if (firstError !== null) {
     // 支援技術にも失敗が伝わるようステータスを更新する（design-review-001 F2）。
     setStatus("入力に誤りがあります");
+    // どの欄を直すべきか即座に分かるよう最初のエラー欄へ移す（design-review-002 L1）。
+    firstError.focus();
     return; // 入力不備では検索しない
   }
 

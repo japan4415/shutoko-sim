@@ -197,6 +197,10 @@ function buildGroup(
  * メモリは「手入力があればそれを正とする」: 手入力があれば `memorySource` は
  * `"manual"` で `memoryPeakMiB` は手入力値、無ければ試行から取れた最大値、
  * どの試行でも取れなければ null（= 判定不能）。
+ *
+ * 複数 envelope を渡した場合は `pageLoad` に `envelopes[0]` のものを代表として全グループ
+ * （cold 転送量・`firstLoadMs` の基準）へ適用する。回線・端末など条件の異なる envelope を
+ * 1 回の呼び出しに混ぜず、`summarize.mjs` のようにファイルごとに呼ぶこと。
  */
 export function aggregate(input: BenchEnvelope | readonly BenchEnvelope[]): BenchAggregate {
   const envelopes = Array.isArray(input) ? input : [input as BenchEnvelope];

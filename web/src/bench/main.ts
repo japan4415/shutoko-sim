@@ -561,10 +561,15 @@ async function runAll(): Promise<void> {
   if (running) {
     return;
   }
-  running = true;
-  el.start.disabled = true;
   const params = new URLSearchParams(window.location.search);
   const patterns = selectPatterns(params.get("patterns"));
+  if (patterns.length === 0) {
+    // 範囲外・不正な `?patterns=` は全件へフォールバックせず、開始せずに理由を出す。
+    el.status.textContent = "patterns の指定が不正です（0〜29 の整数をカンマ区切りで指定してください）";
+    return;
+  }
+  running = true;
+  el.start.disabled = true;
   const repeatsParam = Number(params.get("repeats"));
   const repeats =
     Number.isInteger(repeatsParam) && repeatsParam > 0 ? repeatsParam : DEFAULT_REPEATS;

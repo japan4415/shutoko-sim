@@ -67,20 +67,30 @@ export const BENCH_PATTERNS: readonly BenchPattern[] = BENCH_ORIGINS.flatMap((or
   })),
 );
 
-/** `?patterns=0,5` の値から有効なパターンを解決する（未指定・不正値は全件）。 */
+/**
+ * `?patterns=0,5` の値から有効なパターンを解決する。
+ *
+ * - 未指定（`null`）または空文字は全 30 件（既定）。
+ * - 範囲外（0 未満・30 以上）や整数として読めない値は**黙って全件へフォールバックせず無視**する。
+ *   例: `"0,99"` → パターン 0 の 1 件、`"99"` / `"30"` / `"-1"` / `"1.5"` / `"abc"` → 0 件。
+ * - 有効な index が 1 つも無い場合は空配列を返す。呼び出し側（bench ページ / ランナー）が
+ *   「不正な指定」として扱い、全件を回してしまう事故を防ぐ。
+ */
 export function selectPatterns(spec: string | null): readonly BenchPattern[] {
   if (spec === null || spec.trim() === "") {
     return BENCH_PATTERNS;
   }
   const indexes = new Set<number>();
   for (const part of spec.split(",")) {
-    const value = Number(part.trim());
-    if (Number.isInteger(value) && value >= 0 && value < BENCH_PATTERNS.length) {
+    const text = part.trim();
+    // 10 進の整数リテラルだけを受け付ける（"1.5" / "1e1" / "0x10" / "+5" は無効）。
+    if (!/^\d+$/.test(text)) {
+      continue;
+    }
+    const value = Number(text);
+    if (value < BENCH_PATTERNS.length) {
       indexes.add(value);
     }
-  }
-  if (indexes.size === 0) {
-    return BENCH_PATTERNS;
   }
   return BENCH_PATTERNS.filter((pattern) => indexes.has(pattern.index));
 }

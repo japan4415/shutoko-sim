@@ -163,8 +163,13 @@ Pixel 5 相当 / Chromium 153.0.8010.12 / CPU スロットル ×4 / 30 パター
    同じ条件でメインスレッド側の `tFirstCandidateMs` は 1,683 ms → 1,880 ms と 12 % 悪化する）。
    したがって**代理計測の探索時間は「スロットルなしのデスクトップ CPU」の値**であり、
    実機の探索時間の下限にもなっていない。`--cpu` は実質メインスレッド（ページ JS と描画）
-   にしか効かない。Playwright は dedicated worker のターゲットに CDP セッションを張る API を
-   公開していないため、この Run のスコープでは解消できない。
+   にしか効かない。追試では、ページの CDP セッションから
+   `Target.setAutoAttach({autoAttach: true, flatten: true})` を送ると dedicated worker の
+   ターゲットが `Target.attachedToTarget`（type `worker`、URL は `search-worker` のチャンク）
+   として観測でき、`Emulation.setCPUThrottlingRate` をその worker セッションへ送っても
+   エラーにはならなかった。ただしその場合も探索時間は変化しなかった
+   （`--cpu 1` 236.7 ms / `--cpu 20` 219.8 ms）。したがってこの Run のスコープでは解消せず、
+   探索 p95 はデスクトップ CPU 相当の値として扱う。
 3. **CPU 4 倍の妥当性は未較正**。中程度のスマートフォン相当の暫定値として置いている。
    対象機種が確定したら、実機の `tSearchMs` と代理計測の `tSearchMs` の比で較正する。
 4. **ローカルの圧縮は本番エッジと一致しない**。同一の graph.json（2,907,908 B）に対して、
@@ -255,7 +260,8 @@ Pixel 5 相当 / Chromium 153.0.8010.12 / CPU スロットル ×4 / 30 パター
 
 - **Vitest**: 集計・p95・合否判定・envelope の検証を純粋関数として検証する
   （`web/test/bench-summarize.test.ts` / `web/test/bench-envelope.test.ts`。ブラウザ不要で決定論的）。
-- **Playwright smoke**: 1 パターン × cold/warm 1 回をスロットルなしで回し、envelope が揃うこと
-  と通常 UI が壊れていないことを見る（`web/e2e/bench-smoke.spec.ts`。既存の `npm run e2e` に含まれる）。
+- **Playwright smoke**: 2 パターン（神田橋 15〜30 = 候補 0 件 / 神田橋 15〜60 = 候補あり）×
+  cold/warm 各 1 回 = 4 試行をスロットルなしで回し、envelope が揃うことと通常 UI が
+  壊れていないことを見る（`web/e2e/bench-smoke.spec.ts`。既存の `npm run e2e` に含まれる）。
 
 この 2 つは `npm run e2e` と `npm test` に入っているため、CI への追加配線は不要。

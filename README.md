@@ -161,7 +161,7 @@ npm run bench:summarize -- ../docs/bench/<date>-proxy/fast4g.json \
 - `npm run bench:summarize` は 1 つ以上の結果 JSON を読み、計測ページと同じ `web/src/bench/summarize.ts` の集計・判定で Markdown の表を stdout に出す。追加依存は無い。
 - **CDP の CPU スロットルはレンダラのメインスレッドにのみ作用し、探索（WASM）が走る Web Worker には効かない**（`--cpu 1` と `--cpu 20` で `tSearch` が変わらないことを実測）。したがって代理計測の探索時間は実機の下限にはならない。Chromium 限定でもあり、iOS Safari の代理にはならない（`devices['Pixel 5']` は UA / viewport / touch の模擬にすぎない）。
 - 計測値の定義・限界・実機手順・レポート雛形は [docs/bench/README.md](docs/bench/README.md) に集約している。
-- フル代理計測は CI に入れない。CI では Vitest（集計・検証の純粋関数）と `bench-smoke`（1 パターン × cold/warm 各 1 回）の二段でハーネスの腐敗だけを検知する。
+- フル代理計測は CI に入れない。CI では Vitest（集計・検証の純粋関数）と `bench-smoke`（2 パターン（神田橋 15〜30 = 候補 0 件 / 神田橋 15〜60 = 候補あり）× cold/warm 各 1 回 = 4 試行）の二段でハーネスの腐敗だけを検知する。
 
 ## ドキュメント
 

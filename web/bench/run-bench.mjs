@@ -101,12 +101,22 @@ function parseCli(argv) {
   if (!Number.isInteger(repeats) || repeats < 1) {
     throw new Error(`--repeats は 1 以上の整数: ${values.repeats}`);
   }
-  const patterns =
-    values.patterns === undefined
-      ? Array.from({ length: PATTERN_COUNT }, (_, index) => index)
-      : [...new Set(values.patterns.split(",").map((part) => Number(part.trim())))];
-  if (patterns.length === 0 || patterns.some((index) => !Number.isInteger(index) || index < 0)) {
-    throw new Error(`--patterns は 0 以上の整数のカンマ区切り: ${values.patterns ?? ""}`);
+  // --patterns は 0..29 の整数だけを受け付ける。範囲外・非整数を黙って通すと、計測ページ側が
+  // 全 30 パターンへフォールバックして試行数が取り違えられるため、ここでエラー終了する。
+  let patterns;
+  if (values.patterns === undefined) {
+    patterns = Array.from({ length: PATTERN_COUNT }, (_, index) => index);
+  } else {
+    const parts = values.patterns.split(",").map((part) => part.trim());
+    if (parts.some((part) => !/^\d+$/.test(part) || Number(part) >= PATTERN_COUNT)) {
+      throw new Error(
+        `--patterns は 0..${String(PATTERN_COUNT - 1)} の整数のカンマ区切り: ${values.patterns}`,
+      );
+    }
+    patterns = [...new Set(parts.map((part) => Number(part)))];
+  }
+  if (patterns.length === 0) {
+    throw new Error(`--patterns が 1 件も指定されていません: ${values.patterns ?? ""}`);
   }
   const timeoutMs = Number(values["timeout-ms"]);
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {

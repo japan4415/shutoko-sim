@@ -3,7 +3,7 @@
 「今からこの時間で、首都高をどれくらい楽しめるだろう？」を考えるためのドライブルート提案サービスです。
 首都高を一周したうえで入口の1区間先で降りると、1区間分の料金になるという原案の前提を活かし、時間予算内で長く楽しめるルートを探します。出発地点と最小・最大時間から候補を比較し、Google マップへ引き継ぐ体験を目指します。
 
-現在は Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用道路グラフを決定論的に生成するオフラインビルダー（`crates/graph-builder`）を実装しています。座標入力による空間スナップ、GeoJSON LineString 幾何データ合成、日本語道路名・ランプ名、Google マップ引き継ぎ URL 生成、および首都高速都心環状線（C1）の実データ fixture を用いた探索の成立性検証が完了しています。Web アプリ、公開サービスは今後の段階で開発予定です。
+現在は Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用道路グラフを決定論的に生成するオフラインビルダー（`crates/graph-builder`）、Cloudflare Workers による成果物配信・住所検索プロキシ、および製品 UI（`web/`）を実装しています。製品 UI は住所検索（国土地理院ジオコーディング）または現在地取得による出発地点指定、分単位の時間範囲、Leaflet + 国土地理院タイルによる地図描画、最大3件の候補比較、Google マップへの引き継ぎ、例外系からの復帰を備えます。
 
 ## 想定する使い方
 
@@ -98,7 +98,7 @@
 
 ## Web アプリ（`web/`）
 
-Vite + Vanilla TypeScript の最小 UI。探索はブラウザの専用 Web Worker 内で WASM を実行する。`workers/wrangler.toml` の `[assets]` により、`wrangler dev` 1 台（ポート 8787）で静的ファイルと `/releases`・`/api` を同一オリジン配信する。
+Vite + Vanilla TypeScript の製品 UI。探索はブラウザの専用 Web Worker 内で WASM を実行する。地図は Leaflet、タイルは国土地理院（GSI）標準地図を既定とし（提供元は差し替え可能）、経路データの帰属として `© OpenStreetMap contributors` を地図上に常時表示する。住所検索は同一オリジンの `POST /api/geocode`（国土地理院ジオコーディングのプロキシ）を確定時のみ呼ぶ。`workers/wrangler.toml` の `[assets]` により、`wrangler dev` 1 台（ポート 8787）で静的ファイルと `/releases`・`/api` を同一オリジン配信する。
 
 ### 起動手順（ローカル）
 
@@ -127,10 +127,10 @@ Vite + Vanilla TypeScript の最小 UI。探索はブラウザの専用 Web Work
    CI の `web` job も同じ理由で、`bash scripts/build-wasm.sh` を `npm ci` / `npm run typecheck` / `npm test` より前に置いている。
 5. **E2E（Playwright + chromium）**: 上記 1 の準備が終わっている状態で、
    ```bash
-   cd web && npm run e2e   # vite build → wrangler dev(8787) 起動 → 4 シナリオ
+   cd web && npm run e2e   # vite build → wrangler dev(8787) 起動 → 全シナリオ
    ```
 
-UI の操作: 出発地プリセット「神田橋」（または lat/lon 直接入力）→ 最小/最大分（既定 15〜60、`1 ≤ 最小 ≤ 最大 ≤ 240`）→「ルートを探す」→ 候補カード（総所要時間・料金・入口→出口・通過路線・課金対象 1 区間・警告）→「出発する（Google マップを開く）」。探索は 10 秒でタイムアウトし、その場合は再検索ボタンで Worker を再生成する。
+UI の操作: 住所・地名で検索して候補を選ぶ、または「現在地を使う」で出発地点を確定する（座標の直接入力・神田橋プリセットも折りたたみ内に用意）→ 最小/最大分（既定 15〜60、`1 ≤ 最小 ≤ 最大 ≤ 240`、プリセットボタンあり）→「ルートを探す」→ 地図と候補カード（計画時間・総所要時間・時間内訳・料金・実走行距離・課金対象1区間・推薦理由・警告）が同じ候補 ID で連動し、カード選択で該当経路を強調 →「出発する（Google マップを開く）」。探索は 10 秒でタイムアウトし、キャンセルも可能。候補なし・GPS 拒否・住所検索失敗・地図取得失敗・成果物不整合の各状態から、リロードなしで再操作・再検索できる。
 
 ### 性能計測ページ（`bench.html`、#13）
 

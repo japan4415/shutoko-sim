@@ -3,6 +3,11 @@
   font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
   --line: #d9dce1;
   --accent: #0b5cad;
+  --accent-soft: #e8f0f9;
+  --charged: #c2410c;
+  --muted: #5a5f66;
+  --danger: #a1260d;
+  --radius: 10px;
 }
 
 * {
@@ -11,10 +16,11 @@
 
 body {
   margin: 0 auto;
-  padding: 16px;
+  padding: 12px 12px calc(96px + env(safe-area-inset-bottom));
   max-width: 640px;
   color: #1c1e21;
   line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
 }
 
 h1 {
@@ -22,13 +28,21 @@ h1 {
   margin: 0 0 12px;
 }
 
+h2 {
+  font-size: 0.95rem;
+  margin: 0;
+  color: #33383f;
+}
+
 .panel {
   display: flex;
   flex-direction: column;
   gap: 8px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 12px;
+  margin-bottom: 12px;
+  background: #fff;
 }
 
 label {
@@ -38,19 +52,65 @@ label {
 }
 
 input,
-select {
+select,
+button {
   font: inherit;
-  width: 100%;
-  min-height: 44px; /* タップ標的の最小サイズ（design-review-001 F3） */
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
 }
 
-/* フォーカスリングはアクセント色で明示する（design-review-001 F18）。 */
+input,
+select {
+  width: 100%;
+  min-height: 44px; /* タップ標的の最小サイズ */
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+button {
+  min-height: 44px; /* タップ標的の最小サイズ */
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #fff;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+button:active {
+  opacity: 0.8;
+}
+
+button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* フォーカスリングはアクセント色で明示する。 */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* タッチのはみ出しを防ぎつつ、入力とボタンを横並びにする。 */
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.row input {
+  flex: 1 1 auto;
+}
+
+.row button {
+  flex: 0 0 auto;
 }
 
 .grid {
@@ -59,39 +119,158 @@ select {
   gap: 8px;
 }
 
-/* 入力欄に添える前提の注記（design-review-002 D1）。 */
 .field-note {
   margin: 0;
   font-size: 0.8rem;
-  color: #5a5f66;
+  color: var(--muted);
 }
 
-#search-btn {
-  font: inherit;
-  align-self: flex-start;
-  min-height: 44px; /* タップ標的の最小サイズ（design-review-001 F3） */
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  background: var(--accent);
-  color: #fff;
+#origin-summary.origin-summary {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  font-size: 0.9rem;
+  transition: background-color 150ms ease-out;
+}
+
+#address-feedback:empty {
+  display: none;
+}
+
+#address-feedback {
+  font-size: 0.85rem;
+  color: var(--danger);
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fdf3ef;
+}
+
+.candidates {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0;
+}
+
+.candidates legend {
+  font-size: 0.85rem;
+  color: #444;
+  padding: 0 4px;
+}
+
+/* 住所候補はラジオ（キーボードでも選択できる）。 */
+.address-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 0;
   cursor: pointer;
 }
 
-#search-btn:active {
-  opacity: 0.8;
+.address-option input {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+button.chip {
+  min-height: 44px; /* タップ標的の最小サイズ */
+  padding: 4px 14px;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--accent);
+  border: 1px solid var(--line);
 }
 
 .errors {
   margin: 0;
   padding-left: 20px;
-  color: #a1260d;
+  color: var(--danger);
   font-size: 0.85rem;
+}
+
+#input-errors:empty {
+  display: none;
 }
 
 #status {
   font-size: 0.9rem;
   color: #333;
+}
+
+.map-section {
+  margin-bottom: 12px;
+}
+
+.map {
+  height: 320px;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  /* Leaflet が z-index を多用するため、地図を独立した重なり文脈に閉じ込める。 */
+  isolation: isolate;
+  z-index: 0;
+}
+
+/* 375px 幅の縦画面でも地図と操作が収まる高さを確保する。 */
+@media (max-width: 420px) {
+  .map {
+    height: 260px;
+  }
+}
+
+.map-fallback {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fdf3ef;
+  color: var(--danger);
+  font-size: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-fallback[hidden] {
+  display: none;
+}
+
+/* 候補なしなどの復帰導線。説明と再検索アクションを並べる。 */
+.recovery {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recovery[hidden] {
+  display: none;
+}
+
+.recovery p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 #results {
@@ -102,10 +281,76 @@ select {
 
 .card {
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 12px;
-  /* 候補間で分・円の桁を揃える（design-review-001 F5）。 */
+  border-radius: var(--radius);
+  padding: 12px;
+  background: #fff;
+  /* 候補間で分・円の桁を揃える。 */
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+
+/* 押下瞬間のフィードバック（Apple: respond on pointer-down）。 */
+.card:active {
+  background: var(--accent-soft);
+}
+
+/* 選択中は色だけでなく左ボーダー太さでも示す（色覚多様性に配慮）。 */
+.card[aria-current="true"] {
+  border-color: var(--accent);
+  border-left-width: 6px;
+  background: var(--accent-soft);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+/* 候補番号のバッジ。色に依存せず候補を識別できる。 */
+.candidate-index {
+  flex: 0 0 auto;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card[aria-current="true"] .candidate-index {
+  background: var(--accent);
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: #33383f;
+}
+
+.badge.recommended {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.badge.rank {
+  border-color: var(--charged);
+  color: var(--charged);
 }
 
 .card p {
@@ -113,39 +358,123 @@ select {
   font-size: 0.9rem;
 }
 
-/* 比較の起点になる所要時間だけを大きく強くする（design-review-001 F4）。
-   強調は数値だけに当てる（design-review-002 C2）。 */
+/* 比較の主指標は計画時間。大きく強く、行間を締める（size-specific leading）。 */
+.card .plan-time {
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+/* 総所要時間は補助情報として控えめに。 */
 .card .duration {
-  font-size: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.card .duration-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* 料金は時間に次ぐ比較指標として強調する。 */
+.card .toll {
+  font-size: 1rem;
   font-weight: 600;
 }
 
-/* 所要時間の但し書きは補助テキストに落とす（design-review-002 C2）。 */
-.card .duration-note {
+/* 課金対象は料金の補足。オレンジの強さは料金より一段落とす。 */
+.card .charging {
+  font-size: 0.85rem;
+  color: var(--charged);
+}
+
+.card .distance,
+.card .breakdown,
+.card .efficiency {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.card .roads {
   font-size: 0.8rem;
-  color: #5a5f66;
+  color: var(--muted);
+}
+
+.card .roads summary {
+  cursor: pointer;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
 }
 
 .card ul {
   margin: 4px 0;
   padding-left: 18px;
   font-size: 0.8rem;
-  color: #5a5f66;
+  color: var(--muted);
 }
 
-.card button {
-  font: inherit;
-  min-height: 44px; /* タップ標的の最小サイズ（design-review-001 F3） */
-  padding: 6px 14px;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  background: #fff;
-  color: var(--accent);
-  cursor: pointer;
+/* 警告は推薦理由より強いトーンで分離する。 */
+.card .warnings {
+  color: var(--danger);
+}
+
+.card .depart {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.card .depart[disabled] {
+  pointer-events: none;
+}
+
+@media (max-width: 420px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .row {
+    flex-direction: column;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
+    scroll-behavior: auto !important;
   }
 }
+
+/* Leaflet の出発地マーカー。画像依存を避けた CSS 描画。 */
+.origin-marker {
+  background: transparent;
+  border: none;
+}
+
+.origin-marker__dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
+}
+
+/* 課金対象区間のラベル（線種と色に加えた説明）。 */
+.leaflet-tooltip {
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+/* 地図の帰属表示は常時可視。文字サイズを落としつつタップ領域は確保する。 */
+.leaflet-control-attribution {
+  font-size: 0.7rem;
+  background: rgb(255 255 255 / 85%);
+}
+
+.leaflet-control-attribution a {
+  color: var(--accent);
+}
+

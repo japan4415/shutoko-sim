@@ -103,11 +103,11 @@ export function statusMessage(
   }
   switch (result.reason) {
     case "NO_CONNECTION":
-      return "200m 以内に接続できる一般道がありません。近くの座標を入力し直してください。";
+      return `出発地点が対応範囲外です（200m 以内に接続できる一般道がありません）。${SUPPORTED_AREA_TEXT}`;
     case "NO_BILLING_PAIR":
       return "この版には検証済み課金ペアがありません。";
     case "NO_LOOP":
-      return "周回ルートが見つかりませんでした。";
+      return "周回ルートが見つかりませんでした。出発地点が対応範囲外の可能性があります。";
     case "TIME_WINDOW":
       return `指定時間枠（${String(minMinutes)}〜${String(maxMinutes)} 分）に収まる候補がありません。時間枠を広げると見つかる可能性があります。`;
     case "NO_HANDOFF":
@@ -118,6 +118,10 @@ export function statusMessage(
       return "候補が見つかりませんでした。";
   }
 }
+
+/** 対応範囲の説明。原案の公開範囲（C1 と接続ランプ・周辺一般道）を利用者へ示す。 */
+export const SUPPORTED_AREA_TEXT =
+  "対応範囲は首都高速 都心環状線（C1）とその接続ランプ周辺の一般道です。範囲外の地点では候補を作れません。";
 
 /** Worker error / ステータス文言の一覧（docs/interfaces.md の error.code と対応）。 */
 export function errorMessage(code: string): string {

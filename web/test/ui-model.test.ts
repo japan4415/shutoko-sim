@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SEARCH_TIMEOUT_MS,
+  SUPPORTED_AREA_TEXT,
   TIMEOUT_TEXT,
   coordinateLabel,
   distanceText,
@@ -126,6 +127,13 @@ describe("statusMessage / errorMessage", () => {
     expect(statusMessage(result("NO_LOOP"), 15, 60)).toContain("周回ルート");
     expect(statusMessage(result("NO_HANDOFF"), 15, 60)).toContain("上限超過");
     expect(statusMessage(result("SEARCH_LIMIT"), 15, 60)).toContain("上限に達し");
+  });
+
+  it("対応範囲外は supported area を明示する（requirements 39）", () => {
+    const text = statusMessage(result("NO_CONNECTION"), 15, 60);
+    expect(text).toContain("対応範囲外");
+    expect(text).toContain(SUPPORTED_AREA_TEXT);
+    expect(SUPPORTED_AREA_TEXT).toContain("都心環状線");
   });
 
   it("ARTIFACT_MISMATCH / FETCH_FAILED は再読み込み案内、TIMEOUT は 10 秒文言", () => {

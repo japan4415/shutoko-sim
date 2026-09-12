@@ -465,3 +465,29 @@ test("(15) 条件変更で結果が失効し再検索を促す", async ({ page }
   await expect(page.locator("#results .card")).toHaveCount(0);
   await expect(page.locator("#status")).toContainText("条件が変更");
 });
+
+test("(16) 対応範囲外の出発地点は対応範囲を示し、有効な地点へ復帰できる", async ({ page }) => {
+  // 対応範囲（C1 周辺）から離れた地点を住所検索で確定させる。
+  const outside = [{ label: "東京都台東区上野五丁目３番６号", lat: 35.70347, lon: 139.77444 }];
+  await stubGeocode(page, { candidates: outside });
+  await openApp(page);
+  await page.fill("#address-query", "東京都台東区上野5-3-6");
+  await page.click("#address-search-btn");
+  await page.locator("#address-candidates input[type=radio]").first().check();
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  // NO_CONNECTION の説明文に対応範囲が含まれ、復帰導線が出る。
+  await expect(page.locator("#status")).toContainText("対応範囲外");
+  await expect(page.locator("#status")).toContainText("都心環状線");
+  const recovery = page.locator("#recovery-actions");
+  await expect(recovery).toBeVisible();
+  const preset = recovery.locator("button", { hasText: "神田橋を出発地点にする" });
+  await expect(preset).toBeVisible();
+
+  // ワンタップで有効な出発地点（神田橋）に切り替えると再検索で候補が出る。
+  await preset.click();
+  await expect(page.locator("#origin-summary")).toContainText("35.68967");
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+});

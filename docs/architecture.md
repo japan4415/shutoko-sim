@@ -23,7 +23,7 @@ flowchart LR
 | R2 | 不変のバージョン付き WASM、グラフ、マニフェスト |
 | オフラインの Rust ビルダー（`crates/graph-builder`） | OSM 実データからのトポロジ抽出、立体交差・一方通行・通行規制の反映、1区間先入出口ペア検証、スナップインデックス生成、決定論的マニフェスト出力 |
 
-フロントエンドのフレームワークと地図ライブラリは未選定。地図描画とルート探索は別の責務とし、地図タイルを探索グラフの代わりに使わない。
+フロントエンドのフレームワークは素の TypeScript + DOM（既存 #12 と同一）とする。地図ライブラリは **Leaflet** を採用する（軽量・成熟・モバイル負荷低・WebGL/Worker 不要で 8 秒の初回ロード予算に有利）。地図タイルは **国土地理院（GSI）標準地図タイル**（`https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png`）を既定とする。GSI は無償・公共で利用規約が明確であり、OSMF Tile Usage Policy の大量アクセス制約を受けない。提供元は設定で差し替え可能にし、OSM 標準タイルは本番の無制限基盤とみなさない。経路データの帰属として「© OpenStreetMap contributors」を地図上に常時表示する。地図描画とルート探索は別の責務とし、地図タイルを探索グラフの代わりに使わない。
 
 ### オフラインデータパイプライン（`shutoko-graph-builder`）
 
@@ -117,7 +117,7 @@ Cloudflare Workers 公式の Rate Limiting binding（`[[ratelimits]]`）を採�
 
 ### CORS / CSP 方針
 - **CORS 方針**: 本番環境ではフロントエンド静的ファイルと Workers API は同一オリジンで配信されるため、Workers 側に不要なワイルドカード CORS ヘッダは付与しない。ローカル開発時は Vite の開発サーバー（ポート 5173）から Workers（ポート 8787）へ `server.proxy`（`/api`, `/releases`）を用いて同一オリジン中継を行う。
-- **CSP ヘッダ方針**: HTML を配信する Web アプリ層（#12）で付与する。方針: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://msearch.gsi.go.jp https://*.tile.openstreetmap.org; img-src 'self' data: https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'`。WASM 実行のために `'wasm-unsafe-eval'` を許容する。
+- **CSP ヘッダ方針**: HTML を配信する Web アプリ層で付与する。方針: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'`。WASM 実行のために `'wasm-unsafe-eval'` を許容する。住所検索は同一オリジンの Workers プロキシ `/api/geocode` 経由のため、`connect-src` に国土地理院 API を直接許可しない。
 
 ### 監視・保存期間
 集計対象は成否コード、処理時間、成果物バージョン、候補数だけとする。保存期間は暫定14日、プロバイダー側の保存方針も選定時に確認する。通信失敗率、データ不整合、探索失敗率を監視し、住所検索障害時も既に確定した座標でのローカル探索は可能にする。

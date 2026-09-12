@@ -3,11 +3,23 @@ import { describe, expect, it } from "vitest";
 import {
   SEARCH_TIMEOUT_MS,
   TIMEOUT_TEXT,
+  coordinateLabel,
+  distanceText,
   errorMessage,
+  formatLatLng,
+  formatRank,
+  geocodeErrorMessage,
+  geolocationErrorMessage,
   minutesFromSeconds,
+  reasonText,
+  recommendedLabel,
+  selectCandidate,
   statusMessage,
+  timeBreakdownText,
   tollText,
   toCardModel,
+  validateAddressQuery,
+  validateInputFields,
   validateInputs,
   warningText,
 } from "../src/ui/model";
@@ -175,5 +187,219 @@ describe("toCardModel", () => {
     expect(warningText("UNKNOWN_CODE")).toBe("UNKNOWN_CODE");
     expect(minutesFromSeconds(0)).toBe(0);
     expect(minutesFromSeconds(90)).toBe(2);
+  });
+});
+
+describe("toCardModel の新フィールド", () => {
+  it("index・内訳・距離・短縮料金・効率・reasons・geometry・エッジ列を埋める", () => {
+    const model = toCardModel(sampleCandidate(), 2);
+    expect(model.index).toBe(2);
+    expect(model.accessMinutes).toBe(1); // 60s
+    expect(model.shutokoMinutes).toBe(25); // 1503s → 25 分
+    expect(model.returnMinutes).toBe(2); // 120s
+    expect(model.bufferMinutes).toBe(2); // 121s → 2 分
+    expect(model.distanceKm).toBe(8); // 8000m → 8 km（小数 1 桁）
+    expect(model.tollShort).toBe("300 円");
+    expect(model.timePerYen).toBe("1 円あたり 約 0.08 分");
+    expect(model.reasons).toEqual(["時間あたりの料金効率が最良", "1区間料金（最低料金）"]);
+    expect(model.rankLabel).toBeNull();
+    expect(model.geometry).toEqual({ type: "LineString", coordinates: [] });
+    expect(model.entryId).toBe("e:1");
+    expect(model.exitId).toBe("e:2");
+    expect(model.loopEdgeIds).toEqual(["e:1"]);
+    expect(model.edgeIds).toEqual(["e:1"]);
+  });
+
+  it("index 省略時は 1、距離は小数 1 桁へ丸める", () => {
+    const model = toCardModel(sampleCandidate({ distanceMeters: 12345 }));
+    expect(model.index).toBe(1);
+    expect(model.distanceKm).toBe(12.3);
+    expect(distanceText(12345)).toBe("12.3 km");
+  });
+
+  it("料金 null は timePerYen・tollShort ともに未算出表現", () => {
+    const model = toCardModel(
+      sampleCandidate({
+        toll: {
+          billingPairId: "bp:x",
+          chargedSectionCount: 1,
+          amountYen: null,
+          pricingAt: "2026-09-10T00:00:00Z",
+          effectiveFrom: null,
+          effectiveTo: null,
+        },
+      }),
+    );
+    expect(model.tollShort).toBe("未算出");
+    expect(model.timePerYen).toBeNull();
+  });
+});
+
+describe("formatRank / recommendedLabel", () => {
+  it("全候補の料金が確定しているときだけ順位を出す", () => {
+    expect(formatRank(false, 1)).toBeNull();
+    expect(formatRank(false, 2)).toBeNull();
+    expect(formatRank(true, 1)).toBe("最安順位 1 位");
+    expect(formatRank(true, 3)).toBe("最安順位 3 位");
+  });
+
+  it("BEST_* の理由で推薦ラベルを付ける", () => {
+    expect(recommendedLabel({ reasons: ["BEST_TIME_PER_YEN", "ONE_SECTION_TOLL"] })).toBe("推薦");
+    expect(recommendedLabel({ reasons: ["BEST_SHUTOKO_TIME"] })).toBe("推薦");
+    expect(recommendedLabel({ reasons: ["ONE_SECTION_TOLL"] })).toBeNull();
+    expect(recommendedLabel({ reasons: [] })).toBeNull();
+  });
+});
+
+describe("reasonText / timeBreakdownText", () => {
+  it("推薦理由コードの対応表と未知コードの透過", () => {
+    expect(reasonText("BEST_TIME_PER_YEN")).toBe("時間あたりの料金効率が最良");
+    expect(reasonText("BEST_SHUTOKO_TIME")).toBe("首都高滞在時間が最長");
+    expect(reasonText("ONE_SECTION_TOLL")).toBe("1区間料金（最低料金）");
+    expect(reasonText("UNKNOWN")).toBe("UNKNOWN");
+  });
+
+  it("時間内訳を 1 行にまとめる", () => {
+    expect(timeBreakdownText(toCardModel(sampleCandidate()))).toBe(
+      "内訳: 一般道 入り 1分 / 首都高 25分 / 帰り 2分 / 余裕 2分",
+    );
+  });
+});
+
+describe("validateAddressQuery", () => {
+  it("空・空白のみは必須エラー", () => {
+    expect(validateAddressQuery("")).not.toBeNull();
+    expect(validateAddressQuery("   ")).not.toBeNull();
+  });
+
+  it("200 文字超はエラー、1〜200 文字は正常", () => {
+    expect(validateAddressQuery("あ".repeat(200))).toBeNull();
+    expect(validateAddressQuery("あ".repeat(201))).not.toBeNull();
+    expect(validateAddressQuery("東京都千代田区")).toBeNull();
+  });
+});
+
+describe("geocodeErrorMessage", () => {
+  it("Worker のエラーコードごとの文言", () => {
+    expect(geocodeErrorMessage("INVALID_QUERY")).toContain("1〜200 文字");
+    expect(geocodeErrorMessage("PAYLOAD_TOO_LARGE")).toContain("長すぎ");
+    expect(geocodeErrorMessage("RATE_LIMITED")).toContain("上限");
+    expect(geocodeErrorMessage("GEOCODER_TIMEOUT")).toContain("タイムアウト");
+    expect(geocodeErrorMessage("GEOCODER_UNAVAILABLE")).toContain("一時的");
+    expect(geocodeErrorMessage("RATE_LIMITER_UNAVAILABLE")).toContain("受け付けられません");
+    expect(geocodeErrorMessage("FETCH_FAILED")).toContain("通信");
+  });
+
+  it("未知コードは既定文言", () => {
+    const text = geocodeErrorMessage("SOMETHING_ELSE");
+    expect(text).toContain("失敗");
+    expect(text).not.toContain("SOMETHING_ELSE");
+  });
+});
+
+describe("coordinateLabel / formatLatLng", () => {
+  it("小数 5 桁で整形する", () => {
+    expect(coordinateLabel(35.6896727, 139.7644248)).toBe("35.68967, 139.76442");
+    expect(formatLatLng(35.6896727, 139.7644248)).toBe("35.68967,139.76442");
+  });
+});
+
+describe("geolocationErrorMessage", () => {
+  it("1/2/3 のコードを対応付け、未知コードは既定文言", () => {
+    expect(geolocationErrorMessage(1)).toContain("許可されていません");
+    expect(geolocationErrorMessage(2)).toContain("取得できません");
+    expect(geolocationErrorMessage(3)).toContain("タイムアウト");
+    expect(geolocationErrorMessage(99)).toContain("取得できません");
+  });
+});
+
+describe("selectCandidate", () => {
+  const candidates = [sampleCandidate({ id: "a" }), sampleCandidate({ id: "b" })];
+  it("ID 一致で引き当て、無ければ null", () => {
+    expect(selectCandidate(candidates, "b")?.id).toBe("b");
+    expect(selectCandidate(candidates, "zzz")).toBeNull();
+  });
+});
+
+describe("timePerYen の料金ゲーティング", () => {
+  function withAmount(amountYen: number | null): Candidate {
+    return sampleCandidate({
+      toll: {
+        billingPairId: "bp:x",
+        chargedSectionCount: 1,
+        amountYen,
+        pricingAt: "2026-09-10T00:00:00Z",
+        effectiveFrom: null,
+        effectiveTo: null,
+      },
+    });
+  }
+
+  it("amountYen 0 と負値は timePerYen を出さない", () => {
+    expect(toCardModel(withAmount(0)).timePerYen).toBeNull();
+    expect(toCardModel(withAmount(-100)).timePerYen).toBeNull();
+  });
+
+  it("正の amountYen は「円あたり」を含む効率文字列を出す", () => {
+    const text = toCardModel(withAmount(300)).timePerYen;
+    expect(text).not.toBeNull();
+    expect(text).toContain("円あたり");
+  });
+});
+
+describe("validateInputFields の境界", () => {
+  it("正常な整数入力（下限 1・上限 240）は全項目 null", () => {
+    expect(validateInputFields("35.7", "139.8", "1", "240")).toEqual({
+      lat: null,
+      lon: null,
+      minMinutes: null,
+      maxMinutes: null,
+      range: null,
+    });
+    expect(validateInputFields("35.7", "139.8", "240", "240")).toEqual({
+      lat: null,
+      lon: null,
+      minMinutes: null,
+      maxMinutes: null,
+      range: null,
+    });
+  });
+
+  it("15.0 は整数値のため最小時間エラーにならない", () => {
+    // Number("15.0") === 15 で Number.isInteger が true。表記上の小数は弾かない。
+    const fields = validateInputFields("35.7", "139.8", "15.0", "60");
+    expect(fields.minMinutes).toBeNull();
+    expect(fields.range).toBeNull();
+  });
+
+  it("15.5 は最小時間の整数エラーになる", () => {
+    const fields = validateInputFields("35.7", "139.8", "15.5", "60");
+    expect(fields.minMinutes).not.toBeNull();
+    expect(fields.range).toBeNull(); // 欄単位エラーがある間は範囲条件を重ねない
+  });
+
+  it("範囲外の 0 / 241 は範囲条件エラーになる", () => {
+    const zero = validateInputFields("35.7", "139.8", "0", "60");
+    expect(zero.minMinutes).toBeNull();
+    expect(zero.range).not.toBeNull();
+    const over = validateInputFields("35.7", "139.8", "1", "241");
+    expect(over.maxMinutes).toBeNull();
+    expect(over.range).not.toBeNull();
+  });
+});
+
+describe("toCardModel の rampName フォールバック", () => {
+  it("入口・出口名が null のときは edge ID を経路表記に使う", () => {
+    const model = toCardModel(
+      sampleCandidate({
+        entry: { edgeId: "e:entry-x", name: null },
+        exit: { edgeId: "e:exit-y", name: null },
+        entryId: "e:entry-x",
+        exitId: "e:exit-y",
+      }),
+    );
+    expect(model.route).toBe("e:entry-x → e:exit-y");
+    expect(model.route).toContain("e:entry-x");
+    expect(model.route).toContain("e:exit-y");
   });
 });

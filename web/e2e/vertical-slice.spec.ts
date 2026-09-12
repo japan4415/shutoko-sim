@@ -36,6 +36,10 @@ function delayUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
 async function openApp(page: import("@playwright/test").Page): Promise<void> {
   await page.goto("/");
   await expect(page.locator("#search-btn")).toBeVisible();
+  // #15 以降、座標プリセットは折りたたみ内にある。テストからは開いて操作する。
+  await page.locator("#manual-input").evaluate((node) => {
+    (node as HTMLDetailsElement).open = true;
+  });
 }
 
 // 各テストの後に route ハンドラを確実に破棄する（pending は ignoreErrors で待たない）。

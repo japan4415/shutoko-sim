@@ -2,36 +2,75 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <!-- #15（住所検索・地図描画）で connect-src に https://msearch.gsi.go.jp、
-         img-src に https://*.tile.openstreetmap.org を追加する。現状は未使用のため許可しない。 -->
+    <!-- 地図タイル（国土地理院 / OpenStreetMap）と同一オリジンの住所検索プロキシだけを許可する。
+         住所検索は /api/geocode 経由のため connect-src に外部ジオコーダを直接許可しない。 -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Shutoko Sim</title>
+    <title>首都高 周回ルート探索</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <main id="app">
       <h1>首都高 周回ルート探索</h1>
 
-      <section class="panel">
-        <label for="origin-preset">出発地プリセット</label>
-        <select id="origin-preset">
-          <option value="kandabashi">神田橋（35.6896727, 139.7644248）</option>
-          <option value="manual">座標を直接入力</option>
-        </select>
+      <section class="panel" aria-labelledby="origin-heading">
+        <h2 id="origin-heading">出発地点</h2>
 
+        <!-- 住所は確定時だけ検索する（入力途中の外部検索はしない）。同名住所は候補から選ぶ。 -->
+        <label for="address-query">住所・地名で検索</label>
+        <div class="row">
+          <input
+            id="address-query"
+            type="search"
+            inputmode="text"
+            autocomplete="off"
+            placeholder="例: 東京都千代田区大手町"
+            aria-describedby="address-note"
+          />
+          <button id="address-search-btn" type="button" class="secondary">住所を検索</button>
+        </div>
+        <p id="address-note" class="field-note">
+          検索確定時に国土地理院の住所検索へ送信されます。入力途中は送信しません。
+        </p>
+        <div id="address-feedback" role="alert"></div>
+        <!-- 同名住所などの候補。選択されるまで出発地点は確定しない。 -->
+        <fieldset id="address-candidates-field" class="candidates" hidden>
+          <legend>住所候補を選択</legend>
+          <div id="address-candidates" role="radiogroup" aria-label="住所候補"></div>
+        </fieldset>
+
+        <button id="geolocate-btn" type="button" class="secondary">現在地を使う</button>
+
+        <details id="manual-input">
+          <summary>座標を直接入力 / プリセット</summary>
+          <label for="origin-preset">出発地プリセット</label>
+          <select id="origin-preset">
+            <option value="kandabashi">神田橋（35.6896727, 139.7644248）</option>
+            <option value="manual">座標を直接入力</option>
+          </select>
+
+          <div class="grid">
+            <div>
+              <label for="lat">緯度 lat</label>
+              <input id="lat" type="number" step="any" inputmode="decimal" />
+            </div>
+            <div>
+              <label for="lon">経度 lon</label>
+              <input id="lon" type="number" step="any" inputmode="decimal" />
+            </div>
+          </div>
+        </details>
+
+        <!-- 確定済みの出発地点。地図上の位置と住所を確認できる。 -->
+        <p id="origin-summary" class="origin-summary" role="status">出発地点が未確定です。</p>
+      </section>
+
+      <section class="panel" aria-labelledby="time-heading">
+        <h2 id="time-heading">所要時間の範囲</h2>
         <div class="grid">
-          <div>
-            <label for="lat">緯度 lat</label>
-            <input id="lat" type="number" step="any" inputmode="decimal" />
-          </div>
-          <div>
-            <label for="lon">経度 lon</label>
-            <input id="lon" type="number" step="any" inputmode="decimal" />
-          </div>
           <div>
             <label for="min-minutes">最小時間（分）</label>
             <input
@@ -57,22 +96,43 @@
             />
           </div>
         </div>
-        <!-- 時間の前提は条件を入力する時点で示す（docs/requirements.md:12 / design-review-002 D1）。
-             最小・最大の両 input から aria-describedby で結ぶ。エラー id が付くときは
-             main.ts が空白区切りで併記する。 -->
+        <div class="presets" role="group" aria-label="時間範囲のプリセット">
+          <button type="button" class="chip" data-min="15" data-max="60">15〜60 分</button>
+          <button type="button" class="chip" data-min="30" data-max="90">30〜90 分</button>
+          <button type="button" class="chip" data-min="60" data-max="120">60〜120 分</button>
+        </div>
+        <!-- 時間の前提は条件を入力する時点で示す（docs/requirements.md:12）。
+             最小・最大の両 input から aria-describedby で結ぶ。 -->
         <p id="time-note" class="field-note">一般道での帰着までを含み、休憩は含みません</p>
+      </section>
+
+      <section class="panel">
         <button id="search-btn" type="button">ルートを探す</button>
+        <button id="cancel-btn" type="button" class="secondary" hidden>探索をキャンセル</button>
         <!-- 入力エラーは支援技術へ即時通知する（role="alert"）。
-             探索ボタンより下に置くことで、エラーが出消ししてもボタンの位置が変わらない
-             （design-review-002 N1: エラー消去でボタンがせり上がりクリックが空振りする回帰）。
-             各 input は aria-invalid / aria-describedby で関係するエラーだけに紐づく。 -->
+             探索ボタンより下に置き、エラーが出消ししてもボタンの位置を変えない。 -->
         <div id="input-errors-alert" role="alert">
           <ol id="input-errors" class="errors"></ol>
         </div>
       </section>
 
       <p id="status" role="status">成果物を読み込み中…</p>
-      <div id="results"></div>
+
+      <!-- 地図は常時表示し、タイル取得失敗時は #map-fallback で再試行を案内する。 -->
+      <section class="map-section" aria-labelledby="map-heading">
+        <h2 id="map-heading">地図</h2>
+        <div id="map" class="map" role="region" aria-label="選択した経路の地図"></div>
+        <p id="map-fallback" class="map-fallback" hidden>
+          地図を読み込めませんでした。条件は保持されています。
+          <button type="button" id="map-retry-btn" class="secondary">地図を再読み込み</button>
+        </p>
+      </section>
+
+      <!-- 例外状態からの復帰操作をまとめる。候補なし・時間枠不一致などの説明と再検索導線。 -->
+      <div id="recovery-actions" class="recovery" role="region" aria-label="再検索の案内" hidden></div>
+
+      <!-- 候補カードはテキストでも選択でき、地図と同じ候補 ID に紐づく。 -->
+      <div id="results" role="list"></div>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

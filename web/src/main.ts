@@ -8,6 +8,7 @@ import {
   PRESET_KANDABASHI,
   RELEASE_ID,
   SEARCH_TIMEOUT_MS,
+  SUPPORTED_AREA_TEXT,
   VEHICLE_PROFILE,
   coordinateLabel,
   errorMessage,
@@ -261,6 +262,34 @@ function showAddressFallback(message: string): void {
     el.addressQuery.focus();
   });
   el.recovery.replaceChildren(p, wrapActions(button));
+  el.recovery.hidden = false;
+}
+
+/**
+ * 出発地点が対応範囲外・接続不能なときの復帰導線（docs/requirements.md:39）。
+ * 対応範囲を明示し、検証済みの有効な出発地点（神田橋）をワンタップで設定できるようにする。
+ * 近い高速道路へ直線接続するような誤った代替は出さない。
+ */
+function showAreaRecovery(message: string): void {
+  const p = document.createElement("p");
+  p.textContent = message;
+  const usePreset = document.createElement("button");
+  usePreset.type = "button";
+  usePreset.textContent = "神田橋を出発地点にする";
+  usePreset.addEventListener("click", () => {
+    setOrigin({ lat: PRESET_KANDABASHI.lat, lon: PRESET_KANDABASHI.lon }, "対応範囲内の地点");
+    el.preset.value = "kandabashi";
+    clearRecovery();
+    setStatus("出発地点を神田橋に設定しました。探索ボタンで再検索してください。");
+  });
+  const search = document.createElement("button");
+  search.type = "button";
+  search.className = "secondary";
+  search.textContent = "住所を検索し直す";
+  search.addEventListener("click", () => {
+    el.addressQuery.focus();
+  });
+  el.recovery.replaceChildren(p, wrapActions(usePreset, search));
   el.recovery.hidden = false;
 }
 
@@ -555,7 +584,16 @@ function renderResult(result: SearchResult): void {
   if (candidates.length === 0) {
     el.results.replaceChildren();
     mapView?.renderCandidates([]);
-    // 候補なしは時間条件が原因のことが多いため、時間を広げる導線を出す。
+    // 出発地点が対応範囲外・接続不能なときは、対応範囲を示して有効な地点を案内する。
+    if (
+      result.reason === "NO_CONNECTION" ||
+      result.reason === "NO_LOOP" ||
+      result.reason === "NO_BILLING_PAIR"
+    ) {
+      showAreaRecovery(SUPPORTED_AREA_TEXT);
+      return;
+    }
+    // それ以外の候補なしは時間条件が原因のことが多いため、時間を広げる導線を出す。
     if (result.status === "no_candidates" || result.status === "truncated") {
       showTimeWindowRecovery(
         "指定条件に収まる周回候補が見つかりませんでした。時間の範囲を広げると見つかる可能性があります。",

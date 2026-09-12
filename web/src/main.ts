@@ -825,7 +825,6 @@ function clearMapFailed(): void {
 function retryMap(): void {
   // 楽観的に解除しない。タイルが実際に読めた時点（tileload）で解除する。
   tileErrorCount = 0;
-  el.mapFallback.hidden = true;
   if (mapView !== null) {
     mapView.renderCandidates(currentResult?.candidates.slice(0, 3) ?? []);
     if (selectedCandidateId !== null) {
@@ -834,10 +833,10 @@ function retryMap(): void {
     if (currentResult !== null) {
       mapView.fitToCandidates();
     }
-    // 再取得を促す（ビューポート再評価でタイルを再要求）。
-    mapView.invalidateSize();
+    // タイルレイヤーを作り直して再取得させる（失敗タイルのキャッシュに依らない）。
+    mapView.reloadTiles();
   }
-  setStatus(mapFailed ? "地図を再読み込みしています。" : "地図を再読み込みしました。");
+  setStatus("地図を再読み込みしています。");
 }
 
 // --- 初期化 ---

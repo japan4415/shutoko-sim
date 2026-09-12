@@ -24,8 +24,8 @@ export interface MapView {
   onTileError(cb: (e: unknown) => void): void;
   /** タイル読み込み成功のコールバックを登録する（失敗状態の解除用）。 */
   onTileLoad(cb: () => void): void;
-  /** ビューポートを再評価しタイルを再要求させる（地図復帰用）。 */
-  invalidateSize(): void;
+  /** タイルレイヤーを作り直して再取得させる（地図復帰用）。 */
+  reloadTiles(): void;
   /** イベント購読と地図インスタンスを破棄する。 */
   destroy(): void;
 }
@@ -93,25 +93,32 @@ export function createMapView(
     .addAttribution(tileAttribution(source))
     .addTo(map);
 
-  const tileLayer = L.tileLayer(source.url, {
-    maxZoom: source.maxZoom,
-    attribution: tileAttribution(source),
-    ...(source.subdomains !== undefined ? { subdomains: source.subdomains } : {}),
-  });
-  tileLayer.addTo(map);
-
   const tileErrorCallbacks: ((e: unknown) => void)[] = [];
   const tileLoadCallbacks: (() => void)[] = [];
-  tileLayer.on("tileerror", (event: L.TileErrorEvent) => {
-    for (const cb of tileErrorCallbacks) {
-      cb(event);
-    }
-  });
-  tileLayer.on("tileload", () => {
-    for (const cb of tileLoadCallbacks) {
-      cb();
-    }
-  });
+
+  let tileLayer: L.TileLayer | null = null;
+
+  function attachTiles(): L.TileLayer {
+    const layer = L.tileLayer(source.url, {
+      maxZoom: source.maxZoom,
+      attribution: tileAttribution(source),
+      ...(source.subdomains !== undefined ? { subdomains: source.subdomains } : {}),
+    });
+    layer.on("tileerror", (event: L.TileErrorEvent) => {
+      for (const cb of tileErrorCallbacks) {
+        cb(event);
+      }
+    });
+    layer.on("tileload", () => {
+      for (const cb of tileLoadCallbacks) {
+        cb();
+      }
+    });
+    layer.addTo(map);
+    tileLayer = layer;
+    return layer;
+  }
+  attachTiles();
 
   const originMarkerKey = "origin";
   const markers = new Map<string, L.Marker>();
@@ -244,8 +251,12 @@ export function createMapView(
     tileLoadCallbacks.push(cb);
   }
 
-  function invalidateSize(): void {
-    map.invalidateSize();
+  function reloadTiles(): void {
+    // 既存レイヤーを破棄して作り直すことで、キャッシュ済みの失敗タイルに依らず再取得させる。
+    if (tileLayer !== null) {
+      tileLayer.remove();
+    }
+    attachTiles();
   }
 
   function destroy(): void {
@@ -264,7 +275,7 @@ export function createMapView(
     fitToCandidates,
     onTileError,
     onTileLoad,
-    invalidateSize,
+    reloadTiles,
     destroy,
   };
 }

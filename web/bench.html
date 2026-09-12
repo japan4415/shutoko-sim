@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <!-- 計測ページ（issue #13）。CSP は index.html と同一（connect-src 'self'）。
-         計測結果は画面表示・ダウンロード・console.log のみで、外部送信は一切しない。 -->
+         計測結果は画面表示・ダウンロード・console.log に加え、同一オリジンの
+         POST /api/bench-result で R2 に保存できる（外部オリジンへの送信はしない）。 -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
@@ -26,6 +27,8 @@
         <p class="field-note">
           縮小実行: <code>?patterns=0,5</code>（パターン index）/ <code>?repeats=1</code>（cold・warm 各回数）/
           <code>?auto=1</code>（表示直後に自動開始）。
+          計測完了時に結果を R2 へ自動保存する場合は <code>?upload=1</code> を併記します
+          （未指定時は「結果を R2 に保存」ボタンで手動保存）。
         </p>
         <button id="start-btn" type="button">計測開始</button>
         <p id="status" role="status">待機中</p>
@@ -86,6 +89,10 @@
         <p>
           <a id="download" download="bench-result.json">bench-result.json をダウンロード</a>
         </p>
+        <p>
+          <button id="upload-btn" type="button">結果を R2 に保存</button>
+        </p>
+        <p id="upload-status" role="status"></p>
         <pre id="json"></pre>
       </section>
     </main>

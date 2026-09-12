@@ -1,4 +1,5 @@
 import { createErrorResponse } from "./errors";
+import { handleBenchResult } from "./bench";
 import { handleGeocode } from "./geocode";
 import { handleReleases } from "./releases";
 import { Env, HandlerResult, StructuredLog } from "./types";
@@ -83,7 +84,10 @@ export default {
     if (rawSegments[0] === "releases" || rawPath.startsWith("/releases")) {
       event = "releases_request";
     } else if (rawSegments[0] === "api" || rawPath.startsWith("/api")) {
-      event = "geocode_request";
+      event =
+        rawSegments.length === 2 && rawSegments[1] === "bench-result"
+          ? "bench_result_request"
+          : "geocode_request";
     }
 
     let result: HandlerResult;
@@ -105,6 +109,8 @@ export default {
       }
     } else if (rawSegments[0] === "api" && rawSegments.length === 2 && rawSegments[1] === "geocode") {
       result = await handleGeocode(request, env);
+    } else if (rawSegments[0] === "api" && rawSegments.length === 2 && rawSegments[1] === "bench-result") {
+      result = await handleBenchResult(request, env);
     } else {
       event = "unknown_route";
       result = {
@@ -121,6 +127,8 @@ export default {
       ...(result.logMeta?.releaseId ? { releaseId: result.logMeta.releaseId } : {}),
       ...(result.logMeta?.artifact ? { artifact: result.logMeta.artifact } : {}),
       ...(result.logMeta?.candidateCount !== undefined ? { candidateCount: result.logMeta.candidateCount } : {}),
+      ...(result.logMeta?.benchmarkKey ? { benchmarkKey: result.logMeta.benchmarkKey } : {}),
+      ...(result.logMeta?.benchmarkBytes !== undefined ? { benchmarkBytes: result.logMeta.benchmarkBytes } : {}),
       ...(result.logMeta?.errorCode ? { errorCode: result.logMeta.errorCode } : {}),
     };
 

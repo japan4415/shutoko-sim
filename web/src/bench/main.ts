@@ -68,6 +68,8 @@ const el = {
   summary: mustGet<HTMLDivElement>("summary"),
   json: mustGet<HTMLPreElement>("json"),
   download: mustGet<HTMLAnchorElement>("download"),
+  uploadBtn: mustGet<HTMLButtonElement>("upload-btn"),
+  uploadStatus: mustGet<HTMLParagraphElement>("upload-status"),
   validate: mustGet<HTMLParagraphElement>("validate"),
   results: mustGet<HTMLDivElement>("results"),
   deviceName: mustGet<HTMLInputElement>("device-name"),
@@ -82,6 +84,7 @@ const MANUAL_INPUTS = [el.deviceName, el.os, el.browser, el.network, el.memory, 
 
 let trials: BenchTrial[] = [];
 let running = false;
+let uploading = false;
 let objectUrl: string | null = null;
 
 function mustGet<T extends Element>(id: string): T {
@@ -546,6 +549,43 @@ function publish(): void {
     : `envelope 検証 NG: ${validation.errors.join(" / ")}`;
 }
 
+/**
+ * envelope を R2 に保存する。計測自体の成否とは独立で、失敗しても例外を外へ出さない
+ * （呼び出し側の計測完了処理を止めないため）。メッセージは画面と console.error に出す。
+ */
+async function uploadResult(envelope: BenchEnvelope): Promise<void> {
+  if (uploading) {
+    return;
+  }
+  if (envelope.trials.length === 0) {
+    el.uploadStatus.textContent = "計測結果が無いため保存できません";
+    return;
+  }
+  uploading = true;
+  el.uploadBtn.disabled = true;
+  el.uploadStatus.textContent = "R2 に保存中…";
+  try {
+    const response = await fetch("/api/bench-result", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(envelope),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${String(response.status)}`);
+    }
+    const data = (await response.json()) as { key?: unknown };
+    el.uploadStatus.textContent =
+      typeof data.key === "string" ? `R2 に保存しました: ${data.key}` : "R2 に保存しました";
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    el.uploadStatus.textContent = `R2 への保存に失敗しました: ${message}`;
+    console.error("bench result upload failed", err);
+  } finally {
+    uploading = false;
+    el.uploadBtn.disabled = false;
+  }
+}
+
 /** 手入力欄の変更で envelope を作り直す（手入力メモリの反映先を増やすため）。 */
 function republishOnManualInput(): void {
   for (const input of MANUAL_INPUTS) {
@@ -570,11 +610,17 @@ async function runAll(): Promise<void> {
   }
   running = true;
   el.start.disabled = true;
+  // 計測失敗後も部分結果を手動保存できるよう、終了時に必ず有効化する。
+  el.uploadBtn.disabled = true;
   const repeatsParam = Number(params.get("repeats"));
   const repeats =
     Number.isInteger(repeatsParam) && repeatsParam > 0 ? repeatsParam : DEFAULT_REPEATS;
   trials = [];
   const total = patterns.length * repeats * 2;
+  // 自動保存は明示オプトイン（`?upload=1`）のときだけ行う。Playwright 代理計測では
+  // 既定で 90 コンテキストを回すため、無条件送信はレート制限（429）と console.error で
+  // 計測成果物を汚染する。手動保存ボタンは常に残す。
+  const autoUpload = params.get("upload") === "1";
   try {
     el.progress.textContent = "warm 計測の前提（キャッシュ載せ）を準備中…";
     await primeArtifactCache();
@@ -594,6 +640,14 @@ async function runAll(): Promise<void> {
     // 手入力欄の値も反映した最終 envelope を確定させる。
     publish();
     console.log("BENCH_RESULT", JSON.stringify(window.__benchResult ?? null));
+    if (autoUpload) {
+      // 保存の成否は計測結果に影響させない（失敗しても __benchDone は立てる）。
+      try {
+        await uploadResult(window.__benchResult ?? buildCurrentEnvelope());
+      } catch (err) {
+        console.error("bench result upload failed", err);
+      }
+    }
     window.__benchDone = true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -602,12 +656,17 @@ async function runAll(): Promise<void> {
   } finally {
     running = false;
     el.start.disabled = false;
+    el.uploadBtn.disabled = false;
   }
 }
 
 el.start.addEventListener("click", () => {
   void runAll();
 });
+el.uploadBtn.addEventListener("click", () => {
+  void uploadResult(window.__benchResult ?? buildCurrentEnvelope());
+});
+el.uploadBtn.disabled = true;
 republishOnManualInput();
 el.status.textContent = "待機中（計測開始を押すか、?auto=1 で自動開始）";
 

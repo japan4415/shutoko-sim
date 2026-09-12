@@ -8,7 +8,9 @@ export type ErrorCode =
   | "RATE_LIMITED"
   | "RATE_LIMITER_UNAVAILABLE"
   | "GEOCODER_UNAVAILABLE"
-  | "GEOCODER_TIMEOUT";
+  | "GEOCODER_TIMEOUT"
+  | "INVALID_BENCH_PAYLOAD"
+  | "INTERNAL_ERROR";
 
 export function createErrorResponse(
   code: ErrorCode,

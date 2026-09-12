@@ -132,6 +132,37 @@ Vite + Vanilla TypeScript の最小 UI。探索はブラウザの専用 Web Work
 
 UI の操作: 出発地プリセット「神田橋」（または lat/lon 直接入力）→ 最小/最大分（既定 15〜60、`1 ≤ 最小 ≤ 最大 ≤ 240`）→「ルートを探す」→ 候補カード（総所要時間・料金・入口→出口・通過路線・課金対象 1 区間・警告）→「出発する（Google マップを開く）」。探索は 10 秒でタイムアウトし、その場合は再検索ボタンで Worker を再生成する。
 
+### 性能計測ページ（`bench.html`、#13）
+
+モバイル性能計測ハーネス。上記 1 の準備（`bash scripts/build-wasm.sh` → `npm --prefix workers ci` → `npm --prefix workers run seed:local`）と `cd web && npm run build` を済ませ、`wrangler dev`（8787）を起動して `http://localhost:8787/bench.html` を開く（`npm run e2e` も同じ `vite build` を行うため、E2E 実行後なら `web/dist` は生成済み）。
+
+- 代表出発地点 10 件 × 時間条件 3 件 = 30 パターン。各パターンを cold 3 回 → warm 3 回の順に自動実行する（既定 180 試行）。1 試行ごとに新しい Worker を生成し、終了時に terminate する。
+- 計測値: `tTransfer`（Worker 生成〜成果物取得・照合・WASM init 完了）/ `tSearch`（`search` 呼び出し直前〜直後、Worker 内計測）/ `tFirstCandidate`（Worker 生成〜候補または status 文言の描画を二重 `requestAnimationFrame` で確定した後）/ 10 秒上限到達 / 成果物の `transferSize`・`encodedBodySize`・`decodedBodySize`・`deliveryType` / ピークメモリ。時刻は `performance.timeOrigin + performance.now()` の epoch ms で統一する。
+- 画面に集計表（全体 / cold / warm / パターン別の p50・p95、10 秒到達率、cold 転送量最大、メモリ最大）、目標合否（探索 p95 2 秒 / 初回 p95 8 秒 / 転送 10 MiB / メモリ 128 MiB）、JSON 全文とダウンロードリンクを表示する。`window.__benchResult` に envelope、完了時に `window.__benchDone = true` を立て、console に `BENCH_RESULT` を出す（Playwright からの回収用）。
+- 縮小実行: `?patterns=0,5`（パターン index）/ `?repeats=1`（cold・warm 各回数）/ `?auto=1`（表示直後に自動開始）。既定は計測開始ボタン押下で開始。
+- 端末名・OS・ブラウザ・ネットワーク条件・ピークメモリ（MiB）の手入力欄があり、記入すると envelope の `device` と `memoryManualMiB`（`memorySource: "manual"`）に反映される。`performance.memory` を持たないブラウザ（Safari）ではこの欄が唯一のメモリ計測手段になる（COOP/COEP による cross-origin isolation と `measureUserAgentSpecificMemory()` は使わない）。
+- 転送量は `transferSize` / `encodedBodySize` で判定する。`decodedBodySize` は伸長後サイズ（graph.json では約 7.6 倍）であり転送量ではない。
+- フル計測は CI に入れない（試行数が多く、スロットル下では不安定なため）。CI では `web/e2e/bench-smoke.spec.ts` が 2 パターン × cold/warm 各 1 回だけを検証する。`wrangler dev` は本番 Cloudflare と圧縮・ヘッダの挙動が異なるため、ローカルの転送量を本番値として扱わないこと。
+
+### 代理計測（`npm run bench`、#13）
+
+Playwright で Pixel 5 相当のコンテキストを作り、CDP で回線（Fast 4G / Slow 4G）と CPU 倍率をエミュレートして `bench.html` を自動実行する。上記の準備（`build-wasm.sh` → `workers ci` → `seed:local` → `npm run build` → `wrangler dev` 8787）を済ませてから実行する。
+
+```bash
+cd web
+npm run bench -- --network fast4g --repeats 3 --out ../docs/bench/<date>-proxy/fast4g.json
+npm run bench -- --network slow4g --repeats 3 --out ../docs/bench/<date>-proxy/slow4g.json
+npm run bench:summarize -- ../docs/bench/<date>-proxy/fast4g.json \
+  ../docs/bench/<date>-proxy/slow4g.json --out ../docs/bench/<date>-proxy/summary.md
+```
+
+- オプション: `--network fast4g|slow4g`（既定 fast4g）/ `--cpu 4` / `--patterns 0,1,...` / `--repeats 3` / `--base-url http://localhost:8787` / `--out` / `--timeout-ms` / `--headed`。既定の出力は `web/bench/results/<network>.json`（`.gitignore` 済み）。
+- cold は試行ごとに `browser.newContext()` を作り直してブラウザキャッシュを分離し、warm は同一コンテキストで cold の直後に回収する。`--repeats 3` は cold 3 回 + warm 3 回になる。
+- `npm run bench:summarize` は 1 つ以上の結果 JSON を読み、計測ページと同じ `web/src/bench/summarize.ts` の集計・判定で Markdown の表を stdout に出す。追加依存は無い。
+- **CDP の CPU スロットルはレンダラのメインスレッドにのみ作用し、探索（WASM）が走る Web Worker には効かない**（`--cpu 1` と `--cpu 20` で `tSearch` が変わらないことを実測）。したがって代理計測の探索時間は実機の下限にはならない。Chromium 限定でもあり、iOS Safari の代理にはならない（`devices['Pixel 5']` は UA / viewport / touch の模擬にすぎない）。
+- 計測値の定義・限界・実機手順・レポート雛形は [docs/bench/README.md](docs/bench/README.md) に集約している。
+- フル代理計測は CI に入れない。CI では Vitest（集計・検証の純粋関数）と `bench-smoke`（2 パターン（神田橋 15〜30 = 候補 0 件 / 神田橋 15〜60 = 候補あり）× cold/warm 各 1 回 = 4 試行）の二段でハーネスの腐敗だけを検知する。
+
 ## ドキュメント
 
 | 読みたいこと | ドキュメント |
@@ -145,5 +176,6 @@ UI の操作: 出発地プリセット「神田橋」（または lat/lon 直接
 | データ形式と外部サービスへの引き継ぎ | [データ・インターフェース設計](docs/interfaces.md) |
 | Rust コアのテスト、WASM ビルド、実装済みの範囲 | [Rust / WASM 開発](docs/wasm-development.md) |
 | 実装順序、検証条件、未決事項 | [実装・検証計画](docs/delivery.md) |
+| 性能目標の計測手順・計測値の定義・実測レポート | [性能計測（bench）](docs/bench/README.md) |
 
 最初に企画と要件を読み、実装時にはシステム設計、探索、インターフェースの順に参照してください。設計は原案を具体化した提案であり、現在の実装範囲と動かし方は Rust / WASM 開発に記載しています。外部仕様の参照確認日は 2026-09-10 です。

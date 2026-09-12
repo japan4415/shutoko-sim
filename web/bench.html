@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- 計測ページ（issue #13）。CSP は index.html と同一（connect-src 'self'）。
+         計測結果は画面表示・ダウンロード・console.log に加え、同一オリジンの
+         POST /api/bench-result で R2 に保存できる（外部オリジンへの送信はしない）。 -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shutoko Sim モバイル性能計測</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/bench/bench.css" />
+  </head>
+  <body>
+    <main id="app">
+      <h1>モバイル性能計測</h1>
+
+      <section class="panel">
+        <p class="field-note">
+          代表出発地点 10 件 × 時間条件 3 件 = 30 パターン。各パターンを cold 3 回 →
+          warm 3 回の順に自動実行します（既定 180 試行）。1 試行ごとに Worker を生成して
+          終了時に terminate します。
+        </p>
+        <p class="field-note">
+          縮小実行: <code>?patterns=0,5</code>（パターン index）/ <code>?repeats=1</code>（cold・warm 各回数）/
+          <code>?auto=1</code>（表示直後に自動開始）。
+          計測完了時に結果を R2 へ自動保存する場合は <code>?upload=1</code> を併記します
+          （未指定時は「結果を R2 に保存」ボタンで手動保存）。
+        </p>
+        <button id="start-btn" type="button">計測開始</button>
+        <p id="status" role="status">待機中</p>
+        <p id="progress" role="status"></p>
+      </section>
+
+      <!-- 試行ごとの描画先。通常 UI と同じ位置関係にして描画コストを揃える。 -->
+      <div id="results"></div>
+
+      <section class="panel">
+        <h2>端末・ネットワーク条件（手入力）</h2>
+        <p class="field-note">
+          実機で計測した場合はここに記入してください。ピークメモリを記入すると
+          envelope の <code>memoryManualMiB</code> / <code>memorySource: "manual"</code> に反映し、
+          128 MiB 判定にその値を使います。
+        </p>
+        <div class="bench-grid">
+          <div>
+            <label for="device-name">端末名</label>
+            <input id="device-name" type="text" placeholder="例: Pixel 5" />
+          </div>
+          <div>
+            <label for="device-os">OS</label>
+            <input id="device-os" type="text" placeholder="例: Android 14" />
+          </div>
+          <div>
+            <label for="device-browser">ブラウザ</label>
+            <input id="device-browser" type="text" placeholder="例: Chrome 130" />
+          </div>
+          <div>
+            <label for="device-network">ネットワーク条件</label>
+            <input id="device-network" type="text" placeholder="例: Slow 4G / Wi-Fi" />
+          </div>
+          <div>
+            <label for="memory-manual">ピークメモリ（MiB）</label>
+            <input id="memory-manual" type="number" step="any" inputmode="decimal" placeholder="例: 96" />
+          </div>
+          <div>
+            <label for="device-note">備考</label>
+            <input id="device-note" type="text" placeholder="例: 初回のみ / 2 回目" />
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>目標合否</h2>
+        <div id="verdicts"></div>
+        <p id="validate" role="status"></p>
+      </section>
+
+      <section class="panel">
+        <h2>集計</h2>
+        <div id="summary"></div>
+      </section>
+
+      <section class="panel">
+        <h2>JSON</h2>
+        <p>
+          <a id="download" download="bench-result.json">bench-result.json をダウンロード</a>
+        </p>
+        <p>
+          <button id="upload-btn" type="button">結果を R2 に保存</button>
+        </p>
+        <p id="upload-status" role="status"></p>
+        <pre id="json"></pre>
+      </section>
+    </main>
+    <script type="module" src="/src/bench/main.ts"></script>
+  </body>
+</html>

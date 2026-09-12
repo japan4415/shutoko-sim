@@ -1,6 +1,7 @@
 // パイプライン純粋関数のユニットテスト（node 環境、fetch/import はモック注入）。
 import { describe, expect, it } from "vitest";
 import {
+  buildResultResponse,
   buildSearchRequest,
   hexDigest,
   loadRelease,
@@ -11,7 +12,7 @@ import {
   type FetchResponseLike,
   type WasmGlueModule,
 } from "../src/worker/pipeline";
-import type { UiSearchMessage } from "../src/worker/types";
+import type { SearchResult, UiSearchMessage } from "../src/worker/types";
 
 const encoder = new TextEncoder();
 
@@ -168,6 +169,118 @@ describe("parseWasmError", () => {
       code: "WASM_ERROR",
       message: "linear memory exhausted",
     });
+  });
+});
+
+describe("loadRelease の cacheBust（bench 計測フック）", () => {
+  const graphBytes = encoder.encode('{"nodes":[],"edges":[]}');
+  const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
+  const glueText = "export default function(){};export function search(){return '{}'}";
+  const glueBytes = encoder.encode(glueText);
+
+  /** クエリ付き URL を、クエリ無しのキーで引くモックへ委譲しつつ実 URL を記録する。 */
+  function recordingFetch(files: Record<string, Uint8Array>): { fetch: FetchLike; seen: string[] } {
+    const { fetch: inner } = mockFetch(files);
+    const seen: string[] = [];
+    const fetchImpl: FetchLike = async (url, init) => {
+      seen.push(url);
+      return inner(url.split("?")[0] ?? url, init);
+    };
+    return { fetch: fetchImpl, seen };
+  }
+
+  async function artifactFiles(): Promise<Record<string, Uint8Array>> {
+    const graphExpected = await expectationOf(graphBytes);
+    const manifest = JSON.stringify({
+      releaseId: "c1-real-v1",
+      artifacts: [{ path: "graph.json", ...graphExpected }],
+    });
+    const engine = JSON.stringify({
+      schemaVersion: 1,
+      releaseId: "c1-real-v1",
+      artifacts: [
+        { path: "shutoko_routing_bg.wasm", ...(await expectationOf(wasmBytes)) },
+        { path: "shutoko_routing.js", ...(await expectationOf(glueBytes)) },
+      ],
+    });
+    return {
+      "/releases/c1-real-v1/manifest.json": encoder.encode(manifest),
+      "/releases/c1-real-v1/engine.json": encoder.encode(engine),
+      "/releases/c1-real-v1/graph.json": graphBytes,
+      "/releases/c1-real-v1/shutoko_routing_bg.wasm": wasmBytes,
+      "/releases/c1-real-v1/shutoko_routing.js": glueBytes,
+    };
+  }
+
+  it("cacheBust 指定時は 5 成果物の URL すべてに ?bench=<nonce> が付く", async () => {
+    const { fetch, seen } = recordingFetch(await artifactFiles());
+    const initCalls: unknown[] = [];
+    const state = await loadRelease(fetch, "c1-real-v1", async () => stubGlue(initCalls), undefined, {
+      cacheBust: "nonce-1",
+    });
+    expect(seen).toEqual([
+      "/releases/c1-real-v1/manifest.json?bench=nonce-1",
+      "/releases/c1-real-v1/engine.json?bench=nonce-1",
+      "/releases/c1-real-v1/graph.json?bench=nonce-1",
+      "/releases/c1-real-v1/shutoko_routing_bg.wasm?bench=nonce-1",
+      "/releases/c1-real-v1/shutoko_routing.js?bench=nonce-1",
+    ]);
+    // クエリ付与でも照合・初期化は従来どおり成功する。
+    expect(state.graphJson).toBe('{"nodes":[],"edges":[]}');
+    expect(initCalls).toHaveLength(1);
+  });
+
+  it("cacheBust 未指定・空文字では URL にクエリが付かない", async () => {
+    const files = await artifactFiles();
+    const withoutOptions = recordingFetch(files);
+    await loadRelease(withoutOptions.fetch, "c1-real-v1", async () => stubGlue([]));
+    expect(withoutOptions.seen).toEqual([
+      "/releases/c1-real-v1/manifest.json",
+      "/releases/c1-real-v1/engine.json",
+      "/releases/c1-real-v1/graph.json",
+      "/releases/c1-real-v1/shutoko_routing_bg.wasm",
+      "/releases/c1-real-v1/shutoko_routing.js",
+    ]);
+
+    const emptyBust = recordingFetch(files);
+    await loadRelease(emptyBust.fetch, "c1-real-v1", async () => stubGlue([]), undefined, {
+      cacheBust: "",
+    });
+    expect(emptyBust.seen.some((url) => url.includes("bench="))).toBe(false);
+  });
+
+  it("nonce は URL エンコードして載せる", async () => {
+    const { fetch, seen } = recordingFetch(await artifactFiles());
+    await loadRelease(fetch, "c1-real-v1", async () => stubGlue([]), undefined, {
+      cacheBust: "a b&c",
+    });
+    expect(seen[0]).toBe("/releases/c1-real-v1/manifest.json?bench=a%20b%26c");
+  });
+});
+
+describe("buildResultResponse", () => {
+  const result = { status: "ok", candidates: [] } as unknown as SearchResult;
+
+  it("bench 未指定のときは bench キーを持たない（通常 UI の応答形）", () => {
+    const response = buildResultResponse("request-1", result);
+    expect(Object.keys(response)).toEqual(["type", "requestId", "result"]);
+    expect(Object.hasOwn(response, "bench")).toBe(false);
+    expect(JSON.stringify(response)).not.toContain("bench");
+  });
+
+  it("bench 指定時はそのまま載せる", () => {
+    const bench = {
+      marks: {
+        loadStartEpochMs: 1,
+        loadEndEpochMs: 2,
+        searchStartEpochMs: 3,
+        searchEndEpochMs: 4,
+      },
+      resources: [],
+      memory: { beforeMiB: 1, afterMiB: 2 },
+    };
+    const response = buildResultResponse("request-2", result, bench);
+    expect(response).toMatchObject({ type: "result", requestId: "request-2", bench });
   });
 });
 

@@ -42,6 +42,8 @@ export interface StructuredLog {
   releaseId?: string;
   artifact?: string;
   candidateCount?: number;
+  benchmarkKey?: string;
+  benchmarkBytes?: number;
   errorCode?: string;
 }
 
@@ -49,6 +51,8 @@ export interface HandlerLogMeta {
   releaseId?: string;
   artifact?: string;
   candidateCount?: number;
+  benchmarkKey?: string;
+  benchmarkBytes?: number;
   errorCode?: string;
 }
 

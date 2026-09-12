@@ -1,0 +1,88 @@
+/* 計測ページ専用のスタイル。通常 UI（index.html）には読み込まれない。 */
+
+#start-btn,
+#upload-btn {
+  font: inherit;
+  align-self: flex-start;
+  min-height: 44px; /* タップ標的の最小サイズ（design-review-001 F3） */
+  padding: 8px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+#start-btn:active,
+#upload-btn:active {
+  opacity: 0.8;
+}
+
+#start-btn:disabled,
+#upload-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bench-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+#summary {
+  overflow-x: auto;
+}
+
+.bench-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.bench-table th,
+.bench-table td {
+  border: 1px solid var(--line);
+  padding: 4px 6px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bench-table th:first-child,
+.bench-table td:first-child {
+  text-align: left;
+}
+
+#verdicts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.verdict-pass {
+  color: #0a6b2d;
+}
+
+.verdict-fail {
+  color: #b3261e;
+}
+
+.verdict-unknown {
+  color: #555;
+}
+
+#json {
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f6f7f9;
+  font-size: 0.7rem;
+  line-height: 1.35;
+}

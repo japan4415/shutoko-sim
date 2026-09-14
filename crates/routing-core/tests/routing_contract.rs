@@ -239,11 +239,11 @@ fn rejects_invalid_request_and_zero_limits() {
             "{field}"
         );
     }
+    // maxAccessEntries is excluded from this list: 0 now means "unlimited" (all entries).
     for limit in [
         "maxExpandedStates",
         "beamWidth",
         "maxLoopEdges",
-        "maxAccessEntries",
         "maxPairs",
         "maxCandidates",
     ] {
@@ -257,6 +257,19 @@ fn rejects_invalid_request_and_zero_limits() {
             )
             .is_err(),
             "{limit}"
+        );
+    }
+    // maxAccessEntries=0 is valid (unlimited); verify it does not error.
+    {
+        let limits = json!({"maxAccessEntries": 0});
+        assert!(
+            search_json(
+                &graph().to_string(),
+                &request().to_string(),
+                &limits.to_string()
+            )
+            .is_ok(),
+            "maxAccessEntries=0 must be accepted as unlimited"
         );
     }
 }
@@ -877,5 +890,412 @@ fn snap_grid_nearest_node_order_matches_linear_scan() {
     assert!(
         (85..=95).contains(&d),
         "snap distance should be ≈90 m, got {d}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Task A: max_access_distance_meters
+// ---------------------------------------------------------------------------
+
+/// Helper — minimal two-entry graph used by several access-limit tests.
+///
+/// Two independent networks ("aaa-*" and "zzz-*") are equidistant from a query
+/// at (35.68, 139.760).  Neither network shares any edges, so Jaccard similarity
+/// is 0 and the deduplication filter keeps both candidates.
+fn two_network_graph() -> Value {
+    json!({
+        "schemaVersion": 2,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": [
+            {"id": "aaa-entry", "lat": 35.68, "lon": 139.761},
+            {"id": "zzz-entry", "lat": 35.68, "lon": 139.759},
+            {"id": "aaa-a",  "lat": 35.685, "lon": 139.761},
+            {"id": "aaa-b",  "lat": 35.690, "lon": 139.771},
+            {"id": "aaa-c",  "lat": 35.688, "lon": 139.781},
+            {"id": "aaa-o",  "lat": 35.68,  "lon": 139.761},
+            {"id": "zzz-a",  "lat": 35.685, "lon": 139.759},
+            {"id": "zzz-b",  "lat": 35.690, "lon": 139.749},
+            {"id": "zzz-c",  "lat": 35.688, "lon": 139.739},
+            {"id": "zzz-o",  "lat": 35.68,  "lon": 139.759}
+        ],
+        "edges": [
+            {"id":"aaa-entry-e","from":"aaa-entry","to":"aaa-a","kind":"entry",  "durationSeconds":30, "distanceMeters":200},
+            {"id":"aaa-ab",     "from":"aaa-a",    "to":"aaa-b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"aaa-bc",     "from":"aaa-b",    "to":"aaa-c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"aaa-ca",     "from":"aaa-c",    "to":"aaa-a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"aaa-exit-e", "from":"aaa-a",    "to":"aaa-o","kind":"exit",   "durationSeconds":30, "distanceMeters":200},
+            {"id":"zzz-entry-e","from":"zzz-entry","to":"zzz-a","kind":"entry",  "durationSeconds":30, "distanceMeters":200},
+            {"id":"zzz-ab",     "from":"zzz-a",    "to":"zzz-b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"zzz-bc",     "from":"zzz-b",    "to":"zzz-c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"zzz-ca",     "from":"zzz-c",    "to":"zzz-a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"zzz-exit-e", "from":"zzz-a",    "to":"zzz-o","kind":"exit",   "durationSeconds":30, "distanceMeters":200}
+        ],
+        "billingPairs": [
+            {
+                "id": "aaa-section",
+                "entryId": "aaa-entry-e",
+                "exitId": "aaa-exit-e",
+                "anchorNodeId": "aaa-a",
+                "entryToAnchorEdgeIds": ["aaa-entry-e"],
+                "anchorToExitEdgeIds": ["aaa-exit-e"],
+                "status": "verified",
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+            },
+            {
+                "id": "zzz-section",
+                "entryId": "zzz-entry-e",
+                "exitId": "zzz-exit-e",
+                "anchorNodeId": "zzz-a",
+                "entryToAnchorEdgeIds": ["zzz-entry-e"],
+                "anchorToExitEdgeIds": ["zzz-exit-e"],
+                "status": "verified",
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+            }
+        ],
+        "forbiddenTransitions": []
+    })
+}
+
+/// max_access_distance_meters must be finite and non-negative;
+/// negative, NaN, and Infinity must be rejected at prepare time.
+#[test]
+fn rejects_invalid_max_access_distance_meters() {
+    let g = graph();
+    let r = request();
+
+    // negative
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": -1.0}).to_string()
+        )
+        .is_err(),
+        "negative max_access_distance_meters must be rejected"
+    );
+    // NaN: serde_json does not serialize f64::NAN to JSON; inject as string
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            // f64::NAN cannot appear in JSON; only finite + 0 are valid
+            &json!({"maxAccessDistanceMeters": -0.001}).to_string()
+        )
+        .is_err(),
+        "sub-zero max_access_distance_meters must be rejected"
+    );
+    // Infinity: not representable as JSON number, so the smallest invalid
+    // case we can inject is a very large (but finite) value — that is valid.
+    // Confirm 0.0 (unlimited) is accepted.
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": 0.0}).to_string()
+        )
+        .is_ok(),
+        "0.0 (unlimited) must be accepted"
+    );
+    // A normal cap is also accepted.
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": 30000.0}).to_string()
+        )
+        .is_ok(),
+        "30 000 m cap must be accepted"
+    );
+}
+
+/// A graph with entry at ~4 km from the origin.
+/// With a 3 km cap the entry is too far → NO_CONNECTION.
+/// With a 5 km cap the entry is within range → search proceeds (not NO_CONNECTION).
+/// With 0.0 (unlimited) the entry is reachable regardless of distance.
+#[test]
+fn distance_cap_enforced_and_zero_means_unlimited() {
+    // Entry node "e" is roughly 4 km north of origin (35.0, 139.0).
+    // 0.036° latitude ≈ 0.036 × 111 320 ≈ 4 007 m.
+    let g = json!({
+        "schemaVersion": 2,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": [
+            {"id": "e", "lat": 35.036, "lon": 139.0},
+            {"id": "a", "lat": 35.038, "lon": 139.0},
+            {"id": "b", "lat": 35.040, "lon": 139.001},
+            {"id": "c", "lat": 35.039, "lon": 139.002},
+            {"id": "o", "lat": 35.037, "lon": 139.0}
+        ],
+        "edges": [
+            {"id":"entry","from":"e","to":"a","kind":"entry",  "durationSeconds":30, "distanceMeters":200},
+            {"id":"ab",   "from":"a","to":"b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"bc",   "from":"b","to":"c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"ca",   "from":"c","to":"a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"exit", "from":"a","to":"o","kind":"exit",   "durationSeconds":30, "distanceMeters":200}
+        ],
+        "billingPairs": [{
+            "id": "sec",
+            "entryId": "entry",
+            "exitId": "exit",
+            "anchorNodeId": "a",
+            "entryToAnchorEdgeIds": ["entry"],
+            "anchorToExitEdgeIds": ["exit"],
+            "status": "verified",
+            "vehicleProfile": "passenger-car-etc",
+            "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+        }],
+        "forbiddenTransitions": []
+    });
+    // Origin at (35.0, 139.0), entry "e" at ~4 007 m.
+    let r = json!({
+        "requestId": "dist-cap-test",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.0, "lon": 139.0},
+        "minMinutes": 30,
+        "maxMinutes": 120,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+
+    // 3 km cap: entry ~4 007 m away → NO_CONNECTION.
+    let res_inside: Value = serde_json::from_str(
+        &search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": 3000.0}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(res_inside["status"], "no_candidates");
+    assert_eq!(
+        res_inside["reason"], "NO_CONNECTION",
+        "3 km cap: entry at ~4 km must trigger NO_CONNECTION"
+    );
+
+    // 5 km cap: entry ~4 007 m is within range → search proceeds (status ≠ NO_CONNECTION).
+    let res_within: Value = serde_json::from_str(
+        &search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": 5000.0}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_ne!(
+        res_within["reason"], "NO_CONNECTION",
+        "5 km cap: entry at ~4 km must NOT trigger NO_CONNECTION"
+    );
+
+    // 0.0 (unlimited): entry accessible regardless of distance.
+    let res_unlimited: Value = serde_json::from_str(
+        &search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": 0.0}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_ne!(
+        res_unlimited["reason"], "NO_CONNECTION",
+        "unlimited cap (0.0): must NOT trigger NO_CONNECTION"
+    );
+    // Both 5 km and unlimited cases should find the same candidate (same graph, same route).
+    assert_eq!(
+        res_within["status"], res_unlimited["status"],
+        "5 km cap and unlimited must produce the same search outcome"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Task B: access time with coordinate origin affects base_seconds / time window
+// ---------------------------------------------------------------------------
+
+/// Origin at the exact entry-node coordinates yields access_seconds=0 and
+/// base_seconds=1876 (matching the originNodeId contract).  An origin ~4 km
+/// away yields a larger base and is rejected by the same narrow time window.
+/// Widening the window to 70 min accepts the farther origin.
+///
+/// Entry node "i" in the synthetic graph is at (35.6815, 139.7675).
+/// Far origin used: (35.65, 139.75) ≈ 3 842 m from "i".
+///
+/// Computed values (equirectangular approx):
+///   access_secs = ⌈3 842 × 1.3 / (30/3.6)⌉ = ⌈4 994.6/8.333⌉ = 600 s
+///   return_dist ("o"→origin) ≈ 3 910 m  →  return_secs = 610 s
+///   base = 600 + 1 860 + 610 = 3 070 s   plan = 3 070 + 614 = 3 684 s
+///   → rejected at max_minutes=40 (2 400 s), accepted at max_minutes=70 (4 200 s).
+#[test]
+fn access_time_from_coordinate_origin_affects_base_seconds_and_time_window() {
+    let g = graph(); // synthetic graph: entry "i" at (35.6815, 139.7675)
+
+    // ── Case 1: origin at exact entry-node coordinates ──
+    let r_near = json!({
+        "requestId": "coord-access-near",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.6815, "lon": 139.7675},
+        "minMinutes": 30,
+        "maxMinutes": 40,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let res_near: Value =
+        serde_json::from_str(&search_json(&g.to_string(), &r_near.to_string(), "{}").unwrap())
+            .unwrap();
+    assert_eq!(
+        res_near["status"], "ok",
+        "origin at entry node, window [30,40]: expected candidate, got reason={:?}",
+        res_near["reason"]
+    );
+    let c_near = &res_near["candidates"][0];
+    assert_eq!(
+        c_near["duration"]["accessSeconds"], 0,
+        "origin at entry node must have 0 access seconds"
+    );
+    assert_eq!(
+        c_near["duration"]["baseSeconds"], 1876,
+        "origin at entry node: base must match the originNodeId contract (1876 s)"
+    );
+
+    // ── Case 2: origin ~4 km away — same narrow window rejected (TIME_WINDOW) ──
+    let r_far_narrow = json!({
+        "requestId": "coord-access-far-narrow",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.65, "lon": 139.75},
+        "minMinutes": 30,
+        "maxMinutes": 40,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let res_far_narrow: Value = serde_json::from_str(
+        &search_json(&g.to_string(), &r_far_narrow.to_string(), "{}").unwrap(),
+    )
+    .unwrap();
+    // base ≈ 3 070 s → plan ≈ 3 684 s > 40×60=2 400 → TIME_WINDOW
+    assert_eq!(
+        res_far_narrow["status"], "no_candidates",
+        "far origin, window [30,40]: expected no_candidates"
+    );
+    assert_eq!(
+        res_far_narrow["reason"], "TIME_WINDOW",
+        "far origin, window [30,40]: rejection reason must be TIME_WINDOW, not NO_CONNECTION"
+    );
+
+    // ── Case 3: same far origin, wider window [30, 70] — candidate found ──
+    let r_far_wide = json!({
+        "requestId": "coord-access-far-wide",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.65, "lon": 139.75},
+        "minMinutes": 30,
+        "maxMinutes": 70,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let res_far_wide: Value =
+        serde_json::from_str(&search_json(&g.to_string(), &r_far_wide.to_string(), "{}").unwrap())
+            .unwrap();
+    assert_eq!(
+        res_far_wide["status"], "ok",
+        "far origin, window [30,70]: expected candidate, got reason={:?}",
+        res_far_wide["reason"]
+    );
+    let c_far = &res_far_wide["candidates"][0];
+    let access_far = c_far["duration"]["accessSeconds"].as_u64().unwrap();
+    let base_far = c_far["duration"]["baseSeconds"].as_u64().unwrap();
+    assert!(
+        access_far > 0,
+        "far origin must have non-zero access_seconds, got {access_far}"
+    );
+    assert!(
+        base_far > 1876,
+        "far origin base_seconds ({base_far}) must exceed the zero-access case (1876)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Task B: max_access_entries=0 is unlimited; positive value caps candidates
+// ---------------------------------------------------------------------------
+
+/// With max_access_entries=0 (unlimited, the default) both entries in a
+/// two-network graph are tried and both produce candidates.
+/// With max_access_entries=1 only the lex-smaller entry is tried, so only
+/// one network's candidates appear.
+#[test]
+fn max_access_entries_zero_means_unlimited_tries_all_entries() {
+    let g = two_network_graph();
+    // Query equidistant from both Entry from-nodes.
+    let r = json!({
+        "requestId": "two-entry-unlimited",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.68, "lon": 139.760},
+        "minMinutes": 30,
+        "maxMinutes": 60,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+
+    // ── 0 (unlimited): both billing pairs must appear ──
+    let res_unlimited: Value = serde_json::from_str(
+        &search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessEntries": 0}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        res_unlimited["status"], "ok",
+        "unlimited entries: expected ok, got reason={:?}",
+        res_unlimited["reason"]
+    );
+    let ids_unlimited: Vec<&str> = res_unlimited["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["toll"]["billingPairId"].as_str().unwrap())
+        .collect();
+    assert!(
+        ids_unlimited.contains(&"aaa-section"),
+        "unlimited: aaa-section must be present, candidates={ids_unlimited:?}"
+    );
+    assert!(
+        ids_unlimited.contains(&"zzz-section"),
+        "unlimited: zzz-section must be present, candidates={ids_unlimited:?}"
+    );
+
+    // ── 1 (capped): only the lex-smaller "aaa-entry" is tried ──
+    let res_capped: Value = serde_json::from_str(
+        &search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessEntries": 1}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        res_capped["status"], "ok",
+        "capped entries: expected ok, got reason={:?}",
+        res_capped["reason"]
+    );
+    let ids_capped: Vec<&str> = res_capped["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["toll"]["billingPairId"].as_str().unwrap())
+        .collect();
+    assert!(
+        ids_capped.contains(&"aaa-section"),
+        "cap=1: aaa-section must be present"
+    );
+    assert!(
+        !ids_capped.contains(&"zzz-section"),
+        "cap=1: zzz-section must NOT be present (lex-larger entry excluded)"
     );
 }

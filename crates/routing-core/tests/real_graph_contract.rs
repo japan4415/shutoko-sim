@@ -1,4 +1,4 @@
-use shutoko_routing_core::{search, search_json, Graph, SearchLimits, SearchRequest};
+use shutoko_routing_core::{search, search_json, Graph, LatLng, SearchLimits, SearchRequest};
 use std::collections::BTreeSet;
 
 fn real_graph_str() -> &'static str {
@@ -463,13 +463,23 @@ fn real_graph_coordinate_input_snap_and_candidate_enrichment() {
     };
     let result = search(&g, &request, &limits).expect("coordinate search must succeed");
     assert_eq!(result.status, "ok");
+    // With max_access_entries = 0 (unlimited, the new default), all Entry access
+    // points are tried.  Among C1 outer-ring pairs, `ginza-shibakoen` has the
+    // highest shutoko_seconds (longer entry/exit ramps → more highway time per yen)
+    // and therefore ranks first by time_per_yen.  `kandabashi-takaracho` shares
+    // >80% Jaccard similarity with ginza (same ring cycle edges) and is deduplicated.
     let candidate = result
         .candidates
         .iter()
-        .find(|c| c.toll.billing_pair_id == "bp:c1-outer:kandabashi-takaracho")
-        .expect("kandabashi-takaracho candidate must exist for coordinate origin");
-    assert_eq!(candidate.entry.name.as_deref(), Some("神田橋入口"));
-    assert_eq!(candidate.exit.name.as_deref(), Some("宝町出口"));
+        .find(|c| c.toll.billing_pair_id == "bp:c1-outer:ginza-shibakoen")
+        .expect("ginza-shibakoen must be first outer-ring candidate with unlimited entries");
+    assert_eq!(candidate.entry.name.as_deref(), Some("銀座入口"));
+    assert_eq!(candidate.exit.name.as_deref(), Some("芝公園出口"));
+    // Origin is at kandabashi entry coords (~398 s away from ginza entry).
+    assert!(
+        candidate.duration.access_seconds > 0,
+        "access must be non-zero: origin is not at ginza entry"
+    );
     assert_eq!(candidate.entry_id, candidate.entry.edge_id);
     assert_eq!(candidate.exit_id, candidate.exit.edge_id);
     assert_eq!(
@@ -598,6 +608,139 @@ fn test_eight_pairs_determinism_and_performance_table() {
             own,
             res.expanded_states,
             elapsed.as_secs_f64() * 1000.0
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Task A+B: 現実座標起点のテスト（30 km キャップ / unlimited entries）
+// ---------------------------------------------------------------------------
+
+/// 大阪駅 (34.7025, 135.4959) は C1 最寄り入口まで約 400 km あり、
+/// デフォルト 30 km キャップを超えるため NO_CONNECTION を返す。
+#[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn osaka_station_returns_no_connection_due_to_distance_cap() {
+    let g = real_graph();
+    let limits = SearchLimits::default(); // max_access_distance_meters = 30 000 m
+    let request = SearchRequest {
+        request_id: "req-osaka-no-conn".into(),
+        release_id: "c1-real-v1".into(),
+        origin_node_id: None,
+        origin: Some(LatLng {
+            lat: 34.7025,
+            lon: 135.4959,
+        }),
+        min_minutes: 30,
+        max_minutes: 60,
+        vehicle_profile: "passenger-car-etc".into(),
+        pricing_at: "2026-09-10T00:00:00Z".into(),
+    };
+    let result = search(&g, &request, &limits).expect("search must not error on far origin");
+    eprintln!(
+        "Osaka station: status={}, reason={:?}",
+        result.status, result.reason
+    );
+    assert_eq!(
+        result.status, "no_candidates",
+        "Osaka station must return no_candidates"
+    );
+    assert_eq!(
+        result.reason.as_deref(),
+        Some("NO_CONNECTION"),
+        "Osaka station is ~400 km from C1: must be NO_CONNECTION with 30 km cap"
+    );
+}
+
+/// 東京駅 (35.6812, 139.7671) から検索すると、unlimited entries（デフォルト）で
+/// 候補が返る。最寄り入口（宝町）まで約 746 m。
+/// 旧デフォルト 5 件だと候補 0 だったが、unlimited で候補 ≥ 1 が確認できる。
+#[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn tokyo_station_returns_candidates_with_unlimited_entries() {
+    let g = real_graph();
+    let limits = SearchLimits::default(); // max_access_entries=0 (unlimited), 30 km cap
+    let request = SearchRequest {
+        request_id: "req-tokyo-station".into(),
+        release_id: "c1-real-v1".into(),
+        origin_node_id: None,
+        origin: Some(LatLng {
+            lat: 35.6812,
+            lon: 139.7671,
+        }),
+        min_minutes: 30,
+        max_minutes: 60,
+        vehicle_profile: "passenger-car-etc".into(),
+        pricing_at: "2026-09-10T00:00:00Z".into(),
+    };
+    let result = search(&g, &request, &limits).expect("search must not error");
+    eprintln!(
+        "Tokyo station (unlimited): status={}, reason={:?}, candidates={}",
+        result.status,
+        result.reason,
+        result.candidates.len()
+    );
+    assert_eq!(
+        result.status, "ok",
+        "東京駅 unlimited entries: 候補が得られること。reason={:?}",
+        result.reason
+    );
+    assert!(
+        !result.candidates.is_empty(),
+        "東京駅 unlimited entries: 少なくとも 1 件の候補が必要"
+    );
+    // 最寄り入口は宝町入口（~746 m）。アクセス距離が 2 km 未満であることを確認する。
+    let nearest_access_dist = result
+        .candidates
+        .iter()
+        .map(|c| c.snapped_origin.distance_meters)
+        .fold(f64::MAX, f64::min);
+    assert!(
+        nearest_access_dist < 2000.0,
+        "東京駅 nearest access must be < 2 km, got {:.0} m",
+        nearest_access_dist
+    );
+}
+
+/// 新宿駅 (35.6896, 139.7006) と渋谷駅 (35.6580, 139.7016) から
+/// unlimited entries（デフォルト）で候補が返ること。
+/// 新宿: 最寄り約 4.6 km（霞が関）/ 渋谷: 最寄り約 3.9 km（芝公園）。
+#[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn shinjuku_and_shibuya_stations_return_candidates() {
+    let g = real_graph();
+    let limits = SearchLimits::default();
+
+    for (station, lat, lon) in [
+        ("新宿駅", 35.6896_f64, 139.7006_f64),
+        ("渋谷駅", 35.6580_f64, 139.7016_f64),
+    ] {
+        let request = SearchRequest {
+            request_id: format!("req-{station}"),
+            release_id: "c1-real-v1".into(),
+            origin_node_id: None,
+            origin: Some(LatLng { lat, lon }),
+            min_minutes: 30,
+            max_minutes: 60,
+            vehicle_profile: "passenger-car-etc".into(),
+            pricing_at: "2026-09-10T00:00:00Z".into(),
+        };
+        let result = search(&g, &request, &limits)
+            .unwrap_or_else(|e| panic!("{station} search must not error: {e}"));
+        eprintln!(
+            "{station}: status={}, reason={:?}, candidates={}",
+            result.status,
+            result.reason,
+            result.candidates.len()
+        );
+        assert_eq!(
+            result.status, "ok",
+            "{station} unlimited entries: 候補が得られること。reason={:?}",
+            result.reason
+        );
+        assert!(
+            !result.candidates.is_empty(),
+            "{station}: 少なくとも 1 件の候補が必要"
         );
     }
 }

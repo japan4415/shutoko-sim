@@ -18,9 +18,24 @@ export interface SearchLimits {
   maxExpandedStates?: number;
   beamWidth?: number;
   maxLoopEdges?: number;
-  maxLocalEdges?: number;
+  /**
+   * Maximum number of Entry access points to try for coordinate-input searches.
+   * 0 (or omit) means unlimited — all Entry access points in the graph are candidates.
+   * Default: 0 (unlimited).
+   */
+  maxAccessEntries?: number;
+  /**
+   * Maximum straight-line distance (metres) from the user's coordinate to the nearest
+   * Entry access point.  If the nearest entry exceeds this distance, NO_CONNECTION is
+   * returned.  0.0 (or omit) means unlimited.  Default: 30000 (30 km).
+   */
+  maxAccessDistanceMeters?: number;
   maxPairs?: number;
   maxCandidates?: number;
+  /** Maximum number of nodes allowed in the graph. Default: 1,000,000. */
+  maxGraphNodes?: number;
+  /** Maximum number of edges allowed in the graph. Default: 3,000,000. */
+  maxGraphEdges?: number;
 }
 
 export interface SnappedOrigin {
@@ -116,6 +131,10 @@ export interface RoutingErrorPayload {
 /**
  * Execute experimental route search on a prevalidated graph JSON.
  *
+ * Convenience API — parses all three JSON arguments and rebuilds the index on
+ * every call.  For repeated searches on the same graph, prefer `prepare` +
+ * `searchPrepared` to avoid rebuilding the index each time.
+ *
  * @param graphJson Serialized Graph JSON string
  * @param requestJson Serialized SearchRequest JSON string
  * @param limitsJson Serialized SearchLimits JSON string (empty object "{}" for defaults)
@@ -127,5 +146,40 @@ export function search(
   requestJson: string,
   limitsJson: string
 ): string;
+
+/**
+ * An opaque handle wrapping a PreparedGraph.
+ *
+ * Obtain via `prepare()`; pass to `searchPrepared()` for fast repeated search
+ * without rebuilding the index on every call.
+ *
+ * Call `.free()` when done to release Wasm memory.
+ */
+export class WasmPreparedGraph {
+  free(): void;
+}
+
+/**
+ * Build a prepared graph from JSON strings (the expensive, one-time step).
+ *
+ * @param graphJson  Serialized Graph JSON string
+ * @param limitsJson Serialized SearchLimits JSON string (use "{}" for defaults)
+ * @returns An opaque WasmPreparedGraph handle
+ * @throws JavaScript Error with JSON serialized RoutingErrorPayload on invalid input
+ */
+export function prepare(graphJson: string, limitsJson: string): WasmPreparedGraph;
+
+/**
+ * Execute a route search on an already-prepared graph (fast, per-search call).
+ *
+ * Skips index rebuilding; only validates the request and runs the search
+ * algorithm.
+ *
+ * @param pg          A WasmPreparedGraph handle obtained from `prepare`
+ * @param requestJson Serialized SearchRequest JSON string
+ * @returns Serialized SearchResult JSON string
+ * @throws JavaScript Error with JSON serialized RoutingErrorPayload on invalid input
+ */
+export function searchPrepared(pg: WasmPreparedGraph, requestJson: string): string;
 
 export default function init(module_or_path?: unknown): Promise<unknown>;

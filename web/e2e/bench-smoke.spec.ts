@@ -3,9 +3,10 @@
 // 入れず、手動実行とする。ここでは「ハーネスが壊れていないこと」だけを最小構成
 // （cold 1 回 + warm 1 回、スロットルなし）で検証する。
 //
-// パターンは 0（神田橋 15〜30）と 1（神田橋 15〜60）の 2 件を回す。パターン 0 は
-// scout-003 F4 のとおり TIME_WINDOW で候補 0 件になり status 文言だけを描く分岐、
-// パターン 1 は候補カードを描く分岐を通るため、描画経路を両方被覆できる。
+// パターンは 0（神田橋 15〜30）と 1（神田橋 15〜60）の 2 件を回す。
+// feat/drop-local-roads 以降、一般道を排除し直線距離アクセスに変わったため、
+// パターン 0（15〜30 分）でも候補が返るようになり、描画経路は両パターンとも
+// 候補カード描画を通る。
 import { expect, test } from "@playwright/test";
 import { validateEnvelope, type BenchEnvelope, type BenchTrial } from "../src/bench/envelope";
 
@@ -67,10 +68,11 @@ test("bench ページが cold/warm の 1 試行ずつを完走し envelope を�
     expect(trial?.tFirstCandidateMs ?? 0, `${label} の tFirstCandidate`).toBeGreaterThan(0);
   }
 
-  // パターン 0（神田橋 15〜30）は TIME_WINDOW で候補 0 件、パターン 1（神田橋 15〜60）は候補 2 件。
-  expect(cold0?.resultStatus).toBe("no_candidates");
-  expect(cold0?.reason).toBe("TIME_WINDOW");
-  expect(cold0?.candidateCount).toBe(0);
+  // feat/drop-local-roads 以降：パターン 0（神田橋 15〜30）も ok で候補が返る。
+  // パターン 1（神田橋 15〜60）は候補 2 件。
+  expect(cold0?.resultStatus).toBe("ok");
+  expect(cold0?.reason).toBeNull();
+  expect(cold0?.candidateCount).toBeGreaterThan(0);
   expect(cold1?.resultStatus).toBe("ok");
   expect(cold1?.candidateCount).toBe(2);
 

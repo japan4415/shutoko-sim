@@ -7,11 +7,19 @@ export type Coords = [number, number];
 
 /** セグメント種別ごとの座標列。各区間は連続した座標ラン。 */
 export interface DerivedSegments {
-  /** 出発地点から入口までの一般道。 */
+  /**
+   * 出発地点から入口までのアクセス区間。
+   * 一般道排除後（feat/drop-local-roads）はグラフに一般道エッジが含まれないため、
+   * 現在は常に空配列になる。将来の拡張用に残している。
+   */
   access: Coords[];
   /** 首都高を周回する区間。 */
   loop: Coords[];
-  /** 出口から出発地点へ戻る一般道。 */
+  /**
+   * 出口から出発地点へ戻る帰路区間。
+   * 一般道排除後（feat/drop-local-roads）はグラフに一般道エッジが含まれないため、
+   * 現在は常に空配列になる。将来の拡張用に残している。
+   */
   return: Coords[];
   /** 課金対象の 1 区間（入口エッジ〜出口エッジ）。 */
   charged: Coords[];

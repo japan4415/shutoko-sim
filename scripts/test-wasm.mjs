@@ -12,9 +12,10 @@ const result = JSON.parse(first);
 assert.equal(result.status, 'ok');
 assert.ok(result.candidates.length > 0);
 const candidate = result.candidates[0];
-assert.deepEqual(candidate.edgeIds, ['access', 'entry', 'ab', 'bc', 'ca', 'exit', 'return']);
-assert.equal(candidate.duration.baseSeconds, 1980);
-assert.equal(candidate.duration.planSeconds, 2376);
+// feat/drop-local-roads: 'access' と 'return'（一般道エッジ）はグラフから除去済み。
+assert.deepEqual(candidate.edgeIds, ['entry', 'ab', 'bc', 'ca', 'exit']);
+assert.equal(candidate.duration.baseSeconds, 1876);
+assert.equal(candidate.duration.planSeconds, 2252);
 assert.equal(candidate.toll.amountYen, 300);
 assert.equal(candidate.toll.chargedSectionCount, 1);
 
@@ -27,7 +28,8 @@ assert.ok(
   'mapsUrl must start with Google Maps directions API base',
 );
 assert.ok(candidate.handoff.mapsUrl.length <= 2048, 'mapsUrl length must be <= 2048');
-assert.equal(candidate.snappedOrigin.nodeId, 's');
+// feat/drop-local-roads: 's' ノード（一般道始点）は除去。originNodeId="i" なので snappedOrigin.nodeId は "i"。
+assert.equal(candidate.snappedOrigin.nodeId, 'i');
 assert.equal(candidate.snappedOrigin.distanceMeters, 0);
 assert.ok(
   candidate.warnings.includes('HANDOFF_WAYPOINTS_UNVERIFIED'),
@@ -46,11 +48,12 @@ const coordRes = JSON.parse(search(graph, JSON.stringify(coordReq), '{}'));
 assert.equal(coordRes.status, 'ok');
 assert.ok(coordRes.candidates.length > 0);
 const coordCand = coordRes.candidates[0];
-assert.equal(coordCand.snappedOrigin.nodeId, 's');
-assert.ok(coordCand.snappedOrigin.distanceMeters < 1.0);
+// feat/drop-local-roads: 座標 (35.681, 139.7671) から最近傍 Entry from-node は "i"（約 66m）。
+assert.equal(coordCand.snappedOrigin.nodeId, 'i');
+assert.ok(coordCand.snappedOrigin.distanceMeters < 100.0);
 assert.deepEqual(coordCand.origin, { lat: 35.681, lon: 139.7671 });
 
-// NO_CONNECTION case when coordinates are beyond 200m
+// NO_CONNECTION case when coordinates are beyond 30 km from the nearest Entry access point
 const noConnReq = JSON.parse(request);
 delete noConnReq.originNodeId;
 noConnReq.origin = { lat: 35.0, lon: 139.0 };

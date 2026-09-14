@@ -2,10 +2,9 @@
 //!
 //! URL generation follows standard Google Maps URLs format (<= 2,048 chars) without
 //! pulling external heavy URL crates. Waypoint selection uses a provisional 3-point rule
-//! (entry merge anchor, loop midpoint, exit branch) subject to physical verification in #8.
+//! (entry access point, loop midpoint, exit node) subject to physical verification in #8.
 
-use crate::{Edge, LatLng, Node};
-use std::collections::BTreeMap;
+use crate::{Edge, LatLng};
 
 /// Maximum allowed character length for generated Google Maps URLs.
 pub const MAX_MAPS_URL_LENGTH: usize = 2048;
@@ -13,21 +12,33 @@ pub const MAX_MAPS_URL_LENGTH: usize = 2048;
 /// Select provisional waypoints for Google Maps handoff to prevent short-circuiting.
 ///
 /// Provisional rules:
-/// 1. Mainline node immediately after entry merge (anchor node).
+/// 1. Entry access point: the `from`-node of the Entry edge (where the user enters
+///    the expressway network from the surface streets).
 /// 2. Midpoint node along the loop (node closest to 50% accumulated loop distance).
-/// 3. Mainline node immediately before exit divergence (from-node of exit edge).
+/// 3. Exit node: the `to`-node of the Exit edge (where the user leaves the expressway).
+///
+/// The current-location-to-entry-access-point leg is handled by Google Maps itself;
+/// we do not add the user's origin as a waypoint.
+///
+/// `node_latlng` is called to resolve a node ID to its coordinates.  Returns
+/// `None` for unknown IDs (which are then silently dropped from the result).
+/// Passing a closure avoids building a temporary `BTreeMap` on every call when
+/// the caller already owns an indexed graph structure.
 ///
 /// Returns at most 3 distinct waypoints.
-pub fn select_waypoints(
-    anchor_node_id: &str,
+pub fn select_waypoints<F>(
+    entry_access_node_id: &str,
     cycle_edges: &[&Edge],
     exit_edge: &Edge,
-    nodes_by_id: &BTreeMap<&str, &Node>,
-) -> Vec<LatLng> {
+    node_latlng: F,
+) -> Vec<LatLng>
+where
+    F: Fn(&str) -> Option<LatLng>,
+{
     let mut selected_node_ids: Vec<&str> = Vec::with_capacity(3);
 
-    // 1. Entry merge mainline anchor node
-    selected_node_ids.push(anchor_node_id);
+    // 1. Entry access point: Entry edge from-node (start of expressway section).
+    selected_node_ids.push(entry_access_node_id);
 
     // 2. Loop distance midpoint node
     if !cycle_edges.is_empty() {
@@ -54,22 +65,17 @@ pub fn select_waypoints(
         }
     }
 
-    // 3. Mainline node immediately before exit branch
-    let exit_branch_node_id = exit_edge.from.as_str();
-    if !selected_node_ids.contains(&exit_branch_node_id) {
-        selected_node_ids.push(exit_branch_node_id);
+    // 3. Exit node: Exit edge to-node (end of expressway section).
+    let exit_node_id = exit_edge.to.as_str();
+    if !selected_node_ids.contains(&exit_node_id) {
+        selected_node_ids.push(exit_node_id);
     }
 
     selected_node_ids.truncate(3);
 
     selected_node_ids
         .into_iter()
-        .filter_map(|id| {
-            nodes_by_id.get(id).map(|n| LatLng {
-                lat: n.lat,
-                lon: n.lon,
-            })
-        })
+        .filter_map(node_latlng)
         .collect()
 }
 

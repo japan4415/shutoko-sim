@@ -28,16 +28,18 @@ fn one_loop_then_one_section_exit_accounts_for_every_traversal() {
     let candidate = &candidates(&result)[0];
     assert_eq!(
         candidate["edgeIds"],
-        json!(["access", "entry", "ab", "bc", "ca", "exit", "return"])
+        json!(["entry", "ab", "bc", "ca", "exit"])
     );
     assert_eq!(candidate["loop"]["edgeIds"], json!(["ab", "bc", "ca"]));
-    assert_eq!(candidate["duration"]["accessSeconds"], 60);
+    // originNodeId="i" is the Entry from-node: access distance = 0, access_secs = 0.
+    assert_eq!(candidate["duration"]["accessSeconds"], 0);
     assert_eq!(candidate["duration"]["shutokoSeconds"], 1860);
-    assert_eq!(candidate["duration"]["returnSeconds"], 60);
-    assert_eq!(candidate["duration"]["baseSeconds"], 1980);
-    assert_eq!(candidate["duration"]["bufferSeconds"], 396);
-    assert_eq!(candidate["duration"]["planSeconds"], 2376);
-    assert_eq!(candidate["distanceMeters"], 31400);
+    // return: ceil(dist(o→i) * 1.3 / (30/3.6)) = ceil(96.4 * 1.3 / 8.333) = 16
+    assert_eq!(candidate["duration"]["returnSeconds"], 16);
+    assert_eq!(candidate["duration"]["baseSeconds"], 1876);
+    assert_eq!(candidate["duration"]["bufferSeconds"], 376);
+    assert_eq!(candidate["duration"]["planSeconds"], 2252);
+    assert_eq!(candidate["distanceMeters"], 30400);
     assert_eq!(candidate["shutokoDistanceMeters"], 30400);
     assert_eq!(candidate["toll"]["amountYen"], 300);
     assert_eq!(candidate["toll"]["chargedSectionCount"], 1);
@@ -65,15 +67,13 @@ fn second_lap_cannot_satisfy_a_longer_minimum() {
 
 #[test]
 fn checks_forbidden_transitions_across_all_segment_boundaries() {
+    // Only transitions between edges that still exist in the graph (no local edges).
     for transition in [
-        json!(["access", "entry"]),
         json!(["entry", "ab"]),
         json!(["ab", "bc"]),
         json!(["bc", "ca"]),
         json!(["ca", "exit"]),
-        json!(["exit", "return"]),
         json!(["bc", "ca", "exit"]),
-        json!(["access", "entry", "ab"]),
     ] {
         let mut g = graph();
         g["forbiddenTransitions"] = json!([transition]);
@@ -86,23 +86,27 @@ fn checks_forbidden_transitions_across_all_segment_boundaries() {
 
 #[test]
 fn minimum_uses_base_and_maximum_uses_buffered_seconds() {
+    // base = access(0) + shutoko(1860) + return(16) = 1876 s = 31.27 min
+    // buffer = max(300, ceil(1876/5)) = 376 s; plan = 2252 s = 37.53 min
     let mut r = request();
-    r["minMinutes"] = json!(33);
+    r["minMinutes"] = json!(31); // 31*60=1860 ≤ 1876 → passes
     assert_eq!(candidates(&run(&graph(), &r, json!({}))).len(), 1);
-    r["minMinutes"] = json!(34);
+    r["minMinutes"] = json!(32); // 32*60=1920 > 1876 → rejected
     assert!(candidates(&run(&graph(), &r, json!({}))).is_empty());
     r["minMinutes"] = json!(30);
-    r["maxMinutes"] = json!(39);
+    r["maxMinutes"] = json!(37); // plan=2252 > 37*60=2220 → rejected
     assert!(candidates(&run(&graph(), &r, json!({}))).is_empty());
 }
 
 #[test]
 fn maximum_boundary_is_inclusive_and_buffer_rounds_up() {
     let mut g = graph();
-    // base=2000 -> buffer=400 -> plan=2400, exactly forty minutes.
-    g["edges"][0]["durationSeconds"] = json!(80);
+    // base = 0 + (X + 600+600+600+30) + 16 = X + 1846
+    // With X=154: base=2000 -> buffer=400 -> plan=2400, exactly forty minutes.
+    // With X=155: base=2001 -> buffer=401 -> plan=2402 > 2400 → rejected.
+    g["edges"][0]["durationSeconds"] = json!(154);
     assert_eq!(candidates(&run(&g, &request(), json!({}))).len(), 1);
-    g["edges"][0]["durationSeconds"] = json!(81);
+    g["edges"][0]["durationSeconds"] = json!(155);
     assert!(candidates(&run(&g, &request(), json!({}))).is_empty());
 }
 
@@ -144,7 +148,8 @@ fn rejects_graph_corruption_and_overlapping_prices() {
     g["edges"][0]["to"] = json!("missing");
     cases.push(g);
     let mut g = graph();
-    g["edges"][1]["id"] = json!("access");
+    // Create a duplicate edge ID by giving "ab" the same ID as "entry".
+    g["edges"][1]["id"] = json!("entry");
     cases.push(g);
     let mut g = graph();
     g["billingPairs"][0]["prices"]
@@ -183,9 +188,11 @@ fn rejects_hidden_extra_laps_inside_fixed_connection_segments() {
 
 #[test]
 fn rejects_a_hidden_lap_spanning_both_fixed_connection_segments() {
+    // Change edges[0] (entry i→a) to go i→b, and edges[4] (exit a→o) to go b→o.
+    // Direct path: i→b→c→a→b→o — node "b" appears twice → hidden lap.
     let mut g = graph();
-    g["edges"][1]["to"] = json!("b");
-    g["edges"][5]["from"] = json!("b");
+    g["edges"][0]["to"] = json!("b");
+    g["edges"][4]["from"] = json!("b");
     g["billingPairs"][0]["entryToAnchorEdgeIds"] = json!(["entry", "bc", "ca"]);
     g["billingPairs"][0]["anchorToExitEdgeIds"] = json!(["ab", "exit"]);
     let mut r = request();
@@ -232,11 +239,11 @@ fn rejects_invalid_request_and_zero_limits() {
             "{field}"
         );
     }
+    // maxAccessEntries is excluded from this list: 0 now means "unlimited" (all entries).
     for limit in [
         "maxExpandedStates",
         "beamWidth",
         "maxLoopEdges",
-        "maxLocalEdges",
         "maxPairs",
         "maxCandidates",
     ] {
@@ -250,6 +257,19 @@ fn rejects_invalid_request_and_zero_limits() {
             )
             .is_err(),
             "{limit}"
+        );
+    }
+    // maxAccessEntries=0 is valid (unlimited); verify it does not error.
+    {
+        let limits = json!({"maxAccessEntries": 0});
+        assert!(
+            search_json(
+                &graph().to_string(),
+                &request().to_string(),
+                &limits.to_string()
+            )
+            .is_ok(),
+            "maxAccessEntries=0 must be accepted as unlimited"
         );
     }
 }
@@ -269,8 +289,10 @@ fn repeated_searches_are_deterministic_and_exhaustion_is_explicit() {
 
 #[test]
 fn connection_segments_may_share_edges_with_the_loop() {
+    // Change edges[0] (entry i→a) to go i→b so the entry path is [entry(i→b), bc, ca].
+    // The loop from anchor "a" is [ab, bc, ca], sharing bc and ca with the entry path.
     let mut g = graph();
-    g["edges"][1]["to"] = json!("b");
+    g["edges"][0]["to"] = json!("b");
     g["billingPairs"][0]["entryToAnchorEdgeIds"] = json!(["entry", "bc", "ca"]);
     let mut r = request();
     r["maxMinutes"] = json!(70);
@@ -279,9 +301,10 @@ fn connection_segments_may_share_edges_with_the_loop() {
     let c = &candidates(&result)[0];
     assert_eq!(
         c["edgeIds"],
-        json!(["access", "entry", "bc", "ca", "ab", "bc", "ca", "exit", "return"])
+        json!(["entry", "bc", "ca", "ab", "bc", "ca", "exit"])
     );
-    assert_eq!(c["duration"]["baseSeconds"], 3180);
+    // base = 0 + (30+600+600+600+600+600+30) + 16 = 3076
+    assert_eq!(c["duration"]["baseSeconds"], 3076);
     assert_eq!(c["shutokoDistanceMeters"], 50400);
 }
 
@@ -346,12 +369,13 @@ fn untruncated_search_matches_all_simple_cycles_in_a_tiny_graph() {
     assert_eq!(result, run(&g, &r, json!({})));
 }
 
-// A second independent road network shares only the origin, so diversity filtering
-// cannot hide ranking mistakes between the two billing pairs.
+// A second independent road network shares only the Entry from-node "i" (the common
+// access point), so diversity filtering cannot hide ranking mistakes between the two
+// billing pairs.  Both billing pairs are accessible from originNodeId="i".
 fn add_independent_pair(g: &mut Value, loop_edge_seconds: u64, amount: Option<u64>) {
     let original = graph();
     let rename = |id: &str| {
-        if id == "s" {
+        if id == "i" {
             id.to_owned()
         } else {
             format!("second-{id}")
@@ -361,7 +385,7 @@ fn add_independent_pair(g: &mut Value, loop_edge_seconds: u64, amount: Option<u6
         .as_array()
         .unwrap()
         .iter()
-        .filter(|n| n["id"] != "s")
+        .filter(|n| n["id"] != "i")
     {
         g["nodes"].as_array_mut().unwrap().push(json!({
             "id": rename(node["id"].as_str().unwrap()),
@@ -480,7 +504,8 @@ fn retained_successful_paths_limit_preserves_valid_candidates_and_reports_trunca
         candidates(&result)[0]["loop"]["edgeIds"],
         json!(["a-loop-1"])
     );
-    assert_eq!(candidates(&result)[0]["duration"]["planSeconds"], 2376);
+    // base = 0 + (30+1800+30) + 16 = 1876; buffer=376; plan=2252
+    assert_eq!(candidates(&result)[0]["duration"]["planSeconds"], 2252);
 }
 
 #[test]
@@ -520,8 +545,10 @@ fn identifiers_enforce_the_256_byte_boundary() {
             search_json(&g.to_string(), &request().to_string(), "{}").is_ok(),
             length == 256
         );
+        // Use edges[1] ("ab") which is not referenced by billing pair paths,
+        // so changing its ID only tests the ID length limit.
         let mut g = graph();
-        g["edges"][0]["id"] = json!(id);
+        g["edges"][1]["id"] = json!(id);
         assert_eq!(
             search_json(&g.to_string(), &request().to_string(), "{}").is_ok(),
             length == 256
@@ -578,289 +605,38 @@ fn timestamp_length_cap_rejects_oversized_fractional_seconds() {
     }
 }
 
-fn edge_json(
-    id: &str,
-    from: &str,
-    to: &str,
-    kind: &str,
-    duration_seconds: u64,
-    distance_meters: u64,
-) -> Value {
-    json!({
-        "id": id,
-        "from": from,
-        "to": to,
-        "kind": kind,
-        "durationSeconds": duration_seconds,
-        "distanceMeters": distance_meters,
-    })
-}
-
-fn standard_highway_edges() -> Vec<Value> {
-    vec![
-        edge_json("entry", "i", "a", "entry", 30, 200),
-        edge_json("ab", "a", "b", "shutoko", 600, 10000),
-        edge_json("bc", "b", "c", "shutoko", 600, 10000),
-        edge_json("ca", "c", "a", "shutoko", 600, 10000),
-        edge_json("exit", "a", "o", "exit", 30, 200),
-        edge_json("return", "o", "s", "local", 60, 500),
-    ]
-}
-
-fn build_test_graph(nodes: &[&str], edges: Vec<Value>, forbidden_transitions: Value) -> Value {
-    json!({
-        "schemaVersion": 2,
-        "releaseId": "synthetic-v1",
-        "vehicleProfile": "passenger-car-etc",
-        "nodes": nodes.iter().map(|n| json!({"id": n, "lat": 35.68, "lon": 139.76})).collect::<Vec<_>>(),
-        "edges": edges,
-        "billingPairs": [{
-            "id": "one-section",
-            "entryId": "entry",
-            "exitId": "exit",
-            "anchorNodeId": "a",
-            "entryToAnchorEdgeIds": ["entry"],
-            "anchorToExitEdgeIds": ["exit"],
-            "status": "verified",
-            "vehicleProfile": "passenger-car-etc",
-            "prices": [{
-                "amountYen": 300,
-                "effectiveFrom": "2026-01-01T00:00:00Z",
-                "effectiveTo": "2026-10-01T00:00:00Z"
-            }]
-        }],
-        "forbiddenTransitions": forbidden_transitions
-    })
-}
-
-fn standard_test_request(origin: &str) -> Value {
-    json!({
-        "requestId": "test-req",
-        "releaseId": "synthetic-v1",
-        "originNodeId": origin,
-        "minMinutes": 30,
-        "maxMinutes": 45,
-        "vehicleProfile": "passenger-car-etc",
-        "pricingAt": "2026-09-10T00:00:00Z"
-    })
-}
-
-/// (a) forward: forbiddenTransitions=[["l2","entry"]] で合法迂回 l3,l4 があるとき status: ok で迂回路が選ばれる
+/// Coordinate input snaps to the nearest Entry from-node in the snap grid.
+/// Node "i" (lat:35.6815, lon:139.7675) is the sole Entry from-node in the
+/// synthetic graph.  A query at (35.6815, 139.7675) should snap to "i" with
+/// distance ≈ 0 m.
 #[test]
-fn forbidden_transitions_forward_junction_detour_selected() {
-    let mut edges = vec![
-        edge_json("l1", "s", "p", "local", 60, 500),
-        edge_json("l2", "p", "i", "local", 60, 500),
-        edge_json("l3", "s", "q", "local", 90, 700),
-        edge_json("l4", "q", "i", "local", 90, 700),
-    ];
-    edges.extend(standard_highway_edges());
-    let g = build_test_graph(
-        &["s", "p", "q", "i", "a", "b", "c", "o"],
-        edges,
-        json!([["l2", "entry"]]),
-    );
-    let result = run(&g, &standard_test_request("s"), json!({}));
-    assert_eq!(result["status"], "ok");
-    let c = candidates(&result);
-    assert_eq!(c.len(), 1);
-    let ids: Vec<&str> = c[0]["edgeIds"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert!(
-        ids.starts_with(&["l3", "l4", "entry"]),
-        "must select detour l3,l4, got: {:?}",
-        ids
-    );
-}
-
-/// (b) backward: [["exit","r1"]]（または [["exit","l9"]] 相当）で合法迂回 r3,r4 があるとき選ばれる
-#[test]
-fn forbidden_transitions_backward_junction_detour_selected() {
-    let nodes = ["s", "p", "i", "a", "b", "c", "o", "o2", "q"];
-    let edges = vec![
-        edge_json("l1", "s", "p", "local", 60, 500),
-        edge_json("l2", "p", "i", "local", 60, 500),
-        edge_json("entry", "i", "a", "entry", 30, 200),
-        edge_json("ab", "a", "b", "shutoko", 600, 10000),
-        edge_json("bc", "b", "c", "shutoko", 600, 10000),
-        edge_json("ca", "c", "a", "shutoko", 600, 10000),
-        edge_json("exit", "a", "o", "exit", 30, 200),
-        edge_json("r1", "o", "o2", "local", 60, 500),
-        edge_json("r2", "o2", "s", "local", 60, 500),
-        edge_json("r3", "o", "q", "local", 90, 700),
-        edge_json("r4", "q", "s", "local", 90, 700),
-    ];
-    let g = build_test_graph(&nodes, edges, json!([["exit", "r1"]]));
-    let result = run(&g, &standard_test_request("s"), json!({}));
-    assert_eq!(result["status"], "ok");
-    let c = candidates(&result);
-    assert_eq!(c.len(), 1);
-    let ids: Vec<&str> = c[0]["edgeIds"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert!(
-        ids.ends_with(&["exit", "r3", "r4"]),
-        "must select return detour r3,r4, got: {:?}",
-        ids
-    );
-}
-
-/// (c) 長さ 3: s→p が l1(60s) / l1b(70s) の 2 本、p→m=l2、m→i=l5、[["l1","l2","l5"]] で唯一の合法路 l1b,l2,l5 が選ばれる
-#[test]
-fn forbidden_transitions_length_3_purely_local_preserves_legal_history() {
-    let mut edges = vec![
-        edge_json("l1", "s", "p", "local", 60, 500),
-        edge_json("l1b", "s", "p", "local", 70, 600),
-        edge_json("l2", "p", "m", "local", 60, 500),
-        edge_json("l5", "m", "i", "local", 60, 500),
-    ];
-    edges.extend(standard_highway_edges());
-    let g = build_test_graph(
-        &["s", "p", "m", "i", "a", "b", "c", "o"],
-        edges,
-        json!([["l1", "l2", "l5"]]),
-    );
-    let result = run(&g, &standard_test_request("s"), json!({}));
-    assert_eq!(result["status"], "ok");
-    let c = candidates(&result);
-    assert_eq!(c.len(), 1);
-    let ids: Vec<&str> = c[0]["edgeIds"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert!(
-        ids.starts_with(&["l1b", "l2", "l5", "entry"]),
-        "must select legal history l1b,l2,l5, got: {:?}",
-        ids
-    );
-}
-
-/// (d) 対照として長さ 2 [["l1","l2"]] でも同じ結果
-#[test]
-fn forbidden_transitions_length_2_control_matches_length_3_result() {
-    let mut edges = vec![
-        edge_json("l1", "s", "p", "local", 60, 500),
-        edge_json("l1b", "s", "p", "local", 70, 600),
-        edge_json("l2", "p", "m", "local", 60, 500),
-        edge_json("l5", "m", "i", "local", 60, 500),
-    ];
-    edges.extend(standard_highway_edges());
-    let g = build_test_graph(
-        &["s", "p", "m", "i", "a", "b", "c", "o"],
-        edges,
-        json!([["l1", "l2"]]),
-    );
-    let result = run(&g, &standard_test_request("s"), json!({}));
-    assert_eq!(result["status"], "ok");
-    let c = candidates(&result);
-    assert_eq!(c.len(), 1);
-    let ids: Vec<&str> = c[0]["edgeIds"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert!(
-        ids.starts_with(&["l1b", "l2", "l5", "entry"]),
-        "must select legal history l1b,l2,l5, got: {:?}",
-        ids
-    );
-}
-
-/// (e) local→local 長さ 2 の forward / backward 迂回
-#[test]
-fn forbidden_transitions_local_to_local_len_2_forward_and_backward_detours() {
-    // (e1) Forward local->local detour
-    let mut edges_fwd = vec![
-        edge_json("l1", "s", "p", "local", 60, 500),
-        edge_json("l2", "p", "i", "local", 60, 500),
-        edge_json("l3", "s", "q", "local", 90, 700),
-        edge_json("l4", "q", "i", "local", 90, 700),
-    ];
-    edges_fwd.extend(standard_highway_edges());
-    let g_fwd = build_test_graph(
-        &["s", "p", "q", "i", "a", "b", "c", "o"],
-        edges_fwd,
-        json!([["l1", "l2"]]),
-    );
-    let result_fwd = run(&g_fwd, &standard_test_request("s"), json!({}));
-    assert_eq!(result_fwd["status"], "ok");
-    let c_fwd = candidates(&result_fwd);
-    assert_eq!(c_fwd.len(), 1);
-    let ids_fwd: Vec<&str> = c_fwd[0]["edgeIds"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert!(
-        ids_fwd.starts_with(&["l3", "l4", "entry"]),
-        "forward detour must be l3,l4, got: {:?}",
-        ids_fwd
-    );
-
-    // (e2) Backward local->local detour
-    let nodes_bwd = ["s", "p", "i", "a", "b", "c", "o", "o2", "q"];
-    let edges_bwd = vec![
-        edge_json("l1", "s", "p", "local", 60, 500),
-        edge_json("l2", "p", "i", "local", 60, 500),
-        edge_json("entry", "i", "a", "entry", 30, 200),
-        edge_json("ab", "a", "b", "shutoko", 600, 10000),
-        edge_json("bc", "b", "c", "shutoko", 600, 10000),
-        edge_json("ca", "c", "a", "shutoko", 600, 10000),
-        edge_json("exit", "a", "o", "exit", 30, 200),
-        edge_json("r1", "o", "o2", "local", 60, 500),
-        edge_json("r2", "o2", "s", "local", 60, 500),
-        edge_json("r3", "o", "q", "local", 90, 700),
-        edge_json("r4", "q", "s", "local", 90, 700),
-    ];
-    let g_bwd = build_test_graph(&nodes_bwd, edges_bwd, json!([["r1", "r2"]]));
-    let result_bwd = run(&g_bwd, &standard_test_request("s"), json!({}));
-    assert_eq!(result_bwd["status"], "ok");
-    let c_bwd = candidates(&result_bwd);
-    assert_eq!(c_bwd.len(), 1);
-    let ids_bwd: Vec<&str> = c_bwd[0]["edgeIds"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert!(
-        ids_bwd.ends_with(&["exit", "r3", "r4"]),
-        "backward detour must be r3,r4, got: {:?}",
-        ids_bwd
-    );
-}
-
-#[test]
-fn coordinate_input_snaps_to_nearest_local_node() {
+fn coordinate_input_snaps_to_nearest_entry_node() {
     let mut r = request();
     r.as_object_mut().unwrap().remove("originNodeId");
-    r["origin"] = json!({ "lat": 35.681, "lon": 139.7671 });
+    // Query at node "i"'s exact position.
+    r["origin"] = json!({ "lat": 35.6815, "lon": 139.7675 });
     let result = run(&graph(), &r, json!({}));
     assert_eq!(result["status"], "ok");
     let c = candidates(&result);
     assert_eq!(c.len(), 1);
-    assert_eq!(c[0]["snappedOrigin"]["nodeId"], "s");
+    assert_eq!(c[0]["snappedOrigin"]["nodeId"], "i");
     assert!(c[0]["snappedOrigin"]["distanceMeters"].as_f64().unwrap() < 1.0);
-    assert_eq!(c[0]["origin"], json!({ "lat": 35.681, "lon": 139.7671 }));
+    assert_eq!(c[0]["origin"], json!({ "lat": 35.6815, "lon": 139.7675 }));
 }
 
+/// NO_CONNECTION is returned only when the graph contains no Entry edges at all
+/// (snap grid is empty).  A far-away coordinate still snaps — there is no radius
+/// cap — but may be filtered out by the time window instead.
 #[test]
-fn coordinate_input_beyond_200m_returns_no_connection() {
+fn no_entry_edges_returns_no_connection() {
+    let mut g = graph();
+    // Remove all edges: no Entry edges → snap grid is empty → NO_CONNECTION.
+    g["edges"] = json!([]);
+    g["billingPairs"] = json!([]);
     let mut r = request();
     r.as_object_mut().unwrap().remove("originNodeId");
-    r["origin"] = json!({ "lat": 35.0, "lon": 139.0 });
-    let result = run(&graph(), &r, json!({}));
+    r["origin"] = json!({ "lat": 35.6815, "lon": 139.7675 });
+    let result = run(&g, &r, json!({}));
     assert_eq!(result["status"], "no_candidates");
     assert_eq!(result["reason"], "NO_CONNECTION");
     assert!(candidates(&result).is_empty());
@@ -911,10 +687,10 @@ fn candidate_geometry_and_handoff_and_warnings_contract() {
     let coords = c["geometry"]["coordinates"].as_array().unwrap();
     let edge_ids = c["edgeIds"].as_array().unwrap();
     assert_eq!(coords.len(), edge_ids.len() + 1);
-    // First coordinate corresponds to node "s" [lon, lat]
-    assert_eq!(coords.first().unwrap(), &json!([139.7671, 35.681]));
-    // Last coordinate corresponds to node "s" [lon, lat]
-    assert_eq!(coords.last().unwrap(), &json!([139.7671, 35.681]));
+    // First coordinate: from-node of first edge = "i" [lon, lat]
+    assert_eq!(coords.first().unwrap(), &json!([139.7675, 35.6815]));
+    // Last coordinate: to-node of last edge = "o" [lon, lat]
+    assert_eq!(coords.last().unwrap(), &json!([139.7685, 35.6818]));
 
     // Handoff Maps URL validation
     let maps_url = c["handoff"]["mapsUrl"].as_str().unwrap();
@@ -968,4 +744,558 @@ fn road_names_ordered_and_deduplicated() {
         .map(|v| v.as_str().unwrap())
         .collect();
     assert_eq!(road_names, vec!["都心環状線", "八重洲線"]);
+}
+
+/// SearchLimits の maxGraphNodes / maxGraphEdges が小さい値に設定されたとき、
+/// 合成グラフ（6 ノード, 7 エッジ）が正しく拒否されることを確認する。
+#[test]
+fn custom_graph_size_limits_reject_graph_that_exceeds_them() {
+    let g = graph();
+    let r = request();
+
+    // synthetic graph has 5 nodes and 5 edges (after removing local edges).
+    // maxGraphNodes を 4 に設定 → 5 ノードの合成グラフは超過して拒否されるべき
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxGraphNodes": 4}).to_string(),
+        )
+        .is_err(),
+        "maxGraphNodes=4 should reject the 5-node synthetic graph"
+    );
+
+    // maxGraphEdges を 4 に設定 → 5 エッジの合成グラフは超過して拒否されるべき
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxGraphEdges": 4}).to_string(),
+        )
+        .is_err(),
+        "maxGraphEdges=4 should reject the 5-edge synthetic graph"
+    );
+
+    // デフォルト limits（{}"）では同じグラフが受け付けられることも確認
+    assert!(
+        search_json(&g.to_string(), &r.to_string(), "{}").is_ok(),
+        "default limits should accept the synthetic graph"
+    );
+}
+
+/// Grid snap tie-breaking matches BTreeSet lex order for Entry from-nodes.
+///
+/// Two Entry from-nodes ("aaa-entry" and "zzz-entry") are placed symmetrically
+/// at ≈90 m from a query point, giving them identical distances.  With
+/// maxAccessEntries=1, k_nearest returns only one result; the lex-smaller ID
+/// ("aaa-entry") must win — identical to what a BTreeSet linear scan returns.
+#[test]
+fn snap_grid_nearest_node_order_matches_linear_scan() {
+    // "aaa-entry" < "zzz-entry" lexicographically.
+    // Both are at (35.68, 139.760 ± 0.001°) → ≈90 m from query (35.68, 139.760).
+    let g = json!({
+        "schemaVersion": 2,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": [
+            // Entry from-nodes: equidistant from the query point.
+            {"id": "aaa-entry", "lat": 35.68, "lon": 139.761},
+            {"id": "zzz-entry", "lat": 35.68, "lon": 139.759},
+            // Network 1 (from aaa-entry)
+            {"id": "aaa-a",  "lat": 35.685, "lon": 139.761},
+            {"id": "aaa-b",  "lat": 35.690, "lon": 139.771},
+            {"id": "aaa-c",  "lat": 35.688, "lon": 139.781},
+            {"id": "aaa-o",  "lat": 35.68,  "lon": 139.761},
+            // Network 2 (from zzz-entry)
+            {"id": "zzz-a",  "lat": 35.685, "lon": 139.759},
+            {"id": "zzz-b",  "lat": 35.690, "lon": 139.749},
+            {"id": "zzz-c",  "lat": 35.688, "lon": 139.739},
+            {"id": "zzz-o",  "lat": 35.68,  "lon": 139.759}
+        ],
+        "edges": [
+            // Network 1
+            {"id":"aaa-entry-e","from":"aaa-entry","to":"aaa-a","kind":"entry",  "durationSeconds":30, "distanceMeters":200},
+            {"id":"aaa-ab",     "from":"aaa-a",    "to":"aaa-b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"aaa-bc",     "from":"aaa-b",    "to":"aaa-c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"aaa-ca",     "from":"aaa-c",    "to":"aaa-a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"aaa-exit-e", "from":"aaa-a",    "to":"aaa-o","kind":"exit",   "durationSeconds":30, "distanceMeters":200},
+            // Network 2
+            {"id":"zzz-entry-e","from":"zzz-entry","to":"zzz-a","kind":"entry",  "durationSeconds":30, "distanceMeters":200},
+            {"id":"zzz-ab",     "from":"zzz-a",    "to":"zzz-b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"zzz-bc",     "from":"zzz-b",    "to":"zzz-c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"zzz-ca",     "from":"zzz-c",    "to":"zzz-a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"zzz-exit-e", "from":"zzz-a",    "to":"zzz-o","kind":"exit",   "durationSeconds":30, "distanceMeters":200}
+        ],
+        "billingPairs": [
+            {
+                "id": "aaa-section",
+                "entryId": "aaa-entry-e",
+                "exitId": "aaa-exit-e",
+                "anchorNodeId": "aaa-a",
+                "entryToAnchorEdgeIds": ["aaa-entry-e"],
+                "anchorToExitEdgeIds": ["aaa-exit-e"],
+                "status": "verified",
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+            },
+            {
+                "id": "zzz-section",
+                "entryId": "zzz-entry-e",
+                "exitId": "zzz-exit-e",
+                "anchorNodeId": "zzz-a",
+                "entryToAnchorEdgeIds": ["zzz-entry-e"],
+                "anchorToExitEdgeIds": ["zzz-exit-e"],
+                "status": "verified",
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+            }
+        ],
+        "forbiddenTransitions": []
+    });
+
+    // Query equidistant from both Entry from-nodes.
+    // maxAccessEntries=1: k_nearest returns only the lex-smaller node.
+    let r = json!({
+        "requestId": "snap-grid-order-test",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.68, "lon": 139.760},
+        "minMinutes": 30,
+        "maxMinutes": 60,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let limits = json!({"maxAccessEntries": 1});
+
+    let result: serde_json::Value = serde_json::from_str(
+        &search_json(&g.to_string(), &r.to_string(), &limits.to_string()).unwrap(),
+    )
+    .unwrap();
+
+    // With maxAccessEntries=1, only "aaa-entry" (lex-smaller) is tried.
+    assert_eq!(
+        result["status"], "ok",
+        "search must succeed: {:?}",
+        result["reason"]
+    );
+    let c = &result["candidates"][0];
+    assert_eq!(
+        c["snappedOrigin"]["nodeId"], "aaa-entry",
+        "lex-smaller Entry node must win on distance tie"
+    );
+    // Sanity: both nodes are ≈90 m away.
+    let d = c["snappedOrigin"]["distanceMeters"]
+        .as_f64()
+        .unwrap()
+        .round() as u64;
+    assert!(
+        (85..=95).contains(&d),
+        "snap distance should be ≈90 m, got {d}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Task A: max_access_distance_meters
+// ---------------------------------------------------------------------------
+
+/// Helper — minimal two-entry graph used by several access-limit tests.
+///
+/// Two independent networks ("aaa-*" and "zzz-*") are equidistant from a query
+/// at (35.68, 139.760).  Neither network shares any edges, so Jaccard similarity
+/// is 0 and the deduplication filter keeps both candidates.
+fn two_network_graph() -> Value {
+    json!({
+        "schemaVersion": 2,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": [
+            {"id": "aaa-entry", "lat": 35.68, "lon": 139.761},
+            {"id": "zzz-entry", "lat": 35.68, "lon": 139.759},
+            {"id": "aaa-a",  "lat": 35.685, "lon": 139.761},
+            {"id": "aaa-b",  "lat": 35.690, "lon": 139.771},
+            {"id": "aaa-c",  "lat": 35.688, "lon": 139.781},
+            {"id": "aaa-o",  "lat": 35.68,  "lon": 139.761},
+            {"id": "zzz-a",  "lat": 35.685, "lon": 139.759},
+            {"id": "zzz-b",  "lat": 35.690, "lon": 139.749},
+            {"id": "zzz-c",  "lat": 35.688, "lon": 139.739},
+            {"id": "zzz-o",  "lat": 35.68,  "lon": 139.759}
+        ],
+        "edges": [
+            {"id":"aaa-entry-e","from":"aaa-entry","to":"aaa-a","kind":"entry",  "durationSeconds":30, "distanceMeters":200},
+            {"id":"aaa-ab",     "from":"aaa-a",    "to":"aaa-b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"aaa-bc",     "from":"aaa-b",    "to":"aaa-c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"aaa-ca",     "from":"aaa-c",    "to":"aaa-a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"aaa-exit-e", "from":"aaa-a",    "to":"aaa-o","kind":"exit",   "durationSeconds":30, "distanceMeters":200},
+            {"id":"zzz-entry-e","from":"zzz-entry","to":"zzz-a","kind":"entry",  "durationSeconds":30, "distanceMeters":200},
+            {"id":"zzz-ab",     "from":"zzz-a",    "to":"zzz-b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"zzz-bc",     "from":"zzz-b",    "to":"zzz-c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"zzz-ca",     "from":"zzz-c",    "to":"zzz-a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"zzz-exit-e", "from":"zzz-a",    "to":"zzz-o","kind":"exit",   "durationSeconds":30, "distanceMeters":200}
+        ],
+        "billingPairs": [
+            {
+                "id": "aaa-section",
+                "entryId": "aaa-entry-e",
+                "exitId": "aaa-exit-e",
+                "anchorNodeId": "aaa-a",
+                "entryToAnchorEdgeIds": ["aaa-entry-e"],
+                "anchorToExitEdgeIds": ["aaa-exit-e"],
+                "status": "verified",
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+            },
+            {
+                "id": "zzz-section",
+                "entryId": "zzz-entry-e",
+                "exitId": "zzz-exit-e",
+                "anchorNodeId": "zzz-a",
+                "entryToAnchorEdgeIds": ["zzz-entry-e"],
+                "anchorToExitEdgeIds": ["zzz-exit-e"],
+                "status": "verified",
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+            }
+        ],
+        "forbiddenTransitions": []
+    })
+}
+
+/// max_access_distance_meters must be finite and non-negative;
+/// negative, NaN, and Infinity must be rejected at prepare time.
+#[test]
+fn rejects_invalid_max_access_distance_meters() {
+    let g = graph();
+    let r = request();
+
+    // negative
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": -1.0}).to_string()
+        )
+        .is_err(),
+        "negative max_access_distance_meters must be rejected"
+    );
+    // NaN: serde_json does not serialize f64::NAN to JSON; inject as string
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            // f64::NAN cannot appear in JSON; only finite + 0 are valid
+            &json!({"maxAccessDistanceMeters": -0.001}).to_string()
+        )
+        .is_err(),
+        "sub-zero max_access_distance_meters must be rejected"
+    );
+    // Infinity: not representable as JSON number, so the smallest invalid
+    // case we can inject is a very large (but finite) value — that is valid.
+    // Confirm 0.0 (unlimited) is accepted.
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": 0.0}).to_string()
+        )
+        .is_ok(),
+        "0.0 (unlimited) must be accepted"
+    );
+    // A normal cap is also accepted.
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": 30000.0}).to_string()
+        )
+        .is_ok(),
+        "30 000 m cap must be accepted"
+    );
+}
+
+/// A graph with entry at ~4 km from the origin.
+/// With a 3 km cap the entry is too far → NO_CONNECTION.
+/// With a 5 km cap the entry is within range → search proceeds (not NO_CONNECTION).
+/// With 0.0 (unlimited) the entry is reachable regardless of distance.
+#[test]
+fn distance_cap_enforced_and_zero_means_unlimited() {
+    // Entry node "e" is roughly 4 km north of origin (35.0, 139.0).
+    // 0.036° latitude ≈ 0.036 × 111 320 ≈ 4 007 m.
+    let g = json!({
+        "schemaVersion": 2,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": [
+            {"id": "e", "lat": 35.036, "lon": 139.0},
+            {"id": "a", "lat": 35.038, "lon": 139.0},
+            {"id": "b", "lat": 35.040, "lon": 139.001},
+            {"id": "c", "lat": 35.039, "lon": 139.002},
+            {"id": "o", "lat": 35.037, "lon": 139.0}
+        ],
+        "edges": [
+            {"id":"entry","from":"e","to":"a","kind":"entry",  "durationSeconds":30, "distanceMeters":200},
+            {"id":"ab",   "from":"a","to":"b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"bc",   "from":"b","to":"c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"ca",   "from":"c","to":"a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"exit", "from":"a","to":"o","kind":"exit",   "durationSeconds":30, "distanceMeters":200}
+        ],
+        "billingPairs": [{
+            "id": "sec",
+            "entryId": "entry",
+            "exitId": "exit",
+            "anchorNodeId": "a",
+            "entryToAnchorEdgeIds": ["entry"],
+            "anchorToExitEdgeIds": ["exit"],
+            "status": "verified",
+            "vehicleProfile": "passenger-car-etc",
+            "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+        }],
+        "forbiddenTransitions": []
+    });
+    // Origin at (35.0, 139.0), entry "e" at ~4 007 m.
+    let r = json!({
+        "requestId": "dist-cap-test",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.0, "lon": 139.0},
+        "minMinutes": 30,
+        "maxMinutes": 120,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+
+    // 3 km cap: entry ~4 007 m away → NO_CONNECTION.
+    let res_inside: Value = serde_json::from_str(
+        &search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": 3000.0}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(res_inside["status"], "no_candidates");
+    assert_eq!(
+        res_inside["reason"], "NO_CONNECTION",
+        "3 km cap: entry at ~4 km must trigger NO_CONNECTION"
+    );
+
+    // 5 km cap: entry ~4 007 m is within range → search proceeds (status ≠ NO_CONNECTION).
+    let res_within: Value = serde_json::from_str(
+        &search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": 5000.0}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_ne!(
+        res_within["reason"], "NO_CONNECTION",
+        "5 km cap: entry at ~4 km must NOT trigger NO_CONNECTION"
+    );
+
+    // 0.0 (unlimited): entry accessible regardless of distance.
+    let res_unlimited: Value = serde_json::from_str(
+        &search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessDistanceMeters": 0.0}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_ne!(
+        res_unlimited["reason"], "NO_CONNECTION",
+        "unlimited cap (0.0): must NOT trigger NO_CONNECTION"
+    );
+    // Both 5 km and unlimited cases should find the same candidate (same graph, same route).
+    assert_eq!(
+        res_within["status"], res_unlimited["status"],
+        "5 km cap and unlimited must produce the same search outcome"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Task B: access time with coordinate origin affects base_seconds / time window
+// ---------------------------------------------------------------------------
+
+/// Origin at the exact entry-node coordinates yields access_seconds=0 and
+/// base_seconds=1876 (matching the originNodeId contract).  An origin ~4 km
+/// away yields a larger base and is rejected by the same narrow time window.
+/// Widening the window to 70 min accepts the farther origin.
+///
+/// Entry node "i" in the synthetic graph is at (35.6815, 139.7675).
+/// Far origin used: (35.65, 139.75) ≈ 3 842 m from "i".
+///
+/// Computed values (equirectangular approx):
+///   access_secs = ⌈3 842 × 1.3 / (30/3.6)⌉ = ⌈4 994.6/8.333⌉ = 600 s
+///   return_dist ("o"→origin) ≈ 3 910 m  →  return_secs = 610 s
+///   base = 600 + 1 860 + 610 = 3 070 s   plan = 3 070 + 614 = 3 684 s
+///   → rejected at max_minutes=40 (2 400 s), accepted at max_minutes=70 (4 200 s).
+#[test]
+fn access_time_from_coordinate_origin_affects_base_seconds_and_time_window() {
+    let g = graph(); // synthetic graph: entry "i" at (35.6815, 139.7675)
+
+    // ── Case 1: origin at exact entry-node coordinates ──
+    let r_near = json!({
+        "requestId": "coord-access-near",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.6815, "lon": 139.7675},
+        "minMinutes": 30,
+        "maxMinutes": 40,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let res_near: Value =
+        serde_json::from_str(&search_json(&g.to_string(), &r_near.to_string(), "{}").unwrap())
+            .unwrap();
+    assert_eq!(
+        res_near["status"], "ok",
+        "origin at entry node, window [30,40]: expected candidate, got reason={:?}",
+        res_near["reason"]
+    );
+    let c_near = &res_near["candidates"][0];
+    assert_eq!(
+        c_near["duration"]["accessSeconds"], 0,
+        "origin at entry node must have 0 access seconds"
+    );
+    assert_eq!(
+        c_near["duration"]["baseSeconds"], 1876,
+        "origin at entry node: base must match the originNodeId contract (1876 s)"
+    );
+
+    // ── Case 2: origin ~4 km away — same narrow window rejected (TIME_WINDOW) ──
+    let r_far_narrow = json!({
+        "requestId": "coord-access-far-narrow",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.65, "lon": 139.75},
+        "minMinutes": 30,
+        "maxMinutes": 40,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let res_far_narrow: Value = serde_json::from_str(
+        &search_json(&g.to_string(), &r_far_narrow.to_string(), "{}").unwrap(),
+    )
+    .unwrap();
+    // base ≈ 3 070 s → plan ≈ 3 684 s > 40×60=2 400 → TIME_WINDOW
+    assert_eq!(
+        res_far_narrow["status"], "no_candidates",
+        "far origin, window [30,40]: expected no_candidates"
+    );
+    assert_eq!(
+        res_far_narrow["reason"], "TIME_WINDOW",
+        "far origin, window [30,40]: rejection reason must be TIME_WINDOW, not NO_CONNECTION"
+    );
+
+    // ── Case 3: same far origin, wider window [30, 70] — candidate found ──
+    let r_far_wide = json!({
+        "requestId": "coord-access-far-wide",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.65, "lon": 139.75},
+        "minMinutes": 30,
+        "maxMinutes": 70,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let res_far_wide: Value =
+        serde_json::from_str(&search_json(&g.to_string(), &r_far_wide.to_string(), "{}").unwrap())
+            .unwrap();
+    assert_eq!(
+        res_far_wide["status"], "ok",
+        "far origin, window [30,70]: expected candidate, got reason={:?}",
+        res_far_wide["reason"]
+    );
+    let c_far = &res_far_wide["candidates"][0];
+    let access_far = c_far["duration"]["accessSeconds"].as_u64().unwrap();
+    let base_far = c_far["duration"]["baseSeconds"].as_u64().unwrap();
+    assert!(
+        access_far > 0,
+        "far origin must have non-zero access_seconds, got {access_far}"
+    );
+    assert!(
+        base_far > 1876,
+        "far origin base_seconds ({base_far}) must exceed the zero-access case (1876)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Task B: max_access_entries=0 is unlimited; positive value caps candidates
+// ---------------------------------------------------------------------------
+
+/// With max_access_entries=0 (unlimited, the default) both entries in a
+/// two-network graph are tried and both produce candidates.
+/// With max_access_entries=1 only the lex-smaller entry is tried, so only
+/// one network's candidates appear.
+#[test]
+fn max_access_entries_zero_means_unlimited_tries_all_entries() {
+    let g = two_network_graph();
+    // Query equidistant from both Entry from-nodes.
+    let r = json!({
+        "requestId": "two-entry-unlimited",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.68, "lon": 139.760},
+        "minMinutes": 30,
+        "maxMinutes": 60,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+
+    // ── 0 (unlimited): both billing pairs must appear ──
+    let res_unlimited: Value = serde_json::from_str(
+        &search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessEntries": 0}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        res_unlimited["status"], "ok",
+        "unlimited entries: expected ok, got reason={:?}",
+        res_unlimited["reason"]
+    );
+    let ids_unlimited: Vec<&str> = res_unlimited["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["toll"]["billingPairId"].as_str().unwrap())
+        .collect();
+    assert!(
+        ids_unlimited.contains(&"aaa-section"),
+        "unlimited: aaa-section must be present, candidates={ids_unlimited:?}"
+    );
+    assert!(
+        ids_unlimited.contains(&"zzz-section"),
+        "unlimited: zzz-section must be present, candidates={ids_unlimited:?}"
+    );
+
+    // ── 1 (capped): only the lex-smaller "aaa-entry" is tried ──
+    let res_capped: Value = serde_json::from_str(
+        &search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxAccessEntries": 1}).to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        res_capped["status"], "ok",
+        "capped entries: expected ok, got reason={:?}",
+        res_capped["reason"]
+    );
+    let ids_capped: Vec<&str> = res_capped["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["toll"]["billingPairId"].as_str().unwrap())
+        .collect();
+    assert!(
+        ids_capped.contains(&"aaa-section"),
+        "cap=1: aaa-section must be present"
+    );
+    assert!(
+        !ids_capped.contains(&"zzz-section"),
+        "cap=1: zzz-section must NOT be present (lex-larger entry excluded)"
+    );
 }

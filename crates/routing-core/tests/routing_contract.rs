@@ -969,3 +969,84 @@ fn road_names_ordered_and_deduplicated() {
         .collect();
     assert_eq!(road_names, vec!["都心環状線", "八重洲線"]);
 }
+
+/// Grid snap tie-breaking matches BTreeSet linear-scan order (B requirement).
+///
+/// Two local nodes are placed symmetrically at ≈90 m from a query point,
+/// giving them identical distances.  The one with the lex-smaller ID must be
+/// selected — identical to what the former O(n) BTreeSet scan returned.
+#[test]
+fn snap_grid_nearest_node_order_matches_linear_scan() {
+    // "aaa-start" < "zzz-start" lexicographically.
+    // Both are at (35.68, 139.760 ± 0.001°) from query (35.68, 139.760).
+    // distance ≈ 0.001° × 111320 × cos(35.68°) ≈ 90 m each.
+    let g = json!({
+        "schemaVersion": 2,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": [
+            {"id": "aaa-start", "lat": 35.68,  "lon": 139.761},
+            {"id": "zzz-start", "lat": 35.68,  "lon": 139.759},
+            {"id": "merge",     "lat": 35.682,  "lon": 139.760},
+            {"id": "entry-n",   "lat": 35.683,  "lon": 139.760},
+            {"id": "a",         "lat": 35.684,  "lon": 139.760},
+            {"id": "b",         "lat": 35.690,  "lon": 139.770},
+            {"id": "c",         "lat": 35.688,  "lon": 139.780},
+            {"id": "ex-n",      "lat": 35.683,  "lon": 139.765}
+        ],
+        "edges": [
+            {"id":"laaa","from":"aaa-start","to":"merge",   "kind":"local",   "durationSeconds":60,"distanceMeters":300},
+            {"id":"lzzz","from":"zzz-start","to":"merge",   "kind":"local",   "durationSeconds":60,"distanceMeters":300},
+            {"id":"lmrg","from":"merge",    "to":"entry-n", "kind":"local",   "durationSeconds":60,"distanceMeters":300},
+            {"id":"entry","from":"entry-n", "to":"a",       "kind":"entry",   "durationSeconds":30,"distanceMeters":200},
+            {"id":"ab",  "from":"a",        "to":"b",       "kind":"shutoko", "durationSeconds":600,"distanceMeters":10000},
+            {"id":"bc",  "from":"b",        "to":"c",       "kind":"shutoko", "durationSeconds":600,"distanceMeters":10000},
+            {"id":"ca",  "from":"c",        "to":"a",       "kind":"shutoko", "durationSeconds":600,"distanceMeters":10000},
+            {"id":"exit","from":"a",        "to":"ex-n",    "kind":"exit",    "durationSeconds":30,"distanceMeters":200},
+            {"id":"ret", "from":"ex-n",     "to":"aaa-start","kind":"local",  "durationSeconds":60,"distanceMeters":500}
+        ],
+        "billingPairs": [{
+            "id": "one-section",
+            "entryId": "entry",
+            "exitId": "exit",
+            "anchorNodeId": "a",
+            "entryToAnchorEdgeIds": ["entry"],
+            "anchorToExitEdgeIds": ["exit"],
+            "status": "verified",
+            "vehicleProfile": "passenger-car-etc",
+            "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+        }],
+        "forbiddenTransitions": []
+    });
+
+    // Query at the midpoint: equidistant from both nodes.
+    let r = json!({
+        "requestId": "snap-grid-order-test",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.68, "lon": 139.760},
+        "minMinutes": 30,
+        "maxMinutes": 60,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+
+    let result: serde_json::Value =
+        serde_json::from_str(&search_json(&g.to_string(), &r.to_string(), "{}").unwrap()).unwrap();
+
+    // The grid must select "aaa-start" (lex-smaller) — same as BTreeSet scan.
+    assert_eq!(result["status"], "ok", "search must succeed");
+    let c = &result["candidates"][0];
+    assert_eq!(
+        c["snappedOrigin"]["nodeId"], "aaa-start",
+        "lex-smaller node must win on distance tie"
+    );
+    // Sanity: both nodes are ≈90 m away (rounds to 90 as integer).
+    let d = c["snappedOrigin"]["distanceMeters"]
+        .as_f64()
+        .unwrap()
+        .round() as u64;
+    assert!(
+        (85..=95).contains(&d),
+        "snap distance should be ≈90 m, got {d}"
+    );
+}

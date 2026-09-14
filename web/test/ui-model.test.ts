@@ -122,7 +122,7 @@ describe("statusMessage / errorMessage", () => {
   });
 
   it("reason コードごとの対応表", () => {
-    expect(statusMessage(result("NO_CONNECTION"), 15, 60)).toContain("200m 以内");
+    expect(statusMessage(result("NO_CONNECTION"), 15, 60)).toContain("30km");
     expect(statusMessage(result("NO_BILLING_PAIR"), 15, 60)).toContain("検証済み課金ペア");
     expect(statusMessage(result("NO_LOOP"), 15, 60)).toContain("周回ルート");
     expect(statusMessage(result("NO_HANDOFF"), 15, 60)).toContain("上限超過");
@@ -267,9 +267,9 @@ describe("reasonText / timeBreakdownText", () => {
     expect(reasonText("UNKNOWN")).toBe("UNKNOWN");
   });
 
-  it("時間内訳を 1 行にまとめる", () => {
+  it("時間内訳を 1 行にまとめる（入り・帰りは概算を明示）", () => {
     expect(timeBreakdownText(toCardModel(sampleCandidate()))).toBe(
-      "内訳: 一般道 入り 1分 / 首都高 25分 / 帰り 2分 / 余裕 2分",
+      "内訳: 入り 1分（概算） / 首都高 25分 / 帰り 2分（概算） / 余裕 2分",
     );
   });
 });

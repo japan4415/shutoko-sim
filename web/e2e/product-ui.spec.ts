@@ -467,8 +467,10 @@ test("(15) 条件変更で結果が失効し再検索を促す", async ({ page }
 });
 
 test("(16) 対応範囲外の出発地点は対応範囲を示し、有効な地点へ復帰できる", async ({ page }) => {
-  // 対応範囲（C1 周辺）から離れた地点を住所検索で確定させる。
-  const outside = [{ label: "東京都台東区上野五丁目３番６号", lat: 35.70347, lon: 139.77444 }];
+  // C1 最寄り入口から直線 30km 超の地点を使う（新仕様の NO_CONNECTION 条件）。
+  // 上野（35.70, 139.77）は C1 から約 2km しか離れておらず候補が返るようになったため、
+  // 茨城県つくば市周辺（36.1, 140.1）に変更。C1 最寄り入口まで約 50km 以上ある。
+  const outside = [{ label: "茨城県つくば市天王台", lat: 36.1, lon: 140.1 }];
   await stubGeocode(page, { candidates: outside });
   await openApp(page);
   await page.fill("#address-query", "東京都台東区上野5-3-6");

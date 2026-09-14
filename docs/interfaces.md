@@ -111,14 +111,14 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 - `ready` の payload は従来どおり。bench Worker（`new Worker(url, { name: "bench" })`）は起動時の先読みを行わず `search` メッセージ駆動で取得する（先読みが先に走ると `cacheBust` 付きの取得が先読み済みリリースに相乗りして cold 計測が成立しないため）。
 
 ### 空間スナップ契約
-- スナップ対象: 一般道（`EdgeKind::Local`）に接する（from / to のいずれか）ノードのみ。
+- スナップ対象: Entry エッジの from ノード（入口アクセス地点）のみ。一般道ノードはスナップ対象に含まない。
 - スナップ距離計算: 等距円筒近似（Equirectangular approximation、東京付近 `cos(lat)` 補正）。
-- スナップ半径: `SNAP_RADIUS_METERS = 200.0`（200m）。
-- 200m 以内に Local ノードが存在しない場合: エラーとせず、`status: "no_candidates"`, `reason: "NO_CONNECTION"`, `candidates: []` を正常返却する。
+- 選択件数: 近い順に最大 `SearchLimits.max_access_entries`（デフォルト 5）件。スナップ半径（200m 固定）の概念は廃止。
+- 入口アクセス地点が1件も得られない場合: エラーとせず、`status: "no_candidates"`, `reason: "NO_CONNECTION"`, `candidates: []` を正常返却する。
 
 ### 探索結果の status と reason コード
 結果は `requestId`、`releaseId`、`status`（`ok` / `no_candidates` / `truncated`）、`reason`、`candidates` を持つ。`reason` は該当時のみ以下のコードをとる:
-- `NO_CONNECTION`: スナップ対象の一般道ノードが 200m 以内に存在しない、または一般道から入口・出口への接続経路がない
+- `NO_CONNECTION`: 入口アクセス地点（Entry エッジ from ノード）が1件も得られない
 - `NO_BILLING_PAIR`: 有効な課金ペアが 1 件も存在しない
 - `NO_LOOP`: 周回ループが見つからない、または進入不可
 - `TIME_WINDOW`: 指定所要時間枠（minMinutes〜maxMinutes）に収まる候補がない
@@ -131,11 +131,11 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | --- | --- | --- |
 | `id`, `releaseId` | `string` | 条件と経路列から安定生成する検索内 ID と版。利用履歴として保存しない |
 | `origin` | `LatLng \| null` | 入力座標（`{ lat, lon }`）。`originNodeId` 指定時は `null` |
-| `snappedOrigin` | `SnappedOrigin` | 接続した一般道ノード（`{ nodeId, lat, lon, distanceMeters }`）。`originNodeId` 指定時はそのノードで `distanceMeters: 0` |
+| `snappedOrigin` | `SnappedOrigin` | 選択した入口アクセス地点（`{ nodeId, lat, lon, distanceMeters }`）。候補ごとに異なる入口アクセス地点を持ちうる。`originNodeId` 指定時はそのノードで `distanceMeters: 0` |
 | `entry`, `exit` | `RampInfo` | 入出口情報（`{ edgeId, name }`。`name` は課金ペア公式ランプ名、無ければ `null`） |
 | `entryId`, `exitId` | `string` | 入出口エッジ ID（後方互換用） |
 | `roadNames` | `string[]` | 首都高部分で通過したエッジ名の重複除去済み順序付きリスト（名前のないエッジはスキップ） |
-| `edgeIds` | `string[]` | 順序付き走行エッジ ID 列（access → loop → return） |
+| `edgeIds` | `string[]` | 順序付き走行エッジ ID 列（首都高上の entry → loop → exit） |
 | `geometry` | `GeoJsonLineString` | 全経路の GeoJSON LineString（`{ type: "LineString", coordinates: [[lon, lat], ...] }`）。重複端点なし |
 | `duration` | `Duration` | `accessSeconds`, `shutokoSeconds`, `returnSeconds`, `baseSeconds`, `bufferSeconds`, `planSeconds` |
 | `distanceMeters`, `shutokoDistanceMeters` | `number` | 総距離と首都高部分の距離（メートル） |

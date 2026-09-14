@@ -1,7 +1,7 @@
 {
   "requestId":"synthetic-request",
   "releaseId":"synthetic-v1",
-  "originNodeId":"s",
+  "originNodeId":"i",
   "minMinutes":30,
   "maxMinutes":40,
   "vehicleProfile":"passenger-car-etc",

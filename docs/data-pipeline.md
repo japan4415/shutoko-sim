@@ -1,6 +1,6 @@
 # 実データ道路グラフ・課金ペア生成パイプライン
 
-本ドキュメントでは、OpenStreetMap（OSM）実データから首都高速道路都心環状線（C1）および接続ランプ・周辺一般道を抽出し、決定論的な道路ネットワーク成果物（`graph.json`、`snap-index.json`、`manifest.json`）を生成するオフラインパイプラインの仕様と手順を記録する。
+本ドキュメントでは、OpenStreetMap（OSM）実データから首都高速道路都心環状線（C1）および接続ランプを抽出し、決定論的な道路ネットワーク成果物（`graph.json`、`snap-index.json`、`manifest.json`）を生成するオフラインパイプラインの仕様と手順を記録する。一般道は取得・生成対象から除外している（詳細は「対象範囲」参照）。
 
 ## 1. ライセンスと帰属表示
 
@@ -14,20 +14,21 @@
 ## 2. OSM 実データ取得手順
 
 ### 取得仕様
-- **取得日**: 2026-09-10（UTC: `2026-09-10T13:25:54Z`）
 - **Overpass API エンドポイント**:
   - 主系: `https://overpass-api.de/api/interpreter`
   - 副系: `https://overpass.kumi.systems/api/interpreter`
-- **クエリ SHA-256**: `d578e54ce4ba2d960b783ceaa0ef49de664280d2d1be035f5ec8a62b1cd80604`
+- **クエリ SHA-256**: `43147d30c658cbbcac2cf3f9b86b58160854704a1737352fa614eec03e472e09`
 - **出力先**: `fixtures/osm/shutoko-c1.json`
-- **ファイルサイズ**: 2,298,787 bytes（約 2.30 MB）
-- **要素数**: 合計 10,837 要素（ノード: 8,953、ウェイ: 1,688、リレーション: 196）
+- **ファイルサイズ（再取得後）**: 約 321 KB
+- **要素数（再取得後）**: 合計 1,963 要素
 
 ### 対象範囲
+
+一般道（`trunk`、`primary`、`secondary`、`residential` 等）は取得・生成対象から**除外**している。ルーティングモデルが「直線距離の近い入口から乗る」前提に変わったため、一般道経路探索が不要になったことによる。路線追加は Overpass クエリのリレーション ID を足すだけで可能で、地理的 bbox を指定する必要もない。
+
 - **首都高速都心環状線（C1）**: リレーション ID `4256008`（首都高速都心環状線、`ref=C1`）
-- **接続ランプ（motorway_link）**: C1 本線ノードから最大 5 ホップで到達可能な進入・退出ランプウェイ（芝公園・飯倉・霞が関・汐留・宝町等の多ホップランプを包含）
-- **周辺主要一般道**: C1 領域のバウンディングボックス（緯度 35.645〜35.700、経度 139.730〜139.785）内の幹線道路（`highway` が `trunk`、`primary`、`secondary`）およびランプ端点に接続する道路・リンク（`tertiary`、`residential`、`unclassified`、`*_link`、`service`）
-- **右左折・Uターン禁止制限**: 対象ウェイに関連する `type=restriction` リレーション
+- **接続ランプ（motorway_link）**: C1 本線ノードから最大 4 ホップで到達可能な進入・退出ランプウェイ（芝公園・飯倉・霞が関・汐留・宝町等の多ホップランプを包含）
+- **右左折・Uターン禁止制限**: 高速道路本線およびランプ（`ew_all`・`links`）に関連する `type=restriction` リレーション
   - `no_*`（via=node）: from エッジから to エッジへの禁止遷移ペア（長さ 2）を生成。
   - `only_*`（via=node）: via ノードにおける to 以外の代替流出エッジを自動特定し、禁止遷移ペアとして生成。
   - `via=way`（Uターン制限等）: from エッジ、via エッジ列、to エッジを連結する長さ 3 以上の禁止エッジ列を生成。
@@ -114,15 +115,19 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 ### 成果物スキーマの拡張（Node 座標・Edge 名称・ランプ名）
 issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `graph.json` に追加された:
-- **Node の地理座標 (`lat`, `lon`)**: `graph.json` 内の全 8,803 ノードに f64 の `lat` および `lon` を必須フィールドとして出力。WASM 内部での空間スナップおよび GeoJSON LineString 幾何データ合成に使用される。
+- **Node の地理座標 (`lat`, `lon`)**: `graph.json` 内の全ノードに f64 の `lat` および `lon` を必須フィールドとして出力。WASM 内部での空間スナップおよび GeoJSON LineString 幾何データ合成に使用される。
 - **Edge の日本語道路名 (`name`)**: OSM ウェイの `name`（存在しない場合は `name:ja`）を `Edge.name: Option<String>` として伝播。名前のないエッジは `serde(skip_serializing_if = "Option::is_none")` により JSON 出力からキーが省略される。
 - **課金ペアの公式ランプ名 (`entryName`, `exitName`)**: `data/billing-pairs-seed.json` の各ペアに公式ランプ名（例: `"神田橋入口"`, `"宝町出口"`）が定義され、グラフビルダーにより `graph.json` の `billingPairs[]` へそのまま伝播される。
-- **ファイルサイズと転送量予算**: ノード座標とエッジ名称の追加により、`fixtures/generated/graph.json` のファイルサイズは旧 2,144,366 bytes から実測 2,907,908 bytes（≈ 2.77MiB）に増加したが、プロジェクトのネットワーク転送量上限である 10MiB に対して十分に安全な範囲に収まっている。
+- **ファイルサイズと転送量予算**: 一般道エッジを除外したことで `fixtures/generated/graph.json` は実測 563 KB（1,717 ノード / 1,719 エッジ: shutoko 1,686 / entry 16 / exit 17）となり、プロジェクトのネットワーク転送量上限である 10MiB に対して十分に安全な範囲に収まっている。`schemaVersion` は 2。
+
+### `snap-index.json` の意味と `schemaVersion: 2`
+
+`snap-index.json` は一般道ノード一覧から**入口アクセス地点（Entry エッジの from ノード）一覧**に変わった。`schemaVersion` が 1 → 2 に更新されている。現行データには 16 件の入口アクセス地点が登録されており、ファイルサイズは約 1.5 KB である。WASM はこのインデックスを使って出発座標から近い順に最大 `max_access_entries` 件の入口アクセス地点を選択する。
 
 ### 再現性・決定論的検証
 同一入力から 2 回実行し、`diff -r` によりバイト完全一致（SHA-256 一致）が確認されている。
-- `graph.json`: 禁止遷移（65件、`only_*` および `via=way` を含む）やソート順を決定論的に出力
-- `snap-index.json`: 一般道ノードの空間投影インデックス（後方互換・JS 側任意利用のため維持）
+- `graph.json`: 禁止遷移（`only_*` および `via=way` を含む）やソート順を決定論的に出力（`schemaVersion: 2`）
+- `snap-index.json`: 入口アクセス地点（Entry エッジの from ノード）の空間インデックス（`schemaVersion: 2`、16 ノード、約 1.5 KB）
 - `manifest.json`: 全成果物の SHA-256、未検証区間一覧、検証済みペア出典情報（`provenance`）を記録
 
 ## 5. 未検証区間（Unverified Sections）

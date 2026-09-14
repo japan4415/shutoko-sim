@@ -7,7 +7,8 @@
 //! **Tie-breaking contract**: when two nodes are at exactly equal distance from
 //! a query coordinate, the node with the **lexicographically smaller ID** is
 //! returned — identical to the original `BTreeSet` iteration order.
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use crate::{distance_meters, Node, SNAP_RADIUS_METERS};
 
@@ -44,6 +45,18 @@ pub struct SnapGrid<'a> {
     /// Each cell stores its node IDs in **lexicographic order** (preserved from
     /// the `BTreeSet` iteration used during construction).
     cells: BTreeMap<(i64, i64), Vec<&'a str>>,
+}
+
+/// Owned version of `SnapGrid` — no lifetime parameter.
+///
+/// Stores indices into the `graph.nodes` slice instead of string references,
+/// enabling the index to be stored in [`crate::PreparedGraph`] without
+/// creating a self-referential structure.
+#[derive(Default)]
+pub struct OwnedSnapGrid {
+    /// Each cell stores node indices into `graph.nodes`, sorted by node ID for
+    /// deterministic tie-breaking (identical to [`SnapGrid`] behaviour).
+    cells: BTreeMap<(i64, i64), Vec<usize>>,
 }
 
 impl<'a> SnapGrid<'a> {
@@ -105,5 +118,58 @@ impl<'a> SnapGrid<'a> {
 
         best.filter(|(d, _, _)| *d <= SNAP_RADIUS_METERS)
             .map(|(d, _, n)| (d, n))
+    }
+}
+
+impl OwnedSnapGrid {
+    /// Build from an iterator of local-node indices into `all_nodes`.
+    ///
+    /// Each cell's entries are sorted by node ID for deterministic tie-breaking,
+    /// matching the behaviour of [`SnapGrid`].
+    pub fn build(local_node_indices: impl IntoIterator<Item = usize>, all_nodes: &[Node]) -> Self {
+        let mut cells: BTreeMap<(i64, i64), Vec<usize>> = BTreeMap::new();
+        for idx in local_node_indices {
+            let n = &all_nodes[idx];
+            cells.entry(cell_key(n.lat, n.lon)).or_default().push(idx);
+        }
+        // Sort each cell by node ID so tie-breaking is deterministic.
+        for v in cells.values_mut() {
+            v.sort_by(|&a, &b| all_nodes[a].id.cmp(&all_nodes[b].id));
+        }
+        Self { cells }
+    }
+
+    /// Find the nearest local node within [`SNAP_RADIUS_METERS`].
+    ///
+    /// Returns `Some((distance_meters, node_index))` or `None`.
+    /// Tie-breaking: lexicographically smaller node ID wins, identical to
+    /// the borrowed [`SnapGrid::nearest`].
+    pub fn nearest(&self, lat: f64, lon: f64, all_nodes: &[Node]) -> Option<(f64, usize)> {
+        let (ci, cj) = cell_key(lat, lon);
+        // Track (distance, index) of the best candidate.
+        let mut best: Option<(f64, usize)> = None;
+
+        for di in -1i64..=1 {
+            for dj in -1i64..=1 {
+                let key = (ci + di, cj + dj);
+                let Some(idxs) = self.cells.get(&key) else {
+                    continue;
+                };
+                // `idxs` are already in lex order within each cell.
+                for &idx in idxs {
+                    let n = &all_nodes[idx];
+                    let d = distance_meters(lat, lon, n.lat, n.lon);
+                    let update = match best {
+                        None => true,
+                        Some((bd, bidx)) => d < bd || (d == bd && n.id < all_nodes[bidx].id),
+                    };
+                    if update {
+                        best = Some((d, idx));
+                    }
+                }
+            }
+        }
+
+        best.filter(|(d, _)| *d <= SNAP_RADIUS_METERS)
     }
 }

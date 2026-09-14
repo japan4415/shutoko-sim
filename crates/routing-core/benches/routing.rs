@@ -4,16 +4,16 @@
 //! - `search_small_kandabashi`: 小グラフ（8,803 ノード）神田橋起点で `search()` 全体を計測
 //! - `search_small_all_pairs`: 小グラフ、8 課金ペアそれぞれのエントリーノードを起点に `search()` を 8 回回す
 //! - `snap_small/*`: 小グラフ、座標スナップ経路（スナップ成功・失敗を含む）
+//! - `prepared_small/*`: 小グラフ、prepare() を 1 回 + search_prepared() を N 回計測
+//!   - `prepared_small/prepare_only`: prepare() のコスト（インデックス構築）
+//!   - `prepared_small/search_prepared_kandabashi`: search_prepared() のコスト（探索のみ）
+//!   - `prepared_small/search_prepared_all_pairs`: search_prepared() × 8 課金ペア
 //! - `search_large`: 大規模グラフ（環境変数 `BENCH_LARGE_GRAPH_PATH` 指定、未設定なら skip）
 //! - `snap_large/*`: 大規模グラフ、座標スナップ経路
-//!
-//! # 大規模グラフの注意
-//! `validate()` にノード 100,000 / エッジ 300,000 のハードコード上限があるため、
-//! 23 区全域グラフ（約 602,549 ノード / 1,194,346 エッジ）は現時点で拒否される。
-//! その場合はベンチを skip し、理由をコンソールに出力する（エラーにしない）。
+//! - `prepared_large/*`: 大規模グラフ、prepare() + search_prepared() 分離計測
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use shutoko_routing_core::{search, Graph, LatLng, SearchLimits, SearchRequest};
+use shutoko_routing_core::{prepare, search, Graph, LatLng, SearchLimits, SearchRequest};
 use std::hint::black_box;
 use std::time::Duration;
 
@@ -141,6 +141,67 @@ fn bench_snap_small(c: &mut Criterion) {
     group.finish();
 }
 
+// --- 小グラフ PreparedGraph ベンチ ---
+
+/// `prepared_small`: 小グラフで prepare() + search_prepared() を分離して計測。
+/// - `prepare_only`: グラフのロードとインデックス構築コスト
+/// - `search_prepared_kandabashi`: prepare 済みグラフへの探索コスト（神田橋起点）
+/// - `search_prepared_all_pairs`: prepare 済みグラフへの探索 × 8 課金ペア
+fn bench_prepared_small(c: &mut Criterion) {
+    let g = small_graph();
+    let limits = SearchLimits::default();
+
+    let mut group = c.benchmark_group("prepared_small");
+
+    // prepare() のみを計測（インデックス構築コスト）
+    group.bench_function("prepare_only", |b| {
+        b.iter(|| black_box(prepare(black_box(g.clone()), black_box(&limits)).unwrap()))
+    });
+
+    // search_prepared() を計測（prepare は 1 回だけ実行）
+    let pg = prepare(g.clone(), &limits).expect("prepare に失敗");
+
+    group.bench_function("search_prepared_kandabashi", |b| {
+        b.iter(|| {
+            let req = SearchRequest {
+                request_id: "bench-prepared-kandabashi".into(),
+                release_id: "c1-real-v1".into(),
+                origin_node_id: Some("n:1070862943".into()),
+                origin: None,
+                min_minutes: 15,
+                max_minutes: 60,
+                vehicle_profile: "passenger-car-etc".into(),
+                pricing_at: "2026-09-10T00:00:00Z".into(),
+            };
+            black_box(
+                shutoko_routing_core::search_prepared(black_box(&pg), black_box(&req)).unwrap(),
+            )
+        })
+    });
+
+    group.bench_function("search_prepared_all_pairs", |b| {
+        b.iter(|| {
+            for (i, (_pair_id, node_id)) in PAIR_ENTRY_NODES.iter().enumerate() {
+                let req = SearchRequest {
+                    request_id: format!("bench-prepared-pair-{i}"),
+                    release_id: "c1-real-v1".into(),
+                    origin_node_id: Some((*node_id).into()),
+                    origin: None,
+                    min_minutes: 5,
+                    max_minutes: 90,
+                    vehicle_profile: "passenger-car-etc".into(),
+                    pricing_at: "2026-09-10T00:00:00Z".into(),
+                };
+                let _ = black_box(
+                    shutoko_routing_core::search_prepared(black_box(&pg), black_box(&req)).unwrap(),
+                );
+            }
+        })
+    });
+
+    group.finish();
+}
+
 // --- 大規模グラフ ベンチ ---
 
 /// 環境変数 `BENCH_LARGE_GRAPH_PATH` からパスを読み、ファイルを読み込む。
@@ -166,32 +227,17 @@ fn load_large_graph() -> Option<(Graph, String)> {
     Some((g, json))
 }
 
-/// 大規模グラフの validate() を事前チェックし、サイズ上限で拒否されるかを確認する。
-/// 現行の validate() はノード 100,000 / エッジ 300,000 のハードコード上限を持つ。
+/// 大規模グラフが prepare() で受け入れられるか確認し、第 1 ノード ID を返す。
 /// 拒否された場合はエラーメッセージを出力して `None` を返す。
-fn validate_large_graph_or_skip(g: &Graph) -> Option<String> {
-    // 最小限のリクエストで validate() を通して上限チェックを実行する。
-    // validate() は内部関数なので、search() ごしに上限チェックを行う。
+fn prepare_large_graph_or_skip(g: &Graph) -> Option<String> {
     let first_node_id = g.nodes.first().map(|n| n.id.clone())?;
-    let req = SearchRequest {
-        request_id: "bench-large-probe".into(),
-        release_id: g.release_id.clone(),
-        origin_node_id: Some(first_node_id.clone()),
-        origin: None,
-        min_minutes: 1,
-        max_minutes: 5,
-        vehicle_profile: g.vehicle_profile.clone(),
-        pricing_at: "2026-09-10T00:00:00Z".into(),
-    };
     let limits = SearchLimits::default();
-
-    match search(g, &req, &limits) {
+    match prepare(g.clone(), &limits) {
         Ok(_) => Some(first_node_id),
         Err(e) => {
             eprintln!(
-                "[bench] 大規模グラフは search() で拒否されました（スキップ）: {e}\n\
-                 ノード数={}, エッジ数={} — validate() のハードコード上限 \
-                 (ノード 100,000 / エッジ 300,000) を超えている可能性があります。",
+                "[bench] 大規模グラフは prepare() で拒否されました（スキップ）: {e}\n\
+                 ノード数={}, エッジ数={}",
                 g.nodes.len(),
                 g.edges.len(),
             );
@@ -200,16 +246,15 @@ fn validate_large_graph_or_skip(g: &Graph) -> Option<String> {
     }
 }
 
-/// `search_large`: 大規模グラフで `search()` 全体を計測。
+/// `search_large`: 大規模グラフで `search()` 全体（prepare 込み）を計測。
 /// `BENCH_LARGE_GRAPH_PATH` 未設定またはファイル不在 → skip。
-/// validate() のサイズ上限で拒否 → skip（理由をコンソールに出力）。
 fn bench_search_large(c: &mut Criterion) {
     let Some((g, _json)) = load_large_graph() else {
         eprintln!("[bench] search_large: BENCH_LARGE_GRAPH_PATH が未設定のためスキップします。");
         return;
     };
-    let Some(origin_node_id) = validate_large_graph_or_skip(&g) else {
-        return; // 拒否された場合 — 理由は validate_large_graph_or_skip 内で出力済み
+    let Some(origin_node_id) = prepare_large_graph_or_skip(&g) else {
+        return;
     };
     let limits = SearchLimits::default();
 
@@ -238,14 +283,13 @@ fn bench_search_large(c: &mut Criterion) {
 
 /// `snap_large`: 大規模グラフで座標スナップ経路を計測。
 /// `BENCH_LARGE_GRAPH_PATH` 未設定またはファイル不在 → skip。
-/// validate() のサイズ上限で拒否 → skip（理由をコンソールに出力）。
 fn bench_snap_large(c: &mut Criterion) {
     let Some((g, _json)) = load_large_graph() else {
         eprintln!("[bench] snap_large: BENCH_LARGE_GRAPH_PATH が未設定のためスキップします。");
         return;
     };
-    if validate_large_graph_or_skip(&g).is_none() {
-        return; // 拒否された場合 — 理由は validate_large_graph_or_skip 内で出力済み
+    if prepare_large_graph_or_skip(&g).is_none() {
+        return;
     }
     let limits = SearchLimits::default();
 
@@ -283,12 +327,107 @@ fn bench_snap_large(c: &mut Criterion) {
     group.finish();
 }
 
+/// `prepared_large`: 大規模グラフで prepare() と search_prepared() を分離して計測。
+/// - `prepare_only`: インデックス構築コスト（1 回の計測で大規模グラフを丸ごと処理）
+/// - `search_prepared_origin_first`: prepare 済みグラフへの探索コスト
+/// - `search_prepared_snap_hit`: 座標スナップ成功経路の探索コスト
+/// - `search_prepared_snap_miss`: 座標スナップ失敗（即 return）のコスト
+fn bench_prepared_large(c: &mut Criterion) {
+    let Some((g, _json)) = load_large_graph() else {
+        eprintln!("[bench] prepared_large: BENCH_LARGE_GRAPH_PATH が未設定のためスキップします。");
+        return;
+    };
+    let Some(origin_node_id) = prepare_large_graph_or_skip(&g) else {
+        return;
+    };
+    let limits = SearchLimits::default();
+
+    let mut group = c.benchmark_group("prepared_large");
+    group.sample_size(10);
+    group.measurement_time(Duration::from_secs(30));
+
+    // prepare() のみを計測（インデックス構築、グラフ clone 込み）
+    group.bench_function("prepare_only", |b| {
+        b.iter(|| black_box(prepare(black_box(g.clone()), black_box(&limits)).unwrap()))
+    });
+
+    // 以降は prepare を 1 回だけ実行し search_prepared() のコストだけを計測
+    let pg = prepare(g.clone(), &limits).expect("prepare に失敗");
+
+    group.bench_function("search_prepared_origin_first", |b| {
+        b.iter(|| {
+            let req = SearchRequest {
+                request_id: "bench-prepared-large".into(),
+                release_id: pg.graph.release_id.clone(),
+                origin_node_id: Some(origin_node_id.clone()),
+                origin: None,
+                min_minutes: 15,
+                max_minutes: 60,
+                vehicle_profile: pg.graph.vehicle_profile.clone(),
+                pricing_at: "2026-09-10T00:00:00Z".into(),
+            };
+            black_box(shutoko_routing_core::search_prepared(
+                black_box(&pg),
+                black_box(&req),
+            ))
+        })
+    });
+
+    group.bench_function("search_prepared_snap_hit", |b| {
+        b.iter(|| {
+            let req = SearchRequest {
+                request_id: "bench-prepared-snap-hit".into(),
+                release_id: pg.graph.release_id.clone(),
+                origin_node_id: None,
+                origin: Some(LatLng {
+                    lat: 35.6896727,
+                    lon: 139.7644248,
+                }),
+                min_minutes: 15,
+                max_minutes: 60,
+                vehicle_profile: pg.graph.vehicle_profile.clone(),
+                pricing_at: "2026-09-10T00:00:00Z".into(),
+            };
+            black_box(shutoko_routing_core::search_prepared(
+                black_box(&pg),
+                black_box(&req),
+            ))
+        })
+    });
+
+    group.bench_function("search_prepared_snap_miss", |b| {
+        b.iter(|| {
+            let req = SearchRequest {
+                request_id: "bench-prepared-snap-miss".into(),
+                release_id: pg.graph.release_id.clone(),
+                origin_node_id: None,
+                origin: Some(LatLng {
+                    lat: 35.0000000,
+                    lon: 138.0000000,
+                }),
+                min_minutes: 15,
+                max_minutes: 60,
+                vehicle_profile: pg.graph.vehicle_profile.clone(),
+                pricing_at: "2026-09-10T00:00:00Z".into(),
+            };
+            black_box(shutoko_routing_core::search_prepared(
+                black_box(&pg),
+                black_box(&req),
+            ))
+        })
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_search_small_kandabashi,
     bench_search_small_all_pairs,
     bench_snap_small,
+    bench_prepared_small,
     bench_search_large,
     bench_snap_large,
+    bench_prepared_large,
 );
 criterion_main!(benches);

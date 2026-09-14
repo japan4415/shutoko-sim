@@ -116,6 +116,10 @@ export interface RoutingErrorPayload {
 /**
  * Execute experimental route search on a prevalidated graph JSON.
  *
+ * Convenience API — parses all three JSON arguments and rebuilds the index on
+ * every call.  For repeated searches on the same graph, prefer `prepare` +
+ * `searchPrepared` to avoid rebuilding the index each time.
+ *
  * @param graphJson Serialized Graph JSON string
  * @param requestJson Serialized SearchRequest JSON string
  * @param limitsJson Serialized SearchLimits JSON string (empty object "{}" for defaults)
@@ -127,5 +131,40 @@ export function search(
   requestJson: string,
   limitsJson: string
 ): string;
+
+/**
+ * An opaque handle wrapping a PreparedGraph.
+ *
+ * Obtain via `prepare()`; pass to `searchPrepared()` for fast repeated search
+ * without rebuilding the index on every call.
+ *
+ * Call `.free()` when done to release Wasm memory.
+ */
+export class WasmPreparedGraph {
+  free(): void;
+}
+
+/**
+ * Build a prepared graph from JSON strings (the expensive, one-time step).
+ *
+ * @param graphJson  Serialized Graph JSON string
+ * @param limitsJson Serialized SearchLimits JSON string (use "{}" for defaults)
+ * @returns An opaque WasmPreparedGraph handle
+ * @throws JavaScript Error with JSON serialized RoutingErrorPayload on invalid input
+ */
+export function prepare(graphJson: string, limitsJson: string): WasmPreparedGraph;
+
+/**
+ * Execute a route search on an already-prepared graph (fast, per-search call).
+ *
+ * Skips index rebuilding; only validates the request and runs the search
+ * algorithm.
+ *
+ * @param pg          A WasmPreparedGraph handle obtained from `prepare`
+ * @param requestJson Serialized SearchRequest JSON string
+ * @returns Serialized SearchResult JSON string
+ * @throws JavaScript Error with JSON serialized RoutingErrorPayload on invalid input
+ */
+export function searchPrepared(pg: WasmPreparedGraph, requestJson: string): string;
 
 export default function init(module_or_path?: unknown): Promise<unknown>;

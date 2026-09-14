@@ -1553,6 +1553,117 @@ fn test_real_c1_first_exit_and_benchmark() {
     // New motorway-only fixture has 1,719 edges (was 9,726 with local roads).
     assert_eq!(graph.edges.len(), 1719, "C1 graph must have 1,719 edges");
 
+    // --- Critical-2 fix: kind-level counts pin classification correctness -------
+    // A misclassified Exit or JCT connector keeps the total at 1,719, but changes
+    // the per-kind counts below — making silent misclassification detectable.
+    let entry_count = graph
+        .edges
+        .iter()
+        .filter(|e| e.kind == EdgeKind::Entry)
+        .count();
+    let exit_count = graph
+        .edges
+        .iter()
+        .filter(|e| e.kind == EdgeKind::Exit)
+        .count();
+    let local_count = graph
+        .edges
+        .iter()
+        .filter(|e| e.kind == EdgeKind::Local)
+        .count();
+    assert_eq!(entry_count, 16, "C1 must have exactly 16 Entry edges");
+    assert_eq!(exit_count, 17, "C1 must have exactly 17 Exit edges");
+    assert_eq!(
+        local_count, 0,
+        "C1 motorway-only graph must have 0 Local edges"
+    );
+
+    // --- Individual billing-pair edge classification ---------------------------
+    // Verifies that each of the 8 charged entry/exit pairs is correctly classified.
+    // This is the strongest signal that the topology builder is working correctly:
+    // if any of these edges changes kind the billing pipeline would be broken.
+    let edge_kinds: std::collections::HashMap<&str, EdgeKind> = graph
+        .edges
+        .iter()
+        .map(|e| (e.id.as_str(), e.kind))
+        .collect();
+
+    let billing_edge_pairs: &[(&str, EdgeKind, &str, EdgeKind)] = &[
+        // bp:c1-outer:kandabashi-takaracho (神田橋入口 → 宝町出口)
+        (
+            "e:w92243921:0:f",
+            EdgeKind::Entry,
+            "e:w297864314:11:f",
+            EdgeKind::Exit,
+        ),
+        // bp:c1-outer:kasumigaseki-daikancho (霞が関入口 → 代官町出口)
+        (
+            "e:w916571610:0:f",
+            EdgeKind::Entry,
+            "e:w276920911:6:f",
+            EdgeKind::Exit,
+        ),
+        // bp:c1-outer:ginza-shibakoen (銀座入口 → 芝公園出口)
+        (
+            "e:w4848922:0:f",
+            EdgeKind::Entry,
+            "e:w944671542:0:f",
+            EdgeKind::Exit,
+        ),
+        // bp:c1-outer:shibakoen-iikura (芝公園入口 → 飯倉出口)
+        (
+            "e:w4853801:0:f",
+            EdgeKind::Entry,
+            "e:w203832842:4:f",
+            EdgeKind::Exit,
+        ),
+        // bp:c1-inner:kasumigaseki-shibakoen (霞が関入口 → 芝公園出口)
+        (
+            "e:w916571615:0:f",
+            EdgeKind::Entry,
+            "e:w203873821:2:f",
+            EdgeKind::Exit,
+        ),
+        // bp:c1-inner:daikancho-kasumigaseki (代官町入口 → 霞が関出口)
+        (
+            "e:w1091280541:0:f",
+            EdgeKind::Entry,
+            "e:w1232166619:0:f",
+            EdgeKind::Exit,
+        ),
+        // bp:c1-inner:shibakoen-shiodome (芝公園入口 → 汐留出口)
+        (
+            "e:w4853797:0:f",
+            EdgeKind::Entry,
+            "e:w45068171:1:f",
+            EdgeKind::Exit,
+        ),
+        // bp:c1-inner:takaracho-kandabashi (宝町入口 → 神田橋出口)
+        (
+            "e:w378284514:0:f",
+            EdgeKind::Entry,
+            "e:w390441534:2:f",
+            EdgeKind::Exit,
+        ),
+    ];
+
+    for (entry_id, expected_entry_kind, exit_id, expected_exit_kind) in billing_edge_pairs {
+        assert_eq!(
+            edge_kinds.get(entry_id).copied(),
+            Some(*expected_entry_kind),
+            "billing-pair entry edge {} must be {:?}",
+            entry_id,
+            expected_entry_kind
+        );
+        assert_eq!(
+            edge_kinds.get(exit_id).copied(),
+            Some(*expected_exit_kind),
+            "billing-pair exit edge {} must be {:?}",
+            exit_id,
+            expected_exit_kind
+        );
+    }
+
     // Anchor node for Kandabashi entry is n:499831338
     let anchor = "n:499831338";
 
@@ -3289,4 +3400,135 @@ fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
         );
         assert!(graph_pair.exit_name.is_some(), "exit_name must be present");
     }
+}
+
+// =============================================================================
+// Critical-1 / Critical-3 fix: JCT_DETECTION_MAX_ENTRY_DIST_METERS boundary
+//
+// These two synthetic tests pin the exact distance threshold that separates
+// "real surface Exit" from "JCT connector classified as Shutoko".
+//
+// Topology used in both tests:
+//   Shutoko mainline loop:  n10 → n11 → n12 → n10 (highway=motorway, ref=C1)
+//   Entry ramp:             n1 → n5 → n10          (highway=motorway_link)
+//     • n1 is the Entry-candidate from-node (the proximity reference point)
+//   Exit ramp:              n11 → n25 → n20         (highway=motorway_link)
+//     • n20 is the exit dead-end; its distance to n1 determines classification
+// =============================================================================
+
+/// When the exit dead-end is 549 m from the entry candidate (≤ 550 m threshold),
+/// the edge is classified as Exit — a real surface interchange exists nearby.
+///
+/// Coordinate derivation (Haversine, R = 6 371 000 m):
+///   n1  = (35.6800, 139.7600)  — entry candidate from-node
+///   n20 = (35.6849373, 139.7600) — 549 m due north → rounds to 549 m ≤ 550 m
+#[test]
+fn test_jct_threshold_within_550m_classified_as_exit() {
+    let json_data = json!({
+        "elements": [
+            // Entry candidate from-node (proximity reference)
+            {"type": "node", "id": 1,  "lat": 35.6800,    "lon": 139.7600},
+            // Shutoko mainline loop nodes
+            {"type": "node", "id": 10, "lat": 35.6820,    "lon": 139.7640},
+            {"type": "node", "id": 11, "lat": 35.6820,    "lon": 139.7680},
+            {"type": "node", "id": 12, "lat": 35.6840,    "lon": 139.7660},
+            // Entry ramp intermediate node
+            {"type": "node", "id": 5,  "lat": 35.6815,    "lon": 139.7620},
+            // Exit ramp intermediate node
+            {"type": "node", "id": 25, "lat": 35.6835,    "lon": 139.7620},
+            // Exit dead-end: 549 m from n1 (rounds to 549 ≤ 550 → real exit)
+            {"type": "node", "id": 20, "lat": 35.6849373, "lon": 139.7600},
+
+            // Shutoko mainline loop: n10 → n11 → n12 → n10
+            {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            // Entry ramp: n1 → n5 → n10
+            {"type":"way","id":200,"nodes":[1,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}},
+            // Exit ramp: n11 → n25 → n20
+            {"type":"way","id":300,"nodes":[11,25,20],"tags":{"highway":"motorway_link","oneway":"yes"}}
+        ]
+    });
+
+    let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
+    let (graph, _snap) = build_topology(&resp, &TopologyConfig::default()).unwrap();
+
+    let edge_kinds: std::collections::HashMap<&str, EdgeKind> = graph
+        .edges
+        .iter()
+        .map(|e| (e.id.as_str(), e.kind))
+        .collect();
+
+    // Entry ramp first segment: n1 has 0 incoming ramp/mainline → Entry
+    assert_eq!(
+        edge_kinds.get("e:w200:0:f"),
+        Some(&EdgeKind::Entry),
+        "entry ramp first segment must be Entry"
+    );
+    // Exit ramp last segment dead-ends at n20, which is 549 m from entry candidate n1
+    // → within 550 m threshold → classified as real Exit
+    assert_eq!(
+        edge_kinds.get("e:w300:1:f"),
+        Some(&EdgeKind::Exit),
+        "exit dead-end at 549 m from entry candidate must be classified as Exit (≤ 550 m)"
+    );
+}
+
+/// When the exit dead-end is 551 m from the entry candidate (> 550 m threshold),
+/// no surface entry ramp is nearby and the edge is classified as Shutoko
+/// (JCT connector at the OSM-extract boundary).
+///
+/// Coordinate derivation (Haversine, R = 6 371 000 m):
+///   n1  = (35.6800, 139.7600)  — entry candidate from-node
+///   n20 = (35.6849553, 139.7600) — 551 m due north → rounds to 551 m > 550 m
+#[test]
+fn test_jct_threshold_beyond_550m_classified_as_shutoko() {
+    let json_data = json!({
+        "elements": [
+            // Entry candidate from-node (proximity reference)
+            {"type": "node", "id": 1,  "lat": 35.6800,    "lon": 139.7600},
+            // Shutoko mainline loop nodes
+            {"type": "node", "id": 10, "lat": 35.6820,    "lon": 139.7640},
+            {"type": "node", "id": 11, "lat": 35.6820,    "lon": 139.7680},
+            {"type": "node", "id": 12, "lat": 35.6840,    "lon": 139.7660},
+            // Entry ramp intermediate node
+            {"type": "node", "id": 5,  "lat": 35.6815,    "lon": 139.7620},
+            // Exit ramp intermediate node
+            {"type": "node", "id": 25, "lat": 35.6835,    "lon": 139.7620},
+            // Exit dead-end: 551 m from n1 (rounds to 551 > 550 → JCT, not real exit)
+            {"type": "node", "id": 20, "lat": 35.6849553, "lon": 139.7600},
+
+            // Shutoko mainline loop: n10 → n11 → n12 → n10
+            {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            // Entry ramp: n1 → n5 → n10
+            {"type":"way","id":200,"nodes":[1,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}},
+            // Exit ramp: n11 → n25 → n20
+            {"type":"way","id":300,"nodes":[11,25,20],"tags":{"highway":"motorway_link","oneway":"yes"}}
+        ]
+    });
+
+    let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
+    let (graph, _snap) = build_topology(&resp, &TopologyConfig::default()).unwrap();
+
+    let edge_kinds: std::collections::HashMap<&str, EdgeKind> = graph
+        .edges
+        .iter()
+        .map(|e| (e.id.as_str(), e.kind))
+        .collect();
+
+    // Entry ramp first segment still classified as Entry
+    assert_eq!(
+        edge_kinds.get("e:w200:0:f"),
+        Some(&EdgeKind::Entry),
+        "entry ramp first segment must be Entry"
+    );
+    // Exit ramp last segment dead-ends at n20, which is 551 m from entry candidate n1
+    // → beyond 550 m threshold → no real surface interchange nearby → classified as Shutoko
+    assert_eq!(
+        edge_kinds.get("e:w300:1:f"),
+        Some(&EdgeKind::Shutoko),
+        "exit dead-end at 551 m from entry candidate must be classified as Shutoko (> 550 m)"
+    );
 }

@@ -12,6 +12,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Snap search radius threshold in meters.
 pub const SNAP_RADIUS_METERS: f64 = 200.0;
 
+pub mod grid;
 pub mod handoff;
 
 /// Google Maps handoff payload for a candidate route.
@@ -128,6 +129,9 @@ pub struct SearchLimits {
     pub max_graph_nodes: usize,
     /// Maximum number of edges allowed in the graph. Defaults to 3,000,000.
     pub max_graph_edges: usize,
+    /// Maximum Dijkstra expansion radius from the origin node in metres.
+    /// `0.0` (the default) means unlimited — existing callers are unaffected.
+    pub max_access_radius_meters: f64,
 }
 impl Default for SearchLimits {
     fn default() -> Self {
@@ -140,6 +144,7 @@ impl Default for SearchLimits {
             max_candidates: 3,
             max_graph_nodes: 1_000_000,
             max_graph_edges: 3_000_000,
+            max_access_radius_meters: 0.0,
         }
     }
 }
@@ -281,6 +286,7 @@ struct Index<'a> {
     outgoing: BTreeMap<&'a str, Vec<&'a Edge>>,
     incoming: BTreeMap<&'a str, Vec<&'a Edge>>,
     local_nodes: BTreeSet<&'a str>,
+    snap_grid: grid::SnapGrid<'a>,
 }
 fn validate<'a>(
     g: &'a Graph,
@@ -342,6 +348,9 @@ fn validate<'a>(
     {
         return Err(invalid("search limits outside supported bounds"));
     }
+    if l.max_access_radius_meters < 0.0 || l.max_access_radius_meters.is_nan() {
+        return Err(invalid("max_access_radius_meters must be non-negative"));
+    }
     if g.nodes.len() > l.max_graph_nodes
         || g.edges.len() > l.max_graph_edges
         || g.billing_pairs.len() > 10_000
@@ -373,6 +382,7 @@ fn validate<'a>(
         outgoing: BTreeMap::new(),
         incoming: BTreeMap::new(),
         local_nodes: BTreeSet::new(),
+        snap_grid: grid::SnapGrid::default(),
     };
     for e in &g.edges {
         if e.id.is_empty()
@@ -400,6 +410,10 @@ fn validate<'a>(
     for edges in ix.incoming.values_mut() {
         edges.sort_by(|a, b| a.id.cmp(&b.id));
     }
+    // Build the uniform-grid spatial index for O(1) coordinate snapping.
+    // Done after local_nodes is fully populated by the edge loop above.
+    ix.snap_grid = grid::SnapGrid::build(&ix.local_nodes, &ix.nodes);
+
     if g.forbidden_transitions.iter().map(Vec::len).sum::<usize>() > 20_000 {
         return Err(invalid("too many forbidden transition edges"));
     }
@@ -530,6 +544,39 @@ impl Budget {
         }
     }
 }
+/// BFS/Dijkstra over Shutoko edges to find all nodes reachable from `anchor`
+/// within `max_seconds`.  Used to pre-filter the `paths()` frontier so that
+/// transitions to unreachable nodes are skipped without burning budget.
+fn shutoko_reachable_set<'a>(
+    ix: &Index<'a>,
+    anchor: &'a str,
+    max_seconds: u64,
+) -> BTreeSet<&'a str> {
+    use std::cmp::Reverse;
+    let mut dist: BTreeMap<&'a str, u64> = BTreeMap::new();
+    let mut heap: BinaryHeap<Reverse<(u64, &'a str)>> = BinaryHeap::new();
+    dist.insert(anchor, 0);
+    heap.push(Reverse((0, anchor)));
+    while let Some(Reverse((cost, node))) = heap.pop() {
+        if cost > dist.get(node).copied().unwrap_or(u64::MAX) {
+            continue;
+        }
+        if let Some(outgoing) = ix.outgoing.get(node) {
+            for e in outgoing.iter().filter(|e| e.kind == EdgeKind::Shutoko) {
+                let new_cost = cost + e.duration_seconds;
+                if new_cost <= max_seconds {
+                    let entry = dist.entry(e.to.as_str()).or_insert(u64::MAX);
+                    if new_cost < *entry {
+                        *entry = new_cost;
+                        heap.push(Reverse((new_cost, e.to.as_str())));
+                    }
+                }
+            }
+        }
+    }
+    dist.into_keys().collect()
+}
+
 // Iterative simple-path enumeration. The same global budget includes local paths and combinations.
 #[allow(clippy::too_many_arguments)]
 fn paths<'a>(
@@ -540,6 +587,11 @@ fn paths<'a>(
     kind: EdgeKind,
     depth: usize,
     max_seconds: u64,
+    // Nodes reachable from the anchor via `kind`-edges within max_seconds/2
+    // (pre-computed by shutoko_reachable_set). Transitions to absent nodes are
+    // pruned early.  For small graphs the set contains all relevant nodes, so
+    // no cycle is lost.
+    reachable: &BTreeSet<&'a str>,
     l: &SearchLimits,
     budget: &mut Budget,
 ) -> Vec<Vec<&'a Edge>> {
@@ -557,6 +609,11 @@ fn paths<'a>(
                 for e in outgoing.iter().copied().filter(|e| e.kind == kind) {
                     if !budget.take(l) {
                         return results;
+                    }
+                    // Skip transitions to nodes not reachable from anchor within
+                    // the time budget (pre-filter from BFS/Dijkstra).
+                    if !reachable.contains(e.to.as_str()) {
+                        continue;
                     }
                     if current.iter().map(|e| e.duration_seconds).sum::<u64>() + e.duration_seconds
                         > max_seconds
@@ -597,6 +654,17 @@ fn paths<'a>(
         if next.is_empty() {
             break;
         }
+        // Sort frontier by (accumulated time ASC, edge-ID sequence ASC) for
+        // deterministic, time-ordered expansion on large graphs.
+        next.sort_by(|a, b| {
+            let ta: u64 = a.iter().map(|e| e.duration_seconds).sum();
+            let tb: u64 = b.iter().map(|e| e.duration_seconds).sum();
+            ta.cmp(&tb).then_with(|| {
+                let ia: Vec<&str> = a.iter().map(|e| e.id.as_str()).collect();
+                let ib: Vec<&str> = b.iter().map(|e| e.id.as_str()).collect();
+                ia.cmp(&ib)
+            })
+        });
         frontier = next;
     }
     results
@@ -777,6 +845,17 @@ fn dijkstra_local_forward<'a>(
             }
             if best_for_entry.len() == total_targets {
                 break;
+            }
+        }
+
+        // Radius limit (D): record entry edges above, but do not expand outgoing
+        // local edges if the current node is already beyond max_access_radius_meters.
+        // Default 0.0 means unlimited; existing callers are unaffected.
+        if l.max_access_radius_meters > 0.0 {
+            let o = ix.nodes[origin];
+            let c = ix.nodes[current.node];
+            if distance_meters(o.lat, o.lon, c.lat, c.lon) > l.max_access_radius_meters {
+                continue;
             }
         }
 
@@ -1004,18 +1083,11 @@ pub fn search(
             )
         }
         (None, Some(ll)) => {
-            // Linear scan over nodes touching a Local edge. Deterministic:
-            // BTreeSet iteration by node ID, strict `<` keeps the first on ties.
-            let mut best: Option<(f64, &Node)> = None;
-            for id in &ix.local_nodes {
-                let node = ix.nodes[*id];
-                let d = distance_meters(ll.lat, ll.lon, node.lat, node.lon);
-                if best.is_none_or(|(bd, _)| d < bd) {
-                    best = Some((d, node));
-                }
-            }
-            match best {
-                Some((d, node)) if d <= SNAP_RADIUS_METERS => (
+            // Grid-index snap: O(1) query over the 3×3 cell neighbourhood.
+            // Tie-breaking (same distance) selects the lex-smallest node ID,
+            // identical to the former BTreeSet linear-scan behaviour.
+            match ix.snap_grid.nearest(ll.lat, ll.lon, &ix.nodes) {
+                Some((d, node)) => (
                     node.id.clone(),
                     SnappedOrigin {
                         node_id: node.id.clone(),
@@ -1024,7 +1096,7 @@ pub fn search(
                         distance_meters: d,
                     },
                 ),
-                _ => {
+                None => {
                     return Ok(SearchResult {
                         request_id: r.request_id.clone(),
                         release_id: r.release_id.clone(),
@@ -1118,6 +1190,13 @@ pub fn search(
         };
         connection = true;
 
+        // Pre-compute Shutoko nodes reachable from the anchor within the full
+        // time budget.  This prunes transitions to nodes that are unreachable
+        // regardless of direction, while keeping all nodes that could appear in
+        // any valid loop.  The exact time constraint (total <= max_seconds) is
+        // still enforced inside paths().
+        let reachable = shutoko_reachable_set(&ix, p.anchor_node_id.as_str(), r.max_minutes * 60);
+
         let loops = paths(
             g,
             &ix,
@@ -1126,6 +1205,7 @@ pub fn search(
             EdgeKind::Shutoko,
             l.max_loop_edges,
             r.max_minutes * 60,
+            &reachable,
             l,
             &mut budget,
         );

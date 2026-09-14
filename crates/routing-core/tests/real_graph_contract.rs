@@ -264,15 +264,17 @@ fn real_graph_search_json_wasm_contract_parity() {
     assert_eq!(candidates[0]["toll"]["amountYen"].as_u64(), Some(300));
 }
 
-/// 連結 5 ペアの探索契約定数
+/// 全 8 ペアの探索契約定数
 /// 各ペアの C1 一周計画時間が時間窓に収まる max_minutes とその根拠を明示。
+/// 一般道排除（issue #25）により、旧来「一般道が切断されていた」3 ペアも
+/// origin_node_id = Entry エッジの from-node（アクセス時間 0）として直接探索可能になった。
 struct ConnectedPairContract {
     pair_id: &'static str,
     max_minutes: u64,
     rationale: &'static str,
 }
 
-const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 5] = [
+const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 8] = [
     ConnectedPairContract {
         pair_id: "bp:c1-outer:kandabashi-takaracho",
         max_minutes: 60,
@@ -298,6 +300,24 @@ const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 5] = [
         max_minutes: 60,
         rationale: "芝公園〜飯倉（外回り）。C1 一周の実走行計画時間は約26.6分（base=1298s, plan=1598s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
     },
+    // 以下 3 ペアは issue #25 以前は一般道の OSM 取得範囲境界で孤立していたが、
+    // 一般道排除後は origin_node_id = Entry エッジ from-node（アクセス時間 0）として
+    // 直接 C1 本線に接続されるようになり、自ペア候補が採択される。
+    ConnectedPairContract {
+        pair_id: "bp:c1-outer:ginza-shibakoen",
+        max_minutes: 60,
+        rationale: "銀座〜芝公園（外回り）。一般道排除後、Entry from-node を起点とするためアクセス時間 0。C1 一周の標準窓 max_minutes=60 で自ペア候補が採択される。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-outer:kasumigaseki-daikancho",
+        max_minutes: 60,
+        rationale: "霞が関〜大官町（外回り）。一般道排除後、Entry from-node を起点とするためアクセス時間 0。C1 一周の標準窓 max_minutes=60 で自ペア候補が採択される。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-inner:daikancho-kasumigaseki",
+        max_minutes: 60,
+        rationale: "大官町〜霞が関（内回り）。一般道排除後、Entry from-node を起点とするためアクセス時間 0。C1 一周の標準窓 max_minutes=60 で自ペア候補が採択される。",
+    },
 ];
 
 #[test]
@@ -310,7 +330,7 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
 
     let start_total = std::time::Instant::now();
 
-    // 1. 一般道が連結している 5 ペアの探索契約
+    // 1. 全 8 ペアの探索契約（一般道排除後は全ペアで自ペア候補が採択される）
     for contract in CONNECTED_SEARCH_PAIRS {
         let pair = g
             .billing_pairs
@@ -383,101 +403,11 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         );
     }
 
-    // 2. OSM データ境界により一般道が切断されている 3 ペアの契約（実態に合わせる）
-    // 既定 limits で truncated にならず、孤立成分と一般道連結性の実態を固定する。
-    //
-    // (a) bp:c1-outer:ginza-shibakoen:
-    //     Ginza 外回り出口（n:254360532、13ノード孤立成分）など OSM 取得境界により
-    //     一般道側が物理的に切断されており他入口へも到達不能なため status == "no_candidates"。
-    {
-        let pair_id = "bp:c1-outer:ginza-shibakoen";
-        let pair = g.billing_pairs.iter().find(|p| p.id == pair_id).unwrap();
-        let origin_node_id = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()]
-            .from
-            .clone();
-        let request = SearchRequest {
-            request_id: format!("req-loop-{}", pair_id),
-            release_id: g.release_id.clone(),
-            origin_node_id: Some(origin_node_id.clone()),
-            origin: None,
-            min_minutes: 15,
-            max_minutes: 60,
-            vehicle_profile: "passenger-car-etc".into(),
-            pricing_at: "2026-09-10T00:00:00Z".into(),
-        };
-        let result = search(&g, &request, &limits).expect("search must succeed");
-        assert_eq!(
-            result.status, "no_candidates",
-            "ginza-shibakoen must have status no_candidates due to isolated component"
-        );
-        assert!(result.candidates.is_empty());
-        assert!(result.expanded_states < 100_000);
-    }
-
-    // (b) bp:c1-inner:daikancho-kasumigaseki:
-    //     Daikancho 入口/出口（16ノード/61ノード孤立成分）が OSM 取得境界により孤立しているため
-    //     一般道側が切断されており status == "no_candidates"。
-    {
-        let pair_id = "bp:c1-inner:daikancho-kasumigaseki";
-        let pair = g.billing_pairs.iter().find(|p| p.id == pair_id).unwrap();
-        let origin_node_id = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()]
-            .from
-            .clone();
-        let request = SearchRequest {
-            request_id: format!("req-loop-{}", pair_id),
-            release_id: g.release_id.clone(),
-            origin_node_id: Some(origin_node_id.clone()),
-            origin: None,
-            min_minutes: 15,
-            max_minutes: 60,
-            vehicle_profile: "passenger-car-etc".into(),
-            pricing_at: "2026-09-10T00:00:00Z".into(),
-        };
-        let result = search(&g, &request, &limits).expect("search must succeed");
-        assert_eq!(
-            result.status, "no_candidates",
-            "daikancho-kasumigaseki must have status no_candidates due to isolated component"
-        );
-        assert!(result.candidates.is_empty());
-        assert!(result.expanded_states < 100_000);
-    }
-
-    // (c) bp:c1-outer:kasumigaseki-daikancho:
-    //     Kasumigaseki 起点は一般道網に連結しているため他ペア候補（神田橋・芝公園等経由）により
-    //     status == "ok" となるが、Daikancho 出口側が切断されているため自ペア候補は含まれない。
-    {
-        let pair_id = "bp:c1-outer:kasumigaseki-daikancho";
-        let pair = g.billing_pairs.iter().find(|p| p.id == pair_id).unwrap();
-        let origin_node_id = edge_map[pair.entry_to_anchor_edge_ids[0].as_str()]
-            .from
-            .clone();
-        let request = SearchRequest {
-            request_id: format!("req-loop-{}", pair_id),
-            release_id: g.release_id.clone(),
-            origin_node_id: Some(origin_node_id.clone()),
-            origin: None,
-            min_minutes: 15,
-            max_minutes: 60,
-            vehicle_profile: "passenger-car-etc".into(),
-            pricing_at: "2026-09-10T00:00:00Z".into(),
-        };
-        let result = search(&g, &request, &limits).expect("search must succeed");
-        assert_eq!(
-            result.status, "ok",
-            "kasumigaseki-daikancho must have status ok due to reachable other pairs"
-        );
-        assert!(
-            !result
-                .candidates
-                .iter()
-                .any(|c| c.toll.billing_pair_id == pair_id),
-            "kasumigaseki-daikancho must not contain own-pair candidate due to isolated exit"
-        );
-        assert!(!result.candidates.is_empty());
-        assert!(result.expanded_states < 100_000);
-    }
-
-    // 全 8 ペアの fixture 上のメタデータ整合性（verified・料金レコード・経路ワイヤリング）を確認
+    // 2. 全 8 ペアの fixture 上のメタデータ整合性（verified・料金レコード・経路ワイヤリング）を確認
+    // 注記: issue #25 で一般道の OSM 取得範囲境界による孤立が問題になっていた 3 ペア
+    // （ginza-shibakoen / kasumigaseki-daikancho / daikancho-kasumigaseki）は、
+    // 一般道排除後は Entry from-node を直接起点として探索できるため全て "ok" となる。
+    // 各ペアの探索契約は CONNECTED_SEARCH_PAIRS（8 件）で網羅済み。
     for pair in &g.billing_pairs {
         assert_eq!(
             pair.status,
@@ -566,12 +496,20 @@ fn real_graph_coordinate_input_snap_and_candidate_enrichment() {
 }
 
 #[test]
-fn real_graph_coordinate_beyond_snap_radius_is_no_connection() {
-    // 海上座標（200m 以内に一般道ノードなし。最近傍一般道ノードまで約 2,675m は実測済み）。
-    let g = real_graph();
+fn real_graph_no_entry_edges_coordinate_is_no_connection() {
+    // スナップ半径 200m 制限は廃止済み。新仕様での NO_CONNECTION 条件は
+    // 「グラフに Entry エッジが1件もない（snap grid が空）」である。
+    // Entry エッジを全て除いた改変グラフで座標入力を行い、
+    // k_nearest が空 → NO_CONNECTION となることを確認する。
+    use shutoko_routing_core::EdgeKind;
+    let mut g = real_graph();
+    // Entry エッジを除去 → snap grid が空になる。
+    g.edges.retain(|e| e.kind != EdgeKind::Entry);
+    // BillingPairs は Entry エッジを参照するため合わせて除去する。
+    g.billing_pairs.clear();
     let limits = SearchLimits::default();
     let request = SearchRequest {
-        request_id: "req-c1-sea".into(),
+        request_id: "req-no-entry".into(),
         release_id: "c1-real-v1".into(),
         origin_node_id: None,
         origin: Some(shutoko_routing_core::LatLng {
@@ -583,7 +521,8 @@ fn real_graph_coordinate_beyond_snap_radius_is_no_connection() {
         vehicle_profile: "passenger-car-etc".into(),
         pricing_at: "2026-09-10T00:00:00Z".into(),
     };
-    let result = search(&g, &request, &limits).expect("snap miss must be Ok, not Err");
+    let result = search(&g, &request, &limits)
+        .expect("empty-entry graph must be Ok (search does not error on empty snap grid)");
     assert_eq!(result.status, "no_candidates");
     assert_eq!(result.reason.as_deref(), Some("NO_CONNECTION"));
     assert!(result.candidates.is_empty());

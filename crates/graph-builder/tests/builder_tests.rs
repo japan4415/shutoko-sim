@@ -462,10 +462,13 @@ fn test_routing_core_search_integration() {
         exit_name: None,
     });
 
+    // n:2 is the from-node of the Entry edge (way 2: 2→3).
+    // With local roads removed from routing, the origin must be the Entry
+    // edge's from-node directly — not a surface street node.
     let req = SearchRequest {
         request_id: "req-test-1".into(),
         release_id: "integration-rel".into(),
-        origin_node_id: Some("n:1".into()),
+        origin_node_id: Some("n:2".into()),
         origin: None,
         min_minutes: 1,
         max_minutes: 60,
@@ -598,12 +601,14 @@ fn test_billing_pair_seed_and_pathfinding_success() {
     // Verify it passes validation
     assert!(validate_billing_pair(&graph, &pair).is_ok());
 
-    // Integrate with routing core search
+    // Integrate with routing core search.
+    // n:2 is the from-node of the Entry edge (way 2: 2→3); use it as the
+    // origin because routing now requires origin to be an Entry from-node.
     graph.billing_pairs.push(pair);
     let req = shutoko_routing_core::SearchRequest {
         request_id: "req-1".into(),
         release_id: "test-rel".into(),
-        origin_node_id: Some("n:1".into()),
+        origin_node_id: Some("n:2".into()),
         origin: None,
         min_minutes: 1,
         max_minutes: 60,

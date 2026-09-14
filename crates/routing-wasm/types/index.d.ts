@@ -18,9 +18,24 @@ export interface SearchLimits {
   maxExpandedStates?: number;
   beamWidth?: number;
   maxLoopEdges?: number;
-  maxLocalEdges?: number;
+  /**
+   * Maximum number of Entry access points to try for coordinate-input searches.
+   * 0 (or omit) means unlimited — all Entry access points in the graph are candidates.
+   * Default: 0 (unlimited).
+   */
+  maxAccessEntries?: number;
+  /**
+   * Maximum straight-line distance (metres) from the user's coordinate to the nearest
+   * Entry access point.  If the nearest entry exceeds this distance, NO_CONNECTION is
+   * returned.  0.0 (or omit) means unlimited.  Default: 30000 (30 km).
+   */
+  maxAccessDistanceMeters?: number;
   maxPairs?: number;
   maxCandidates?: number;
+  /** Maximum number of nodes allowed in the graph. Default: 1,000,000. */
+  maxGraphNodes?: number;
+  /** Maximum number of edges allowed in the graph. Default: 3,000,000. */
+  maxGraphEdges?: number;
 }
 
 export interface SnappedOrigin {

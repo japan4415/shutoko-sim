@@ -149,7 +149,15 @@ pub struct SearchLimits {
     pub max_loop_edges: usize,
     /// Maximum number of Entry access points to try for coordinate-input searches.
     /// `k_nearest()` returns at most this many Entry from-nodes, sorted by distance
-    /// (ascending), with lex-smaller ID as a tie-break.  Defaults to 5.
+    /// (ascending), with lex-smaller ID as a tie-break.
+    ///
+    /// `0` means **unlimited**: every Entry access point in the graph is a candidate.
+    /// Defaults to `0` (unlimited — all entries).
+    ///
+    /// C1 has only 16 Entry from-nodes; distance-based truncation never helps and
+    /// silently drops valid candidates when the nearest k nodes are not billing-pair
+    /// origins.  Set to a positive value only when you explicitly want to restrict
+    /// the search to the N nearest entry points.
     pub max_access_entries: usize,
     pub max_pairs: usize,
     pub max_candidates: usize,
@@ -157,6 +165,16 @@ pub struct SearchLimits {
     pub max_graph_nodes: usize,
     /// Maximum number of edges allowed in the graph. Defaults to 3,000,000.
     pub max_graph_edges: usize,
+    /// Maximum straight-line distance (metres) from the user's coordinate to the
+    /// **nearest** Entry access point.  If the nearest entry is farther than this
+    /// value, the search immediately returns `NO_CONNECTION` without exploring any
+    /// billing pairs.
+    ///
+    /// `0.0` means **unlimited** (no distance cap applied).
+    /// Must be a non-negative finite number; negative values, `NaN`, and `Infinity`
+    /// are rejected by `validate()`.
+    /// Defaults to `30_000.0` (30 km).
+    pub max_access_distance_meters: f64,
 }
 impl Default for SearchLimits {
     fn default() -> Self {
@@ -164,11 +182,14 @@ impl Default for SearchLimits {
             max_expanded_states: 100_000,
             beam_width: 200,
             max_loop_edges: 2000,
-            max_access_entries: 5,
+            // 0 = unlimited: all Entry access points are candidates.
+            max_access_entries: 0,
             max_pairs: 10,
             max_candidates: 3,
             max_graph_nodes: 1_000_000,
             max_graph_edges: 3_000_000,
+            // 30 km: beyond this the engine is outside its operational area.
+            max_access_distance_meters: 30_000.0,
         }
     }
 }
@@ -419,14 +440,21 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
         || l.beam_width > 200
         || l.max_loop_edges == 0
         || l.max_loop_edges > 2000
-        || l.max_access_entries == 0
-        || l.max_access_entries > 50
+        // max_access_entries: 0 = unlimited (all entries); positive values are capped at 50.
+        || (l.max_access_entries != 0 && l.max_access_entries > 50)
         || l.max_pairs == 0
         || l.max_pairs > 100
         || l.max_candidates == 0
         || l.max_candidates > 3
     {
         return Err(invalid("search limits outside supported bounds"));
+    }
+    // max_access_distance_meters: must be non-negative and finite.
+    // 0.0 = unlimited (no distance cap).
+    if !l.max_access_distance_meters.is_finite() || l.max_access_distance_meters < 0.0 {
+        return Err(invalid(
+            "max_access_distance_meters must be finite and non-negative (0.0 = unlimited)",
+        ));
     }
     if g.nodes.len() > l.max_graph_nodes
         || g.edges.len() > l.max_graph_edges
@@ -896,10 +924,13 @@ pub fn search_prepared(
     // For `originNodeId` input: the specified node is the sole Entry access candidate
     // (backward-compatible behaviour).
     //
-    // For `origin` (coordinate) input: `k_nearest` returns up to `max_access_entries`
-    // Entry from-nodes sorted by distance (lex-smaller ID as tie-break), with no
-    // radius cap.  `NO_CONNECTION` is returned only when the snap grid is empty
-    // (i.e. the graph has no Entry edges at all).
+    // For `origin` (coordinate) input:
+    //   1. `k_nearest` returns Entry from-nodes sorted by distance (lex-smaller ID as
+    //      tie-break).  When `max_access_entries == 0` (unlimited, the default), all
+    //      Entry from-nodes in the graph are candidates.
+    //   2. If the snap grid is empty (no Entry edges at all), `NO_CONNECTION` is returned.
+    //   3. If `max_access_distance_meters > 0.0` and the nearest entry exceeds that
+    //      distance, `NO_CONNECTION` is returned (out-of-service-area guard).
     // ---------------------------------------------------------------------------
     let (origin_ll, access_node_indices): (LatLng, BTreeSet<usize>) =
         match (&r.origin_node_id, &r.origin) {
@@ -916,14 +947,35 @@ pub fn search_prepared(
                 (origin_ll, std::iter::once(idx).collect())
             }
             (None, Some(ll)) => {
-                let results = pg.index.snap_grid.k_nearest(
-                    ll.lat,
-                    ll.lon,
-                    pg.limits.max_access_entries,
-                    &pg.graph.nodes,
-                );
+                // max_access_entries == 0 means "unlimited": pass usize::MAX so that
+                // k_nearest returns every entry in the graph.
+                let k = if pg.limits.max_access_entries == 0 {
+                    usize::MAX
+                } else {
+                    pg.limits.max_access_entries
+                };
+                let results = pg
+                    .index
+                    .snap_grid
+                    .k_nearest(ll.lat, ll.lon, k, &pg.graph.nodes);
                 if results.is_empty() {
                     // Snap grid is empty — no Entry edges in the graph.
+                    return Ok(SearchResult {
+                        request_id: r.request_id.clone(),
+                        release_id: r.release_id.clone(),
+                        status: "no_candidates".into(),
+                        reason: Some("NO_CONNECTION".into()),
+                        ranking_mode: "shutoko_time".into(),
+                        expanded_states: 0,
+                        candidates: Vec::new(),
+                    });
+                }
+                // Distance sanity cap: if even the nearest Entry access point exceeds the
+                // allowed maximum, the origin is outside the operational area.
+                // 0.0 means unlimited (no cap applied).
+                if pg.limits.max_access_distance_meters > 0.0
+                    && results[0].0 > pg.limits.max_access_distance_meters
+                {
                     return Ok(SearchResult {
                         request_id: r.request_id.clone(),
                         release_id: r.release_id.clone(),

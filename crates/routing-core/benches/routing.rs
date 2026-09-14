@@ -429,8 +429,6 @@ fn bench_prepared_large(c: &mut Criterion) {
         let success_origin = "n:577255402";
         let limits_ext = SearchLimits {
             max_expanded_states: 1_000_000,
-            max_local_edges: 2000,
-            max_access_radius_meters: 0.0,
             ..SearchLimits::default()
         };
         match prepare(g.clone(), &limits_ext) {

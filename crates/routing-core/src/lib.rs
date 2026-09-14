@@ -2,7 +2,7 @@
 //! This engine does not establish real-world toll eligibility or navigation safety.
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap};
+use std::collections::{BTreeSet, BinaryHeap, HashMap};
 use std::fmt;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
@@ -10,8 +10,29 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 /// manifest always records the search-engine version (not the builder's own).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Snap search radius threshold in meters.
+/// Snap search radius used by the spatial grid for cell-size computation.
+/// Kept here so `grid.rs` can import it via `crate::SNAP_RADIUS_METERS`.
 pub const SNAP_RADIUS_METERS: f64 = 200.0;
+
+/// Detour factor for Tokyo urban areas. Straight-line distances underestimate
+/// actual driving distance due to the dense grid of one-way streets and turns.
+/// A value of 1.3 is a conservative estimate for the Tokyo metropolitan area.
+const DETOUR_FACTOR: f64 = 1.3;
+
+/// Assumed driving speed for surface streets approaching/leaving the expressway.
+/// 30 km/h = 8.333… m/s.
+///
+/// We use the equirectangular `distance_meters` approximation for the straight-line
+/// leg; it is accurate to <0.1 % at Tokyo's latitude for distances under 50 km,
+/// which is sufficient for access-time estimation.
+const ACCESS_SPEED_MPS: f64 = 30.0 / 3.6;
+
+/// Estimate one-way access or return time in seconds given a straight-line distance.
+///
+/// Formula: ⌈distance × DETOUR_FACTOR / ACCESS_SPEED_MPS⌉
+fn estimated_access_seconds(dist_m: f64) -> u64 {
+    ((dist_m * DETOUR_FACTOR) / ACCESS_SPEED_MPS).ceil() as u64
+}
 
 pub mod grid;
 pub mod handoff;
@@ -49,6 +70,9 @@ pub struct Node {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EdgeKind {
+    /// Retained for graph-file compatibility with older fixtures.
+    /// graph-builder no longer emits Local edges; the routing engine never
+    /// traverses them.
     Local,
     Entry,
     Shutoko,
@@ -123,16 +147,16 @@ pub struct SearchLimits {
     pub max_expanded_states: usize,
     pub beam_width: usize,
     pub max_loop_edges: usize,
-    pub max_local_edges: usize,
+    /// Maximum number of Entry access points to try for coordinate-input searches.
+    /// `k_nearest()` returns at most this many Entry from-nodes, sorted by distance
+    /// (ascending), with lex-smaller ID as a tie-break.  Defaults to 5.
+    pub max_access_entries: usize,
     pub max_pairs: usize,
     pub max_candidates: usize,
     /// Maximum number of nodes allowed in the graph. Defaults to 1,000,000.
     pub max_graph_nodes: usize,
     /// Maximum number of edges allowed in the graph. Defaults to 3,000,000.
     pub max_graph_edges: usize,
-    /// Maximum Dijkstra expansion radius from the origin node in metres.
-    /// `0.0` (the default) means unlimited — existing callers are unaffected.
-    pub max_access_radius_meters: f64,
 }
 impl Default for SearchLimits {
     fn default() -> Self {
@@ -140,12 +164,11 @@ impl Default for SearchLimits {
             max_expanded_states: 100_000,
             beam_width: 200,
             max_loop_edges: 2000,
-            max_local_edges: 200,
+            max_access_entries: 5,
             max_pairs: 10,
             max_candidates: 3,
             max_graph_nodes: 1_000_000,
             max_graph_edges: 3_000_000,
-            max_access_radius_meters: 0.0,
         }
     }
 }
@@ -181,9 +204,12 @@ pub struct Loop {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SnappedOrigin {
+    /// Node ID of the Entry access point used for this candidate.
+    /// Each candidate may use a different entry access point.
     pub node_id: String,
     pub lat: f64,
     pub lon: f64,
+    /// Straight-line distance (metres) from the user's origin to this access point.
     pub distance_meters: f64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -205,6 +231,9 @@ pub struct Candidate {
     pub release_id: String,
     pub origin: Option<LatLng>,
     pub origin_node_id: String,
+    /// Entry access point for this candidate.  Candidates from the same
+    /// coordinate-input search may have different `snapped_origin` values if
+    /// they are reached via different Entry access points.
     pub snapped_origin: SnappedOrigin,
     pub entry: RampInfo,
     pub exit: RampInfo,
@@ -295,7 +324,8 @@ struct OwnedIndex {
     /// Maps node ID → sorted list of outgoing edge indices (sorted by edge ID
     /// for deterministic expansion order).
     outgoing: HashMap<String, Vec<usize>>,
-    /// Spatial index for fast coordinate → nearest-local-node snapping.
+    /// Spatial index over Entry edge from-nodes for fast coordinate → nearest
+    /// access-point snapping.
     snap_grid: grid::OwnedSnapGrid,
 }
 
@@ -389,17 +419,14 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
         || l.beam_width > 200
         || l.max_loop_edges == 0
         || l.max_loop_edges > 2000
-        || l.max_local_edges == 0
-        || l.max_local_edges > 2000
+        || l.max_access_entries == 0
+        || l.max_access_entries > 50
         || l.max_pairs == 0
         || l.max_pairs > 100
         || l.max_candidates == 0
         || l.max_candidates > 3
     {
         return Err(invalid("search limits outside supported bounds"));
-    }
-    if !l.max_access_radius_meters.is_finite() || l.max_access_radius_meters < 0.0 {
-        return Err(invalid("max_access_radius_meters must be non-negative"));
     }
     if g.nodes.len() > l.max_graph_nodes
         || g.edges.len() > l.max_graph_edges
@@ -424,12 +451,12 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
         }
     }
 
-    // Build edge_pos, outgoing, and collect local-node IDs for the snap grid.
+    // Build edge_pos, outgoing, and collect Entry from-node IDs for the snap grid.
+    // Using a BTreeSet so iteration is in lex order, giving deterministic
+    // tie-breaking in OwnedSnapGrid.
     let mut edge_pos: HashMap<String, usize> = HashMap::with_capacity(g.edges.len());
     let mut outgoing: HashMap<String, Vec<usize>> = HashMap::with_capacity(g.nodes.len());
-    // local_node_ids is a BTreeSet so iteration is in lex order, which the
-    // OwnedSnapGrid construction relies on for deterministic tie-breaking.
-    let mut local_node_ids: BTreeSet<String> = BTreeSet::new();
+    let mut entry_from_ids: BTreeSet<String> = BTreeSet::new();
 
     for (i, e) in g.edges.iter().enumerate() {
         if e.id.is_empty()
@@ -444,9 +471,8 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
         {
             return Err(invalid("invalid edge, endpoint, weight, or duplicate id"));
         }
-        if e.kind == EdgeKind::Local {
-            local_node_ids.insert(e.from.clone());
-            local_node_ids.insert(e.to.clone());
+        if e.kind == EdgeKind::Entry {
+            entry_from_ids.insert(e.from.clone());
         }
         outgoing.entry(e.from.clone()).or_default().push(i);
     }
@@ -456,12 +482,12 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
         v.sort_by(|&a, &b| g.edges[a].id.cmp(&g.edges[b].id));
     }
 
-    // Build snap grid from local-node indices.
-    let local_indices: Vec<usize> = local_node_ids
+    // Build snap grid from Entry from-node indices.
+    let entry_from_indices: Vec<usize> = entry_from_ids
         .iter()
         .map(|id| node_pos[id.as_str()])
         .collect();
-    let snap_grid = grid::OwnedSnapGrid::build(local_indices, &g.nodes);
+    let snap_grid = grid::OwnedSnapGrid::build(entry_from_indices, &g.nodes);
 
     // Validate forbidden transitions.
     if g.forbidden_transitions.iter().map(Vec::len).sum::<usize>() > 20_000 {
@@ -736,7 +762,7 @@ impl Budget {
     }
 }
 
-// Iterative simple-path enumeration. The same global budget includes local paths and combinations.
+// Iterative simple-path enumeration. The same global budget includes paths and combinations.
 #[allow(clippy::too_many_arguments)]
 fn paths_pg<'pg>(
     pg: &'pg PreparedGraph,
@@ -749,9 +775,6 @@ fn paths_pg<'pg>(
     reachable: &BTreeSet<usize>,
     budget: &mut Budget,
 ) -> Vec<Vec<&'pg Edge>> {
-    if start == end && kind == EdgeKind::Local {
-        return vec![vec![]];
-    }
     let mut frontier: Vec<Vec<&Edge>> = vec![vec![]];
     let mut results = Vec::new();
     let mut retained_edges = 0;
@@ -824,368 +847,6 @@ fn paths_pg<'pg>(
 }
 
 // ---------------------------------------------------------------------------
-// Dijkstra local-road search
-// ---------------------------------------------------------------------------
-
-#[derive(Clone)]
-struct DijkstraState<'a> {
-    duration_seconds: u64,
-    distance_meters: u64,
-    edge_id: &'a str,
-    node: &'a str,
-    edge: Option<&'a Edge>,
-    parent_index: Option<usize>,
-    depth: usize,
-    suffix: Vec<&'a str>,
-}
-
-impl<'a> PartialEq for DijkstraState<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.duration_seconds == other.duration_seconds
-            && self.distance_meters == other.distance_meters
-            && self.edge_id == other.edge_id
-            && self.node == other.node
-            && self.suffix == other.suffix
-    }
-}
-
-impl<'a> Eq for DijkstraState<'a> {}
-
-impl<'a> Ord for DijkstraState<'a> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other
-            .duration_seconds
-            .cmp(&self.duration_seconds)
-            .then_with(|| other.distance_meters.cmp(&self.distance_meters))
-            .then_with(|| other.edge_id.cmp(self.edge_id))
-            .then_with(|| other.node.cmp(self.node))
-            .then_with(|| other.suffix.cmp(&self.suffix))
-    }
-}
-
-impl<'a> PartialOrd for DijkstraState<'a> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-fn next_suffix<'a>(
-    current_suffix: &[&'a str],
-    next_edge_id: &'a str,
-    history_len: usize,
-) -> Vec<&'a str> {
-    if history_len == 0 {
-        return Vec::new();
-    }
-    let mut next = Vec::with_capacity(history_len);
-    let start = current_suffix.len().saturating_sub(history_len - 1);
-    next.extend_from_slice(&current_suffix[start..]);
-    next.push(next_edge_id);
-    next
-}
-
-struct HistoryNode<'a> {
-    edge: &'a Edge,
-    parent_index: Option<usize>,
-}
-
-fn transition_allowed_forward<'a>(
-    forbidden_transitions: &[Vec<String>],
-    history: &[HistoryNode<'a>],
-    my_history_index: Option<usize>,
-    next_edge: &'a Edge,
-) -> bool {
-    for seq in forbidden_transitions {
-        if seq.last().map(String::as_str) != Some(&next_edge.id) {
-            continue;
-        }
-        let mut curr = my_history_index;
-        let mut matched = true;
-        for target_id in seq[..seq.len() - 1].iter().rev() {
-            if let Some(idx) = curr {
-                if history[idx].edge.id != *target_id {
-                    matched = false;
-                    break;
-                }
-                curr = history[idx].parent_index;
-            } else {
-                matched = false;
-                break;
-            }
-        }
-        if matched {
-            return false;
-        }
-    }
-    true
-}
-
-#[allow(clippy::too_many_arguments)]
-fn dijkstra_local_forward_pg<'pg>(
-    pg: &'pg PreparedGraph,
-    origin: &'pg str,
-    target_entry_edges: &[&'pg Edge],
-    max_local_edges: usize,
-    max_seconds: u64,
-    budget: &mut Budget,
-) -> HashMap<&'pg str, Vec<&'pg Edge>> {
-    let ft = &pg.graph.forbidden_transitions;
-    let max_forbidden_len = ft.iter().map(|s| s.len()).max().unwrap_or(0);
-    let history_len = max_forbidden_len.saturating_sub(1);
-
-    let mut entry_by_from: BTreeMap<&'pg str, Vec<&'pg Edge>> = BTreeMap::new();
-    for e in target_entry_edges {
-        entry_by_from.entry(e.from.as_str()).or_default().push(e);
-    }
-    let total_targets = target_entry_edges.len();
-
-    let mut best_for_entry: HashMap<&'pg str, Vec<&'pg Edge>> = HashMap::new();
-    let mut best_cost: HashMap<(&'pg str, Vec<&'pg str>), (u64, u64)> = HashMap::new();
-    let mut history: Vec<HistoryNode<'pg>> = Vec::new();
-    let mut pq: BinaryHeap<DijkstraState<'pg>> = BinaryHeap::new();
-
-    best_cost.insert((origin, Vec::new()), (0, 0));
-    pq.push(DijkstraState {
-        duration_seconds: 0,
-        distance_meters: 0,
-        edge_id: "",
-        node: origin,
-        edge: None,
-        parent_index: None,
-        depth: 0,
-        suffix: Vec::new(),
-    });
-
-    while let Some(current) = pq.pop() {
-        let state_key = (current.node, current.suffix.clone());
-        if let Some(&(best_d, best_m)) = best_cost.get(&state_key) {
-            if (current.duration_seconds, current.distance_meters) > (best_d, best_m) {
-                continue;
-            }
-        }
-
-        if !budget.take(&pg.limits) {
-            break;
-        }
-
-        let my_history_index = if let Some(e) = current.edge {
-            let idx = history.len();
-            history.push(HistoryNode {
-                edge: e,
-                parent_index: current.parent_index,
-            });
-            Some(idx)
-        } else {
-            None
-        };
-
-        if let Some(entries) = entry_by_from.get(current.node) {
-            for &entry_e in entries {
-                if !best_for_entry.contains_key(entry_e.id.as_str())
-                    && transition_allowed_forward(ft, &history, my_history_index, entry_e)
-                {
-                    let mut path = Vec::new();
-                    let mut curr = my_history_index;
-                    while let Some(idx) = curr {
-                        path.push(history[idx].edge);
-                        curr = history[idx].parent_index;
-                    }
-                    path.reverse();
-                    best_for_entry.insert(entry_e.id.as_str(), path);
-                }
-            }
-            if best_for_entry.len() == total_targets {
-                break;
-            }
-        }
-
-        // Radius limit: do not expand outgoing local edges if the current node
-        // is already beyond max_access_radius_meters (0.0 = unlimited).
-        if pg.limits.max_access_radius_meters > 0.0 {
-            let o = pg.node(origin);
-            let c = pg.node(current.node);
-            if distance_meters(o.lat, o.lon, c.lat, c.lon) > pg.limits.max_access_radius_meters {
-                continue;
-            }
-        }
-
-        if current.depth >= max_local_edges {
-            continue;
-        }
-
-        for e in pg
-            .outgoing_edges(current.node)
-            .filter(|e| e.kind == EdgeKind::Local)
-        {
-            let next_d = current.duration_seconds + e.duration_seconds;
-            if next_d > max_seconds {
-                continue;
-            }
-            let next_m = current.distance_meters + e.distance_meters;
-
-            if !transition_allowed_forward(ft, &history, my_history_index, e) {
-                continue;
-            }
-
-            let next_suf = next_suffix(&current.suffix, e.id.as_str(), history_len);
-            let next_state_key = (e.to.as_str(), next_suf.clone());
-            if let Some(&(best_d, best_m)) = best_cost.get(&next_state_key) {
-                if (next_d, next_m) >= (best_d, best_m) {
-                    continue;
-                }
-            }
-            best_cost.insert(next_state_key, (next_d, next_m));
-            pq.push(DijkstraState {
-                duration_seconds: next_d,
-                distance_meters: next_m,
-                edge_id: e.id.as_str(),
-                node: e.to.as_str(),
-                edge: Some(e),
-                parent_index: my_history_index,
-                depth: current.depth + 1,
-                suffix: next_suf,
-            });
-        }
-    }
-
-    best_for_entry
-}
-
-#[allow(clippy::too_many_arguments)]
-fn dijkstra_local_backward_pg<'pg>(
-    pg: &'pg PreparedGraph,
-    exit_edges: &[&'pg Edge],
-    destination: &'pg str,
-    max_local_edges: usize,
-    max_seconds: u64,
-    budget: &mut Budget,
-) -> HashMap<&'pg str, Vec<&'pg Edge>> {
-    let ft = &pg.graph.forbidden_transitions;
-    let max_forbidden_len = ft.iter().map(|s| s.len()).max().unwrap_or(0);
-    let history_len = max_forbidden_len.saturating_sub(1);
-
-    let mut best_for_exit: HashMap<&'pg str, Vec<&'pg Edge>> = HashMap::new();
-
-    for &exit_edge in exit_edges {
-        if best_for_exit.contains_key(exit_edge.id.as_str()) {
-            continue;
-        }
-
-        if exit_edge.to == destination {
-            best_for_exit.insert(exit_edge.id.as_str(), Vec::new());
-            continue;
-        }
-
-        let mut best_cost: HashMap<(&'pg str, Vec<&'pg str>), (u64, u64)> = HashMap::new();
-        let mut history: Vec<HistoryNode<'pg>> = Vec::new();
-        let mut pq: BinaryHeap<DijkstraState<'pg>> = BinaryHeap::new();
-
-        history.push(HistoryNode {
-            edge: exit_edge,
-            parent_index: None,
-        });
-        let initial_history_index = Some(0);
-
-        let initial_suffix = if history_len > 0 {
-            vec![exit_edge.id.as_str()]
-        } else {
-            Vec::new()
-        };
-
-        best_cost.insert((exit_edge.to.as_str(), initial_suffix.clone()), (0, 0));
-        pq.push(DijkstraState {
-            duration_seconds: 0,
-            distance_meters: 0,
-            edge_id: exit_edge.id.as_str(),
-            node: exit_edge.to.as_str(),
-            edge: None,
-            parent_index: initial_history_index,
-            depth: 0,
-            suffix: initial_suffix,
-        });
-
-        while let Some(current) = pq.pop() {
-            let state_key = (current.node, current.suffix.clone());
-            if let Some(&(best_d, best_m)) = best_cost.get(&state_key) {
-                if (current.duration_seconds, current.distance_meters) > (best_d, best_m) {
-                    continue;
-                }
-            }
-
-            if !budget.take(&pg.limits) {
-                break;
-            }
-
-            let my_history_index = if let Some(e) = current.edge {
-                let idx = history.len();
-                history.push(HistoryNode {
-                    edge: e,
-                    parent_index: current.parent_index,
-                });
-                Some(idx)
-            } else {
-                current.parent_index
-            };
-
-            if current.node == destination {
-                let mut path = Vec::new();
-                let mut curr = my_history_index;
-                while let Some(idx) = curr {
-                    if idx == 0 {
-                        break;
-                    }
-                    path.push(history[idx].edge);
-                    curr = history[idx].parent_index;
-                }
-                path.reverse();
-                best_for_exit.insert(exit_edge.id.as_str(), path);
-                break;
-            }
-
-            if current.depth >= max_local_edges {
-                continue;
-            }
-
-            for e in pg
-                .outgoing_edges(current.node)
-                .filter(|e| e.kind == EdgeKind::Local)
-            {
-                let next_d = current.duration_seconds + e.duration_seconds;
-                if next_d > max_seconds {
-                    continue;
-                }
-                let next_m = current.distance_meters + e.distance_meters;
-
-                if !transition_allowed_forward(ft, &history, my_history_index, e) {
-                    continue;
-                }
-
-                let next_suf = next_suffix(&current.suffix, e.id.as_str(), history_len);
-                let next_state_key = (e.to.as_str(), next_suf.clone());
-                if let Some(&(best_d, best_m)) = best_cost.get(&next_state_key) {
-                    if (next_d, next_m) >= (best_d, best_m) {
-                        continue;
-                    }
-                }
-                best_cost.insert(next_state_key, (next_d, next_m));
-                pq.push(DijkstraState {
-                    duration_seconds: next_d,
-                    distance_meters: next_m,
-                    edge_id: e.id.as_str(),
-                    node: e.to.as_str(),
-                    edge: Some(e),
-                    parent_index: my_history_index,
-                    depth: current.depth + 1,
-                    suffix: next_suf,
-                });
-            }
-        }
-    }
-
-    best_for_exit
-}
-
-// ---------------------------------------------------------------------------
 // Scalar helpers
 // ---------------------------------------------------------------------------
 
@@ -1229,51 +890,55 @@ pub fn search_prepared(
     validate_request(pg, r)?;
     let now = utc(&r.pricing_at)?;
 
-    // Resolve the origin.
-    let (origin_label, snapped) = match (&r.origin_node_id, &r.origin) {
-        (Some(id), None) => {
-            if !pg.has_node(id.as_str()) {
-                return Err(invalid("unknown origin node"));
-            }
-            let node = pg.node(id.as_str());
-            (
-                id.clone(),
-                SnappedOrigin {
-                    node_id: id.clone(),
+    // ---------------------------------------------------------------------------
+    // Origin resolution: determine user departure coordinates and access candidates.
+    //
+    // For `originNodeId` input: the specified node is the sole Entry access candidate
+    // (backward-compatible behaviour).
+    //
+    // For `origin` (coordinate) input: `k_nearest` returns up to `max_access_entries`
+    // Entry from-nodes sorted by distance (lex-smaller ID as tie-break), with no
+    // radius cap.  `NO_CONNECTION` is returned only when the snap grid is empty
+    // (i.e. the graph has no Entry edges at all).
+    // ---------------------------------------------------------------------------
+    let (origin_ll, access_node_indices): (LatLng, BTreeSet<usize>) =
+        match (&r.origin_node_id, &r.origin) {
+            (Some(id), None) => {
+                if !pg.has_node(id.as_str()) {
+                    return Err(invalid("unknown origin node"));
+                }
+                let node = pg.node(id.as_str());
+                let origin_ll = LatLng {
                     lat: node.lat,
                     lon: node.lon,
-                    distance_meters: 0.0,
-                },
-            )
-        }
-        (None, Some(ll)) => match pg.index.snap_grid.nearest(ll.lat, ll.lon, &pg.graph.nodes) {
-            Some((d, idx)) => {
-                let node = &pg.graph.nodes[idx];
-                (
-                    node.id.clone(),
-                    SnappedOrigin {
-                        node_id: node.id.clone(),
-                        lat: node.lat,
-                        lon: node.lon,
-                        distance_meters: d,
-                    },
-                )
+                };
+                let idx = pg.index.node_pos[id.as_str()];
+                (origin_ll, std::iter::once(idx).collect())
             }
-            None => {
-                return Ok(SearchResult {
-                    request_id: r.request_id.clone(),
-                    release_id: r.release_id.clone(),
-                    status: "no_candidates".into(),
-                    reason: Some("NO_CONNECTION".into()),
-                    ranking_mode: "shutoko_time".into(),
-                    expanded_states: 0,
-                    candidates: Vec::new(),
-                })
+            (None, Some(ll)) => {
+                let results = pg.index.snap_grid.k_nearest(
+                    ll.lat,
+                    ll.lon,
+                    pg.limits.max_access_entries,
+                    &pg.graph.nodes,
+                );
+                if results.is_empty() {
+                    // Snap grid is empty — no Entry edges in the graph.
+                    return Ok(SearchResult {
+                        request_id: r.request_id.clone(),
+                        release_id: r.release_id.clone(),
+                        status: "no_candidates".into(),
+                        reason: Some("NO_CONNECTION".into()),
+                        ranking_mode: "shutoko_time".into(),
+                        expanded_states: 0,
+                        candidates: Vec::new(),
+                    });
+                }
+                let indices = results.into_iter().map(|(_, idx)| idx).collect();
+                (ll.clone(), indices)
             }
-        },
-        _ => return Err(invalid("origin resolution state unreachable")),
-    };
-    let origin_node_id = origin_label.as_str();
+            _ => return Err(invalid("origin resolution state unreachable")),
+        };
 
     let mut budget = Budget::default();
     let mut candidates = Vec::new();
@@ -1298,57 +963,46 @@ pub fn search_prepared(
 
     let mut verified_pairs: Vec<(&BillingPair, Vec<&Edge>, Vec<&Edge>)> =
         Vec::with_capacity(pairs.len());
-    let mut entry_edges: Vec<&Edge> = Vec::with_capacity(pairs.len());
-    let mut exit_edges: Vec<&Edge> = Vec::with_capacity(pairs.len());
     for p in pairs {
         let pre = path_pg(pg, &p.entry_to_anchor_edge_ids)?;
         let post = path_pg(pg, &p.anchor_to_exit_edge_ids)?;
-        entry_edges.push(pre[0]);
-        exit_edges.push(post.last().copied().unwrap());
         verified_pairs.push((p, pre, post));
     }
-    entry_edges.sort_by_key(|e| e.id.as_str());
-    entry_edges.dedup_by_key(|e| e.id.as_str());
-    exit_edges.sort_by_key(|e| e.id.as_str());
-    exit_edges.dedup_by_key(|e| e.id.as_str());
-
-    let forward_map = dijkstra_local_forward_pg(
-        pg,
-        origin_node_id,
-        &entry_edges,
-        pg.limits.max_local_edges,
-        r.max_minutes * 60,
-        &mut budget,
-    );
-    let mut active_exit_edges = Vec::new();
-    for (_p, pre, post) in &verified_pairs {
-        let entry_edge = pre[0];
-        if forward_map.contains_key(entry_edge.id.as_str()) {
-            active_exit_edges.push(post.last().copied().unwrap());
-        }
-    }
-    active_exit_edges.sort_by_key(|e| e.id.as_str());
-    active_exit_edges.dedup_by_key(|e| e.id.as_str());
-
-    let backward_map = dijkstra_local_backward_pg(
-        pg,
-        &active_exit_edges,
-        origin_node_id,
-        pg.limits.max_local_edges,
-        r.max_minutes * 60,
-        &mut budget,
-    );
 
     'pairs: for (p, pre, post) in verified_pairs {
         let entry_edge = pre[0];
         let exit_edge = post.last().unwrap();
-        let (Some(access), Some(returns)) = (
-            forward_map.get(entry_edge.id.as_str()),
-            backward_map.get(exit_edge.id.as_str()),
-        ) else {
+
+        // Only explore this billing pair if its Entry from-node is an accessible
+        // candidate (i.e. it was returned by k_nearest or is the specified node).
+        let entry_from_idx = pg.index.node_pos[entry_edge.from.as_str()];
+        if !access_node_indices.contains(&entry_from_idx) {
             continue;
-        };
+        }
         connection = true;
+
+        let access_node = &pg.graph.nodes[entry_from_idx];
+        // Straight-line distance from user's departure to the Entry access point.
+        // Using equirectangular approximation (distance_meters): accurate <0.1%
+        // within 50 km at Tokyo's latitude — sufficient for access-time estimation.
+        let access_dist = distance_meters(
+            origin_ll.lat,
+            origin_ll.lon,
+            access_node.lat,
+            access_node.lon,
+        );
+        let access_secs = estimated_access_seconds(access_dist);
+
+        let exit_to_node = pg.node(exit_edge.to.as_str());
+        // Return: straight-line distance from the expressway exit node to the
+        // user's departure point.
+        let return_dist = distance_meters(
+            exit_to_node.lat,
+            exit_to_node.lon,
+            origin_ll.lat,
+            origin_ll.lon,
+        );
+        let return_secs = estimated_access_seconds(return_dist);
 
         // Task C': use the cached reachable set to avoid recomputing Dijkstra
         // for the same (anchor, max_seconds) across multiple search_prepared calls.
@@ -1371,45 +1025,40 @@ pub fn search_prepared(
                 break 'pairs;
             }
             let highway: Vec<_> = pre.iter().chain(cycle).chain(&post).copied().collect();
-            let all: Vec<_> = access
-                .iter()
-                .chain(&highway)
-                .chain(returns)
-                .copied()
-                .collect();
-            if !allowed_pg(pg, &all) {
+            if !allowed_pg(pg, &highway) {
                 continue;
             }
             legal_route = true;
-            let base = seconds(&all);
+            let base = access_secs + seconds(&highway) + return_secs;
             let buffer = 300.max(base.div_ceil(5));
             if base < r.min_minutes * 60 || base + buffer > r.max_minutes * 60 {
                 time_rejected = true;
                 continue;
             }
-            if candidates.len() == pg.limits.beam_width || candidate_edges + all.len() > 20_000 {
+            if candidates.len() == pg.limits.beam_width || candidate_edges + highway.len() > 20_000
+            {
                 budget.truncated = true;
                 break 'pairs;
             }
-            candidate_edges += all.len();
+            candidate_edges += highway.len();
             let price = p.prices.iter().find(|v| {
                 utc(&v.effective_from).is_ok_and(|from| from <= now)
                     && v.effective_to
                         .as_deref()
                         .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
             });
-            let ids = edge_ids(&all);
+            let ids = edge_ids(&highway);
             let id = std::iter::once(p.id.as_str())
                 .chain(ids.iter().map(String::as_str))
                 .map(|s| format!("{}:{}", s.len(), s))
                 .collect::<String>();
 
-            let mut coordinates: Vec<[f64; 2]> = Vec::with_capacity(all.len() + 1);
-            if let Some(first) = all.first() {
+            let mut coordinates: Vec<[f64; 2]> = Vec::with_capacity(highway.len() + 1);
+            if let Some(first) = highway.first() {
                 let n = pg.node(first.from.as_str());
                 coordinates.push([n.lon, n.lat]);
             }
-            for e in &all {
+            for e in &highway {
                 let n = pg.node(e.to.as_str());
                 coordinates.push([n.lon, n.lat]);
             }
@@ -1423,21 +1072,28 @@ pub fn search_prepared(
                 }
             }
 
-            let departure = r.origin.clone().unwrap_or(LatLng {
-                lat: snapped.lat,
-                lon: snapped.lon,
-            });
-            let waypoints = handoff::select_waypoints(
-                &p.anchor_node_id,
-                cycle,
-                exit_edge,
-                |id| {
+            // Candidate's snapped_origin: the Entry access point for this candidate.
+            // Each candidate may have a different access point when coordinate input
+            // is used with multiple nearby entries (k_nearest).
+            // distance_meters is the straight-line distance from the user's origin.
+            let snapped_origin = SnappedOrigin {
+                node_id: entry_edge.from.clone(),
+                lat: access_node.lat,
+                lon: access_node.lon,
+                distance_meters: access_dist,
+            };
+
+            let departure = r.origin.clone().unwrap_or_else(|| origin_ll.clone());
+            let waypoints =
+                handoff::select_waypoints(entry_edge.from.as_str(), cycle, exit_edge, |id| {
                     pg.index.node_pos.get(id).map(|&i| {
                         let n = &pg.graph.nodes[i];
-                        LatLng { lat: n.lat, lon: n.lon }
+                        LatLng {
+                            lat: n.lat,
+                            lon: n.lon,
+                        }
                     })
-                },
-            );
+                });
             let maps_url = match handoff::format_maps_url(&departure, &waypoints) {
                 Ok(url) => url,
                 Err(()) => {
@@ -1457,8 +1113,8 @@ pub fn search_prepared(
                 id,
                 release_id: r.release_id.clone(),
                 origin: r.origin.clone(),
-                origin_node_id: origin_label.clone(),
-                snapped_origin: snapped.clone(),
+                origin_node_id: entry_edge.from.clone(),
+                snapped_origin,
                 entry: RampInfo {
                     edge_id: p.entry_id.clone(),
                     name: p.entry_name.clone(),
@@ -1476,14 +1132,14 @@ pub fn search_prepared(
                     coordinates,
                 },
                 duration: Duration {
-                    access_seconds: seconds(access),
+                    access_seconds: access_secs,
                     shutoko_seconds: seconds(&highway),
-                    return_seconds: seconds(returns),
+                    return_seconds: return_secs,
                     base_seconds: base,
                     buffer_seconds: buffer,
                     plan_seconds: base + buffer,
                 },
-                distance_meters: meters(&all),
+                distance_meters: meters(&highway),
                 shutoko_distance_meters: meters(&highway),
                 toll: Toll {
                     billing_pair_id: p.id.clone(),
@@ -1589,13 +1245,9 @@ pub fn search_prepared(
 }
 
 fn similar_pg(pg: &PreparedGraph, a: &Candidate, b: &Candidate) -> bool {
-    let set = |c: &Candidate| -> BTreeSet<String> {
-        c.edge_ids
-            .iter()
-            .filter(|id| pg.edge(id.as_str()).kind != EdgeKind::Local)
-            .cloned()
-            .collect()
-    };
+    // All edges in the candidate are now highway edges (no Local edges);
+    // the former EdgeKind::Local filter is removed as it was a no-op.
+    let set = |c: &Candidate| -> BTreeSet<String> { c.edge_ids.iter().cloned().collect() };
     let sa = set(a);
     let sb = set(b);
     let shared: u64 = sa

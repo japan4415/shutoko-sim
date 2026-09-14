@@ -22,9 +22,9 @@ const PAIRS: &[(&str, &str)] = &[
     ("bp:c1-inner:kasumigaseki-shibakoen", "n:573233927"),
     ("bp:c1-inner:shibakoen-shiodome", "n:254367256"),
     ("bp:c1-inner:takaracho-kandabashi", "n:1105125663"),
-    ("bp:c1-outer:ginza-shibakoen", "n:835996316"),         // issue #25
+    ("bp:c1-outer:ginza-shibakoen", "n:835996316"), // issue #25
     ("bp:c1-outer:kandabashi-takaracho", "n:1070862943"),
-    ("bp:c1-outer:kasumigaseki-daikancho", "n:577255402"),  // issue #25
+    ("bp:c1-outer:kasumigaseki-daikancho", "n:577255402"), // issue #25
     ("bp:c1-outer:shibakoen-iikura", "n:940044988"),
 ];
 
@@ -56,11 +56,10 @@ fn large_graph_smoke_search() {
     // ------------------------------------------------------------------
     eprintln!("[large_graph_smoke] loading graph from {}", path);
     let load_start = Instant::now();
-    let file =
-        std::fs::File::open(&path).unwrap_or_else(|e| panic!("cannot open {}: {}", path, e));
+    let file = std::fs::File::open(&path).unwrap_or_else(|e| panic!("cannot open {}: {}", path, e));
     let reader = std::io::BufReader::new(file);
-    let graph: Graph = serde_json::from_reader(reader)
-        .unwrap_or_else(|e| panic!("JSON parse failed: {}", e));
+    let graph: Graph =
+        serde_json::from_reader(reader).unwrap_or_else(|e| panic!("JSON parse failed: {}", e));
     let load_elapsed = load_start.elapsed();
     eprintln!(
         "[large_graph_smoke] graph loaded in {:.2?}  nodes={} edges={} billing_pairs={}",
@@ -78,17 +77,13 @@ fn large_graph_smoke_search() {
     // ------------------------------------------------------------------
     let limits = SearchLimits::default();
     eprintln!(
-        "[large_graph_smoke] max_graph_nodes={} max_graph_edges={} max_access_radius={}",
-        limits.max_graph_nodes, limits.max_graph_edges, limits.max_access_radius_meters,
+        "[large_graph_smoke] max_graph_nodes={} max_graph_edges={} max_access_entries={}",
+        limits.max_graph_nodes, limits.max_graph_edges, limits.max_access_entries,
     );
     let prepare_start = Instant::now();
-    let pg = prepare(graph, &limits)
-        .unwrap_or_else(|e| panic!("prepare() failed: {}", e));
+    let pg = prepare(graph, &limits).unwrap_or_else(|e| panic!("prepare() failed: {}", e));
     let prepare_elapsed = prepare_start.elapsed();
-    eprintln!(
-        "[large_graph_smoke] prepare() took {:.2?}",
-        prepare_elapsed,
-    );
+    eprintln!("[large_graph_smoke] prepare() took {:.2?}", prepare_elapsed,);
 
     // ------------------------------------------------------------------
     // 4. Search each billing pair (cold run + warm run).
@@ -172,7 +167,11 @@ fn large_graph_smoke_search() {
             pair_id,
             status,
             cands,
-            if resolved { "YES (issue #25 fixed)" } else { "no (still disconnected)" }
+            if resolved {
+                "YES (issue #25 fixed)"
+            } else {
+                "no (still disconnected)"
+            }
         );
     }
 
@@ -213,21 +212,18 @@ fn large_graph_smoke_search_extended_limits() {
 
     let limits = SearchLimits {
         max_expanded_states: 1_000_000, // maximum allowed by validation
-        max_local_edges: 2000,          // allow deeper local-road traversal
-        max_access_radius_meters: 0.0,  // unlimited radius
         ..SearchLimits::default()
     };
     eprintln!(
-        "[smoke_ext] max_expanded_states={} max_local_edges={}",
-        limits.max_expanded_states, limits.max_local_edges
+        "[smoke_ext] max_expanded_states={}",
+        limits.max_expanded_states
     );
 
     let prep_start = Instant::now();
     let pg = prepare(graph, &limits).unwrap_or_else(|e| panic!("prepare: {}", e));
     eprintln!("[smoke_ext] prepare() took {:.2?}", prep_start.elapsed());
 
-    eprintln!(
-        "\n[smoke_ext] === SEARCH RESULTS (extended limits) ===");
+    eprintln!("\n[smoke_ext] === SEARCH RESULTS (extended limits) ===");
     eprintln!(
         "{:<50}  {:>10}  {:>4}  {:>8}  {:>8}  own",
         "pair_id", "status", "cand", "expand", "ms"
@@ -245,14 +241,20 @@ fn large_graph_smoke_search_extended_limits() {
             pricing_at: "2026-09-10T00:00:00Z".to_owned(),
         };
         let t = Instant::now();
-        let res = search_prepared(&pg, &req)
-            .unwrap_or_else(|e| panic!("search: {}", e));
+        let res = search_prepared(&pg, &req).unwrap_or_else(|e| panic!("search: {}", e));
         let ms = t.elapsed().as_secs_f64() * 1000.0;
 
-        let own_pair = res.candidates.iter().any(|c| c.toll.billing_pair_id == pair_id);
+        let own_pair = res
+            .candidates
+            .iter()
+            .any(|c| c.toll.billing_pair_id == pair_id);
         eprintln!(
             "{:<50}  {:>10}  {:>4}  {:>8}  {:>8.1}  {}",
-            pair_id, res.status, res.candidates.len(), res.expanded_states, ms,
+            pair_id,
+            res.status,
+            res.candidates.len(),
+            res.expanded_states,
+            ms,
             if own_pair { "YES" } else { "no" },
         );
     }

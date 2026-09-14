@@ -4,11 +4,6 @@
   "vehicleProfile": "passenger-car-etc",
   "nodes": [
     {
-      "id": "s",
-      "lat": 35.681,
-      "lon": 139.7671
-    },
-    {
       "id": "i",
       "lat": 35.6815,
       "lon": 139.7675
@@ -35,14 +30,6 @@
     }
   ],
   "edges": [
-    {
-      "id": "access",
-      "from": "s",
-      "to": "i",
-      "kind": "local",
-      "durationSeconds": 60,
-      "distanceMeters": 500
-    },
     {
       "id": "entry",
       "from": "i",
@@ -82,14 +69,6 @@
       "kind": "exit",
       "durationSeconds": 30,
       "distanceMeters": 200
-    },
-    {
-      "id": "return",
-      "from": "o",
-      "to": "s",
-      "kind": "local",
-      "durationSeconds": 60,
-      "distanceMeters": 500
     }
   ],
   "billingPairs": [

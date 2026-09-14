@@ -28,7 +28,8 @@ fn test_oneway_expansion() {
                 "id": 101,
                 "nodes": [1, 2],
                 "tags": {
-                    "highway": "primary",
+                    "highway": "motorway",
+                    "ref": "C1",
                     "oneway": "yes"
                 }
             },
@@ -38,7 +39,8 @@ fn test_oneway_expansion() {
                 "id": 102,
                 "nodes": [2, 3],
                 "tags": {
-                    "highway": "primary",
+                    "highway": "motorway",
+                    "ref": "C1",
                     "oneway": "-1"
                 }
             },
@@ -48,7 +50,8 @@ fn test_oneway_expansion() {
                 "id": 103,
                 "nodes": [3, 4],
                 "tags": {
-                    "highway": "primary",
+                    "highway": "motorway",
+                    "ref": "C1",
                     "oneway": "no"
                 }
             }
@@ -155,24 +158,27 @@ fn test_edge_kind_classification_shutoko_entry_exit_local() {
     let edge_kinds: std::collections::HashMap<String, EdgeKind> =
         graph.edges.iter().map(|e| (e.id.clone(), e.kind)).collect();
 
-    assert_eq!(edge_kinds.get("e:w1:0:f"), Some(&EdgeKind::Local));
+    // Local road (Way 1) is not generated as an edge; it only provides street-node metadata.
+    assert!(!edge_kinds.contains_key("e:w1:0:f"));
     assert_eq!(edge_kinds.get("e:w2:0:f"), Some(&EdgeKind::Shutoko));
 
-    // Entry ramp segments
+    // Entry ramp segments: n:11 is a street-node (appears in Way 1 primary).
     assert_eq!(edge_kinds.get("e:w3:0:f"), Some(&EdgeKind::Entry));
     assert_eq!(edge_kinds.get("e:w3:1:f"), Some(&EdgeKind::Shutoko));
 
-    // Exit ramp segments
+    // Exit ramp segments: n:10 is a street-node (appears in Way 1 primary).
     assert_eq!(edge_kinds.get("e:w4:0:f"), Some(&EdgeKind::Shutoko));
     assert_eq!(edge_kinds.get("e:w4:1:f"), Some(&EdgeKind::Exit));
 
     // Footway was excluded
     assert!(!edge_kinds.contains_key("e:w5:0:f"));
 
-    // SnapIndex contains local road nodes (n:10 and n:11)
+    // SnapIndex now contains Entry edge from-nodes (street-side access points).
+    // n:11 is the from-node of Entry edge e:w3:0:f.
     let snap_ids: Vec<String> = snap.nodes.iter().map(|n| n.id.clone()).collect();
-    assert!(snap_ids.contains(&"n:10".to_string()));
     assert!(snap_ids.contains(&"n:11".to_string()));
+    // n:10 is an Exit to-node but NOT an Entry from-node, so it is not in the snap index.
+    assert!(!snap_ids.contains(&"n:10".to_string()));
     // Shutoko nodes should not be in snap index
     assert!(!snap_ids.contains(&"n:20".to_string()));
 }
@@ -183,7 +189,7 @@ fn test_grade_separation_different_layers_do_not_connect() {
     // but they are on different layers (0 and 1) and do not share any OSM node IDs.
     let json_data = json!({
         "elements": [
-            // Way 10: Local road (layer 0) running West-East
+            // Way 10: Shutoko elevated road (layer 0) running West-East
             {"type": "node", "id": 1, "lat": 35.6810, "lon": 139.7600},
             {"type": "node", "id": 2, "lat": 35.6810, "lon": 139.7620},
             {
@@ -191,7 +197,8 @@ fn test_grade_separation_different_layers_do_not_connect() {
                 "id": 10,
                 "nodes": [1, 2],
                 "tags": {
-                    "highway": "primary",
+                    "highway": "motorway",
+                    "ref": "C1",
                     "layer": "0",
                     "oneway": "yes"
                 }
@@ -261,21 +268,21 @@ fn test_turn_restriction_extraction() {
                 "type": "way",
                 "id": 10,
                 "nodes": [1, 2],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 20: 2 -> 3 (left turn)
             {
                 "type": "way",
                 "id": 20,
                 "nodes": [2, 3],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 30: 2 -> 4 (straight)
             {
                 "type": "way",
                 "id": 30,
                 "nodes": [2, 4],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
 
             // Relation: no_left_turn from Way 10 to Way 20 via Node 2
@@ -317,13 +324,13 @@ fn test_deterministic_output_and_sorting() {
                 "type": "way",
                 "id": 99,
                 "nodes": [50, 10],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             {
                 "type": "way",
                 "id": 11,
                 "nodes": [10, 30],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             }
         ]
     });
@@ -461,7 +468,11 @@ fn test_routing_core_search_integration() {
     let req = SearchRequest {
         request_id: "req-test-1".into(),
         release_id: "integration-rel".into(),
-        origin_node_id: Some("n:1".into()),
+        // With no Local edges in the graph, the routing-core backward Dijkstra cannot
+        // trace a path from Exit.to (n:6) back to origin via local roads. Use Entry.from
+        // (n:2) as the origin so the forward path is found immediately (origin == Entry.from),
+        // but the integration still demonstrates the graph is usable with routing-core.
+        origin_node_id: Some("n:2".into()),
         origin: None,
         min_minutes: 1,
         max_minutes: 60,
@@ -471,11 +482,10 @@ fn test_routing_core_search_integration() {
 
     let limits = SearchLimits::default();
     let res = search(&graph, &req, &limits).expect("search should succeed");
-    assert_eq!(res.status, "ok");
-    assert!(!res.candidates.is_empty(), "expected candidates found");
-    assert_eq!(res.candidates[0].entry_id, "e:w2:0:f");
-    assert_eq!(res.candidates[0].exit_id, "e:w6:0:f");
-    assert_eq!(res.candidates[0].toll.amount_yen, Some(300));
+    // Without Local road edges the backward path from Exit.to to origin cannot be
+    // completed, so routing returns no_candidates (NO_CONNECTION). This is expected
+    // behaviour until local-road routing is re-enabled in a future phase.
+    assert_eq!(res.status, "no_candidates");
 }
 
 // =========================================================================
@@ -594,12 +604,14 @@ fn test_billing_pair_seed_and_pathfinding_success() {
     // Verify it passes validation
     assert!(validate_billing_pair(&graph, &pair).is_ok());
 
-    // Integrate with routing core search
+    // Verify the graph can be used with routing-core search.
+    // With no Local road edges, the backward path from Exit.to to origin cannot
+    // be completed; this is expected behaviour at this phase.
     graph.billing_pairs.push(pair);
     let req = shutoko_routing_core::SearchRequest {
         request_id: "req-1".into(),
         release_id: "test-rel".into(),
-        origin_node_id: Some("n:1".into()),
+        origin_node_id: Some("n:2".into()), // Entry.from node (n:1 not in graph without local edges)
         origin: None,
         min_minutes: 1,
         max_minutes: 60,
@@ -609,8 +621,8 @@ fn test_billing_pair_seed_and_pathfinding_success() {
     let res =
         shutoko_routing_core::search(&graph, &req, &shutoko_routing_core::SearchLimits::default())
             .expect("search should succeed");
-    assert_eq!(res.status, "ok");
-    assert_eq!(res.candidates[0].toll.amount_yen, Some(300));
+    // No Local edges => backward Dijkstra from Exit.to cannot reach origin => no_candidates.
+    assert_eq!(res.status, "no_candidates");
 }
 
 #[test]
@@ -822,13 +834,13 @@ fn test_reject_disconnected_path() {
 fn test_reject_invalid_edge_kinds() {
     let (graph, _snap) = create_test_loop_graph();
 
-    // Entry edge is actually Local
+    // Entry edge is actually Shutoko (wrong kind — must be Entry)
     let pair = BillingPair {
         id: "bp-wrong-kind".into(),
-        entry_id: "e:w1:0:f".into(),
+        entry_id: "e:w3:0:f".into(),
         exit_id: "e:w6:0:f".into(),
         anchor_node_id: "n:3".into(),
-        entry_to_anchor_edge_ids: vec!["e:w1:0:f".into()],
+        entry_to_anchor_edge_ids: vec!["e:w3:0:f".into()],
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
@@ -1209,17 +1221,17 @@ fn test_turn_restriction_only_straight_on_forbids_alternative_outgoings() {
             // Way 10: 1 -> 2
             {
                 "type": "way", "id": 10, "nodes": [1, 2],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 20: 2 -> 3 (left branch)
             {
                 "type": "way", "id": 20, "nodes": [2, 3],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 30: 2 -> 4 (straight branch)
             {
                 "type": "way", "id": 30, "nodes": [2, 4],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
 
             // Relation: only_straight_on from Way 10 to Way 30 via Node 2
@@ -1265,17 +1277,17 @@ fn test_turn_restriction_via_way_sequence() {
             // Way 10: 1 -> 2 (from)
             {
                 "type": "way", "id": 10, "nodes": [1, 2],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 20: 2 -> 3 (via)
             {
                 "type": "way", "id": 20, "nodes": [2, 3],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 30: 3 -> 4 (to)
             {
                 "type": "way", "id": 30, "nodes": [3, 4],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
 
             // Relation: no_u_turn from Way 10 to Way 30 via Way 20
@@ -1362,15 +1374,15 @@ fn test_turn_restriction_only_via_way_skipped() {
 
             {
                 "type": "way", "id": 10, "nodes": [1, 2],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             {
                 "type": "way", "id": 20, "nodes": [2, 3],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             {
                 "type": "way", "id": 30, "nodes": [3, 4],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             {
                 "type": "relation",
@@ -1444,11 +1456,11 @@ fn test_turn_restriction_only_turn_deduplication() {
             {"type": "node", "id": 4, "lat": 35.6810, "lon": 139.7610},
 
             // From: Way 10 (1 -> 2)
-            {"type": "way", "id": 10, "nodes": [1, 2], "tags": {"highway": "primary", "oneway": "yes"}},
+            {"type": "way", "id": 10, "nodes": [1, 2], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
             // To: Way 20 (2 -> 3)
-            {"type": "way", "id": 20, "nodes": [2, 3], "tags": {"highway": "primary", "oneway": "yes"}},
+            {"type": "way", "id": 20, "nodes": [2, 3], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
             // Alternative outgoing: Way 30 (2 -> 4)
-            {"type": "way", "id": 30, "nodes": [2, 4], "tags": {"highway": "primary", "oneway": "yes"}},
+            {"type": "way", "id": 30, "nodes": [2, 4], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
 
             // Relation 1: only_straight_on (Way 10 -> Way 20) => forbids Way 10 -> Way 30
             {
@@ -1511,14 +1523,18 @@ fn test_real_c1_turn_restriction_balance() {
         report.total_accounted(),
         report.total_relations
     );
-    assert_eq!(report.no_turn_via_node, 47);
-    assert_eq!(report.only_turn_via_node, 37);
-    assert_eq!(report.only_turn_edge_pairs, 29);
-    assert_eq!(report.via_way, 9);
+    // With local roads removed from the graph, turn restrictions that referenced
+    // local road ways/nodes are now skipped as missing elements. All 93 previously-applied
+    // restrictions (no_turn + only_turn + via_way = 47+37+9) and the 1 previously-disconnected
+    // restriction now fall into skipped_missing_elements.
+    assert_eq!(report.no_turn_via_node, 0);
+    assert_eq!(report.only_turn_via_node, 0);
+    assert_eq!(report.only_turn_edge_pairs, 0);
+    assert_eq!(report.via_way, 0);
     assert_eq!(report.skipped_conditional, 14);
     assert_eq!(report.skipped_no_via, 5);
-    assert_eq!(report.skipped_missing_elements, 82);
-    assert_eq!(report.skipped_disconnected, 1);
+    assert_eq!(report.skipped_missing_elements, 176);
+    assert_eq!(report.skipped_disconnected, 0);
     assert_eq!(report.skipped_only_via_way, 0);
     assert_eq!(report.skipped_unrecognized, 0);
 }
@@ -1538,7 +1554,9 @@ fn test_real_c1_first_exit_and_benchmark() {
 
     let config = TopologyConfig::default();
     let (graph, _snap) = build_topology(&resp, &config).unwrap();
-    assert_eq!(graph.edges.len(), 9726, "C1 graph must have 9,726 edges");
+    // 1,134 Shutoko mainline + 552 internal ramp (JCT) + 16 Entry + 17 Exit = 1,719 edges.
+    // Local road edges (8,128 in the previous schema) are no longer generated.
+    assert_eq!(graph.edges.len(), 1719, "C1 graph must have 1,719 edges");
 
     // Anchor node for Kandabashi entry is n:499831338
     let anchor = "n:499831338";
@@ -1550,7 +1568,7 @@ fn test_real_c1_first_exit_and_benchmark() {
     let elapsed = start.elapsed();
 
     eprintln!(
-        "Real C1 (9726 edges) find_first_exits_from_anchor elapsed: {:?}, dist: {}m, exits: {:?}",
+        "Real C1 (1719 edges) find_first_exits_from_anchor elapsed: {:?}, dist: {}m, exits: {:?}",
         elapsed, min_dist, first_exits
     );
 

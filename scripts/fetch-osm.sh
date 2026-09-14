@@ -2,8 +2,11 @@
 set -euo pipefail
 
 # scripts/fetch-osm.sh
-# Fetch Tokyo Inner Circular Route (C1), connecting ramps, and surrounding major surface streets
+# Fetch Shutoko (Tokyo Metropolitan Expressway) routes and their entry/exit ramps
 # from OpenStreetMap via Overpass API [out:json].
+#
+# Local surface streets are intentionally excluded: the routing model assumes
+# "board at the nearest entrance" so there is no need to solve surface-road paths.
 #
 # Usage:
 #   ./scripts/fetch-osm.sh [OUTPUT_PATH] [ENDPOINT]
@@ -21,25 +24,25 @@ ENDPOINT="${2:-"https://overpass-api.de/api/interpreter"}"
 mkdir -p "$(dirname "${OUTPUT_PATH}")"
 
 # Overpass query rationale:
-# 1. Motorway link expansion: C1 connecting ramps (Shibakoen, Iikura, Kasumigaseki,
-#    Shiodome, Takaracho, etc.) consist of 3 to 5 successive motorway_link ways.
-#    Expanding link traversal up to 5 hops ensures all ramp endpoints reach surface streets.
-# 2. Local surface streets: Include trunk/primary/secondary within bbox covering C1
-#    (35.645,139.730,35.700,139.785), plus all surface streets and connecting links
-#    (including *_link and service) directly touching ramp endpoints.
+# 1. Target expressway relations are listed in the relation(id:...) filter.
+#    To add a new route (e.g. C2, Wangan), append its relation ID to that list.
+#    Current targets:
+#      4256008 — C1 Inner Circular Route (都心環状線)
+# 2. Motorway link expansion: entry/exit ramps consist of 3–5 successive
+#    motorway_link ways. Four hops of expansion capture all ramp geometry.
+# 3. Turn restrictions for the expressway ways and ramps are included so the
+#    router can honour prohibited manoeuvres.
+# 4. No bbox or local-road queries: general surface streets are not needed.
 OVERPASS_QUERY='[out:json][timeout:90];
-relation(4256008) -> .c1;
+relation(id:4256008) -> .expressways;
 (
-  .c1;
-  way(r.c1);
+  .expressways;
+  way(r.expressways);
   node(w);
-) -> .c1_all;
-node.c1_all -> .c1_nodes;
+) -> .ew_all;
+node.ew_all -> .ew_nodes;
 
-way(bn.c1_nodes)["highway"="motorway_link"] -> .links;
-
-( .links; node(w.links); ) -> .l_nodes;
-( .links; way(bn.l_nodes)["highway"="motorway_link"]; ) -> .links;
+way(bn.ew_nodes)["highway"="motorway_link"] -> .links;
 
 ( .links; node(w.links); ) -> .l_nodes;
 ( .links; way(bn.l_nodes)["highway"="motorway_link"]; ) -> .links;
@@ -50,22 +53,15 @@ way(bn.c1_nodes)["highway"="motorway_link"] -> .links;
 ( .links; node(w.links); ) -> .l_nodes;
 ( .links; way(bn.l_nodes)["highway"="motorway_link"]; ) -> .links;
 
-node(w.links) -> .all_link_nodes;
+( .links; node(w.links); ) -> .l_nodes;
+( .links; way(bn.l_nodes)["highway"="motorway_link"]; ) -> .links;
 
 (
-  way["highway"~"^(trunk|primary|secondary)$"](35.645,139.730,35.700,139.785);
-  way(bn.all_link_nodes)["highway"~"^(trunk|primary|secondary|tertiary|residential|unclassified|trunk_link|primary_link|secondary_link|tertiary_link|service)$"];
-) -> .local_ways;
-
-(
-  .c1_all;
+  .ew_all;
   .links;
   node(w.links);
-  .local_ways;
-  node(w.local_ways);
-  relation(bw.c1_all)["type"="restriction"];
+  relation(bw.ew_all)["type"="restriction"];
   relation(bw.links)["type"="restriction"];
-  relation(bw.local_ways)["type"="restriction"];
 );
 out body;'
 

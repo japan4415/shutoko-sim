@@ -8,7 +8,6 @@
 //! a query coordinate, the node with the **lexicographically smaller ID** is
 //! returned — identical to the original `BTreeSet` iteration order.
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 
 use crate::{distance_meters, Node, SNAP_RADIUS_METERS};
 
@@ -40,14 +39,6 @@ fn cell_key(lat: f64, lon: f64) -> (i64, i64) {
 }
 
 /// Uniform-grid spatial index over local-road nodes.
-#[derive(Default)]
-pub struct SnapGrid<'a> {
-    /// Each cell stores its node IDs in **lexicographic order** (preserved from
-    /// the `BTreeSet` iteration used during construction).
-    cells: BTreeMap<(i64, i64), Vec<&'a str>>,
-}
-
-/// Owned version of `SnapGrid` — no lifetime parameter.
 ///
 /// Stores indices into the `graph.nodes` slice instead of string references,
 /// enabling the index to be stored in [`crate::PreparedGraph`] without
@@ -55,70 +46,8 @@ pub struct SnapGrid<'a> {
 #[derive(Default)]
 pub struct OwnedSnapGrid {
     /// Each cell stores node indices into `graph.nodes`, sorted by node ID for
-    /// deterministic tie-breaking (identical to [`SnapGrid`] behaviour).
+    /// deterministic tie-breaking.
     cells: BTreeMap<(i64, i64), Vec<usize>>,
-}
-
-impl<'a> SnapGrid<'a> {
-    /// Build from the set of local-node IDs and the full node coordinate map.
-    ///
-    /// `local_nodes` is a `BTreeSet`, so iteration is already in lexicographic
-    /// order. Each cell therefore receives its nodes in lex order automatically,
-    /// with no additional sort needed.
-    pub fn build(local_nodes: &BTreeSet<&'a str>, nodes: &BTreeMap<&'a str, &'a Node>) -> Self {
-        let mut cells: BTreeMap<(i64, i64), Vec<&'a str>> = BTreeMap::new();
-        for &id in local_nodes {
-            let n = nodes[id];
-            cells.entry(cell_key(n.lat, n.lon)).or_default().push(id);
-        }
-        Self { cells }
-    }
-
-    /// Find the nearest local node within [`SNAP_RADIUS_METERS`] of `(lat, lon)`.
-    ///
-    /// Returns `Some((distance_meters, node))` or `None` if no node qualifies.
-    ///
-    /// Tie-breaking: among nodes at equal distance, the one with the
-    /// lexicographically smaller node ID is returned, matching the `BTreeSet`
-    /// linear-scan behaviour.
-    pub fn nearest(
-        &self,
-        lat: f64,
-        lon: f64,
-        nodes: &BTreeMap<&'a str, &'a Node>,
-    ) -> Option<(f64, &'a Node)> {
-        let (ci, cj) = cell_key(lat, lon);
-
-        // Track (distance, node_id, node_ref) for the best candidate so far.
-        let mut best: Option<(f64, &'a str, &'a Node)> = None;
-
-        for di in -1i64..=1 {
-            for dj in -1i64..=1 {
-                let key = (ci + di, cj + dj);
-                let Some(ids) = self.cells.get(&key) else {
-                    continue;
-                };
-                // `ids` are in lex order within the cell.
-                for &id in ids {
-                    let n = nodes[id];
-                    let d = distance_meters(lat, lon, n.lat, n.lon);
-                    let update = match best {
-                        None => true,
-                        // Update if strictly closer, or equally close but lex-smaller ID.
-                        // This replicates the BTreeSet `d < bd` rule: the first node
-                        // encountered in lex order at the minimum distance wins.
-                        Some((bd, bid, _)) => d < bd || (d == bd && id < bid),
-                    };
-                    if update {
-                        best = Some((d, id, n));
-                    }
-                }
-            }
-        }
-
-        best.filter(|(d, _, _)| *d <= SNAP_RADIUS_METERS)
-            .map(|(d, _, n)| (d, n))
-    }
 }
 
 impl OwnedSnapGrid {
@@ -143,7 +72,7 @@ impl OwnedSnapGrid {
     ///
     /// Returns `Some((distance_meters, node_index))` or `None`.
     /// Tie-breaking: lexicographically smaller node ID wins, identical to
-    /// the borrowed [`SnapGrid::nearest`].
+    /// Tie-breaking: lexicographically smaller node ID wins.
     pub fn nearest(&self, lat: f64, lon: f64, all_nodes: &[Node]) -> Option<(f64, usize)> {
         let (ci, cj) = cell_key(lat, lon);
         // Track (distance, index) of the best candidate.

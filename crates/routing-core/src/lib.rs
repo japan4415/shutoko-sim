@@ -306,9 +306,17 @@ struct OwnedIndex {
 /// each subsequent search skips that cost entirely.
 pub struct PreparedGraph {
     /// The owned graph data.
-    pub graph: Graph,
+    ///
+    /// `pub(crate)` instead of `pub` to prevent external mutation.  External
+    /// consumers should use the [`PreparedGraph::graph`] accessor instead.
+    /// Because `OwnedIndex` stores positional indices (usize) into
+    /// `graph.nodes` / `graph.edges`, any external push/remove would silently
+    /// corrupt lookups and the reachable cache.
+    pub(crate) graph: Graph,
     /// Search limits used during preparation (re-validated on each search).
-    pub limits: SearchLimits,
+    ///
+    /// `pub(crate)` to keep `PreparedGraph` opaque outside the crate.
+    pub(crate) limits: SearchLimits,
     /// Pre-built index over the graph.
     index: OwnedIndex,
     /// Cache: (anchor_node_id, max_seconds) → set of reachable Shutoko node
@@ -321,6 +329,16 @@ pub struct PreparedGraph {
 }
 
 impl PreparedGraph {
+    /// Read-only access to the graph data.
+    pub fn graph(&self) -> &Graph {
+        &self.graph
+    }
+
+    /// Read-only access to the search limits stored at prepare time.
+    pub fn limits(&self) -> &SearchLimits {
+        &self.limits
+    }
+
     #[inline]
     fn node(&self, id: &str) -> &Node {
         &self.graph.nodes[self.index.node_pos[id]]
@@ -380,7 +398,7 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
     {
         return Err(invalid("search limits outside supported bounds"));
     }
-    if l.max_access_radius_meters < 0.0 || l.max_access_radius_meters.is_nan() {
+    if !l.max_access_radius_meters.is_finite() || l.max_access_radius_meters < 0.0 {
         return Err(invalid("max_access_radius_meters must be non-negative"));
     }
     if g.nodes.len() > l.max_graph_nodes
@@ -1257,11 +1275,6 @@ pub fn search_prepared(
     };
     let origin_node_id = origin_label.as_str();
 
-    // Build a node lookup map (borrowed from pg.graph.nodes) once and reuse
-    // it for all handoff::select_waypoints calls inside the 'pairs loop below.
-    let nodes_map: BTreeMap<&str, &Node> =
-        pg.graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
-
     let mut budget = Budget::default();
     let mut candidates = Vec::new();
     let mut candidate_edges = 0;
@@ -1414,8 +1427,17 @@ pub fn search_prepared(
                 lat: snapped.lat,
                 lon: snapped.lon,
             });
-            let waypoints =
-                handoff::select_waypoints(&p.anchor_node_id, cycle, exit_edge, &nodes_map);
+            let waypoints = handoff::select_waypoints(
+                &p.anchor_node_id,
+                cycle,
+                exit_edge,
+                |id| {
+                    pg.index.node_pos.get(id).map(|&i| {
+                        let n = &pg.graph.nodes[i];
+                        LatLng { lat: n.lat, lon: n.lon }
+                    })
+                },
+            );
             let maps_url = match handoff::format_maps_url(&departure, &waypoints) {
                 Ok(url) => url,
                 Err(()) => {

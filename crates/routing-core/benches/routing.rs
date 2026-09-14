@@ -329,7 +329,8 @@ fn bench_snap_large(c: &mut Criterion) {
 
 /// `prepared_large`: 大規模グラフで prepare() と search_prepared() を分離して計測。
 /// - `prepare_only`: インデックス構築コスト（1 回の計測で大規模グラフを丸ごと処理）
-/// - `search_prepared_origin_first`: prepare 済みグラフへの探索コスト
+/// - `search_prepared_origin_first`: **失敗探索**（グラフ先頭ノード起点、status=no_candidates/NO_CONNECTION）のコスト
+/// - `search_prepared_origin_first_success`: **成功探索**（max_expanded_states=1_000_000 で候補が返る 8 ペア中先頭ペアのエントリーノード起点）
 /// - `search_prepared_snap_hit`: 座標スナップ成功経路の探索コスト
 /// - `search_prepared_snap_miss`: 座標スナップ失敗（即 return）のコスト
 fn bench_prepared_large(c: &mut Criterion) {
@@ -354,16 +355,19 @@ fn bench_prepared_large(c: &mut Criterion) {
     // 以降は prepare を 1 回だけ実行し search_prepared() のコストだけを計測
     let pg = prepare(g.clone(), &limits).expect("prepare に失敗");
 
+    // NOTE: このベンチはグラフ先頭ノード（通常は周辺部ノード）を起点とするため
+    // status=no_candidates / reason=NO_CONNECTION を返す失敗探索を計測している。
+    // 「候補が返る成功探索」のコストは search_prepared_origin_first_success を参照。
     group.bench_function("search_prepared_origin_first", |b| {
         b.iter(|| {
             let req = SearchRequest {
                 request_id: "bench-prepared-large".into(),
-                release_id: pg.graph.release_id.clone(),
+                release_id: pg.graph().release_id.clone(),
                 origin_node_id: Some(origin_node_id.clone()),
                 origin: None,
                 min_minutes: 15,
                 max_minutes: 60,
-                vehicle_profile: pg.graph.vehicle_profile.clone(),
+                vehicle_profile: pg.graph().vehicle_profile.clone(),
                 pricing_at: "2026-09-10T00:00:00Z".into(),
             };
             black_box(shutoko_routing_core::search_prepared(
@@ -377,7 +381,7 @@ fn bench_prepared_large(c: &mut Criterion) {
         b.iter(|| {
             let req = SearchRequest {
                 request_id: "bench-prepared-snap-hit".into(),
-                release_id: pg.graph.release_id.clone(),
+                release_id: pg.graph().release_id.clone(),
                 origin_node_id: None,
                 origin: Some(LatLng {
                     lat: 35.6896727,
@@ -385,7 +389,7 @@ fn bench_prepared_large(c: &mut Criterion) {
                 }),
                 min_minutes: 15,
                 max_minutes: 60,
-                vehicle_profile: pg.graph.vehicle_profile.clone(),
+                vehicle_profile: pg.graph().vehicle_profile.clone(),
                 pricing_at: "2026-09-10T00:00:00Z".into(),
             };
             black_box(shutoko_routing_core::search_prepared(
@@ -399,7 +403,7 @@ fn bench_prepared_large(c: &mut Criterion) {
         b.iter(|| {
             let req = SearchRequest {
                 request_id: "bench-prepared-snap-miss".into(),
-                release_id: pg.graph.release_id.clone(),
+                release_id: pg.graph().release_id.clone(),
                 origin_node_id: None,
                 origin: Some(LatLng {
                     lat: 35.0000000,
@@ -407,7 +411,7 @@ fn bench_prepared_large(c: &mut Criterion) {
                 }),
                 min_minutes: 15,
                 max_minutes: 60,
-                vehicle_profile: pg.graph.vehicle_profile.clone(),
+                vehicle_profile: pg.graph().vehicle_profile.clone(),
                 pricing_at: "2026-09-10T00:00:00Z".into(),
             };
             black_box(shutoko_routing_core::search_prepared(
@@ -416,6 +420,64 @@ fn bench_prepared_large(c: &mut Criterion) {
             ))
         })
     });
+
+    // 成功探索ベンチ: max_expanded_states=1_000_000 に引き上げて候補が返る探索を計測する。
+    // 起点は bp:c1-outer:kasumigaseki-daikancho のエントリーノード (n:577255402)。
+    // large_graph_smoke_search_extended_limits で status=ok (expanded≈856k) が確認済み。
+    // このノードが大規模グラフに存在しない場合は「no node」エラーになりベンチをスキップする。
+    {
+        let success_origin = "n:577255402";
+        let limits_ext = SearchLimits {
+            max_expanded_states: 1_000_000,
+            max_local_edges: 2000,
+            max_access_radius_meters: 0.0,
+            ..SearchLimits::default()
+        };
+        match prepare(g.clone(), &limits_ext) {
+            Ok(pg_ext) => {
+                let release_id = pg_ext.graph().release_id.clone();
+                let vehicle_profile = pg_ext.graph().vehicle_profile.clone();
+                // このベンチは 1 回あたり数秒かかるため sample_size を最小にする
+                group.sample_size(10);
+                group.measurement_time(Duration::from_secs(60));
+                group.bench_function("search_prepared_origin_first_success", |b| {
+                    b.iter(|| {
+                        let req = SearchRequest {
+                            request_id: "bench-prepared-large-success".into(),
+                            release_id: release_id.clone(),
+                            origin_node_id: Some(success_origin.into()),
+                            origin: None,
+                            min_minutes: 15,
+                            max_minutes: 60,
+                            vehicle_profile: vehicle_profile.clone(),
+                            pricing_at: "2026-09-10T00:00:00Z".into(),
+                        };
+                        let result = shutoko_routing_core::search_prepared(
+                            black_box(&pg_ext),
+                            black_box(&req),
+                        );
+                        // 成功しなかった場合にベンチ実行時に気づけるよう status を出力する
+                        if let Ok(ref r) = result {
+                            if r.status != "ok" {
+                                eprintln!(
+                                    "[bench] search_prepared_origin_first_success: \
+                                     status={} (expected ok) expanded_states={}",
+                                    r.status, r.expanded_states
+                                );
+                            }
+                        }
+                        black_box(result)
+                    })
+                });
+            }
+            Err(e) => {
+                eprintln!(
+                    "[bench] search_prepared_origin_first_success: \
+                     extended prepare() failed (スキップ): {e}"
+                );
+            }
+        }
+    }
 
     group.finish();
 }

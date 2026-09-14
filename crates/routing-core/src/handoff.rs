@@ -4,8 +4,7 @@
 //! pulling external heavy URL crates. Waypoint selection uses a provisional 3-point rule
 //! (entry merge anchor, loop midpoint, exit branch) subject to physical verification in #8.
 
-use crate::{Edge, LatLng, Node};
-use std::collections::BTreeMap;
+use crate::{Edge, LatLng};
 
 /// Maximum allowed character length for generated Google Maps URLs.
 pub const MAX_MAPS_URL_LENGTH: usize = 2048;
@@ -17,13 +16,21 @@ pub const MAX_MAPS_URL_LENGTH: usize = 2048;
 /// 2. Midpoint node along the loop (node closest to 50% accumulated loop distance).
 /// 3. Mainline node immediately before exit divergence (from-node of exit edge).
 ///
+/// `node_latlng` is called to resolve a node ID to its coordinates.  Returns
+/// `None` for unknown IDs (which are then silently dropped from the result).
+/// Passing a closure avoids building a temporary `BTreeMap` on every call when
+/// the caller already owns an indexed graph structure.
+///
 /// Returns at most 3 distinct waypoints.
-pub fn select_waypoints(
+pub fn select_waypoints<F>(
     anchor_node_id: &str,
     cycle_edges: &[&Edge],
     exit_edge: &Edge,
-    nodes_by_id: &BTreeMap<&str, &Node>,
-) -> Vec<LatLng> {
+    node_latlng: F,
+) -> Vec<LatLng>
+where
+    F: Fn(&str) -> Option<LatLng>,
+{
     let mut selected_node_ids: Vec<&str> = Vec::with_capacity(3);
 
     // 1. Entry merge mainline anchor node
@@ -64,12 +71,7 @@ pub fn select_waypoints(
 
     selected_node_ids
         .into_iter()
-        .filter_map(|id| {
-            nodes_by_id.get(id).map(|n| LatLng {
-                lat: n.lat,
-                lon: n.lon,
-            })
-        })
+        .filter_map(node_latlng)
         .collect()
 }
 

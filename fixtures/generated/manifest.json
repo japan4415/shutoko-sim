@@ -52,10 +52,9 @@
     "exit:e:w760748024:7:f",
     "exit:e:w760760233:11:f (新富町出口)",
     "exit:e:w944138315:0:f (芝公園出口)",
-    "unsupported-restriction: 1 disconnected via-way turn restrictions (disconnected) excluded from static graph",
     "unsupported-restriction: 14 conditional turn restrictions (conditional) excluded from static graph",
-    "unsupported-restriction: 5 turn restrictions missing via member (no via) excluded from static graph",
-    "unsupported-restriction: 82 turn restrictions referencing elements outside graph (outside graph) excluded from static graph"
+    "unsupported-restriction: 176 turn restrictions referencing elements outside graph (outside graph) excluded from static graph",
+    "unsupported-restriction: 5 turn restrictions missing via member (no via) excluded from static graph"
   ],
   "provenance": [
     {
@@ -110,13 +109,13 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "bce7e2386c70161b829759d11f498c394d1b6059fc1dccecc9754bb7d1e1d6bd",
-      "byteLength": 2907908
+      "sha256": "357253c035c0279a75442e2e0b8120ad387d1e4ae5b20cb962b888fbbf6e3e87",
+      "byteLength": 563486
     },
     {
       "path": "snap-index.json",
-      "sha256": "82bc10e405dde08e5952a5bc5f6ea685f5a1c3b572001393e05ebc1310185346",
-      "byteLength": 656140
+      "sha256": "c5fed838d1df90689eb42f05dedb6a10e04a12719c1c8261ecb70c83cb9f1aff",
+      "byteLength": 1511
     }
   ]
 }

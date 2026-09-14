@@ -181,14 +181,6 @@ pub fn is_shutoko_motorway(element: &OsmElement) -> bool {
     false
 }
 
-/// Checks if highway tag indicates a surface street / local road.
-pub fn is_local_highway(highway_val: &str) -> bool {
-    matches!(
-        highway_val,
-        "trunk" | "primary" | "secondary" | "tertiary" | "unclassified" | "residential"
-    )
-}
-
 /// Parse oneway direction from OSM tags.
 /// - "yes", "1", "true" -> Forward only
 /// - "-1", "reverse" -> Reverse only
@@ -245,10 +237,8 @@ pub fn build_topology_with_report(
             (false, Some(EdgeKind::Shutoko))
         } else if highway == "motorway_link" {
             (true, None)
-        } else if is_local_highway(highway) {
-            (false, Some(EdgeKind::Local))
         } else {
-            // Not a recognized roadway type
+            // Not a Shutoko motorway or motorway_link; skip (Local roads excluded by design).
             continue;
         };
 
@@ -310,22 +300,34 @@ pub fn build_topology_with_report(
         }
     }
 
-    // 3. Classify motorway_link edges into Entry or Exit based on connectivity
-    // Identify nodes that touch Shutoko or Local edges
+    // 3. Classify motorway_link edges into Entry, Exit, or Shutoko based on connectivity.
+    // Build the set of OSM nodes that appear in any non-motorway, non-motorway_link way.
+    // These are the "street-level" nodes that form valid access points to/from the expressway.
+    // JCT connector nodes (connecting two expressways) appear only in motorway/motorway_link
+    // ways and are excluded by this filter.
+    let mut street_nodes: HashSet<String> = HashSet::new();
+    for elem in &response.elements {
+        if !elem.is_way() {
+            continue;
+        }
+        match elem.get_tag("highway") {
+            Some("motorway") | Some("motorway_link") | None => continue,
+            _ => {}
+        }
+        if let Some(ref ns) = elem.nodes {
+            for &node_id in ns {
+                street_nodes.insert(format!("n:{}", node_id));
+            }
+        }
+    }
+
+    // Identify nodes that touch Shutoko mainline edges.
     let mut shutoko_nodes: HashSet<String> = HashSet::new();
-    let mut local_nodes: HashSet<String> = HashSet::new();
 
     for edge in &intermediate_edges {
-        match edge.tentative_kind {
-            Some(EdgeKind::Shutoko) => {
-                shutoko_nodes.insert(edge.from.clone());
-                shutoko_nodes.insert(edge.to.clone());
-            }
-            Some(EdgeKind::Local) => {
-                local_nodes.insert(edge.from.clone());
-                local_nodes.insert(edge.to.clone());
-            }
-            _ => {}
+        if edge.tentative_kind == Some(EdgeKind::Shutoko) {
+            shutoko_nodes.insert(edge.from.clone());
+            shutoko_nodes.insert(edge.to.clone());
         }
     }
 
@@ -392,34 +394,37 @@ pub fn build_topology_with_report(
     // Build final edges
     let mut final_edges: Vec<Edge> = Vec::new();
     let mut final_edge_ids: HashSet<String> = HashSet::new();
-    let mut dropped_link_edges = 0;
 
     for edge in intermediate_edges {
         let kind = if let Some(k) = edge.tentative_kind {
             k
         } else if edge.is_motorway_link {
             let forward_to_shutoko = reaches_target_forward(&edge.to, &shutoko_nodes);
-            let backward_from_local = reaches_target_backward(&edge.from, &local_nodes);
-
-            let forward_to_local = reaches_target_forward(&edge.to, &local_nodes);
             let backward_from_shutoko = reaches_target_backward(&edge.from, &shutoko_nodes);
 
-            if forward_to_shutoko && backward_from_local && !backward_from_shutoko {
-                if local_nodes.contains(&edge.from) {
-                    EdgeKind::Entry
-                } else {
-                    EdgeKind::Shutoko
-                }
-            } else if forward_to_local && backward_from_shutoko && !backward_from_local {
-                if local_nodes.contains(&edge.to) {
-                    EdgeKind::Exit
-                } else {
-                    EdgeKind::Shutoko
-                }
+            // Entry: directed toward Shutoko mainline AND from-node is a street-level access
+            // point (appears in at least one non-motorway/non-motorway_link way in OSM)
+            // AND from-node is NOT reachable from Shutoko backward (excludes JCT connectors).
+            // Street-node check distinguishes real on-ramps (touching local roads) from
+            // expressway-to-expressway connectors whose endpoints only exist in motorway ways.
+            let is_street_from = street_nodes.contains(edge.from.as_str());
+            // Exit: reachable from Shutoko mainline backward AND to-node is a street-level
+            // destination AND to-node has no further outgoing ramp edges (it is the foot of the
+            // off-ramp, not a mid-ramp junction) AND to-node does NOT lead back to Shutoko.
+            let is_street_to = street_nodes.contains(edge.to.as_str());
+            let no_outgoing_ramp = link_outgoing.get(&edge.to).is_none_or(|v| v.is_empty());
+
+            if forward_to_shutoko && is_street_from && !backward_from_shutoko {
+                EdgeKind::Entry
+            } else if backward_from_shutoko
+                && is_street_to
+                && no_outgoing_ramp
+                && !forward_to_shutoko
+            {
+                EdgeKind::Exit
             } else {
-                // Not a distinct entry/exit between local and Shutoko (e.g. internal JCT connector)
-                dropped_link_edges += 1;
-                continue;
+                // Internal ramp segment (JCT connector or mid-ramp): treat as Shutoko mainline.
+                EdgeKind::Shutoko
             }
         } else {
             continue;
@@ -494,10 +499,7 @@ pub fn build_topology_with_report(
 
     // 5. Parse turn restrictions from relations
     let mut forbidden_transitions_set: BTreeSet<Vec<String>> = BTreeSet::new();
-    let mut report = RestrictionReport {
-        dropped_link_edges,
-        ..Default::default()
-    };
+    let mut report = RestrictionReport::default();
 
     for elem in &response.elements {
         if !elem.is_relation() {
@@ -815,12 +817,6 @@ pub fn build_topology_with_report(
         }
     }
 
-    if report.dropped_link_edges > 0 {
-        eprintln!(
-            "Info: dropped {} internal motorway_link edges (not connecting local streets and Shutoko)",
-            report.dropped_link_edges
-        );
-    }
     eprintln!(
         "Turn restrictions: {} total relations -> {} no_turn (via=node), {} only_turn (via=node, {} forbidden pairs), {} via_way | skipped: {} conditional, {} no via, {} outside graph, {} disconnected{}{}",
         report.total_relations,
@@ -861,34 +857,33 @@ pub fn build_topology_with_report(
         forbidden_transitions,
     };
 
-    // 6. Build SnapIndex for local road nodes
-    let mut snap_nodes: Vec<SnapNode> = Vec::new();
-    let local_node_ids: HashSet<&str> = graph
+    // 6. Build SnapIndex for Entry edge from-nodes (street-side access points).
+    // These are the geographic positions users snap to when looking for an on-ramp.
+    let entry_from_node_ids: BTreeSet<&str> = graph
         .edges
         .iter()
-        .filter(|e| e.kind == EdgeKind::Local)
-        .flat_map(|e| vec![e.from.as_str(), e.to.as_str()])
+        .filter(|e| e.kind == EdgeKind::Entry)
+        .map(|e| e.from.as_str())
         .collect();
 
-    for node in &graph.nodes {
-        if local_node_ids.contains(node.id.as_str()) {
-            if let Some(num_str) = node.id.strip_prefix("n:") {
-                if let Ok(osm_id) = num_str.parse::<i64>() {
-                    if let Some(&(lat, lon)) = node_coords.get(&osm_id) {
-                        snap_nodes.push(SnapNode {
-                            id: node.id.clone(),
-                            lat,
-                            lon,
-                        });
-                    }
-                }
-            }
-        }
-    }
+    let mut snap_nodes: Vec<SnapNode> = graph
+        .nodes
+        .iter()
+        .filter(|n| entry_from_node_ids.contains(n.id.as_str()))
+        .filter_map(|node| {
+            let osm_id: i64 = node.id.strip_prefix("n:")?.parse().ok()?;
+            let &(lat, lon) = node_coords.get(&osm_id)?;
+            Some(SnapNode {
+                id: node.id.clone(),
+                lat,
+                lon,
+            })
+        })
+        .collect();
     snap_nodes.sort_by(|a, b| a.id.cmp(&b.id));
 
     let snap_index = SnapIndex {
-        schema_version: 1,
+        schema_version: 2,
         release_id: config.release_id.clone(),
         nodes: snap_nodes,
     };

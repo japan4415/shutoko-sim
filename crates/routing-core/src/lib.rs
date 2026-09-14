@@ -124,6 +124,10 @@ pub struct SearchLimits {
     pub max_local_edges: usize,
     pub max_pairs: usize,
     pub max_candidates: usize,
+    /// Maximum number of nodes allowed in the graph. Defaults to 1,000,000.
+    pub max_graph_nodes: usize,
+    /// Maximum number of edges allowed in the graph. Defaults to 3,000,000.
+    pub max_graph_edges: usize,
 }
 impl Default for SearchLimits {
     fn default() -> Self {
@@ -134,6 +138,8 @@ impl Default for SearchLimits {
             max_local_edges: 200,
             max_pairs: 10,
             max_candidates: 3,
+            max_graph_nodes: 1_000_000,
+            max_graph_edges: 3_000_000,
         }
     }
 }
@@ -336,8 +342,8 @@ fn validate<'a>(
     {
         return Err(invalid("search limits outside supported bounds"));
     }
-    if g.nodes.len() > 100_000
-        || g.edges.len() > 300_000
+    if g.nodes.len() > l.max_graph_nodes
+        || g.edges.len() > l.max_graph_edges
         || g.billing_pairs.len() > 10_000
         || g.forbidden_transitions.len() > 10_000
     {
@@ -1371,7 +1377,10 @@ pub fn search_json(
     request_json: &str,
     limits_json: &str,
 ) -> Result<String, RoutingError> {
-    if graph_json.len() > 64 * 1024 * 1024
+    // 512 MiB: raised from 64 MiB to accommodate large real-world graphs
+    // (metropolitan highway networks can exceed 100k nodes × ~10 edges each).
+    const MAX_GRAPH_JSON_BYTES: usize = 512 * 1024 * 1024;
+    if graph_json.len() > MAX_GRAPH_JSON_BYTES
         || request_json.len() > 16 * 1024
         || limits_json.len() > 4096
     {

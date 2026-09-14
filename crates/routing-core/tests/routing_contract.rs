@@ -969,3 +969,39 @@ fn road_names_ordered_and_deduplicated() {
         .collect();
     assert_eq!(road_names, vec!["都心環状線", "八重洲線"]);
 }
+
+/// SearchLimits の maxGraphNodes / maxGraphEdges が小さい値に設定されたとき、
+/// 合成グラフ（6 ノード, 7 エッジ）が正しく拒否されることを確認する。
+#[test]
+fn custom_graph_size_limits_reject_graph_that_exceeds_them() {
+    let g = graph();
+    let r = request();
+
+    // maxGraphNodes を 5 に設定 → 6 ノードの合成グラフは超過して拒否されるべき
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxGraphNodes": 5}).to_string(),
+        )
+        .is_err(),
+        "maxGraphNodes=5 should reject the 6-node synthetic graph"
+    );
+
+    // maxGraphEdges を 6 に設定 → 7 エッジの合成グラフは超過して拒否されるべき
+    assert!(
+        search_json(
+            &g.to_string(),
+            &r.to_string(),
+            &json!({"maxGraphEdges": 6}).to_string(),
+        )
+        .is_err(),
+        "maxGraphEdges=6 should reject the 7-edge synthetic graph"
+    );
+
+    // デフォルト limits（{}"）では同じグラフが受け付けられることも確認
+    assert!(
+        search_json(&g.to_string(), &r.to_string(), "{}").is_ok(),
+        "default limits should accept the synthetic graph"
+    );
+}

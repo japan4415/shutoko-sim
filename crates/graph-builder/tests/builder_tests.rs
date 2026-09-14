@@ -169,10 +169,14 @@ fn test_edge_kind_classification_shutoko_entry_exit_local() {
     // Footway was excluded
     assert!(!edge_kinds.contains_key("e:w5:0:f"));
 
-    // SnapIndex contains local road nodes (n:10 and n:11)
+    // SnapIndex (schema_version 2) contains the from-nodes of Entry edges only.
+    // n:11 is the street-side terminus (from-node) of the Entry edge e:w3:0:f.
+    // n:10 is the to-node of the Exit edge e:w4:1:f — it is NOT in the snap index.
     let snap_ids: Vec<String> = snap.nodes.iter().map(|n| n.id.clone()).collect();
-    assert!(snap_ids.contains(&"n:10".to_string()));
+    assert_eq!(snap.schema_version, 2);
     assert!(snap_ids.contains(&"n:11".to_string()));
+    // Exit to-node (n:10) should not be in snap index
+    assert!(!snap_ids.contains(&"n:10".to_string()));
     // Shutoko nodes should not be in snap index
     assert!(!snap_ids.contains(&"n:20".to_string()));
 }
@@ -1501,24 +1505,27 @@ fn test_real_c1_turn_restriction_balance() {
     let config = TopologyConfig::default();
     let (_graph, _snap, report) = build_topology_with_report(&resp, &config).unwrap();
 
+    // New motorway-only fixture (shutoko-c1.json) contains only 6 turn restriction
+    // relations — the local-road relations were stripped when surface streets were
+    // dropped from the OSM extract.
     assert_eq!(
-        report.total_relations, 195,
-        "C1 real dataset contains exactly 195 turn restriction relations"
+        report.total_relations, 6,
+        "C1 real dataset (motorway-only fixture) contains exactly 6 turn restriction relations"
     );
     assert!(
         report.is_balanced(),
-        "all 195 relations must be accounted for without leakage: accounted={}, total={}",
+        "all 6 relations must be accounted for without leakage: accounted={}, total={}",
         report.total_accounted(),
         report.total_relations
     );
-    assert_eq!(report.no_turn_via_node, 47);
-    assert_eq!(report.only_turn_via_node, 37);
-    assert_eq!(report.only_turn_edge_pairs, 29);
-    assert_eq!(report.via_way, 9);
-    assert_eq!(report.skipped_conditional, 14);
-    assert_eq!(report.skipped_no_via, 5);
-    assert_eq!(report.skipped_missing_elements, 82);
-    assert_eq!(report.skipped_disconnected, 1);
+    assert_eq!(report.no_turn_via_node, 0);
+    assert_eq!(report.only_turn_via_node, 0);
+    assert_eq!(report.only_turn_edge_pairs, 0);
+    assert_eq!(report.via_way, 0);
+    assert_eq!(report.skipped_conditional, 2);
+    assert_eq!(report.skipped_no_via, 0);
+    assert_eq!(report.skipped_missing_elements, 4);
+    assert_eq!(report.skipped_disconnected, 0);
     assert_eq!(report.skipped_only_via_way, 0);
     assert_eq!(report.skipped_unrecognized, 0);
 }
@@ -1538,7 +1545,8 @@ fn test_real_c1_first_exit_and_benchmark() {
 
     let config = TopologyConfig::default();
     let (graph, _snap) = build_topology(&resp, &config).unwrap();
-    assert_eq!(graph.edges.len(), 9726, "C1 graph must have 9,726 edges");
+    // New motorway-only fixture has 1,719 edges (was 9,726 with local roads).
+    assert_eq!(graph.edges.len(), 1719, "C1 graph must have 1,719 edges");
 
     // Anchor node for Kandabashi entry is n:499831338
     let anchor = "n:499831338";
@@ -1550,7 +1558,7 @@ fn test_real_c1_first_exit_and_benchmark() {
     let elapsed = start.elapsed();
 
     eprintln!(
-        "Real C1 (9726 edges) find_first_exits_from_anchor elapsed: {:?}, dist: {}m, exits: {:?}",
+        "Real C1 (1719 edges) find_first_exits_from_anchor elapsed: {:?}, dist: {}m, exits: {:?}",
         elapsed, min_dist, first_exits
     );
 

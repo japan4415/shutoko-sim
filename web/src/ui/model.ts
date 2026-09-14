@@ -103,7 +103,7 @@ export function statusMessage(
   }
   switch (result.reason) {
     case "NO_CONNECTION":
-      return `出発地点が対応範囲外です（200m 以内に接続できる一般道がありません）。${SUPPORTED_AREA_TEXT}`;
+      return `出発地点が対応範囲外です（最寄り入口まで 30km を超えています）。${SUPPORTED_AREA_TEXT}`;
     case "NO_BILLING_PAIR":
       return "この版には検証済み課金ペアがありません。";
     case "NO_LOOP":
@@ -119,9 +119,9 @@ export function statusMessage(
   }
 }
 
-/** 対応範囲の説明。原案の公開範囲（C1 と接続ランプ・周辺一般道）を利用者へ示す。 */
+/** 対応範囲の説明。グラフに含まれる首都高 C1 とその接続ランプを利用者へ示す。 */
 export const SUPPORTED_AREA_TEXT =
-  "対応範囲は首都高速 都心環状線（C1）とその接続ランプ周辺の一般道です。範囲外の地点では候補を作れません。";
+  "対応範囲は首都高速 都心環状線（C1）とその接続ランプです。範囲外の地点では候補を作れません。";
 
 /** Worker error / ステータス文言の一覧（docs/interfaces.md の error.code と対応）。 */
 export function errorMessage(code: string): string {
@@ -173,14 +173,15 @@ export function reasonText(code: string): string {
   }
 }
 
-/** 時間内訳の文言。一般道・首都高・帰り・余裕の内訳を 1 行で示す。 */
+/** 時間内訳の文言。入り・首都高・帰り・余裕の内訳を 1 行で示す。
+ * 入り・帰りは直線距離ベースの概算値（直線距離 × 1.3 ÷ 30km/h）。 */
 export function timeBreakdownText(model: {
   accessMinutes: number;
   shutokoMinutes: number;
   returnMinutes: number;
   bufferMinutes: number;
 }): string {
-  return `内訳: 一般道 入り ${String(model.accessMinutes)}分 / 首都高 ${String(model.shutokoMinutes)}分 / 帰り ${String(model.returnMinutes)}分 / 余裕 ${String(model.bufferMinutes)}分`;
+  return `内訳: 入り ${String(model.accessMinutes)}分（概算） / 首都高 ${String(model.shutokoMinutes)}分 / 帰り ${String(model.returnMinutes)}分（概算） / 余裕 ${String(model.bufferMinutes)}分`;
 }
 
 /** 距離表示（m → km、小数 1 桁）。 */

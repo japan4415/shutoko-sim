@@ -670,7 +670,7 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
 
   const durationNote = document.createElement("p");
   durationNote.className = "duration-note";
-  durationNote.textContent = "一般道での帰着までを含み、休憩は含みません";
+  durationNote.textContent = "アクセス・帰着を含み（概算）、休憩は含みません";
   card.appendChild(durationNote);
 
   const breakdown = document.createElement("p");
@@ -693,7 +693,7 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
 
   const distance = document.createElement("p");
   distance.className = "distance";
-  distance.textContent = `実走行距離: ${String(model.distanceKm)} km`;
+  distance.textContent = `入口まで（直線）: ${String(model.distanceKm)} km`;
   card.appendChild(distance);
 
   // 円当たり効率は金額が算出できたときだけ示す（docs/requirements.md:24）。

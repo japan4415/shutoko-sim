@@ -8790,186 +8790,6 @@
       "distanceMeters": 16
     },
     {
-      "id": "e:w1545541217:0:f",
-      "from": "n:260710826",
-      "to": "n:10130671103",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541217:1:f",
-      "from": "n:10130671103",
-      "to": "n:302311748",
-      "kind": "shutoko",
-      "durationSeconds": 3,
-      "distanceMeters": 49,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541217:2:f",
-      "from": "n:302311748",
-      "to": "n:7649865059",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 16,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541217:3:f",
-      "from": "n:7649865059",
-      "to": "n:260711676",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 15,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541217:4:f",
-      "from": "n:260711676",
-      "to": "n:7649936832",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 14,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541217:5:f",
-      "from": "n:7649936832",
-      "to": "n:260710829",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 14,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541219:0:f",
-      "from": "n:264871731",
-      "to": "n:7649865072",
-      "kind": "shutoko",
-      "durationSeconds": 4,
-      "distanceMeters": 60,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541219:1:f",
-      "from": "n:7649865072",
-      "to": "n:7649865079",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 15,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541219:2:f",
-      "from": "n:7649865079",
-      "to": "n:7649865071",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 15,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541219:3:f",
-      "from": "n:7649865071",
-      "to": "n:7649936835",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541219:4:f",
-      "from": "n:7649936835",
-      "to": "n:7649865080",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541219:5:f",
-      "from": "n:7649865080",
-      "to": "n:264871734",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 15,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541219:6:f",
-      "from": "n:264871734",
-      "to": "n:302311751",
-      "kind": "shutoko",
-      "durationSeconds": 3,
-      "distanceMeters": 45,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541219:7:f",
-      "from": "n:302311751",
-      "to": "n:264871735",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 13,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w1545541220:0:f",
-      "from": "n:271663574",
-      "to": "n:7649936837",
-      "kind": "shutoko",
-      "durationSeconds": 2,
-      "distanceMeters": 23,
-      "name": "神田橋入口"
-    },
-    {
-      "id": "e:w1545541220:1:f",
-      "from": "n:7649936837",
-      "to": "n:7649865075",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 9,
-      "name": "神田橋入口"
-    },
-    {
-      "id": "e:w1545541220:2:f",
-      "from": "n:7649865075",
-      "to": "n:7649865084",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 9,
-      "name": "神田橋入口"
-    },
-    {
-      "id": "e:w1545541220:3:f",
-      "from": "n:7649865084",
-      "to": "n:7649936836",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 9,
-      "name": "神田橋入口"
-    },
-    {
-      "id": "e:w1545541220:4:f",
-      "from": "n:7649936836",
-      "to": "n:7649865076",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 9,
-      "name": "神田橋入口"
-    },
-    {
-      "id": "e:w1545541220:5:f",
-      "from": "n:7649865076",
-      "to": "n:7649865078",
-      "kind": "shutoko",
-      "durationSeconds": 2,
-      "distanceMeters": 17,
-      "name": "神田橋入口"
-    },
-    {
       "id": "e:w172598647:0:f",
       "from": "n:1834887252",
       "to": "n:1834887237",
@@ -11039,7 +10859,7 @@
       "kind": "shutoko",
       "durationSeconds": 8,
       "distanceMeters": 129,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w23704461:1:f",
@@ -11048,7 +10868,7 @@
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 12,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w23704461:2:f",
@@ -11057,7 +10877,7 @@
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 9,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w23704461:3:f",
@@ -11066,7 +10886,7 @@
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 10,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w23704461:4:f",
@@ -11075,7 +10895,7 @@
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 8,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w23704461:5:f",
@@ -11084,7 +10904,7 @@
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 10,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w23704461:6:f",
@@ -11093,7 +10913,7 @@
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 9,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w23704469:0:f",
@@ -12096,402 +11916,15 @@
     },
     {
       "id": "e:w24039781:0:f",
-      "from": "n:260710829",
-      "to": "n:7649865061",
+      "from": "n:260710826",
+      "to": "n:10130671103",
       "kind": "shutoko",
-      "durationSeconds": 4,
-      "distanceMeters": 61,
+      "durationSeconds": 1,
+      "distanceMeters": 8,
       "name": "首都高速都心環状線"
     },
     {
       "id": "e:w24039781:10:f",
-      "from": "n:260711686",
-      "to": "n:7649936816",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 14,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:11:f",
-      "from": "n:7649936816",
-      "to": "n:7649936817",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 11,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:12:f",
-      "from": "n:7649936817",
-      "to": "n:256426158",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 11,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:13:f",
-      "from": "n:256426158",
-      "to": "n:6322600795",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 9,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:14:f",
-      "from": "n:6322600795",
-      "to": "n:1070862971",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 7,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:15:f",
-      "from": "n:1070862971",
-      "to": "n:7649936818",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 9,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:16:f",
-      "from": "n:7649936818",
-      "to": "n:7649936819",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 9,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:17:f",
-      "from": "n:7649936819",
-      "to": "n:302313030",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 9,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:18:f",
-      "from": "n:302313030",
-      "to": "n:7649936820",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 10,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:19:f",
-      "from": "n:7649936820",
-      "to": "n:7649936821",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 10,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:1:f",
-      "from": "n:7649865061",
-      "to": "n:7649936803",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:20:f",
-      "from": "n:7649936821",
-      "to": "n:256426159",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 10,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:21:f",
-      "from": "n:256426159",
-      "to": "n:567877350",
-      "kind": "shutoko",
-      "durationSeconds": 6,
-      "distanceMeters": 94,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:22:f",
-      "from": "n:567877350",
-      "to": "n:7649936826",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 19,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:23:f",
-      "from": "n:7649936826",
-      "to": "n:7649936827",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 16,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:24:f",
-      "from": "n:7649936827",
-      "to": "n:7649936828",
-      "kind": "shutoko",
-      "durationSeconds": 2,
-      "distanceMeters": 37,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:25:f",
-      "from": "n:7649936828",
-      "to": "n:7649936829",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 16,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:26:f",
-      "from": "n:7649936829",
-      "to": "n:499831338",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 17,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:27:f",
-      "from": "n:499831338",
-      "to": "n:9707544424",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 19,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:28:f",
-      "from": "n:9707544424",
-      "to": "n:256426161",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 13,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:29:f",
-      "from": "n:256426161",
-      "to": "n:9707544423",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 15,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:2:f",
-      "from": "n:7649936803",
-      "to": "n:7649865068",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:30:f",
-      "from": "n:9707544423",
-      "to": "n:256426162",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 13,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:31:f",
-      "from": "n:256426162",
-      "to": "n:2130007378",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 12,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:32:f",
-      "from": "n:2130007378",
-      "to": "n:2130007358",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 11,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:33:f",
-      "from": "n:2130007358",
-      "to": "n:9707544425",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 13,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:34:f",
-      "from": "n:9707544425",
-      "to": "n:256426163",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 14,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:35:f",
-      "from": "n:256426163",
-      "to": "n:567877352",
-      "kind": "shutoko",
-      "durationSeconds": 4,
-      "distanceMeters": 67,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:36:f",
-      "from": "n:567877352",
-      "to": "n:6035710829",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 20,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:37:f",
-      "from": "n:6035710829",
-      "to": "n:567877353",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 15,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:38:f",
-      "from": "n:567877353",
-      "to": "n:11662713547",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 16,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:39:f",
-      "from": "n:11662713547",
-      "to": "n:11662713548",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 23,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:3:f",
-      "from": "n:7649865068",
-      "to": "n:7649936802",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:40:f",
-      "from": "n:11662713548",
-      "to": "n:567877354",
-      "kind": "shutoko",
-      "durationSeconds": 2,
-      "distanceMeters": 31,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:41:f",
-      "from": "n:567877354",
-      "to": "n:1744024021",
-      "kind": "shutoko",
-      "durationSeconds": 7,
-      "distanceMeters": 124,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:42:f",
-      "from": "n:1744024021",
-      "to": "n:256426165",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 12,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:43:f",
-      "from": "n:256426165",
-      "to": "n:9340367495",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 20,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:44:f",
-      "from": "n:9340367495",
-      "to": "n:1744024020",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 17,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:45:f",
-      "from": "n:1744024020",
-      "to": "n:256426166",
-      "kind": "shutoko",
-      "durationSeconds": 2,
-      "distanceMeters": 36,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:46:f",
-      "from": "n:256426166",
-      "to": "n:1744024017",
-      "kind": "shutoko",
-      "durationSeconds": 3,
-      "distanceMeters": 55,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:47:f",
-      "from": "n:1744024017",
-      "to": "n:256426167",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 19,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:48:f",
-      "from": "n:256426167",
-      "to": "n:1744024016",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 10,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:49:f",
-      "from": "n:1744024016",
-      "to": "n:9709368628",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:4:f",
       "from": "n:7649936802",
       "to": "n:7649865063",
       "kind": "shutoko",
@@ -12500,97 +11933,7 @@
       "name": "首都高速都心環状線"
     },
     {
-      "id": "e:w24039781:50:f",
-      "from": "n:9709368628",
-      "to": "n:9709283854",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:51:f",
-      "from": "n:9709283854",
-      "to": "n:10132686095",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 7,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:52:f",
-      "from": "n:10132686095",
-      "to": "n:1744024014",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 7,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:53:f",
-      "from": "n:1744024014",
-      "to": "n:256426168",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 7,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:54:f",
-      "from": "n:256426168",
-      "to": "n:9709283855",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 7,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:55:f",
-      "from": "n:9709283855",
-      "to": "n:10132686094",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 6,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:56:f",
-      "from": "n:10132686094",
-      "to": "n:1744024011",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 6,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:57:f",
-      "from": "n:1744024011",
-      "to": "n:1744024009",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 7,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:58:f",
-      "from": "n:1744024009",
-      "to": "n:256426169",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:59:f",
-      "from": "n:256426169",
-      "to": "n:1744024003",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 9,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:5:f",
+      "id": "e:w24039781:11:f",
       "from": "n:7649865063",
       "to": "n:7649936801",
       "kind": "shutoko",
@@ -12599,61 +11942,7 @@
       "name": "首都高速都心環状線"
     },
     {
-      "id": "e:w24039781:60:f",
-      "from": "n:1744024003",
-      "to": "n:567877714",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:61:f",
-      "from": "n:567877714",
-      "to": "n:9409102366",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 9,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:62:f",
-      "from": "n:9409102366",
-      "to": "n:9340379988",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 13,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:63:f",
-      "from": "n:9340379988",
-      "to": "n:567877715",
-      "kind": "shutoko",
-      "durationSeconds": 9,
-      "distanceMeters": 143,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:64:f",
-      "from": "n:567877715",
-      "to": "n:256426170",
-      "kind": "shutoko",
-      "durationSeconds": 5,
-      "distanceMeters": 82,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:65:f",
-      "from": "n:256426170",
-      "to": "n:271660700",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 22,
-      "name": "首都高速都心環状線"
-    },
-    {
-      "id": "e:w24039781:6:f",
+      "id": "e:w24039781:12:f",
       "from": "n:7649936801",
       "to": "n:7649865069",
       "kind": "shutoko",
@@ -12662,7 +11951,7 @@
       "name": "首都高速都心環状線"
     },
     {
-      "id": "e:w24039781:7:f",
+      "id": "e:w24039781:13:f",
       "from": "n:7649865069",
       "to": "n:7649936800",
       "kind": "shutoko",
@@ -12671,7 +11960,7 @@
       "name": "首都高速都心環状線"
     },
     {
-      "id": "e:w24039781:8:f",
+      "id": "e:w24039781:14:f",
       "from": "n:7649936800",
       "to": "n:7649865062",
       "kind": "shutoko",
@@ -12680,12 +11969,597 @@
       "name": "首都高速都心環状線"
     },
     {
-      "id": "e:w24039781:9:f",
+      "id": "e:w24039781:15:f",
       "from": "n:7649865062",
       "to": "n:260711686",
       "kind": "shutoko",
       "durationSeconds": 2,
       "distanceMeters": 33,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:16:f",
+      "from": "n:260711686",
+      "to": "n:7649936816",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 14,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:17:f",
+      "from": "n:7649936816",
+      "to": "n:7649936817",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 11,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:18:f",
+      "from": "n:7649936817",
+      "to": "n:256426158",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 11,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:19:f",
+      "from": "n:256426158",
+      "to": "n:6322600795",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 9,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:1:f",
+      "from": "n:10130671103",
+      "to": "n:302311748",
+      "kind": "shutoko",
+      "durationSeconds": 3,
+      "distanceMeters": 49,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:20:f",
+      "from": "n:6322600795",
+      "to": "n:1070862971",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 7,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:21:f",
+      "from": "n:1070862971",
+      "to": "n:7649936818",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 9,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:22:f",
+      "from": "n:7649936818",
+      "to": "n:7649936819",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 9,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:23:f",
+      "from": "n:7649936819",
+      "to": "n:302313030",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 9,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:24:f",
+      "from": "n:302313030",
+      "to": "n:7649936820",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 10,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:25:f",
+      "from": "n:7649936820",
+      "to": "n:7649936821",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 10,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:26:f",
+      "from": "n:7649936821",
+      "to": "n:256426159",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 10,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:27:f",
+      "from": "n:256426159",
+      "to": "n:567877350",
+      "kind": "shutoko",
+      "durationSeconds": 6,
+      "distanceMeters": 94,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:28:f",
+      "from": "n:567877350",
+      "to": "n:7649936826",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 19,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:29:f",
+      "from": "n:7649936826",
+      "to": "n:7649936827",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 16,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:2:f",
+      "from": "n:302311748",
+      "to": "n:7649865059",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 16,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:30:f",
+      "from": "n:7649936827",
+      "to": "n:7649936828",
+      "kind": "shutoko",
+      "durationSeconds": 2,
+      "distanceMeters": 37,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:31:f",
+      "from": "n:7649936828",
+      "to": "n:7649936829",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 16,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:32:f",
+      "from": "n:7649936829",
+      "to": "n:499831338",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 17,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:33:f",
+      "from": "n:499831338",
+      "to": "n:9707544424",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 19,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:34:f",
+      "from": "n:9707544424",
+      "to": "n:256426161",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 13,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:35:f",
+      "from": "n:256426161",
+      "to": "n:9707544423",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 15,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:36:f",
+      "from": "n:9707544423",
+      "to": "n:256426162",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 13,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:37:f",
+      "from": "n:256426162",
+      "to": "n:2130007378",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 12,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:38:f",
+      "from": "n:2130007378",
+      "to": "n:2130007358",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 11,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:39:f",
+      "from": "n:2130007358",
+      "to": "n:9707544425",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 13,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:3:f",
+      "from": "n:7649865059",
+      "to": "n:260711676",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 15,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:40:f",
+      "from": "n:9707544425",
+      "to": "n:256426163",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 14,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:41:f",
+      "from": "n:256426163",
+      "to": "n:567877352",
+      "kind": "shutoko",
+      "durationSeconds": 4,
+      "distanceMeters": 67,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:42:f",
+      "from": "n:567877352",
+      "to": "n:6035710829",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 20,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:43:f",
+      "from": "n:6035710829",
+      "to": "n:567877353",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 15,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:44:f",
+      "from": "n:567877353",
+      "to": "n:11662713547",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 16,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:45:f",
+      "from": "n:11662713547",
+      "to": "n:11662713548",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 23,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:46:f",
+      "from": "n:11662713548",
+      "to": "n:567877354",
+      "kind": "shutoko",
+      "durationSeconds": 2,
+      "distanceMeters": 31,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:47:f",
+      "from": "n:567877354",
+      "to": "n:1744024021",
+      "kind": "shutoko",
+      "durationSeconds": 7,
+      "distanceMeters": 124,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:48:f",
+      "from": "n:1744024021",
+      "to": "n:256426165",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 12,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:49:f",
+      "from": "n:256426165",
+      "to": "n:9340367495",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 20,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:4:f",
+      "from": "n:260711676",
+      "to": "n:7649936832",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 14,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:50:f",
+      "from": "n:9340367495",
+      "to": "n:1744024020",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 17,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:51:f",
+      "from": "n:1744024020",
+      "to": "n:256426166",
+      "kind": "shutoko",
+      "durationSeconds": 2,
+      "distanceMeters": 36,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:52:f",
+      "from": "n:256426166",
+      "to": "n:1744024017",
+      "kind": "shutoko",
+      "durationSeconds": 3,
+      "distanceMeters": 55,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:53:f",
+      "from": "n:1744024017",
+      "to": "n:256426167",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 19,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:54:f",
+      "from": "n:256426167",
+      "to": "n:1744024016",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 10,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:55:f",
+      "from": "n:1744024016",
+      "to": "n:9709368628",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:56:f",
+      "from": "n:9709368628",
+      "to": "n:9709283854",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:57:f",
+      "from": "n:9709283854",
+      "to": "n:10132686095",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 7,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:58:f",
+      "from": "n:10132686095",
+      "to": "n:1744024014",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 7,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:59:f",
+      "from": "n:1744024014",
+      "to": "n:256426168",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 7,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:5:f",
+      "from": "n:7649936832",
+      "to": "n:260710829",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 14,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:60:f",
+      "from": "n:256426168",
+      "to": "n:9709283855",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 7,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:61:f",
+      "from": "n:9709283855",
+      "to": "n:10132686094",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 6,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:62:f",
+      "from": "n:10132686094",
+      "to": "n:1744024011",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 6,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:63:f",
+      "from": "n:1744024011",
+      "to": "n:1744024009",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 7,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:64:f",
+      "from": "n:1744024009",
+      "to": "n:256426169",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:65:f",
+      "from": "n:256426169",
+      "to": "n:1744024003",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 9,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:66:f",
+      "from": "n:1744024003",
+      "to": "n:567877714",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:67:f",
+      "from": "n:567877714",
+      "to": "n:9409102366",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 9,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:68:f",
+      "from": "n:9409102366",
+      "to": "n:9340379988",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 13,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:69:f",
+      "from": "n:9340379988",
+      "to": "n:567877715",
+      "kind": "shutoko",
+      "durationSeconds": 9,
+      "distanceMeters": 143,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:6:f",
+      "from": "n:260710829",
+      "to": "n:7649865061",
+      "kind": "shutoko",
+      "durationSeconds": 4,
+      "distanceMeters": 61,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:70:f",
+      "from": "n:567877715",
+      "to": "n:256426170",
+      "kind": "shutoko",
+      "durationSeconds": 5,
+      "distanceMeters": 82,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:71:f",
+      "from": "n:256426170",
+      "to": "n:271660700",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 22,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:7:f",
+      "from": "n:7649865061",
+      "to": "n:7649936803",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:8:f",
+      "from": "n:7649936803",
+      "to": "n:7649865068",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w24039781:9:f",
+      "from": "n:7649865068",
+      "to": "n:7649936802",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
       "name": "首都高速都心環状線"
     },
     {
@@ -13026,7 +12900,7 @@
       "from": "n:260710778",
       "to": "n:9326102270",
       "kind": "shutoko",
-      "durationSeconds": 4,
+      "durationSeconds": 2,
       "distanceMeters": 39,
       "name": "首都高速3号渋谷線"
     },
@@ -13170,7 +13044,7 @@
       "from": "n:7884454098",
       "to": "n:264006972",
       "kind": "shutoko",
-      "durationSeconds": 6,
+      "durationSeconds": 4,
       "distanceMeters": 63,
       "name": "首都高速3号渋谷線"
     },
@@ -13451,7 +13325,7 @@
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 10,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w24372965:1:f",
@@ -13460,7 +13334,7 @@
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 9,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w24372965:2:f",
@@ -13469,7 +13343,7 @@
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 9,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w24372965:3:f",
@@ -13478,7 +13352,7 @@
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 9,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w24372965:4:f",
@@ -13487,7 +13361,7 @@
       "kind": "shutoko",
       "durationSeconds": 3,
       "distanceMeters": 54,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w24372965:5:f",
@@ -13496,7 +13370,7 @@
       "kind": "shutoko",
       "durationSeconds": 4,
       "distanceMeters": 71,
-      "name": "首都高速都心環状線"
+      "name": "北の丸トンネル"
     },
     {
       "id": "e:w24402014:0:f",
@@ -18714,12 +18588,84 @@
       "name": "首都高速都心環状線"
     },
     {
+      "id": "e:w44805845:64:f",
+      "from": "n:264871731",
+      "to": "n:7649865072",
+      "kind": "shutoko",
+      "durationSeconds": 4,
+      "distanceMeters": 60,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w44805845:65:f",
+      "from": "n:7649865072",
+      "to": "n:7649865079",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 15,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w44805845:66:f",
+      "from": "n:7649865079",
+      "to": "n:7649865071",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 15,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w44805845:67:f",
+      "from": "n:7649865071",
+      "to": "n:7649936835",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w44805845:68:f",
+      "from": "n:7649936835",
+      "to": "n:7649865080",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w44805845:69:f",
+      "from": "n:7649865080",
+      "to": "n:264871734",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 15,
+      "name": "首都高速都心環状線"
+    },
+    {
       "id": "e:w44805845:6:f",
       "from": "n:1744023995",
       "to": "n:6233123672",
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 10,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w44805845:70:f",
+      "from": "n:264871734",
+      "to": "n:302311751",
+      "kind": "shutoko",
+      "durationSeconds": 3,
+      "distanceMeters": 45,
+      "name": "首都高速都心環状線"
+    },
+    {
+      "id": "e:w44805845:71:f",
+      "from": "n:302311751",
+      "to": "n:264871735",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 13,
       "name": "首都高速都心環状線"
     },
     {
@@ -20006,42 +19952,15 @@
     },
     {
       "id": "e:w46240403:0:f",
-      "from": "n:7649865078",
-      "to": "n:7649865077",
+      "from": "n:271663574",
+      "to": "n:7649936837",
       "kind": "shutoko",
-      "durationSeconds": 4,
-      "distanceMeters": 42,
+      "durationSeconds": 2,
+      "distanceMeters": 23,
       "name": "神田橋入口"
     },
     {
-      "id": "e:w46240403:1:f",
-      "from": "n:7649865077",
-      "to": "n:7649936833",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "神田橋入口"
-    },
-    {
-      "id": "e:w46240403:2:f",
-      "from": "n:7649936833",
-      "to": "n:7649865081",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 8,
-      "name": "神田橋入口"
-    },
-    {
-      "id": "e:w46240403:3:f",
-      "from": "n:7649865081",
-      "to": "n:7649936834",
-      "kind": "shutoko",
-      "durationSeconds": 1,
-      "distanceMeters": 7,
-      "name": "神田橋入口"
-    },
-    {
-      "id": "e:w46240403:4:f",
+      "id": "e:w46240403:10:f",
       "from": "n:7649936834",
       "to": "n:7649865070",
       "kind": "shutoko",
@@ -20050,7 +19969,7 @@
       "name": "神田橋入口"
     },
     {
-      "id": "e:w46240403:5:f",
+      "id": "e:w46240403:11:f",
       "from": "n:7649865070",
       "to": "n:7649865082",
       "kind": "shutoko",
@@ -20059,12 +19978,93 @@
       "name": "神田橋入口"
     },
     {
-      "id": "e:w46240403:6:f",
+      "id": "e:w46240403:12:f",
       "from": "n:7649865082",
       "to": "n:264871734",
       "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 16,
+      "name": "神田橋入口"
+    },
+    {
+      "id": "e:w46240403:1:f",
+      "from": "n:7649936837",
+      "to": "n:7649865075",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 9,
+      "name": "神田橋入口"
+    },
+    {
+      "id": "e:w46240403:2:f",
+      "from": "n:7649865075",
+      "to": "n:7649865084",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 9,
+      "name": "神田橋入口"
+    },
+    {
+      "id": "e:w46240403:3:f",
+      "from": "n:7649865084",
+      "to": "n:7649936836",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 9,
+      "name": "神田橋入口"
+    },
+    {
+      "id": "e:w46240403:4:f",
+      "from": "n:7649936836",
+      "to": "n:7649865076",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 9,
+      "name": "神田橋入口"
+    },
+    {
+      "id": "e:w46240403:5:f",
+      "from": "n:7649865076",
+      "to": "n:7649865078",
+      "kind": "shutoko",
+      "durationSeconds": 2,
+      "distanceMeters": 17,
+      "name": "神田橋入口"
+    },
+    {
+      "id": "e:w46240403:6:f",
+      "from": "n:7649865078",
+      "to": "n:7649865077",
+      "kind": "shutoko",
+      "durationSeconds": 4,
+      "distanceMeters": 42,
+      "name": "神田橋入口"
+    },
+    {
+      "id": "e:w46240403:7:f",
+      "from": "n:7649865077",
+      "to": "n:7649936833",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
+      "name": "神田橋入口"
+    },
+    {
+      "id": "e:w46240403:8:f",
+      "from": "n:7649936833",
+      "to": "n:7649865081",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 8,
+      "name": "神田橋入口"
+    },
+    {
+      "id": "e:w46240403:9:f",
+      "from": "n:7649865081",
+      "to": "n:7649936834",
+      "kind": "shutoko",
+      "durationSeconds": 1,
+      "distanceMeters": 7,
       "name": "神田橋入口"
     },
     {
@@ -20251,7 +20251,7 @@
       "id": "e:w4848898:0:f",
       "from": "n:57529600",
       "to": "n:10129712728",
-      "kind": "shutoko",
+      "kind": "entry",
       "durationSeconds": 3,
       "distanceMeters": 30,
       "name": "首都高速都心環状線"
@@ -21777,7 +21777,7 @@
       "from": "n:574460620",
       "to": "n:31297025",
       "kind": "shutoko",
-      "durationSeconds": 9,
+      "durationSeconds": 6,
       "distanceMeters": 100,
       "name": "首都高速2号目黒線"
     },
@@ -21822,7 +21822,7 @@
       "from": "n:8327619208",
       "to": "n:31296994",
       "kind": "shutoko",
-      "durationSeconds": 2,
+      "durationSeconds": 1,
       "distanceMeters": 17,
       "name": "首都高速2号目黒線"
     },
@@ -21840,7 +21840,7 @@
       "from": "n:8327660313",
       "to": "n:574460576",
       "kind": "shutoko",
-      "durationSeconds": 6,
+      "durationSeconds": 4,
       "distanceMeters": 72,
       "name": "首都高速2号目黒線"
     },
@@ -21930,7 +21930,7 @@
       "from": "n:31297000",
       "to": "n:8327660314",
       "kind": "shutoko",
-      "durationSeconds": 6,
+      "durationSeconds": 4,
       "distanceMeters": 71,
       "name": "首都高速2号目黒線"
     },
@@ -22002,7 +22002,7 @@
       "from": "n:574460591",
       "to": "n:252175569",
       "kind": "shutoko",
-      "durationSeconds": 6,
+      "durationSeconds": 4,
       "distanceMeters": 67,
       "name": "首都高速2号目黒線"
     },
@@ -22020,7 +22020,7 @@
       "from": "n:8327619209",
       "to": "n:31297040",
       "kind": "shutoko",
-      "durationSeconds": 2,
+      "durationSeconds": 1,
       "distanceMeters": 17,
       "name": "首都高速2号目黒線"
     },
@@ -23333,7 +23333,7 @@
       "id": "e:w861095931:1:f",
       "from": "n:8327736737",
       "to": "n:8327736735",
-      "kind": "entry",
+      "kind": "shutoko",
       "durationSeconds": 1,
       "distanceMeters": 6
     },
@@ -24658,12 +24658,6 @@
         "e:w203035380:7:f"
       ],
       "anchorToExitEdgeIds": [
-        "e:w24039781:27:f",
-        "e:w24039781:28:f",
-        "e:w24039781:29:f",
-        "e:w24039781:30:f",
-        "e:w24039781:31:f",
-        "e:w24039781:32:f",
         "e:w24039781:33:f",
         "e:w24039781:34:f",
         "e:w24039781:35:f",
@@ -24697,6 +24691,12 @@
         "e:w24039781:63:f",
         "e:w24039781:64:f",
         "e:w24039781:65:f",
+        "e:w24039781:66:f",
+        "e:w24039781:67:f",
+        "e:w24039781:68:f",
+        "e:w24039781:69:f",
+        "e:w24039781:70:f",
+        "e:w24039781:71:f",
         "e:w316185365:0:f",
         "e:w316185365:1:f",
         "e:w316185365:2:f",

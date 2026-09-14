@@ -134,7 +134,9 @@ struct IntermediateEdge {
 }
 
 /// Determines whether a way's tags identify it as Shutoko mainline.
-/// Inspects `operator`, `network`, and `ref` tags.
+/// Inspects `operator`, `network`, `ref`, and `name` / `name:ja` tags.
+/// The `name` check is required because some OSM way segments for the Shutoko C1
+/// mainline carry only a name tag (e.g. "首都高速都心環状線") without `ref` or `operator`.
 pub fn is_shutoko_motorway(element: &OsmElement) -> bool {
     if element.get_tag("highway") != Some("motorway") {
         return false;
@@ -178,7 +180,63 @@ pub fn is_shutoko_motorway(element: &OsmElement) -> bool {
         }
     }
 
+    // Fall back to name / name:ja: some way segments carry only the Japanese name without
+    // operator/network/ref tags. "首都高速" and "首都高" unambiguously identify the Shutoko
+    // network in combination with highway=motorway.
+    let name = element
+        .get_tag("name")
+        .or_else(|| element.get_tag("name:ja"))
+        .unwrap_or("");
+    if name.contains("首都高速") || name.contains("首都高") {
+        return true;
+    }
+
     false
+}
+
+/// Checks whether a `motorway_link` way is named after a numbered Shutoko route
+/// (e.g. "首都高速2号目黒線", "首都高速3号渋谷線").  Such links are JCT connectors
+/// that join C1 to another toll-road route rather than exit ramps to surface streets.
+///
+/// The criterion: name (or name:ja) contains "首都高速" (or "首都高") AND contains an
+/// ASCII digit immediately followed by the kanji '号' — the counter used in Japanese
+/// numbered-route names.  This deliberately excludes "首都高速都心環状線" (the C1 ring
+/// road, which uses "環状" not a digit+号) and plain "首都高速道路" (generic name).
+fn is_shutoko_numbered_route_link(element: &OsmElement) -> bool {
+    let name = element
+        .get_tag("name")
+        .or_else(|| element.get_tag("name:ja"))
+        .unwrap_or("");
+    if !name.contains("首都高速") && !name.contains("首都高") {
+        return false;
+    }
+    // Scan for the pattern <ASCII digit> + '号'.
+    let chars: Vec<char> = name.chars().collect();
+    for i in 0..chars.len().saturating_sub(1) {
+        if chars[i].is_ascii_digit() && chars[i + 1] == '号' {
+            return true;
+        }
+    }
+    false
+}
+
+/// Maximum distance in meters between a potential Exit dead-end node and the nearest
+/// Entry-candidate from-node that is still considered a "real surface interchange".
+///
+/// At a genuine entry/exit interchange the paired entry ramp start and exit ramp end
+/// are always within ~500 m of each other (analysis of the C1 fixture: closest real
+/// pair is 17 m, furthest is 466 m for 飯倉出口).  JCT connectors whose reverse
+/// direction lies entirely outside the OSM extract have no entry candidate within
+/// this radius (observed minimum: 665 m for way 44805850).  550 m gives an 84 m
+/// safety margin below the 飯倉 pair and a 115 m margin above the JCT boundary.
+const JCT_DETECTION_MAX_ENTRY_DIST_METERS: u64 = 550;
+
+/// Checks if highway tag indicates a surface street / local road.
+pub fn is_local_highway(highway_val: &str) -> bool {
+    matches!(
+        highway_val,
+        "trunk" | "primary" | "secondary" | "tertiary" | "unclassified" | "residential"
+    )
 }
 
 /// Parse oneway direction from OSM tags.
@@ -235,10 +293,16 @@ pub fn build_topology_with_report(
 
         let (is_motorway_link, tentative_kind) = if is_shutoko_motorway(elem) {
             (false, Some(EdgeKind::Shutoko))
+        } else if highway == "motorway_link" && is_shutoko_numbered_route_link(elem) {
+            // motorway_link named after a numbered Shutoko route (e.g. "首都高速2号目黒線")
+            // is a JCT connector, not a surface exit/entry ramp; treat as mainline Shutoko.
+            (false, Some(EdgeKind::Shutoko))
         } else if highway == "motorway_link" {
             (true, None)
+        } else if is_local_highway(highway) {
+            (false, Some(EdgeKind::Local))
         } else {
-            // Not a Shutoko motorway or motorway_link; skip (Local roads excluded by design).
+            // Not a recognized roadway type
             continue;
         };
 
@@ -300,28 +364,29 @@ pub fn build_topology_with_report(
         }
     }
 
-    // 3. Classify motorway_link edges into Entry, Exit, or Shutoko based on connectivity.
-    // Build the set of OSM nodes that appear in any non-motorway, non-motorway_link way.
-    // These are the "street-level" nodes that form valid access points to/from the expressway.
-    // JCT connector nodes (connecting two expressways) appear only in motorway/motorway_link
-    // ways and are excluded by this filter.
-    let mut street_nodes: HashSet<String> = HashSet::new();
-    for elem in &response.elements {
-        if !elem.is_way() {
-            continue;
-        }
-        match elem.get_tag("highway") {
-            Some("motorway") | Some("motorway_link") | None => continue,
-            _ => {}
-        }
-        if let Some(ref ns) = elem.nodes {
-            for &node_id in ns {
-                street_nodes.insert(format!("n:{}", node_id));
-            }
-        }
-    }
+    // 3. Classify motorway_link edges based on graph topology alone (no local roads required).
+    //
+    // Design rationale: the new OSM fetch drops general-surface roads, so `local_nodes` no longer
+    // exists. Instead we identify the street-side terminus of each ramp by topology:
+    //
+    //   Entry edge: a motorway_link edge whose `from` node has **zero** incoming edges from any
+    //               other ramp (motorway_link) or mainline (motorway/Shutoko) edge, AND whose
+    //               forward link-chain eventually reaches the Shutoko mainline.
+    //               The zero-incoming-from condition identifies the "surface side" dead-end of an
+    //               entry ramp—exactly the node a driver departs from when they enter the
+    //               expressway.
+    //
+    //   Exit edge:  a motorway_link edge whose `to` node has **zero** outgoing edges from any
+    //               ramp or mainline edge, AND whose backward link-chain reaches the Shutoko
+    //               mainline.  This is the surface-side dead-end of an exit ramp.
+    //
+    //   Shutoko:    all other motorway_link edges that are connected to the Shutoko network
+    //               (intermediate ramp segments, JCT connectors, etc.)
+    //
+    //   Dropped:    motorway_link edges that cannot reach the Shutoko mainline in either
+    //               direction (isolated fragments not part of the analysed network).
 
-    // Identify nodes that touch Shutoko mainline edges.
+    // 3a. Collect nodes that touch Shutoko mainline edges.
     let mut shutoko_nodes: HashSet<String> = HashSet::new();
 
     for edge in &intermediate_edges {
@@ -331,7 +396,21 @@ pub fn build_topology_with_report(
         }
     }
 
-    // Graph of link edges for reachability analysis
+    // 3b. Count incoming / outgoing edges for each node, considering only ramp and mainline
+    //     edges (motorway_link and motorway).  Local-road edges are intentionally excluded so
+    //     that a ramp terminus node shared with a surface street is still recognised as a
+    //     dead-end from the ramp/motorway graph's perspective.
+    let mut ramp_motor_incoming: HashMap<String, usize> = HashMap::new();
+    let mut ramp_motor_outgoing: HashMap<String, usize> = HashMap::new();
+
+    for edge in &intermediate_edges {
+        if edge.tentative_kind == Some(EdgeKind::Shutoko) || edge.is_motorway_link {
+            *ramp_motor_outgoing.entry(edge.from.clone()).or_insert(0) += 1;
+            *ramp_motor_incoming.entry(edge.to.clone()).or_insert(0) += 1;
+        }
+    }
+
+    // 3c. Build link adjacency maps for forward/backward reachability through motorway_link edges.
     let mut link_outgoing: HashMap<String, Vec<String>> = HashMap::new();
     let mut link_incoming: HashMap<String, Vec<String>> = HashMap::new();
 
@@ -346,7 +425,7 @@ pub fn build_topology_with_report(
             .push(edge.from.clone());
     }
 
-    // Reachability helpers across link edges
+    // 3d. Reachability helpers: traverse motorway_link edges only.
     let reaches_target_forward = |start: &str, target_nodes: &HashSet<String>| -> bool {
         if target_nodes.contains(start) {
             return true;
@@ -391,42 +470,97 @@ pub fn build_topology_with_report(
         false
     };
 
-    // Build final edges
+    // 3d.5. Pre-compute geographic coordinates of Entry-candidate from-nodes.
+    //
+    // A genuine exit ramp always has a corresponding entry ramp at the same surface
+    // interchange, so the exit dead-end node should be geographically close to the
+    // Entry-candidate from-node of that entry ramp.  JCT connectors whose reverse
+    // direction is outside the OSM extract have no Entry candidate within a reasonable
+    // distance.  This set is used in step 3e to guard Exit classification.
+    let entry_candidate_coords: Vec<(f64, f64)> = {
+        let mut coords: Vec<(f64, f64)> = intermediate_edges
+            .iter()
+            .filter(|e| {
+                e.is_motorway_link
+                    && *ramp_motor_incoming.get(&e.from).unwrap_or(&0) == 0
+                    && reaches_target_forward(&e.to, &shutoko_nodes)
+            })
+            .filter_map(|e| {
+                e.from
+                    .strip_prefix("n:")
+                    .and_then(|s| s.parse::<i64>().ok())
+                    .and_then(|id| node_coords.get(&id))
+                    .copied()
+            })
+            .collect();
+        // Deduplicate by bit representation to avoid redundant proximity checks.
+        coords.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        coords.dedup();
+        coords
+    };
+
+    // 3e. Build final edges with topology-based classification.
     let mut final_edges: Vec<Edge> = Vec::new();
     let mut final_edge_ids: HashSet<String> = HashSet::new();
+    let mut dropped_link_edges = 0;
 
     for edge in intermediate_edges {
         let kind = if let Some(k) = edge.tentative_kind {
+            // Shutoko mainline edges and Local edges pass through unchanged.
             k
         } else if edge.is_motorway_link {
+            let incoming_at_from = *ramp_motor_incoming.get(&edge.from).unwrap_or(&0);
+            let outgoing_from_to = *ramp_motor_outgoing.get(&edge.to).unwrap_or(&0);
+
             let forward_to_shutoko = reaches_target_forward(&edge.to, &shutoko_nodes);
             let backward_from_shutoko = reaches_target_backward(&edge.from, &shutoko_nodes);
 
-            // Entry: directed toward Shutoko mainline AND from-node is a street-level access
-            // point (appears in at least one non-motorway/non-motorway_link way in OSM)
-            // AND from-node is NOT reachable from Shutoko backward (excludes JCT connectors).
-            // Street-node check distinguishes real on-ramps (touching local roads) from
-            // expressway-to-expressway connectors whose endpoints only exist in motorway ways.
-            let is_street_from = street_nodes.contains(edge.from.as_str());
-            // Exit: reachable from Shutoko mainline backward AND to-node is a street-level
-            // destination AND to-node has no further outgoing ramp edges (it is the foot of the
-            // off-ramp, not a mid-ramp junction) AND to-node does NOT lead back to Shutoko.
-            let is_street_to = street_nodes.contains(edge.to.as_str());
-            let no_outgoing_ramp = link_outgoing.get(&edge.to).is_none_or(|v| v.is_empty());
-
-            if forward_to_shutoko && is_street_from && !backward_from_shutoko {
+            if incoming_at_from == 0 && forward_to_shutoko {
+                // Street-side terminus of an entry ramp: no ramp/mainline edges flow into
+                // this node and the forward chain reaches the Shutoko mainline.
                 EdgeKind::Entry
-            } else if backward_from_shutoko
-                && is_street_to
-                && no_outgoing_ramp
-                && !forward_to_shutoko
-            {
-                EdgeKind::Exit
-            } else {
-                // Internal ramp segment (JCT connector or mid-ramp): treat as Shutoko mainline.
+            } else if outgoing_from_to == 0 && backward_from_shutoko {
+                // Candidate street-side terminus of an exit ramp: no ramp/mainline edges
+                // leave this to-node and the backward chain reaches the Shutoko mainline.
+                //
+                // Guard: JCT connectors at the OSM extract boundary satisfy the same
+                // conditions.  A genuine surface exit always has a corresponding entry
+                // ramp at the same interchange, so its dead-end to-node should be within
+                // JCT_DETECTION_MAX_ENTRY_DIST_METERS of at least one Entry-candidate
+                // from-node.  If no such node is found, classify as Shutoko instead.
+                let is_real_exit = match edge
+                    .to
+                    .strip_prefix("n:")
+                    .and_then(|s| s.parse::<i64>().ok())
+                    .and_then(|id| node_coords.get(&id))
+                    .copied()
+                {
+                    None => true, // No coordinates — conservatively keep as Exit.
+                    Some((to_lat, to_lon)) => {
+                        entry_candidate_coords.iter().any(|&(ec_lat, ec_lon)| {
+                            haversine_distance_meters(to_lat, to_lon, ec_lat, ec_lon)
+                                <= JCT_DETECTION_MAX_ENTRY_DIST_METERS
+                        })
+                    }
+                };
+                if is_real_exit {
+                    EdgeKind::Exit
+                } else {
+                    EdgeKind::Shutoko
+                }
+            } else if forward_to_shutoko || backward_from_shutoko {
+                // Intermediate ramp segment or JCT connector connected to Shutoko but not
+                // at a street-side dead-end; treat as part of the expressway network.
                 EdgeKind::Shutoko
+            } else {
+                // Motorway_link edge that cannot reach the Shutoko mainline in either
+                // direction — isolated fragment, drop it.
+                dropped_link_edges += 1;
+                continue;
             }
         } else {
+            // Unreachable: non-motorway, non-link, non-recognised ways are filtered at
+            // the way-parsing stage above.
             continue;
         };
 
@@ -499,7 +633,10 @@ pub fn build_topology_with_report(
 
     // 5. Parse turn restrictions from relations
     let mut forbidden_transitions_set: BTreeSet<Vec<String>> = BTreeSet::new();
-    let mut report = RestrictionReport::default();
+    let mut report = RestrictionReport {
+        dropped_link_edges,
+        ..Default::default()
+    };
 
     for elem in &response.elements {
         if !elem.is_relation() {
@@ -817,6 +954,12 @@ pub fn build_topology_with_report(
         }
     }
 
+    if report.dropped_link_edges > 0 {
+        eprintln!(
+            "Info: dropped {} internal motorway_link edges (not connecting local streets and Shutoko)",
+            report.dropped_link_edges
+        );
+    }
     eprintln!(
         "Turn restrictions: {} total relations -> {} no_turn (via=node), {} only_turn (via=node, {} forbidden pairs), {} via_way | skipped: {} conditional, {} no via, {} outside graph, {} disconnected{}{}",
         report.total_relations,
@@ -857,29 +1000,38 @@ pub fn build_topology_with_report(
         forbidden_transitions,
     };
 
-    // 6. Build SnapIndex for Entry edge from-nodes (street-side access points).
-    // These are the geographic positions users snap to when looking for an on-ramp.
-    let entry_from_node_ids: BTreeSet<&str> = graph
+    // 6. Build SnapIndex for Entry ramp origin nodes (schema_version 2).
+    //
+    // Each Entry edge's `from` node is the street-accessible terminus of an entry ramp —
+    // the point a driver stands at when they are about to enter the expressway.  These are
+    // the nodes used for geographic snapping of a user's origin to the nearest entry point.
+    //
+    // A node appears at most once: the Entry condition (zero ramp/mainline incoming) ensures
+    // no two distinct Entry edges share the same `from` node, so the snap count equals the
+    // Entry edge count.
+    let mut snap_nodes: Vec<SnapNode> = Vec::new();
+    let entry_from_ids: HashSet<&str> = graph
         .edges
         .iter()
         .filter(|e| e.kind == EdgeKind::Entry)
         .map(|e| e.from.as_str())
         .collect();
 
-    let mut snap_nodes: Vec<SnapNode> = graph
-        .nodes
-        .iter()
-        .filter(|n| entry_from_node_ids.contains(n.id.as_str()))
-        .filter_map(|node| {
-            let osm_id: i64 = node.id.strip_prefix("n:")?.parse().ok()?;
-            let &(lat, lon) = node_coords.get(&osm_id)?;
-            Some(SnapNode {
-                id: node.id.clone(),
-                lat,
-                lon,
-            })
-        })
-        .collect();
+    for node in &graph.nodes {
+        if entry_from_ids.contains(node.id.as_str()) {
+            if let Some(num_str) = node.id.strip_prefix("n:") {
+                if let Ok(osm_id) = num_str.parse::<i64>() {
+                    if let Some(&(lat, lon)) = node_coords.get(&osm_id) {
+                        snap_nodes.push(SnapNode {
+                            id: node.id.clone(),
+                            lat,
+                            lon,
+                        });
+                    }
+                }
+            }
+        }
+    }
     snap_nodes.sort_by(|a, b| a.id.cmp(&b.id));
 
     let snap_index = SnapIndex {

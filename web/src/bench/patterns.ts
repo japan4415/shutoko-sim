@@ -1,12 +1,15 @@
 // 計測ページ（bench.html）が回す代表パターンの定義。
 //
 // 出発地点は scout-003 F5 で実 WASM を実行して候補生成を確認済みの 10 件。
-// 末尾 2 件（銀座入口・代官町入口）は 200m 以内に接続可能な一般道が無い
-// `status: "no_candidates"` / `reason: "NO_CONNECTION"` の系統を被覆するための起点。
 //
 // 注意: 探索コストは min/max の時間条件に依存せず起点のみで決まる（scout-003 F4）。
 // 時間条件 3 件は探索の仕事量を変えず、TIME_WINDOW による候補フィルタの分岐を
 // 被覆するために残している。
+//
+// 注意（仕様変更）: 一般道排除後はスナップ半径 200m の制限が撤廃された（feat/drop-local-roads）。
+// どんな座標からでも最寄り Entry アクセス地点（最大 5 件）が直線距離で返るため、
+// NO_CONNECTION は「Entry エッジが 0 件」でのみ発生し実質トリガーされない。
+// 以前の末尾 2 件（銀座・代官町）は NO_CONNECTION を期待していたが、現在は候補が返る。
 
 /** 計測用の出発地点。 */
 export interface BenchOrigin {
@@ -14,7 +17,12 @@ export interface BenchOrigin {
   label: string;
   lat: number;
   lon: number;
-  /** 200m 以内に接続できる一般道が無く NO_CONNECTION になると想定される起点。 */
+  /**
+   * @deprecated feat/drop-local-roads 以降は使用しない。
+   * 以前は「200m 以内に一般道が無く NO_CONNECTION になると想定される起点」に true を設定していたが、
+   * 一般道排除後はスナップ半径制限が撤廃されたため、全起点で Entry アクセス地点が得られる。
+   * NO_CONNECTION の新条件は「Entry エッジが 0 件」であり実質トリガーされない。
+   */
   noConnection: boolean;
 }
 
@@ -45,8 +53,8 @@ export const BENCH_ORIGINS: readonly BenchOrigin[] = [
   { id: "kasumigaseki-out", label: "霞が関入口(外)", lat: 35.674176, lon: 139.747945, noConnection: false },
   { id: "nihonbashi", label: "日本橋", lat: 35.6838, lon: 139.7745, noConnection: false },
   { id: "yurakucho", label: "有楽町", lat: 35.6751, lon: 139.7638, noConnection: false },
-  { id: "ginza", label: "銀座入口（NO_CONNECTION 想定）", lat: 35.66695, lon: 139.767957, noConnection: true },
-  { id: "daikancho", label: "代官町入口（NO_CONNECTION 想定）", lat: 35.689332, lon: 139.75253, noConnection: true },
+  { id: "ginza", label: "銀座入口", lat: 35.66695, lon: 139.767957, noConnection: false },
+  { id: "daikancho", label: "代官町入口", lat: 35.689332, lon: 139.75253, noConnection: false },
 ];
 
 /** 時間条件 3 件（short / mid / long）。 */

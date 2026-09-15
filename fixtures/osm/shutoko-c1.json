@@ -2,7 +2,7 @@
   "version": 0.6,
   "generator": "Overpass API 0.7.62.11 87bfad18",
   "osm3s": {
-    "timestamp_osm_base": "2026-06-01T08:52:28Z",
+    "timestamp_osm_base": "2026-05-06T03:25:00Z",
     "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
   },
   "elements": [
@@ -19053,6 +19053,2222 @@
   "tags": {
     "restriction": "only_straight_on",
     "type": "restriction"
+  }
+},
+{
+  "type": "way",
+  "id": 23579065,
+  "nodes": [
+    271663255,
+    1070863469,
+    10648540689,
+    10648540686,
+    6284656302,
+    3337633016,
+    6188927994,
+    1072641452,
+    589929553,
+    6284800728,
+    9402519864,
+    9402519861,
+    5558517030,
+    1033242735,
+    1072641389,
+    265889493,
+    265889636
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "highway": "secondary",
+    "lanes": "3",
+    "lit": "yes",
+    "maxspeed": "50",
+    "name": "日比谷通り",
+    "name:en": "Hibiya Street",
+    "name:es": "Calle Hibiya",
+    "name:fr": "Rue Hibiya",
+    "name:ja-Hira": "ひびやどおり",
+    "name:ja-Latn": "Hibiya-dōri",
+    "official_name": "特例都道大手町湯島線",
+    "oneway": "yes",
+    "ref": "403",
+    "surface": "asphalt",
+    "wikidata": "Q11086791"
+  }
+},
+{
+  "type": "way",
+  "id": 23581608,
+  "nodes": [
+    254365140,
+    9652972644,
+    6282083972,
+    5570578225,
+    5570578230,
+    11984876120,
+    6282083978,
+    266238544,
+    6282086586,
+    13520802411,
+    11427759888,
+    4366608580,
+    573233928
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "foot": "no",
+    "highway": "secondary",
+    "lanes": "3",
+    "name": "六本木通り",
+    "name:en": "Roppongi-dori",
+    "name:es": "Calle Roppongi",
+    "name:fr": "Rue Roppongi",
+    "name:ja-Hira": "ろっぽんぎどおり",
+    "name:ja-Latn": "Roppongi-dōri",
+    "oneway": "yes",
+    "ref": "412",
+    "sidewalk:left": "separate",
+    "sidewalk:right": "no",
+    "source": "Bing 2010",
+    "surface": "asphalt",
+    "wikidata": "Q111948784"
+  }
+},
+{
+  "type": "way",
+  "id": 23581721,
+  "nodes": [
+    255367560,
+    255367561,
+    3736838577,
+    2138385742,
+    2138385741,
+    264879742,
+    264879981,
+    1618600717,
+    254365764,
+    5030354965,
+    266237326
+  ],
+  "tags": {
+    "foot": "no",
+    "highway": "secondary",
+    "lanes": "2",
+    "name": "高輪麻布線",
+    "name:en": "Takanawa-Azabu Line",
+    "name:ja": "高輪麻布線",
+    "oneway": "yes",
+    "ref": "415",
+    "source": "Bing 2010",
+    "surface": "paved"
+  }
+},
+{
+  "type": "way",
+  "id": 23811959,
+  "nodes": [
+    573233930,
+    1535108851,
+    11984475565,
+    573233898,
+    573233859,
+    4785413271,
+    11984475547,
+    4785413269,
+    4366627902,
+    13071076992,
+    4366627903,
+    258041113
+  ],
+  "tags": {
+    "highway": "secondary",
+    "lanes": "3",
+    "name": "東京都道二四七号線",
+    "name:en": "Metropolitan Road 247",
+    "name:ja": "東京都道二四七号線",
+    "oneway": "yes",
+    "ref": "247",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 24487308,
+  "nodes": [
+    266237326,
+    3558402088,
+    3129365571,
+    3667138874,
+    266239039,
+    11071237362,
+    266239016,
+    5931499510,
+    5931475060,
+    266238987,
+    11071237366,
+    3667139046,
+    5267133524,
+    3736842338,
+    2558218577,
+    3736842340,
+    255645747,
+    266237126,
+    1618362314,
+    1618362318,
+    2558218687,
+    1618362336,
+    499831382,
+    2400003884,
+    1616271813,
+    11900454688,
+    1616271882,
+    1616271920,
+    1616271953,
+    13294594950,
+    266238900
+  ],
+  "tags": {
+    "cycleway:both": "no",
+    "foot": "no",
+    "highway": "tertiary",
+    "lanes": "2",
+    "lit": "yes",
+    "name": "泉通り",
+    "name:en": "Izumi-dori",
+    "name:es": "Calle Izumi",
+    "sidewalk:left": "separate",
+    "sidewalk:right": "no",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 24490217,
+  "nodes": [
+    1694060355,
+    266292068,
+    2397043925,
+    4137867895,
+    266292094,
+    4129806715,
+    266292174,
+    4137867902,
+    2140926684,
+    1871118769,
+    266292176,
+    2138849543,
+    2177839598,
+    10120726981,
+    10120375935,
+    679193852
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "cycleway:left:lane": "pictogram",
+    "highway": "primary",
+    "lanes": "2",
+    "lit": "yes",
+    "maxspeed": "50",
+    "name": "環状三号線",
+    "name:en": "Circular Route 3",
+    "name:fr": "Route circulaire 3",
+    "name:ja": "環状三号線",
+    "name:ja-Hira": "かんじょうさんごうせん",
+    "name:ja-Latn": "Kanjō san-gōsen",
+    "oneway": "yes",
+    "ref": "319",
+    "sidewalk:both": "separate",
+    "source": "Bing 2012",
+    "surface": "asphalt",
+    "wikidata": "Q11525785"
+  }
+},
+{
+  "type": "way",
+  "id": 27085151,
+  "nodes": [
+    243827967,
+    297162633,
+    1072642054,
+    1588177910,
+    5246522556,
+    589929556,
+    5558517031,
+    9402519862,
+    9402519863,
+    6284800727,
+    1072641795,
+    6188927993,
+    1033242761,
+    6284656301,
+    5500162064,
+    12881208983,
+    5500161799
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "highway": "secondary",
+    "lanes": "3",
+    "lit": "yes",
+    "maxspeed": "50",
+    "name": "日比谷通り",
+    "name:en": "Hibiya Street",
+    "name:es": "Calle Hibiya",
+    "name:fr": "Rue Hibiya",
+    "name:ja-Hira": "ひびやどおり",
+    "name:ja-Latn": "Hibiya-dōri",
+    "official_name": "特例都道大手町湯島線",
+    "oneway": "yes",
+    "ref": "403",
+    "surface": "asphalt",
+    "wikidata": "Q11086791"
+  }
+},
+{
+  "type": "way",
+  "id": 40969792,
+  "nodes": [
+    940044988,
+    11612528981
+  ],
+  "tags": {
+    "access:conditional": "no @ (08:00-20:00)",
+    "cycleway:both": "no",
+    "highway": "primary_link",
+    "lane_markings": "no",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 43896733,
+  "nodes": [
+    558082303,
+    558101382,
+    1866082362,
+    6114544149,
+    558082184,
+    5892946043,
+    559307022,
+    1866082131,
+    5892946042,
+    256672387
+  ],
+  "tags": {
+    "highway": "tertiary",
+    "source": "NRPB of MLIT Japan",
+    "source:ja": "国土画像情報（オルソ化空中写真）国土計画局",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 46151426,
+  "nodes": [
+    1130812252,
+    6389200847,
+    1130813251,
+    6389184505,
+    261022723,
+    6389184508,
+    1130812254,
+    6389184512,
+    1130812874,
+    6389184528,
+    6389184519,
+    689881137,
+    260996137
+  ],
+  "tags": {
+    "highway": "tertiary",
+    "lanes": "2",
+    "lit": "yes",
+    "name": "八重洲通り",
+    "name:en": "Yaesu-dori Avenue",
+    "name:es": "Calle Yaesu",
+    "name:ja": "八重洲通り",
+    "name:ja-Hira": "やえすどおり",
+    "name:ja-Latn": "Yaesu Dōri",
+    "oneway": "yes",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 46151742,
+  "nodes": [
+    588411747,
+    588411742,
+    588411746
+  ],
+  "tags": {
+    "bridge": "yes",
+    "foot": "no",
+    "highway": "tertiary",
+    "layer": "1",
+    "motor_vehicle": "yes",
+    "name": "新金橋",
+    "name:en": "Shimane bridge",
+    "name:es": "Puente Shimane"
+  }
+},
+{
+  "type": "way",
+  "id": 89043374,
+  "nodes": [
+    260710835,
+    1072641475,
+    8869066671,
+    12881208984,
+    260710837,
+    260710839,
+    6114582924,
+    6114582925,
+    260710840
+  ],
+  "tags": {
+    "highway": "secondary",
+    "lanes": "5",
+    "name": "錦町有楽町線",
+    "name:en": "Nishikicho-Yurakucho Line",
+    "name:ja": "錦町有楽町線",
+    "official_name": "特例都道錦町有楽町線",
+    "oneway": "yes",
+    "ref": "402",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 92403865,
+  "nodes": [
+    1072642164,
+    5157287305,
+    1072641894,
+    1072642032,
+    2399085684,
+    1072641973,
+    1072641492,
+    1072641859,
+    6286003314,
+    1072641621,
+    6286003304,
+    260710835
+  ],
+  "tags": {
+    "highway": "residential",
+    "oneway": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 95277522,
+  "nodes": [
+    1105152925,
+    3196337535,
+    2253603552,
+    5104643069,
+    499831379,
+    5104643073,
+    11915135707,
+    5104643078,
+    835996365
+  ],
+  "tags": {
+    "highway": "residential",
+    "oneway": "yes",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 95277523,
+  "nodes": [
+    835996371,
+    5103534582,
+    1105152891,
+    2253598240,
+    1105152927,
+    835996339
+  ],
+  "tags": {
+    "destination": "首都高銀座入口",
+    "highway": "unclassified",
+    "name": "銀中通り",
+    "name:en": "Ginchu-dori",
+    "name:es": "Calle Ginchu",
+    "name:ja_rm": "Ginchū Dōri",
+    "oneway": "yes",
+    "oneway:bicycle": "no",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 97671376,
+  "nodes": [
+    1130813069,
+    1130812633,
+    1982745605,
+    6240679137,
+    1130812096,
+    1130812427,
+    6240679095,
+    6484986810,
+    1130812423,
+    2699904510,
+    6240679152,
+    1105125464,
+    6389189453,
+    1130812481,
+    1130812621,
+    1130812103,
+    1130812251,
+    3977436339,
+    1130812252
+  ],
+  "tags": {
+    "cycleway:left": "no",
+    "foot": "yes",
+    "highway": "unclassified",
+    "lane_markings": "no",
+    "lit": "yes",
+    "oneway": "yes",
+    "sidewalk": "no",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 144967546,
+  "nodes": [
+    1866081909,
+    251725816,
+    1866081984,
+    1866082006,
+    1866082028,
+    251725815,
+    1866082047,
+    256672383,
+    1584417309,
+    1866082035,
+    6285957244,
+    1584417306,
+    1584417305,
+    1584417303,
+    1584417302,
+    1584417300,
+    1584417299,
+    1584417298,
+    1584417297
+  ],
+  "tags": {
+    "alt_name": "紀伊国坂",
+    "highway": "tertiary",
+    "name": "代官町通り",
+    "name:en": "Daikanchō Street",
+    "name:es": "Calle Daikancho",
+    "name:fr": "Rue Daikanchō",
+    "name:ja-Hira": "だいかんちょうどおり",
+    "name:ja-Latn": "Daikanchō-dōri",
+    "name:ja_rm": "Daikanchō Dōri",
+    "oneway": "yes",
+    "surface": "asphalt",
+    "wikidata": "Q65965948"
+  }
+},
+{
+  "type": "way",
+  "id": 144967548,
+  "nodes": [
+    1584417297,
+    627244197,
+    1584417301,
+    251723892,
+    1584417304,
+    269659022,
+    1584417307,
+    1866082034,
+    627244198,
+    7485222316,
+    1866082060,
+    251723890,
+    256672384,
+    269658894,
+    251723889,
+    627244200,
+    251723888,
+    627244201,
+    1866081961,
+    269658621,
+    251723887,
+    1866081938,
+    269658633,
+    251723886,
+    558082299,
+    251723885,
+    9830910022,
+    1866082121,
+    269658634,
+    9830910018,
+    251723884,
+    559307008,
+    1866082300
+  ],
+  "tags": {
+    "alt_name": "紀伊国坂",
+    "cycleway": "shared_lane",
+    "highway": "tertiary",
+    "name": "代官町通り",
+    "name:en": "Daikanchō Street",
+    "name:es": "Calle Daikancho",
+    "name:fr": "Rue Daikanchō",
+    "name:ja-Hira": "だいかんちょうどおり",
+    "name:ja-Latn": "Daikanchō-dōri",
+    "oneway": "yes",
+    "surface": "asphalt",
+    "wikidata": "Q65965948"
+  }
+},
+{
+  "type": "way",
+  "id": 176046407,
+  "nodes": [
+    256672387,
+    1866082084,
+    1866082089,
+    1866082085,
+    1866082083,
+    1866082079,
+    1866082075,
+    1866082068,
+    256672384,
+    1866082056,
+    1584417309
+  ],
+  "tags": {
+    "highway": "tertiary",
+    "oneway": "yes",
+    "source": "Bing",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 178988162,
+  "nodes": [
+    1892725514,
+    6120574757,
+    1130958845,
+    12886921594,
+    1130958429,
+    12886921593,
+    1130958379,
+    6120574766,
+    1893305698,
+    6120574769,
+    11575488962,
+    1893305703,
+    4114770744,
+    4114770739,
+    1130958292,
+    1105167225,
+    1105125241,
+    3790001990,
+    1893305687
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "highway": "tertiary",
+    "lanes": "2",
+    "maxspeed": "50",
+    "name": "鍛冶橋通り",
+    "name:en": "Kajibashi-dori Avenue",
+    "name:es": "Calle Kajibashi",
+    "name:ja": "鍛冶橋通り",
+    "name:ja-Latn": "Kajibashi Dōri",
+    "oneway": "yes",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 206524230,
+  "nodes": [
+    499192059,
+    266237326
+  ],
+  "tags": {
+    "foot": "no",
+    "highway": "tertiary"
+  }
+},
+{
+  "type": "way",
+  "id": 233086394,
+  "nodes": [
+    264877828,
+    573233927
+  ],
+  "tags": {
+    "highway": "secondary",
+    "lanes": "2",
+    "name": "国会通り",
+    "name:es": "Calle Kokkai",
+    "name:fr": "Rue de la Diète nationale",
+    "name:ja": "国会通り",
+    "name:ja-Hira": "こっかいどおり",
+    "name:ja-Latn": "Kokkai-dōri",
+    "name:ja_rm": "Kokkai-dori",
+    "official_name": "東京都道二四七号線",
+    "official_name:en": "Metropolitan Road 247",
+    "official_name:ja": "東京都道二四七号線",
+    "oneway": "yes",
+    "ref": "247",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 233086397,
+  "nodes": [
+    573233928,
+    6114822494,
+    5576263921,
+    2392369337,
+    951247029,
+    951247038
+  ],
+  "tags": {
+    "highway": "secondary",
+    "loc_name": "潮見坂",
+    "loc_name:en": "Shiomizaka",
+    "loc_name:es": "Shiomizaka",
+    "loc_name:ja": "潮見坂",
+    "loc_name:ja-Latn": "Shiomizaka",
+    "name": "国会通り",
+    "name:es": "Calle Kokkai",
+    "name:fr": "Rue de la Diète nationale",
+    "name:ja": "国会通り",
+    "name:ja-Hira": "こっかいどおり",
+    "name:ja-Latn": "Kokkai-dōri",
+    "name:ja_rm": "Kokkai-dori",
+    "official_name": "東京都道二四七号線",
+    "official_name:en": "Metropolitan Road 247",
+    "official_name:ja": "東京都道二四七号線",
+    "oneway": "yes",
+    "ref": "247",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 240392355,
+  "nodes": [
+    1105125663,
+    3790002032,
+    12179896730,
+    6569551793,
+    6569551800,
+    6569551795,
+    1130812664,
+    6569551797,
+    1130813256,
+    6569551794,
+    6569551799,
+    6389193655,
+    1105125073,
+    6389193642,
+    6512518363,
+    6512518366,
+    6512518368,
+    6512518350,
+    1130813229,
+    6512518349,
+    6512518339,
+    6512518356,
+    1130812316,
+    6512518360,
+    6512518365,
+    1130812418,
+    6484986811,
+    6240679096,
+    1130813257
+  ],
+  "tags": {
+    "highway": "unclassified",
+    "lit": "yes",
+    "maxspeed": "30",
+    "name": "江戸・もみじ通り",
+    "oneway": "yes",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 265049223,
+  "nodes": [
+    251865990,
+    13703558781,
+    251865991,
+    1075128006,
+    499192503,
+    251865992,
+    255337558,
+    1075127945,
+    255337576,
+    1075127878,
+    255337642,
+    255337643,
+    6241292204,
+    255337644,
+    6389677461,
+    264443321
+  ],
+  "tags": {
+    "highway": "secondary",
+    "lanes": "2",
+    "name": "高輪麻布線",
+    "name:en": "Takanawa-Azabu Line",
+    "name:ja": "高輪麻布線",
+    "oneway": "yes",
+    "ref": "415",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 273211042,
+  "nodes": [
+    31254388,
+    6114579103,
+    1130958907,
+    1130958798,
+    1130958372,
+    31254357,
+    6114579099,
+    31254387
+  ],
+  "tags": {
+    "highway": "secondary",
+    "name": "佃大橋通り",
+    "name:en": "Tsukuda Ohashi-dori",
+    "name:es": "Calle Tsukuda Ohashi",
+    "oneway": "yes",
+    "ref": "473"
+  }
+},
+{
+  "type": "way",
+  "id": 284715283,
+  "nodes": [
+    2884316851,
+    2884316852,
+    2884316859,
+    2884316863,
+    2884316865,
+    2884316866,
+    2884316867,
+    5715376053,
+    5715370231,
+    2884316871
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "source": "image,2014-05;Bing;GSI/KIBAN 2500,NARO"
+  }
+},
+{
+  "type": "way",
+  "id": 342481196,
+  "nodes": [
+    31254351,
+    1130958431,
+    5100407661,
+    951247035
+  ],
+  "tags": {
+    "highway": "unclassified",
+    "oneway": "yes",
+    "oneway:bicycle": "no",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 375651963,
+  "nodes": [
+    6389189446,
+    6389184503,
+    3977436329,
+    6389200845,
+    3977436339,
+    3977436348,
+    12179896729
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "way",
+  "id": 411814068,
+  "nodes": [
+    4134172848,
+    4134172818,
+    4134172812
+  ],
+  "tags": {
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 411814074,
+  "nodes": [
+    4134172844,
+    2397043955,
+    8327736735,
+    4134172824
+  ],
+  "tags": {
+    "footway": "crossing",
+    "highway": "footway",
+    "lit": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 412327046,
+  "nodes": [
+    266292094,
+    31296991
+  ],
+  "tags": {
+    "highway": "primary_link",
+    "oneway": "yes",
+    "smoothness": "excellent",
+    "source": "Bing 2012",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 439035081,
+  "nodes": [
+    1535108859,
+    11428863123,
+    4366610691,
+    4366608585,
+    4366610696,
+    4366608580,
+    11428863122,
+    4366608588
+  ],
+  "tags": {
+    "crossing": "zebra",
+    "footway": "crossing",
+    "highway": "footway",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 454433744,
+  "nodes": [
+    4509947047,
+    3890965327,
+    4509947068,
+    3890965294,
+    4509947049,
+    3890965266,
+    4509947065,
+    3890965341,
+    9830910023,
+    4509947075,
+    3279741656
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 525147302,
+  "nodes": [
+    5109258226,
+    2133066629,
+    5109258227
+  ],
+  "tags": {
+    "crossing": "marked",
+    "crossing:markings": "yes",
+    "footway": "crossing",
+    "highway": "footway",
+    "source": "GSI/KIBAN 2500;NARO"
+  }
+},
+{
+  "type": "way",
+  "id": 572507444,
+  "nodes": [
+    6325181677,
+    4436218907,
+    5500161798
+  ],
+  "tags": {
+    "crossing": "zebra",
+    "footway": "crossing",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "asphalt",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "way",
+  "id": 572507445,
+  "nodes": [
+    5500161797,
+    5500161794,
+    6241744894,
+    5500161796
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "way",
+  "id": 572507450,
+  "nodes": [
+    1033242750,
+    6241744902,
+    1070862943,
+    5500161801
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "foot": "no",
+    "highway": "secondary",
+    "lanes": "3",
+    "lit": "yes",
+    "maxspeed": "50",
+    "name": "日比谷通り",
+    "name:en": "Hibiya-dori",
+    "name:es": "Calle Hibiya",
+    "name:ja_rm": "Hibiya Dōri",
+    "official_name": "特例都道大手町湯島線",
+    "oneway": "yes",
+    "ref": "403",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 582445977,
+  "nodes": [
+    5570377649,
+    11428863118,
+    7485222315,
+    8512840451,
+    8512840452,
+    264878014,
+    11428863119,
+    5570377653
+  ],
+  "tags": {
+    "crossing": "zebra",
+    "footway": "crossing",
+    "highway": "footway",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 601323474,
+  "nodes": [
+    5715376052,
+    1834887298,
+    5715378449,
+    5715378450,
+    13651290737,
+    5715378451,
+    5715378452,
+    5715378453,
+    5715378454
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 658506322,
+  "nodes": [
+    6166477719,
+    6789046962,
+    5112070783
+  ],
+  "tags": {
+    "bridge": "yes",
+    "footway": "sidewalk",
+    "highway": "footway",
+    "layer": "1",
+    "source": "GSI/KIBAN 2500;NARO"
+  }
+},
+{
+  "type": "way",
+  "id": 658506324,
+  "nodes": [
+    5112070789,
+    5112070782,
+    5112070759,
+    5112070760,
+    5112070761,
+    5112070762,
+    13277759009,
+    5112070763,
+    5112070764,
+    5112070765,
+    5112070766,
+    5112070767,
+    5112070768,
+    5112070769,
+    5112070770,
+    5112070771,
+    5112070772,
+    5112070773,
+    1130958574,
+    5112070774,
+    5112070775,
+    12234727913,
+    5112070776,
+    5112070777,
+    5112070778,
+    5112070779,
+    5112070780,
+    12234727912,
+    5112070781
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "source": "GSI/KIBAN 2500;NARO"
+  }
+},
+{
+  "type": "way",
+  "id": 661053795,
+  "nodes": [
+    5558517022,
+    13229908289,
+    9933260742,
+    6188927992,
+    6188927988,
+    6284656300,
+    9933260739,
+    9633809936,
+    12881236510,
+    6188927990,
+    6188927991
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 666654625,
+  "nodes": [
+    6188927991,
+    6241744900
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 671243463,
+  "nodes": [
+    5892078223,
+    6285957242,
+    7485222316,
+    6285957244,
+    7161523694,
+    6285957245,
+    6285957246
+  ],
+  "tags": {
+    "crossing": "marked",
+    "crossing:markings": "yes",
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 679801682,
+  "nodes": [
+    6389606757,
+    6389606756,
+    6389610252,
+    6389603044,
+    6389606753,
+    6389603043,
+    6389614139,
+    6389603047,
+    6389614134,
+    6389603034,
+    6389603042,
+    6389603046,
+    6389629597,
+    6389629595,
+    6389603041,
+    6389629593,
+    2139068782,
+    12876461830,
+    6389614140,
+    6389614141,
+    6389624110,
+    12876461835,
+    13518553533,
+    6168034173,
+    6168034172,
+    9926428299,
+    2139068777
+  ],
+  "tags": {
+    "bicycle": "yes",
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 680788596,
+  "nodes": [
+    835996365,
+    2253599228,
+    1105152852
+  ],
+  "tags": {
+    "highway": "unclassified",
+    "lanes": "2",
+    "maxspeed": "30",
+    "oneway": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 716751568,
+  "nodes": [
+    940044988,
+    11612528982
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "cycleway:left:lane": "pictogram",
+    "highway": "primary",
+    "lanes": "2",
+    "lit": "yes",
+    "maxspeed": "50",
+    "name": "環状三号線",
+    "name:en": "Circular Route 3",
+    "name:fr": "Route circulaire 3",
+    "name:ja": "環状三号線",
+    "name:ja-Hira": "かんじょうさんごうせん",
+    "name:ja-Latn": "Kanjō san-gōsen",
+    "oneway": "yes",
+    "ref": "319",
+    "sidewalk:both": "separate",
+    "source": "Bing 2012",
+    "surface": "asphalt",
+    "wikidata": "Q11525785"
+  }
+},
+{
+  "type": "way",
+  "id": 759287234,
+  "nodes": [
+    7092267898,
+    31253688,
+    1016976212,
+    7084239584,
+    31254149,
+    7597572751,
+    570818423,
+    7597572698,
+    7597547580,
+    7597572747,
+    7597572699,
+    7597572748,
+    7597547578,
+    7597572700,
+    7597572749,
+    7597547584,
+    7597572701,
+    7597572750,
+    31253837,
+    570818416,
+    7597572730,
+    7597572713,
+    7597572729,
+    7597572705,
+    7597572728,
+    7597572712,
+    7597572727,
+    7597547572,
+    31253962,
+    31254189,
+    8957637474
+  ],
+  "tags": {
+    "bicycle": "no",
+    "highway": "primary",
+    "lanes": "3",
+    "maxspeed": "50",
+    "name": "海岸通り",
+    "name:en": "Kaigan Street",
+    "name:es": "Calle Kaigan",
+    "name:fr": "Rue Kaigan",
+    "name:ja": "海岸通り",
+    "name:ja-Hira": "かいがんどおり",
+    "name:ja-Latn": "Kaigan-dōri",
+    "oneway": "yes",
+    "ref": "316",
+    "smoothness": "good",
+    "source": "survey;bing;Bing 2010",
+    "surface": "asphalt",
+    "wikidata": "Q111948769"
+  }
+},
+{
+  "type": "way",
+  "id": 880644156,
+  "nodes": [
+    273317690,
+    577255402
+  ],
+  "tags": {
+    "highway": "secondary_link",
+    "oneway": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 891166425,
+  "nodes": [
+    577253667,
+    2400012925,
+    265883525,
+    265883526,
+    265883527,
+    265883528,
+    8327872144,
+    2892839565,
+    265883529,
+    265883530,
+    6114579905,
+    273317695,
+    6114579908,
+    577255014,
+    8327872172,
+    265883532,
+    8327872171,
+    577255015,
+    8327872173,
+    265883533,
+    265883534,
+    4785413266,
+    265883536,
+    13520802409,
+    2892839579,
+    11427759886,
+    7485222315,
+    573233930
+  ],
+  "tags": {
+    "highway": "secondary",
+    "lanes": "2",
+    "name": "六本木通り",
+    "name:en": "Roppongi-dori Avenue",
+    "name:es": "Calle Roppongi",
+    "name:ja_rm": "Roppongi Dōri",
+    "oneway": "yes",
+    "ref": "412",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 916571609,
+  "nodes": [
+    577255402,
+    577255403
+  ],
+  "tags": {
+    "highway": "secondary",
+    "name": "国会通り",
+    "name:es": "Calle Kokkai",
+    "name:fr": "Rue de la Diète nationale",
+    "name:ja": "国会通り",
+    "name:ja-Hira": "こっかいどおり",
+    "name:ja-Latn": "Kokkai-dōri",
+    "name:ja_rm": "Kokkai-dori",
+    "official_name": "東京都道二四七号線",
+    "official_name:en": "Metropolitan Road 247",
+    "official_name:ja": "東京都道二四七号線",
+    "oneway": "yes",
+    "ref": "247",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 916571611,
+  "nodes": [
+    273317690,
+    573233930
+  ],
+  "tags": {
+    "highway": "secondary",
+    "lanes": "2",
+    "name": "国会通り",
+    "name:es": "Calle Kokkai",
+    "name:fr": "Rue de la Diète nationale",
+    "name:ja": "国会通り",
+    "name:ja-Hira": "こっかいどおり",
+    "name:ja-Latn": "Kokkai-dōri",
+    "name:ja_rm": "Kokkai-dori",
+    "official_name": "東京都道二四七号線",
+    "official_name:en": "Metropolitan Road 247",
+    "official_name:ja": "東京都道二四七号線",
+    "oneway": "yes",
+    "ref": "247",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 916571612,
+  "nodes": [
+    573233930,
+    577255013
+  ],
+  "tags": {
+    "highway": "secondary",
+    "lanes": "2",
+    "name": "六本木通り",
+    "name:en": "Roppongi-dori",
+    "name:es": "Calle Roppongi",
+    "name:ja_rm": "Roppongi Dōri",
+    "oneway": "yes",
+    "ref": "412",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 916571614,
+  "nodes": [
+    573233927,
+    273317690
+  ],
+  "tags": {
+    "highway": "secondary",
+    "lanes": "2",
+    "name": "国会通り",
+    "name:es": "Calle Kokkai",
+    "name:fr": "Rue de la Diète nationale",
+    "name:ja": "国会通り",
+    "name:ja-Hira": "こっかいどおり",
+    "name:ja-Latn": "Kokkai-dōri",
+    "name:ja_rm": "Kokkai-dori",
+    "official_name": "東京都道二四七号線",
+    "official_name:en": "Metropolitan Road 247",
+    "official_name:ja": "東京都道二四七号線",
+    "oneway": "yes",
+    "ref": "247",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 916571617,
+  "nodes": [
+    573233928,
+    264877828
+  ],
+  "tags": {
+    "foot": "no",
+    "highway": "secondary",
+    "lanes": "3",
+    "name": "六本木通り",
+    "name:en": "Roppongi-dori",
+    "name:es": "Calle Roppongi",
+    "name:ja_rm": "Roppongi Dōri",
+    "oneway": "yes",
+    "ref": "412",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 916571618,
+  "nodes": [
+    577255403,
+    573233928
+  ],
+  "tags": {
+    "highway": "secondary",
+    "name": "国会通り",
+    "name:es": "Calle Kokkai",
+    "name:fr": "Rue de la Diète nationale",
+    "name:ja": "国会通り",
+    "name:ja-Hira": "こっかいどおり",
+    "name:ja-Latn": "Kokkai-dōri",
+    "name:ja_rm": "Kokkai-dori",
+    "official_name": "東京都道二四七号線",
+    "official_name:en": "Metropolitan Road 247",
+    "official_name:ja": "東京都道二四七号線",
+    "oneway": "yes",
+    "ref": "247",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 916571619,
+  "nodes": [
+    577255013,
+    577255402
+  ],
+  "tags": {
+    "highway": "secondary",
+    "name": "国会通り",
+    "name:es": "Calle Kokkai",
+    "name:fr": "Rue de la Diète nationale",
+    "name:ja": "国会通り",
+    "name:ja-Hira": "こっかいどおり",
+    "name:ja-Latn": "Kokkai-dōri",
+    "name:ja_rm": "Kokkai-dori",
+    "official_name": "東京都道二四七号線",
+    "official_name:en": "Metropolitan Road 247",
+    "official_name:ja": "東京都道二四七号線",
+    "oneway": "yes",
+    "ref": "247",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 916571626,
+  "nodes": [
+    573233930,
+    573233900,
+    573233899,
+    5570377833,
+    1535108858,
+    255366258,
+    1535108876
+  ],
+  "tags": {
+    "highway": "secondary",
+    "lanes": "2",
+    "name": "国会通り",
+    "name:es": "Calle Kokkai",
+    "name:fr": "Rue de la Diète nationale",
+    "name:ja": "国会通り",
+    "name:ja-Hira": "こっかいどおり",
+    "name:ja-Latn": "Kokkai-dōri",
+    "name:ja_rm": "Kokkai-dori",
+    "official_name": "東京都道二四七号線",
+    "official_name:en": "Metropolitan Road 247",
+    "official_name:ja": "東京都道二四七号線",
+    "oneway": "yes",
+    "ref": "247",
+    "sidewalk:left": "separate",
+    "sidewalk:right": "no",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 916571630,
+  "nodes": [
+    577255403,
+    573233927
+  ],
+  "tags": {
+    "highway": "secondary_link",
+    "oneway": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 926526956,
+  "nodes": [
+    1866082282,
+    1866082255,
+    9830910021,
+    269658638,
+    251725819,
+    1866082069,
+    1866082000,
+    256672661,
+    251725818,
+    269658622,
+    1866081846,
+    251725817,
+    1866081844,
+    269658612,
+    1866081865,
+    1866081909
+  ],
+  "tags": {
+    "alt_name": "紀伊国坂",
+    "cycleway:left": "shared_lane",
+    "highway": "tertiary",
+    "name": "代官町通り",
+    "name:en": "Daikanchō Street",
+    "name:es": "Calle Daikancho",
+    "name:fr": "Rue Daikanchō",
+    "name:ja-Hira": "だいかんちょうどおり",
+    "name:ja-Latn": "Daikanchō-dōri",
+    "oneway": "yes",
+    "surface": "asphalt",
+    "wikidata": "Q65965948"
+  }
+},
+{
+  "type": "way",
+  "id": 944671541,
+  "nodes": [
+    254360532,
+    8741451208
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "highway": "tertiary",
+    "lanes": "4",
+    "lit": "yes",
+    "maxspeed": "40",
+    "source": "Bing 2010",
+    "surface": "paved"
+  }
+},
+{
+  "type": "way",
+  "id": 944671543,
+  "nodes": [
+    8741451208,
+    11250589369,
+    9857621160,
+    1873947511,
+    9857621159,
+    254360494,
+    1871017492,
+    3825363262,
+    1509276193,
+    3825363275
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "highway": "tertiary",
+    "lanes": "4",
+    "lit": "yes",
+    "maxspeed": "40",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 968060910,
+  "nodes": [
+    1070638350,
+    5109267501,
+    10944330519,
+    5109258245,
+    31255183,
+    5109258252,
+    1105125516,
+    1105125707,
+    499185613,
+    1105125075,
+    9826041185,
+    2133066640
+  ],
+  "tags": {
+    "highway": "tertiary",
+    "name": "銀座桜通り",
+    "name:en": "Ginza Sakura-dori Street",
+    "name:es": "Calle Ginza Sakura",
+    "name:ja_rm": "Ginza Sakura Dōri"
+  }
+},
+{
+  "type": "way",
+  "id": 968218278,
+  "nodes": [
+    31253838,
+    6473239588,
+    31254013,
+    31253774,
+    7597572709,
+    7597572725,
+    7597572706,
+    7597572724,
+    7597572708,
+    7597572723,
+    570818415,
+    31253850,
+    7597572694,
+    7597572756,
+    7597547583,
+    7597572755,
+    7597572695,
+    7597572754,
+    7597547575,
+    7597572753,
+    7597572696,
+    7597547579,
+    7597572752,
+    7597572697,
+    6049182070,
+    570818422,
+    2429511219,
+    574325761,
+    31254191,
+    31253747,
+    31254181,
+    7092265234,
+    574325720
+  ],
+  "tags": {
+    "bicycle": "no",
+    "highway": "primary",
+    "name": "海岸通り",
+    "name:en": "Kaigan Street",
+    "name:es": "Calle Kaigan",
+    "name:fr": "Rue Kaigan",
+    "name:ja": "海岸通り",
+    "name:ja-Hira": "かいがんどおり",
+    "name:ja-Latn": "Kaigan-dōri",
+    "oneway": "yes",
+    "ref": "316",
+    "smoothness": "good",
+    "surface": "asphalt",
+    "wikidata": "Q111948769"
+  }
+},
+{
+  "type": "way",
+  "id": 1074746900,
+  "nodes": [
+    11250566432,
+    9857621161,
+    254360532
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "highway": "tertiary",
+    "lanes": "4",
+    "lit": "yes",
+    "maxspeed": "40",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1085022603,
+  "nodes": [
+    1105125663,
+    12179896741,
+    1130812252
+  ],
+  "tags": {
+    "cycleway:left": "no",
+    "highway": "tertiary",
+    "lanes": "2",
+    "lit": "yes",
+    "name": "八重洲通り",
+    "name:en": "Yaesu-dori Avenue",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1085022604,
+  "nodes": [
+    1105125351,
+    1105125663
+  ],
+  "tags": {
+    "cycleway:left": "no",
+    "highway": "unclassified",
+    "lane_markings": "no",
+    "oneway": "yes",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1085022605,
+  "nodes": [
+    31255186,
+    5112070799,
+    5110457575,
+    5110457578,
+    13277759035,
+    5110457579,
+    5110457580,
+    1130812168,
+    1130812360,
+    3790001984,
+    1105125241,
+    1893305701,
+    3790001988,
+    1130812400,
+    1130812115,
+    1130812796,
+    1105125510,
+    1105125758,
+    1130813228,
+    1130812571,
+    3790002025,
+    1105125351
+  ],
+  "tags": {
+    "cycleway:left": "no",
+    "highway": "unclassified",
+    "oneway": "yes",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1085022609,
+  "nodes": [
+    236104926,
+    3790002035,
+    1105125663
+  ],
+  "tags": {
+    "cycleway:left": "no",
+    "foot": "no",
+    "highway": "tertiary",
+    "lanes": "2",
+    "lit": "yes",
+    "name": "八重洲通り",
+    "name:en": "Yaesu-dori Avenue",
+    "oneway": "yes",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1085022612,
+  "nodes": [
+    1130812252,
+    1130812503
+  ],
+  "tags": {
+    "cycleway:left": "no",
+    "foot": "no",
+    "highway": "unclassified",
+    "lane_markings": "no",
+    "lit": "yes",
+    "oneway": "yes",
+    "sidewalk": "no",
+    "source": "Bing 2010",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1106246996,
+  "nodes": [
+    10123014464,
+    10123014465,
+    10123014466,
+    10123014467,
+    10123014468,
+    10123014469,
+    10123014481,
+    10123014470,
+    10123014471,
+    31296982,
+    10123014472,
+    10123014473,
+    10123014474,
+    3825363260
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 1106515772,
+  "nodes": [
+    10125456573,
+    2177839600,
+    940044988
+  ],
+  "tags": {
+    "cycleway:left": "shared_lane",
+    "cycleway:left:lane": "pictogram",
+    "highway": "primary",
+    "lanes": "3",
+    "lit": "yes",
+    "maxspeed": "50",
+    "name": "環状三号線",
+    "name:en": "Circular Route 3",
+    "name:fr": "Route circulaire 3",
+    "name:ja": "環状三号線",
+    "name:ja-Hira": "かんじょうさんごうせん",
+    "name:ja-Latn": "Kanjō san-gōsen",
+    "oneway": "yes",
+    "ref": "319",
+    "sidewalk:both": "separate",
+    "source": "Bing 2012",
+    "surface": "asphalt",
+    "wikidata": "Q11525785"
+  }
+},
+{
+  "type": "way",
+  "id": 1192656124,
+  "nodes": [
+    266237326,
+    9507015276,
+    1075127861,
+    254024855,
+    11395669247,
+    3558402079,
+    254024828,
+    12441539468,
+    254024830,
+    2398054974
+  ],
+  "tags": {
+    "foot": "no",
+    "highway": "secondary",
+    "lanes": "2",
+    "name": "高輪麻布線",
+    "name:en": "Takanawa-Azabu Line",
+    "name:ja": "高輪麻布線",
+    "oneway": "yes",
+    "ref": "415",
+    "source": "Bing 2010",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1232083940,
+  "nodes": [
+    573233930,
+    577255402
+  ],
+  "tags": {
+    "highway": "secondary_link",
+    "oneway": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1232166617,
+  "nodes": [
+    573233928,
+    573233927
+  ],
+  "tags": {
+    "highway": "secondary_link",
+    "oneway": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1232166618,
+  "nodes": [
+    4366610696,
+    577255403
+  ],
+  "tags": {
+    "highway": "secondary_link",
+    "oneway": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1232166620,
+  "nodes": [
+    8512840451,
+    273317690
+  ],
+  "tags": {
+    "highway": "secondary_link",
+    "oneway": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1284334993,
+  "nodes": [
+    951247019,
+    6501207765,
+    835996365
+  ],
+  "tags": {
+    "highway": "unclassified",
+    "lanes": "1",
+    "maxspeed": "30",
+    "oneway": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 1284450625,
+  "nodes": [
+    1866082005,
+    1866081985,
+    558686754
+  ],
+  "tags": {
+    "access": "no",
+    "highway": "pedestrian",
+    "name": "乾通り",
+    "name:en": "Inui-Dori Street",
+    "name:fr": "Rue Inu",
+    "name:ja-Hira": "いぬいどおり",
+    "name:ja-Latn": "Inui-dōri",
+    "opening_hours": "Mar-Apr Mo-Su 09:00-15:30; Sep Mo-Su 09:00-15:30",
+    "source": "NRPB of MLIT Japan",
+    "source:ja": "国土画像情報（オルソ化空中写真）国土計画局",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1284459989,
+  "nodes": [
+    1866081861,
+    1866081864,
+    1866081909
+  ],
+  "tags": {
+    "access": "no",
+    "highway": "pedestrian",
+    "source": "NRPB of MLIT Japan",
+    "source:ja": "国土画像情報（オルソ化空中写真）国土計画局"
+  }
+},
+{
+  "type": "way",
+  "id": 1315891079,
+  "nodes": [
+    12179896729,
+    3977436333,
+    3790002032,
+    12179896724
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "crossing:signals": "yes",
+    "footway": "crossing",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1352273264,
+  "nodes": [
+    254367255,
+    1694060355,
+    2397043930,
+    254367256,
+    8327736737,
+    12511779683
+  ],
+  "tags": {
+    "cycleway:left": "lane",
+    "highway": "secondary",
+    "lanes": "3",
+    "lit": "yes",
+    "name": "日比谷通り",
+    "name:en": "Hibiya-dori",
+    "name:es": "Calle Hibiya",
+    "name:ja": "日比谷通り",
+    "name:ja_rm": "Hibiya Dōri",
+    "oneway": "yes",
+    "ref": "409",
+    "source": "Bing",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1352273266,
+  "nodes": [
+    12511779682,
+    8025624725,
+    2397044019,
+    266292068,
+    266292154,
+    2397043933,
+    5731642373,
+    5731639390,
+    2140926690,
+    2140926696,
+    1694060349,
+    4130679916,
+    4129765671,
+    2397043883,
+    1694060348,
+    11422369665,
+    1918977192
+  ],
+  "tags": {
+    "cycleway:left": "lane",
+    "highway": "secondary",
+    "lanes": "3",
+    "lit": "yes",
+    "maxspeed": "60",
+    "name": "日比谷通り",
+    "name:en": "Hibiya Street",
+    "name:es": "Calle Hibiya",
+    "name:fr": "Rue Hibiya",
+    "name:ja": "日比谷通り",
+    "name:ja-Hira": "ひびやどおり",
+    "name:ja-Latn": "Hibiya-dōri",
+    "oneway": "yes",
+    "ref": "409",
+    "sidewalk:left": "separate",
+    "sidewalk:right": "no",
+    "source": "Bing",
+    "surface": "asphalt",
+    "width": "6",
+    "wikidata": "Q11086791"
+  }
+},
+{
+  "type": "way",
+  "id": 1391162948,
+  "nodes": [
+    951247002,
+    5097575106,
+    31254351
+  ],
+  "tags": {
+    "destination": "首都高銀座入口",
+    "highway": "unclassified",
+    "oneway": "yes",
+    "oneway:bicycle": "no",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1391621226,
+  "nodes": [
+    297162631,
+    6241744899,
+    8869023812,
+    1072641664,
+    260710835
+  ],
+  "tags": {
+    "highway": "secondary",
+    "lanes": "4",
+    "name": "錦町有楽町線",
+    "name:en": "Nishikicho-Yurakucho Line",
+    "name:ja": "錦町有楽町線",
+    "official_name": "特例都道錦町有楽町線",
+    "oneway": "yes",
+    "ref": "402",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1426009023,
+  "nodes": [
+    1834887187,
+    1105152959,
+    835996316,
+    13042475628,
+    499230086
+  ],
+  "tags": {
+    "highway": "unclassified"
+  }
+},
+{
+  "type": "way",
+  "id": 1447149817,
+  "nodes": [
+    31255192,
+    13277759042,
+    13277759064
+  ],
+  "tags": {
+    "access": "no",
+    "highway": "service",
+    "surface": "asphalt",
+    "traffic_sign:backward": "\"関係者以外立入禁止\"",
+    "traffic_sign:forward": "JP:303,\"関係車両を除く\""
   }
 }
 

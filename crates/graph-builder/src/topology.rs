@@ -40,6 +40,11 @@ pub struct RestrictionReport {
     pub skipped_unrecognized: usize,
     /// Internal motorway_link edges dropped (not connecting local streets and Shutoko).
     pub dropped_link_edges: usize,
+    /// Ramp edges that could not be classified as Entry/Exit vs. Shutoko because neither
+    /// the surface-connection signal nor the OSM node tag secondary signal was available.
+    /// These edges are conservatively classified as Shutoko. Regenerate with an updated
+    /// OSM extract that includes surface roads for accurate classification.
+    pub undecidable_ramp_edges: usize,
     /// Human-readable diagnostic messages detailing skipped or notable relations.
     pub notes: Vec<String>,
 }
@@ -194,70 +199,36 @@ pub fn is_shutoko_motorway(element: &OsmElement) -> bool {
     false
 }
 
-/// Checks whether a `motorway_link` way is named after a numbered Shutoko route
-/// (e.g. "首都高速2号目黒線", "首都高速３号渋谷線").  Such links are JCT connectors
-/// that join C1 to another toll-road route rather than exit ramps to surface streets.
+/// Classifies an OSM `highway` value as vehicle-accessible (for surface-connection evidence),
+/// non-vehicle (ignored for Entry/Exit signal), or ambiguous.
 ///
-/// The criterion: name (or name:ja) contains "首都高速" (or "首都高") AND contains a
-/// digit (ASCII '0'-'9' or fullwidth '０'-'９') immediately followed by the kanji
-/// '号' — the counter used in Japanese numbered-route names.  This deliberately
-/// excludes "首都高速都心環状線" (the C1 ring road, which uses "環状" not a digit+号)
-/// and plain "首都高速道路" (generic name).
+/// Returns `Some(true)` when the way is a road vehicles (cars) can drive on — a ramp
+/// descending to such a way is a real street-level Entry or Exit.
+/// Returns `Some(false)` when the way is a non-vehicle path (footway, cycleway, steps, …)
+/// or part of the motorway network already captured in the graph.
+/// Returns `None` for uncommon or ambiguous values; callers should emit a warning and treat
+/// the way conservatively (i.e. not count it as surface-connection evidence).
 ///
-/// # Why name-based classification is unavoidable (C1 fixture analysis)
-///
-/// Alternative tag approaches were evaluated against fixtures/osm/shutoko-c1.json:
-///
-/// * `ref` tag: way 24336502 (3号渋谷線) carries `ref="3"`, but ways 4853804/4853805
-///   (2号目黒線) have no `ref` tag.  Using `ref` alone would miss the 目黒線 pair.
-/// * `toll` tag: all C1 motorway_link ways carry `toll=yes`, including ordinary
-///   entry/exit ramps, so this tag provides no discriminating signal.
-/// * `destination` / `junction` tags: absent on the relevant JCT connector ways.
-///
-/// Until higher-quality tagging is present in the OSM data, the name pattern remains
-/// the most reliable discriminator.  When extending coverage to C2, 湾岸線, and other
-/// routes, re-evaluate this function — those routes may carry consistent `ref` tags
-/// that allow a more robust supplementary condition.
-pub(crate) fn is_shutoko_numbered_route_link(element: &OsmElement) -> bool {
-    let name = element
-        .get_tag("name")
-        .or_else(|| element.get_tag("name:ja"))
-        .unwrap_or("");
-    if !name.contains("首都高速") && !name.contains("首都高") {
-        return false;
-    }
-    // Scan for the pattern <digit> + '号', accepting both ASCII ('0'-'9') and
-    // fullwidth ('０'-'９') digits.  Some OSM editors use fullwidth forms.
-    let chars: Vec<char> = name.chars().collect();
-    for i in 0..chars.len().saturating_sub(1) {
-        let is_digit = chars[i].is_ascii_digit() || ('\u{FF10}'..='\u{FF19}').contains(&chars[i]);
-        if is_digit && chars[i + 1] == '号' {
-            return true;
-        }
-    }
-    false
-}
+/// This uses OSM's documented structural `highway` taxonomy (what *type* of road is this?)
+/// rather than brittle string-pattern matching on road names.  Non-vehicle paths can share
+/// a node with a motorway_link incidentally (e.g. a footbridge alongside a ramp); counting
+/// them as evidence would produce false Entry/Exit classifications.
+pub(crate) fn is_vehicle_highway(highway: &str) -> Option<bool> {
+    match highway {
+        // Motor-vehicle roads — confirmed surface connection evidence
+        "trunk" | "trunk_link" | "primary" | "primary_link" | "secondary" | "secondary_link"
+        | "tertiary" | "tertiary_link" | "unclassified" | "residential" | "living_street"
+        | "service" | "road" => Some(true),
 
-/// Maximum distance in meters between a potential Exit dead-end node and the nearest
-/// Entry-candidate from-node that is still considered a "real surface interchange".
-///
-/// This constant is `pub(crate)` so that unit tests can verify the 549 m / 551 m
-/// boundary behaviour without hard-coding the numeric value.
-///
-/// At a genuine entry/exit interchange the paired entry ramp start and exit ramp end
-/// are always within ~500 m of each other (analysis of the C1 fixture: closest real
-/// pair is 17 m, furthest is 466 m for 飯倉出口).  JCT connectors whose reverse
-/// direction lies entirely outside the OSM extract have no entry candidate within
-/// this radius (observed minimum: 665 m for way 44805850).  550 m gives an 84 m
-/// safety margin below the 飯倉 pair and a 115 m margin above the JCT boundary.
-pub(crate) const JCT_DETECTION_MAX_ENTRY_DIST_METERS: u64 = 550;
+        // Non-vehicle paths — share nodes with ramps only incidentally
+        "footway" | "path" | "pedestrian" | "cycleway" | "steps" | "bridleway" => Some(false),
 
-/// Checks if highway tag indicates a surface street / local road.
-pub fn is_local_highway(highway_val: &str) -> bool {
-    matches!(
-        highway_val,
-        "trunk" | "primary" | "secondary" | "tertiary" | "unclassified" | "residential"
-    )
+        // Already captured in the Shutoko graph — not a "surface" road relative to that graph
+        "motorway" | "motorway_link" => Some(false),
+
+        // Ambiguous or uncommon values: caller emits a warning and skips conservatively
+        _ => None,
+    }
 }
 
 /// Parse oneway direction from OSM tags.
@@ -294,6 +265,79 @@ pub fn build_topology_with_report(
         }
     }
 
+    // Pre-pass: collect surface_nodes from all non-motorway, non-motorway_link highway ways,
+    // and build a node OSM-highway-tag index for the secondary classification signal.
+    //
+    // "Surface nodes" are nodes that belong to at least one way whose highway tag is
+    // neither "motorway" nor "motorway_link".  A ramp endpoint node that is in surface_nodes
+    // is connected to the ground-level street network — a definitive signal for Entry/Exit.
+    //
+    // IMPORTANT: these ways are NOT added to intermediate_edges and do not appear in the
+    // final graph.  The output graph's Local-edge count remains 0.
+    let mut surface_nodes: HashSet<String> = HashSet::new();
+    let mut node_highway_tags: HashMap<i64, String> = HashMap::new();
+    let mut ambiguous_highway_warnings: Vec<String> = Vec::new();
+
+    for elem in &response.elements {
+        if elem.is_node() {
+            // Collect each node's OSM highway tag for the secondary classification signal.
+            if let Some(hw) = elem.get_tag("highway") {
+                node_highway_tags.insert(elem.id, hw.to_string());
+            }
+            continue;
+        }
+        if !elem.is_way() {
+            continue;
+        }
+        let highway = match elem.get_tag("highway") {
+            Some(h) => h,
+            None => continue,
+        };
+        match is_vehicle_highway(highway) {
+            Some(true) => {
+                // Vehicle-accessible surface road: record its node IDs as evidence that a
+                // ramp endpoint touching this way is at street level (Entry or Exit).
+                if let Some(nodes) = &elem.nodes {
+                    for &nid in nodes {
+                        surface_nodes.insert(format!("n:{}", nid));
+                    }
+                }
+            }
+            Some(false) => {
+                // Non-vehicle path or motorway-network way: not surface-connection evidence.
+                // (footways, cycleways, steps, etc. can share a node with a ramp incidentally
+                // without that implying the ramp descends to street level.)
+            }
+            None => {
+                // Ambiguous highway value: conservatively exclude from surface_nodes and warn.
+                ambiguous_highway_warnings.push(format!(
+                    "Way {}: unrecognised highway type {:?} — \
+                     not counted as surface-connection evidence (conservative)",
+                    elem.id, highway
+                ));
+            }
+        }
+    }
+
+    for warn in &ambiguous_highway_warnings {
+        eprintln!("Warning: {warn}");
+    }
+
+    // True if the OSM extract contains at least one surface (non-motorway/motorway_link)
+    // road way.  Distinguishes "node is confirmed not on any surface road" from
+    // "no surface data present to evaluate".
+    let has_surface_context = !surface_nodes.is_empty();
+
+    if !has_surface_context {
+        eprintln!(
+            "Warning: OSM extract contains no surface (non-motorway/non-motorway_link) \
+             road ways. Ramp Entry/Exit classification will use OSM node tags only (secondary \
+             signal). Edges with no discriminating node tag are conservatively classified as \
+             Shutoko. Re-run with an updated OSM extract that includes surface roads for \
+             accurate classification."
+        );
+    }
+
     // 2. Extract intermediate edges from ways
     let mut intermediate_edges: Vec<IntermediateEdge> = Vec::new();
     let mut way_edges_by_id: HashMap<i64, Vec<String>> = HashMap::new();
@@ -314,16 +358,13 @@ pub fn build_topology_with_report(
 
         let (is_motorway_link, tentative_kind) = if is_shutoko_motorway(elem) {
             (false, Some(EdgeKind::Shutoko))
-        } else if highway == "motorway_link" && is_shutoko_numbered_route_link(elem) {
-            // motorway_link named after a numbered Shutoko route (e.g. "首都高速2号目黒線")
-            // is a JCT connector, not a surface exit/entry ramp; treat as mainline Shutoko.
-            (false, Some(EdgeKind::Shutoko))
         } else if highway == "motorway_link" {
             (true, None)
-        } else if is_local_highway(highway) {
-            (false, Some(EdgeKind::Local))
         } else {
-            // Not a recognized roadway type
+            // Surface road ways (all non-motorway, non-motorway_link highway types) are
+            // context-only: their nodes are captured in surface_nodes (pre-pass above) and
+            // used for Entry/Exit vs. Shutoko classification, but they are NOT added as
+            // graph edges — the output graph therefore contains zero Local edges.
             continue;
         };
 
@@ -491,43 +532,39 @@ pub fn build_topology_with_report(
         false
     };
 
-    // 3d.5. Pre-compute geographic coordinates of Entry-candidate from-nodes.
+    // 3e. Build final edges with surface-connection-based classification.
     //
-    // A genuine exit ramp always has a corresponding entry ramp at the same surface
-    // interchange, so the exit dead-end node should be geographically close to the
-    // Entry-candidate from-node of that entry ramp.  JCT connectors whose reverse
-    // direction is outside the OSM extract have no Entry candidate within a reasonable
-    // distance.  This set is used in step 3e to guard Exit classification.
-    let entry_candidate_coords: Vec<(f64, f64)> = {
-        let mut coords: Vec<(f64, f64)> = intermediate_edges
-            .iter()
-            .filter(|e| {
-                e.is_motorway_link
-                    && *ramp_motor_incoming.get(&e.from).unwrap_or(&0) == 0
-                    && reaches_target_forward(&e.to, &shutoko_nodes)
-            })
-            .filter_map(|e| {
-                e.from
-                    .strip_prefix("n:")
-                    .and_then(|s| s.parse::<i64>().ok())
-                    .and_then(|id| node_coords.get(&id))
-                    .copied()
-            })
-            .collect();
-        // Deduplicate by bit representation to avoid redundant proximity checks.
-        coords.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
-        coords.dedup();
-        coords
-    };
-
-    // 3e. Build final edges with topology-based classification.
+    // Primary signal: does the candidate's street-side endpoint node share a node with any
+    // non-motorway, non-motorway_link highway way (surface_nodes membership)?
+    //   Some(true)  → real surface connection → Entry or Exit
+    //   Some(false) → confirmed no surface connection (surface data IS present) → Shutoko
+    //   None        → no surface road data in extract → primary signal unavailable
+    //
+    // Secondary signal: OSM highway tag on the endpoint node.
+    //   highway=traffic_signals → surface intersection → Entry/Exit evidence
+    //   highway=motorway_junction → grade-separated junction → Shutoko evidence
+    //   other / absent → no additional discriminating information
+    //
+    // Conflict resolution (primary takes precedence):
+    //   (a) Primary=surface AND secondary=motorway_junction → warn, use primary → Entry/Exit
+    //   (b) Primary=no-surface AND secondary=traffic_signals → warn, use primary → Shutoko
+    //   (c) Primary unavailable AND secondary=traffic_signals → Entry/Exit
+    //   (d) Primary unavailable AND secondary=motorway_junction → Shutoko
+    //   (e) Primary unavailable AND secondary unavailable → undecidable:
+    //       log warning, use conservative default → Shutoko
+    //       (JCT connectors misclassified as Entry/Exit are more harmful: a phantom
+    //        snap origin causes silent routing failures, while a real ramp defaulted
+    //        to Shutoko is simply omitted from the snap index.)
     let mut final_edges: Vec<Edge> = Vec::new();
     let mut final_edge_ids: HashSet<String> = HashSet::new();
-    let mut dropped_link_edges = 0;
+    let mut dropped_link_edges = 0usize;
+    let mut undecidable_ramp_count = 0usize;
+    let mut classification_warnings: Vec<String> = Vec::new();
 
     for edge in intermediate_edges {
         let kind = if let Some(k) = edge.tentative_kind {
-            // Shutoko mainline edges and Local edges pass through unchanged.
+            // Shutoko mainline edges pass through unchanged.
+            // (Local edges are no longer created in step 2.)
             k
         } else if edge.is_motorway_link {
             let incoming_at_from = *ramp_motor_incoming.get(&edge.from).unwrap_or(&0);
@@ -537,37 +574,120 @@ pub fn build_topology_with_report(
             let backward_from_shutoko = reaches_target_backward(&edge.from, &shutoko_nodes);
 
             if incoming_at_from == 0 && forward_to_shutoko {
-                // Street-side terminus of an entry ramp: no ramp/mainline edges flow into
-                // this node and the forward chain reaches the Shutoko mainline.
-                EdgeKind::Entry
-            } else if outgoing_from_to == 0 && backward_from_shutoko {
-                // Candidate street-side terminus of an exit ramp: no ramp/mainline edges
-                // leave this to-node and the backward chain reaches the Shutoko mainline.
-                //
-                // Guard: JCT connectors at the OSM extract boundary satisfy the same
-                // conditions.  A genuine surface exit always has a corresponding entry
-                // ramp at the same interchange, so its dead-end to-node should be within
-                // JCT_DETECTION_MAX_ENTRY_DIST_METERS of at least one Entry-candidate
-                // from-node.  If no such node is found, classify as Shutoko instead.
-                let is_real_exit = match edge
-                    .to
+                // Entry candidate: no ramp/mainline edges flow into the from-node and the
+                // forward chain reaches the Shutoko mainline.
+                let node_str = &edge.from;
+                let on_surface = surface_nodes.contains(node_str.as_str());
+                let primary: Option<bool> = if has_surface_context {
+                    Some(on_surface)
+                } else {
+                    None
+                };
+                let tag_hw: Option<&str> = node_str
                     .strip_prefix("n:")
                     .and_then(|s| s.parse::<i64>().ok())
-                    .and_then(|id| node_coords.get(&id))
-                    .copied()
-                {
-                    None => true, // No coordinates — conservatively keep as Exit.
-                    Some((to_lat, to_lon)) => {
-                        entry_candidate_coords.iter().any(|&(ec_lat, ec_lon)| {
-                            haversine_distance_meters(to_lat, to_lon, ec_lat, ec_lon)
-                                <= JCT_DETECTION_MAX_ENTRY_DIST_METERS
-                        })
-                    }
+                    .and_then(|id| node_highway_tags.get(&id))
+                    .map(|s| s.as_str());
+                let secondary: Option<bool> = match tag_hw {
+                    Some("traffic_signals") => Some(true),
+                    Some("motorway_junction") => Some(false),
+                    _ => None,
                 };
-                if is_real_exit {
-                    EdgeKind::Exit
+
+                match (primary, secondary) {
+                    (Some(true), sec) => {
+                        if sec == Some(false) {
+                            classification_warnings.push(format!(
+                                "entry candidate {}: surface-connection=yes conflicts with \
+                                 highway={} (secondary=Shutoko); using surface-connection \
+                                 (primary) → Entry",
+                                node_str,
+                                tag_hw.unwrap_or("?")
+                            ));
+                        }
+                        EdgeKind::Entry
+                    }
+                    (Some(false), sec) => {
+                        if sec == Some(true) {
+                            classification_warnings.push(format!(
+                                "entry candidate {}: no surface connection conflicts with \
+                                 highway=traffic_signals (secondary=Entry); using \
+                                 surface-connection (primary) → Shutoko",
+                                node_str
+                            ));
+                        }
+                        EdgeKind::Shutoko
+                    }
+                    (None, Some(true)) => EdgeKind::Entry,
+                    (None, Some(false)) => EdgeKind::Shutoko,
+                    (None, None) => {
+                        // Undecidable: no surface context and no discriminating node tag.
+                        // Conservative default: Shutoko (see rationale in step 3e header).
+                        undecidable_ramp_count += 1;
+                        classification_warnings.push(format!(
+                            "entry candidate {}: no surface-road context and no discriminating \
+                             OSM node tag → undecidable, conservatively classified as Shutoko",
+                            node_str
+                        ));
+                        EdgeKind::Shutoko
+                    }
+                }
+            } else if outgoing_from_to == 0 && backward_from_shutoko {
+                // Exit candidate: no ramp/mainline edges leave the to-node and the backward
+                // chain reaches the Shutoko mainline.
+                let node_str = &edge.to;
+                let on_surface = surface_nodes.contains(node_str.as_str());
+                let primary: Option<bool> = if has_surface_context {
+                    Some(on_surface)
                 } else {
-                    EdgeKind::Shutoko
+                    None
+                };
+                let tag_hw: Option<&str> = node_str
+                    .strip_prefix("n:")
+                    .and_then(|s| s.parse::<i64>().ok())
+                    .and_then(|id| node_highway_tags.get(&id))
+                    .map(|s| s.as_str());
+                let secondary: Option<bool> = match tag_hw {
+                    Some("traffic_signals") => Some(true),
+                    Some("motorway_junction") => Some(false),
+                    _ => None,
+                };
+
+                match (primary, secondary) {
+                    (Some(true), sec) => {
+                        if sec == Some(false) {
+                            classification_warnings.push(format!(
+                                "exit candidate {}: surface-connection=yes conflicts with \
+                                 highway={} (secondary=Shutoko); using surface-connection \
+                                 (primary) → Exit",
+                                node_str,
+                                tag_hw.unwrap_or("?")
+                            ));
+                        }
+                        EdgeKind::Exit
+                    }
+                    (Some(false), sec) => {
+                        if sec == Some(true) {
+                            classification_warnings.push(format!(
+                                "exit candidate {}: no surface connection conflicts with \
+                                 highway=traffic_signals (secondary=Exit); using \
+                                 surface-connection (primary) → Shutoko",
+                                node_str
+                            ));
+                        }
+                        EdgeKind::Shutoko
+                    }
+                    (None, Some(true)) => EdgeKind::Exit,
+                    (None, Some(false)) => EdgeKind::Shutoko,
+                    (None, None) => {
+                        undecidable_ramp_count += 1;
+                        classification_warnings.push(format!(
+                            "exit candidate {}: no surface-road context and no discriminating \
+                             OSM node tag → undecidable, conservatively classified as Shutoko",
+                            node_str
+                        ));
+                        EdgeKind::Shutoko
+                    }
                 }
             } else if forward_to_shutoko || backward_from_shutoko {
                 // Intermediate ramp segment or JCT connector connected to Shutoko but not
@@ -580,8 +700,8 @@ pub fn build_topology_with_report(
                 continue;
             }
         } else {
-            // Unreachable: non-motorway, non-link, non-recognised ways are filtered at
-            // the way-parsing stage above.
+            // Unreachable: non-motorway, non-link ways are filtered at the way-parsing
+            // stage above.
             continue;
         };
 
@@ -653,9 +773,22 @@ pub fn build_topology_with_report(
     }
 
     // 5. Parse turn restrictions from relations
+    // Emit undecidable-classification warnings before report construction.
+    if undecidable_ramp_count > 0 {
+        eprintln!(
+            "Warning: {} ramp edge(s) could not be classified as Entry/Exit vs. Shutoko \
+             (no surface-road context and no discriminating OSM node tag); conservatively \
+             classified as Shutoko. Update OSM extract with surface roads via fetch-osm.sh \
+             for accurate Entry/Exit classification.",
+            undecidable_ramp_count
+        );
+    }
+
     let mut forbidden_transitions_set: BTreeSet<Vec<String>> = BTreeSet::new();
     let mut report = RestrictionReport {
         dropped_link_edges,
+        undecidable_ramp_edges: undecidable_ramp_count,
+        notes: classification_warnings,
         ..Default::default()
     };
 
@@ -1092,7 +1225,6 @@ pub fn snap_index_to_deterministic_json(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::osm::OsmElement;
 
     #[test]
     fn test_haversine_distance() {
@@ -1116,152 +1248,349 @@ mod tests {
         assert_eq!(dur_local, 120);
     }
 
-    /// Build a minimal OsmElement with specified tags for testing helper functions.
-    fn make_way(tags: &[(&str, &str)]) -> OsmElement {
-        use std::collections::BTreeMap;
-        OsmElement {
-            element_type: "way".into(),
-            id: 0,
-            lat: None,
-            lon: None,
-            nodes: Some(vec![1, 2]),
-            members: None,
-            tags: Some(
-                tags.iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<_, _>>(),
-            ),
-        }
-    }
-
     // -------------------------------------------------------------------------
-    // Tests for is_shutoko_numbered_route_link
-    // (Major-2 fix: add unit coverage; Major-1 fix: include fullwidth digits)
+    // Tests for the surface-connection-based Entry/Exit classification
+    // (issue #32: replace brittle name-pattern and distance heuristics with
+    // structural OSM signals)
     // -------------------------------------------------------------------------
 
-    /// "首都高速2号目黒線" — the ASCII '2' before '号' must match (Critical-1).
+    /// Helper: build a minimal OverpassResponse from JSON-like element descriptors.
+    /// Each element is (type, id, lat, lon, nodes, tags).
+    /// For simplicity we use serde_json for the full pipeline.
+    fn build_response_from_json(json_str: &str) -> crate::osm::OverpassResponse {
+        serde_json::from_str(json_str).expect("test JSON must parse")
+    }
+
+    /// With a surface road connecting to the entry from-node, the ramp is classified
+    /// as Entry even when no name/distance heuristic is available.
     #[test]
-    fn test_numbered_route_link_megurogawa_ascii() {
-        let elem = make_way(&[("highway", "motorway_link"), ("name", "首都高速2号目黒線")]);
+    fn test_surface_connection_entry_classified_as_entry() {
+        // Shutoko loop: n10 → n11 → n12 → n10 (motorway C1)
+        // Surface road: n1 → n2 (highway=primary)
+        // Entry ramp: n2 → n5 → n10 (motorway_link, oneway)
+        // n2 is in surface_nodes (part of primary way) → Entry
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":1,"lat":35.6800,"lon":139.7600},
+                {"type":"node","id":2,"lat":35.6810,"lon":139.7600},
+                {"type":"node","id":5,"lat":35.6815,"lon":139.7620},
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"way","id":1,"nodes":[1,2],"tags":{"highway":"primary","oneway":"yes"}},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":200,"nodes":[2,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}}
+            ]
+        }"#,
+        );
+        let (graph, _snap, report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let kinds: std::collections::HashMap<&str, crate::model::EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        assert_eq!(
+            kinds.get("e:w200:0:f"),
+            Some(&crate::model::EdgeKind::Entry),
+            "entry ramp from-node n:2 is in surface_nodes → Entry"
+        );
+        assert_eq!(report.undecidable_ramp_edges, 0);
+    }
+
+    /// With a surface road connecting to the exit to-node, the ramp is classified
+    /// as Exit even without name/distance heuristics.
+    #[test]
+    fn test_surface_connection_exit_classified_as_exit() {
+        // Shutoko loop: n10 → n11 → n12 → n10 (motorway C1)
+        // Exit ramp: n11 → n25 → n20 (motorway_link, oneway)
+        // Surface road: n20 → n21 (highway=primary)
+        // n20 is in surface_nodes → Exit
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"node","id":20,"lat":35.6850,"lon":139.7600},
+                {"type":"node","id":21,"lat":35.6860,"lon":139.7600},
+                {"type":"node","id":25,"lat":35.6835,"lon":139.7620},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":300,"nodes":[11,25,20],"tags":{"highway":"motorway_link","oneway":"yes"}},
+                {"type":"way","id":2,"nodes":[20,21],"tags":{"highway":"primary","oneway":"yes"}}
+            ]
+        }"#,
+        );
+        let (graph, _snap, report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let kinds: std::collections::HashMap<&str, crate::model::EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        assert_eq!(
+            kinds.get("e:w300:1:f"),
+            Some(&crate::model::EdgeKind::Exit),
+            "exit ramp to-node n:20 is in surface_nodes → Exit"
+        );
+        assert_eq!(report.undecidable_ramp_edges, 0);
+    }
+
+    /// Without surface road data, an entry/exit candidate whose endpoint node has no
+    /// discriminating OSM tag is classified as Shutoko (conservative default) and
+    /// counted as undecidable.
+    #[test]
+    fn test_no_surface_context_undecidable_defaults_to_shutoko() {
+        // No surface roads. Entry candidate n:1 (no highway tag) → undecidable → Shutoko.
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":1,"lat":35.6800,"lon":139.7600},
+                {"type":"node","id":5,"lat":35.6815,"lon":139.7620},
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":200,"nodes":[1,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}}
+            ]
+        }"#,
+        );
+        let (graph, _snap, report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let kinds: std::collections::HashMap<&str, crate::model::EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        assert_eq!(
+            kinds.get("e:w200:0:f"),
+            Some(&crate::model::EdgeKind::Shutoko),
+            "no surface data + no OSM tag → undecidable → Shutoko"
+        );
         assert!(
-            is_shutoko_numbered_route_link(&elem),
-            "首都高速2号目黒線 must be detected as a numbered-route JCT connector"
+            report.undecidable_ramp_edges >= 1,
+            "undecidable edges must be counted; got {}",
+            report.undecidable_ramp_edges
+        );
+        assert!(
+            report.notes.iter().any(|n| n.contains("undecidable")),
+            "undecidable classification must appear in notes"
         );
     }
 
-    /// "首都高速3号渋谷線" — the ASCII '3' before '号' must match.
+    /// Without surface road data, the secondary signal highway=traffic_signals on the
+    /// entry from-node overrides the undecidable default and classifies as Entry.
     #[test]
-    fn test_numbered_route_link_shibuya_ascii() {
-        let elem = make_way(&[("highway", "motorway_link"), ("name", "首都高速3号渋谷線")]);
+    fn test_traffic_signals_secondary_signal_entry() {
+        // Node 1 has highway=traffic_signals (surface intersection evidence).
+        // No surface road ways → primary signal absent → use secondary → Entry.
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":1,"lat":35.6800,"lon":139.7600,"tags":{"highway":"traffic_signals"}},
+                {"type":"node","id":5,"lat":35.6815,"lon":139.7620},
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":200,"nodes":[1,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}}
+            ]
+        }"#,
+        );
+        let (graph, _snap, report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let kinds: std::collections::HashMap<&str, crate::model::EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        assert_eq!(
+            kinds.get("e:w200:0:f"),
+            Some(&crate::model::EdgeKind::Entry),
+            "highway=traffic_signals on from-node → Entry (secondary signal)"
+        );
+        assert_eq!(report.undecidable_ramp_edges, 0);
+    }
+
+    /// Without surface road data, highway=motorway_junction on the entry from-node
+    /// overrides the undecidable default and classifies as Shutoko (JCT evidence).
+    #[test]
+    fn test_motorway_junction_secondary_signal_shutoko() {
+        // Node 1 has highway=motorway_junction (JCT evidence).
+        // No surface road ways → primary absent → secondary → Shutoko.
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":1,"lat":35.6800,"lon":139.7600,"tags":{"highway":"motorway_junction"}},
+                {"type":"node","id":5,"lat":35.6815,"lon":139.7620},
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":200,"nodes":[1,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}}
+            ]
+        }"#,
+        );
+        let (graph, _snap, report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let kinds: std::collections::HashMap<&str, crate::model::EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        assert_eq!(
+            kinds.get("e:w200:0:f"),
+            Some(&crate::model::EdgeKind::Shutoko),
+            "highway=motorway_junction on from-node → Shutoko (secondary signal)"
+        );
+        assert_eq!(report.undecidable_ramp_edges, 0);
+    }
+
+    /// Surface road connection takes precedence over a contradicting motorway_junction tag.
+    /// The node is in surface_nodes (primary=true) but also has highway=motorway_junction
+    /// (secondary=Shutoko). Primary wins → Entry, with a warning in notes.
+    #[test]
+    fn test_surface_connection_overrides_motorway_junction_tag() {
+        // n:2 is in the primary surface road AND has highway=motorway_junction tag.
+        // Primary signal (surface connection) takes precedence → Entry + warning.
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":1,"lat":35.6800,"lon":139.7600},
+                {"type":"node","id":2,"lat":35.6810,"lon":139.7600,"tags":{"highway":"motorway_junction","name":"TestJCT"}},
+                {"type":"node","id":5,"lat":35.6815,"lon":139.7620},
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"way","id":1,"nodes":[1,2],"tags":{"highway":"primary","oneway":"yes"}},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":200,"nodes":[2,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}}
+            ]
+        }"#,
+        );
+        let (graph, _snap, report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let kinds: std::collections::HashMap<&str, crate::model::EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        assert_eq!(
+            kinds.get("e:w200:0:f"),
+            Some(&crate::model::EdgeKind::Entry),
+            "surface connection (primary) overrides motorway_junction tag (secondary) → Entry"
+        );
+        assert_eq!(report.undecidable_ramp_edges, 0);
         assert!(
-            is_shutoko_numbered_route_link(&elem),
-            "首都高速3号渋谷線 must be detected as a numbered-route JCT connector"
+            report.notes.iter().any(|n| n.contains("conflicts with")),
+            "contradiction between primary and secondary signals must be noted; notes={:?}",
+            report.notes
         );
     }
 
-    /// "首都高速２号目黒線" — fullwidth digit '２' must also match (Major-1 fix).
+    /// Surface road data is present but the exit to-node is NOT connected to any surface
+    /// road (primary=Some(false)) → confirmed Shutoko. This correctly rejects a JCT
+    /// connector whose end-point is entirely within the motorway network.
     #[test]
-    fn test_numbered_route_link_megurogawa_fullwidth() {
-        let elem = make_way(&[("highway", "motorway_link"), ("name", "首都高速２号目黒線")]);
-        assert!(
-            is_shutoko_numbered_route_link(&elem),
-            "fullwidth digit '２' before '号' must be accepted (Major-1)"
+    fn test_surface_context_present_no_connection_shutoko() {
+        // Entry ramp has a surface connection (n:2 in primary way).
+        // Exit candidate n:20 is NOT connected to any surface road → Shutoko.
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":1,"lat":35.6800,"lon":139.7600},
+                {"type":"node","id":2,"lat":35.6810,"lon":139.7600},
+                {"type":"node","id":5,"lat":35.6815,"lon":139.7620},
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"node","id":20,"lat":35.6850,"lon":139.7600},
+                {"type":"node","id":25,"lat":35.6835,"lon":139.7620},
+                {"type":"way","id":1,"nodes":[1,2],"tags":{"highway":"primary","oneway":"yes"}},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":200,"nodes":[2,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}},
+                {"type":"way","id":300,"nodes":[11,25,20],"tags":{"highway":"motorway_link","oneway":"yes"}}
+            ]
+        }"#,
         );
+        let (graph, _snap, report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let kinds: std::collections::HashMap<&str, crate::model::EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        // Entry ramp (n:2 in surface_nodes) → Entry
+        assert_eq!(
+            kinds.get("e:w200:0:f"),
+            Some(&crate::model::EdgeKind::Entry)
+        );
+        // Exit candidate n:20 NOT in surface_nodes (surface context IS present) → Shutoko
+        assert_eq!(
+            kinds.get("e:w300:1:f"),
+            Some(&crate::model::EdgeKind::Shutoko),
+            "exit to-node n:20 not in surface_nodes despite surface context being present → Shutoko (JCT)"
+        );
+        assert_eq!(report.undecidable_ramp_edges, 0);
     }
 
-    /// "首都高速都心環状線" — no digit+'号' pattern, must return false.
+    /// Verify that surface road ways do NOT produce graph edges — only motorway and
+    /// motorway_link ways appear in the output graph.
     #[test]
-    fn test_numbered_route_link_kanjo_rejected() {
-        let elem = make_way(&[("highway", "motorway_link"), ("name", "首都高速都心環状線")]);
-        assert!(
-            !is_shutoko_numbered_route_link(&elem),
-            "首都高速都心環状線 must not be classified as a numbered-route connector"
+    fn test_surface_roads_not_added_as_edges() {
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":1,"lat":35.6800,"lon":139.7600},
+                {"type":"node","id":2,"lat":35.6810,"lon":139.7600},
+                {"type":"node","id":3,"lat":35.6815,"lon":139.7620},
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"way","id":1,"nodes":[1,2],"tags":{"highway":"primary","oneway":"yes"}},
+                {"type":"way","id":2,"nodes":[2,3],"tags":{"highway":"secondary","oneway":"yes"}},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}}
+            ]
+        }"#,
         );
-    }
-
-    /// Plain "首都高速道路" — no digit+'号', must return false.
-    #[test]
-    fn test_numbered_route_link_generic_rejected() {
-        let elem = make_way(&[("highway", "motorway_link"), ("name", "首都高速道路")]);
+        let (graph, _snap, _report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let edge_ids: std::collections::HashSet<&str> =
+            graph.edges.iter().map(|e| e.id.as_str()).collect();
+        // Surface road edges must NOT appear in the graph
         assert!(
-            !is_shutoko_numbered_route_link(&elem),
-            "首都高速道路 (generic name) must not be classified as a numbered-route connector"
+            !edge_ids.contains("e:w1:0:f"),
+            "primary road must not produce a graph edge"
         );
-    }
-
-    /// Empty name string — must return false without panic.
-    #[test]
-    fn test_numbered_route_link_empty_name_rejected() {
-        let elem = make_way(&[("highway", "motorway_link"), ("name", "")]);
         assert!(
-            !is_shutoko_numbered_route_link(&elem),
-            "empty name must not match"
+            !edge_ids.contains("e:w2:0:f"),
+            "secondary road must not produce a graph edge"
         );
-    }
-
-    /// No name tag at all — must return false without panic.
-    #[test]
-    fn test_numbered_route_link_no_name_rejected() {
-        let elem = make_way(&[("highway", "motorway_link")]);
-        assert!(
-            !is_shutoko_numbered_route_link(&elem),
-            "absent name must not match"
-        );
-    }
-
-    /// "2号線" — digit+'号' present but no 首都高速 prefix; must return false.
-    #[test]
-    fn test_numbered_route_link_non_shutoko_rejected() {
-        let elem = make_way(&[("highway", "motorway_link"), ("name", "2号線")]);
-        assert!(
-            !is_shutoko_numbered_route_link(&elem),
-            "name without 首都高速 prefix must not match"
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // Test for the None => true (no coordinates) branch in the exit guard
-    // (Major-3 fix: document and cover the defensive fallback)
-    //
-    // In normal operation this branch is unreachable: edges are only built when
-    // both endpoint nodes have coordinates, so node_coords always contains the
-    // to-node ID of every edge.  The branch exists as a safety net for future
-    // code paths that might construct IntermediateEdges outside the normal OSM
-    // ingestion loop.  This test documents and pins the conservative behaviour.
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn test_exit_classification_no_coordinates_is_conservative() {
-        use std::collections::HashMap;
-
-        // Simulate an empty coordinate map (no coordinates available).
-        let node_coords: HashMap<i64, (f64, f64)> = HashMap::new();
-
-        // Replicate the exact Option chain used in the exit guard.
-        // A to-node ID that is absent from node_coords should yield None.
-        let to_node_str = "n:9999";
-        let coord = to_node_str
-            .strip_prefix("n:")
-            .and_then(|s| s.parse::<i64>().ok())
-            .and_then(|id| node_coords.get(&id))
-            .copied();
-
-        // The guard's None arm conservatively keeps the edge as Exit.
-        let is_real_exit = match coord {
-            None => true,
-            Some((to_lat, to_lon)) => {
-                // Would perform proximity check; not reached in this test.
-                let entry_candidates: Vec<(f64, f64)> = vec![(35.6800, 139.7600)];
-                entry_candidates.iter().any(|&(ec_lat, ec_lon)| {
-                    haversine_distance_meters(to_lat, to_lon, ec_lat, ec_lon)
-                        <= JCT_DETECTION_MAX_ENTRY_DIST_METERS
-                })
-            }
-        };
-
-        assert!(
-            is_real_exit,
-            "missing coordinates must conservatively preserve Exit classification"
-        );
+        // Shutoko edges must be present
+        assert!(edge_ids.contains("e:w100:0:f"), "Shutoko edge must exist");
+        // No Local edges
+        let local_count = graph
+            .edges
+            .iter()
+            .filter(|e| e.kind == crate::model::EdgeKind::Local)
+            .count();
+        assert_eq!(local_count, 0, "Local edges must not be created");
     }
 }

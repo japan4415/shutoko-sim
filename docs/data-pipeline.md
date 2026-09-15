@@ -1,6 +1,6 @@
 # 実データ道路グラフ・課金ペア生成パイプライン
 
-本ドキュメントでは、OpenStreetMap（OSM）実データから首都高速道路都心環状線（C1）および接続ランプを抽出し、決定論的な道路ネットワーク成果物（`graph.json`、`snap-index.json`、`manifest.json`）を生成するオフラインパイプラインの仕様と手順を記録する。一般道は取得・生成対象から除外している（詳細は「対象範囲」参照）。
+本ドキュメントでは、OpenStreetMap（OSM）実データから首都高速道路都心環状線（C1）および接続ランプを抽出し、決定論的な道路ネットワーク成果物（`graph.json`、`snap-index.json`、`manifest.json`）を生成するオフラインパイプラインの仕様と手順を記録する。一般道はルーティンググラフのエッジには含めないが、入口/出口ランプの分類コンテキストとして取得・参照している（詳細は「対象範囲」参照）。
 
 ## 1. ライセンスと帰属表示
 
@@ -17,24 +17,51 @@
 - **Overpass API エンドポイント**:
   - 主系: `https://overpass-api.de/api/interpreter`
   - 副系: `https://overpass.kumi.systems/api/interpreter`
-- **クエリ SHA-256**: 要再計算（コンテキストホップ追加によりクエリ文字列が変更済み。次回 `./scripts/fetch-osm.sh` 実行時にスクリプトが自動出力する値で更新すること）
+- **クエリ SHA-256**: `ae8754b341bce5bd0acb79f70fb8c71175b332679b44d6f3425b6e1a00b1510e`
 - **出力先**: `fixtures/osm/shutoko-c1.json`
-- **ファイルサイズ（再取得後）**: 要再取得後更新（コンテキストウェイ追加により 321 KB から増加見込み。推測: 700 KB〜1.5 MB 程度）
-- **要素数（再取得後）**: 要再取得後更新
+- **最終取得日時（UTC）**: `2026-09-15T04:38:52Z`（副系エンドポイント使用）
+- **ファイルサイズ**: 369,367 bytes（約 361 KB）
+- **要素数**: 合計 2,051 要素（ノード 1,745 / way 299 / リレーション 7）
 
 ### 対象範囲
 
-一般道（`trunk`、`primary`、`secondary`、`residential`、`service` 等）は**ルーティンググラフには含めない**。ルーティングモデルが「直線距離の近い入口から乗る」前提であるため、一般道経路探索は不要である。ただし入口・出口ランプの**分類コンテキスト**として一般道ウェイを取得する（後述）。路線追加は Overpass クエリのリレーション ID を足すだけで可能で、地理的 bbox を指定する必要もない。
+一般道（`trunk`、`primary`、`secondary`、`residential`、`service` 等）は**ルーティンググラフには含めない**。ルーティングモデルが「直線距離の近い入口から乗る」前提であるため、一般道経路探索は不要である。ただし入口・出口ランプの**分類コンテキスト**として一般道ウェイを取得する（後述「入口/出口ランプの分類方式」参照）。路線追加は Overpass クエリのリレーション ID を足すだけで可能で、地理的 bbox を指定する必要もない。**旧方式で必要だった路線名リスト（「首都高 + ＜数字＞号」パターンマッチ）のメンテナンスも不要になった**（詳細は「入口/出口ランプの分類方式」参照）。
 
 - **首都高速都心環状線（C1）**: リレーション ID `4256008`（首都高速都心環状線、`ref=C1`）
 - **接続ランプ（motorway_link）**: C1 本線ノードから最大 4 ホップで到達可能な進入・退出ランプウェイ（芝公園・飯倉・霞が関・汐留・宝町等の多ホップランプを包含）
-- **コンテキストウェイ（surface-road context）**: 4 ホップ展開後、取得済みの motorway / motorway_link ウェイのいずれかのノードを共有するすべての `highway` ウェイ（motorway / motorway_link を除く）。`trunk`・`primary`・`secondary`・`tertiary`・`unclassified`・`residential`・`service`・`living_street` など、出口ランプが降りる先になりうるあらゆる型を対象とする。グラフビルダーはこれらを**ルーティンググラフに含めず**、入口・出口ランプの分類（ランプ終端ノードが一般道と接するか否か）にのみ使用する。
+- **コンテキストウェイ（surface-road context）**: 4 ホップ展開後、取得済みの motorway / motorway_link ウェイのいずれかのノードを共有するすべての `highway` ウェイ（motorway / motorway_link を除く）。`trunk`・`primary`・`secondary`・`tertiary`・`unclassified`・`residential`・`service`・`living_street` など、出口ランプが降りる先になりうるあらゆる型を対象とする。グラフビルダーはこれらを**ルーティンググラフに含めず**、入口・出口ランプの分類（ランプ終端ノードが一般道と接するか否か）にのみ使用する。**コンテキストウェイは way 要素のみ（`nodes` 配列と `tags`）が出力され、そのノードの座標は出力されない。** 座標の代わりにノード ID の包含チェック（motorway_link のノード ID セットとの積集合）で一般道接続を判定するためである。本データセットでは motorway_link のノード ID と重複するコンテキストウェイのノード ID は 57 件。highway 値ごとの way 件数の内訳: motorway 105 / motorway_link 101 / secondary 24 / footway 19 / tertiary 16 / unclassified 11 / secondary_link 6 / primary 5 / primary_link 2 / residential 2 / pedestrian 2 / service 1（highway タグなし 5）。
 - **右左折・Uターン禁止制限**: 高速道路本線およびランプ（`ew_all`・`links`）に関連する `type=restriction` リレーション
   - `no_*`（via=node）: from エッジから to エッジへの禁止遷移ペア（長さ 2）を生成。
   - `only_*`（via=node）: via ノードにおける to 以外の代替流出エッジを自動特定し、禁止遷移ペアとして生成。
   - `via=way`（Uターン制限等）: from エッジ、via エッジ列、to エッジを連結する長さ 3 以上の禁止エッジ列を生成。
   - `restriction:conditional`（時間帯・車種条件付き制限）: 静的道路グラフでは一意に評価できないためスキップし、標準エラー出力およびマニフェストへ記録。
   - `only_*`（via=way）: 静的道路グラフ生成では現時点で未サポートとし、該当関係が存在する場合はスキップしてマニフェストへ記録。
+
+### 入口/出口ランプの分類方式
+
+ランプエッジ（`motorway_link`）を入口（Entry）・出口（Exit）・首都高本線（Shutoko）に分類する際、以下の優先順位付き規則を適用する（issue #32 対応）。
+
+**廃止した旧ヒューリスティック**:
+- **路線名パターンマッチ**（`is_shutoko_numbered_route_link()`）: 「首都高 + ＜数字＞号」の路線名から号数を抽出して判定。湾岸線・中央環状線 C2・八重洲線等、号数を持たない路線を正しく扱えなかった。路線拡充のたびに路線名リストのメンテナンスが必要だった
+- **距離しきい値**（`JCT_DETECTION_MAX_ENTRY_DIST_METERS = 550`）: 実出口の最遠 466m と JCT 連絡路の最小 665m の間のマージンが薄く、路線拡充で破綻するリスクがあった
+
+**現行の優先順位付き規則**:
+1. **地表接続シグナル（一次）**: ランプ端点ノードが、車両通行可能な一般道 way のノード集合に含まれるか。`is_vehicle_highway(highway) -> Option<bool>` が道路種別の構造的区分を担い、歩道・歩行者専用路（footway / pedestrian / cycleway / steps 等）は共有ノードがあっても地表接続の証拠に数えない（本データセットで 3 ノードが該当）
+2. **OSM ノードタグシグナル（二次）**: `highway=traffic_signals` → 入口/出口の証拠、`highway=motorway_junction` → 本線側の証拠
+3. 一次シグナルが決定的ならそれを採用。二次と矛盾する場合は警告を記録
+4. どちらでも決まらない場合は `undecidable_ramp_edges` を加算し警告を出したうえで保守的に Shutoko に分類
+
+**結果（`c1-real-v1` データセット）**:
+
+| 種別 | エッジ数 |
+|------|---------|
+| Entry | 15 |
+| Exit | 17 |
+| Shutoko | 1,687 |
+| Local | 0 |
+| undecidable_ramp_edges | 0 |
+
+旧ロジックとの差異: `e:w4848898:0:f`（way 4848898「首都高速都心環状線」`ref=C1` の先頭セグメント）が Entry の誤分類から正しく Shutoko に修正された（始端ノードが車両通行可能な一般道と接続していないため）。
 
 ### 再現実行手順
 ```bash
@@ -119,16 +146,16 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 - **Node の地理座標 (`lat`, `lon`)**: `graph.json` 内の全ノードに f64 の `lat` および `lon` を必須フィールドとして出力。WASM 内部での空間スナップおよび GeoJSON LineString 幾何データ合成に使用される。
 - **Edge の日本語道路名 (`name`)**: OSM ウェイの `name`（存在しない場合は `name:ja`）を `Edge.name: Option<String>` として伝播。名前のないエッジは `serde(skip_serializing_if = "Option::is_none")` により JSON 出力からキーが省略される。
 - **課金ペアの公式ランプ名 (`entryName`, `exitName`)**: `data/billing-pairs-seed.json` の各ペアに公式ランプ名（例: `"神田橋入口"`, `"宝町出口"`）が定義され、グラフビルダーにより `graph.json` の `billingPairs[]` へそのまま伝播される。
-- **ファイルサイズと転送量予算**: 一般道エッジを除外したことで `fixtures/generated/graph.json` は実測 563 KB（1,717 ノード / 1,719 エッジ: shutoko 1,686 / entry 16 / exit 17）となり、プロジェクトのネットワーク転送量上限である 10MiB に対して十分に安全な範囲に収まっている。`schemaVersion` は 2。
+- **ファイルサイズと転送量予算**: 一般道エッジを除外したことで `fixtures/generated/graph.json` は実測 563 KB（1,717 ノード / 1,719 エッジ: shutoko 1,687 / entry 15 / exit 17）となり、プロジェクトのネットワーク転送量上限である 10MiB に対して十分に安全な範囲に収まっている。`schemaVersion` は 2。
 
 ### `snap-index.json` の意味と `schemaVersion: 2`
 
-`snap-index.json` は一般道ノード一覧から**入口アクセス地点（Entry エッジの from ノード）一覧**に変わった。`schemaVersion` が 1 → 2 に更新されている。現行データには 16 件の入口アクセス地点が登録されており、ファイルサイズは約 1.5 KB である。WASM はこのインデックスを使って出発座標から近い順に最大 `max_access_entries` 件の入口アクセス地点を選択する。
+`snap-index.json` は一般道ノード一覧から**入口アクセス地点（Entry エッジの from ノード）一覧**に変わった。`schemaVersion` が 1 → 2 に更新されている。現行データには 15 件の入口アクセス地点が登録されており、ファイルサイズは約 1.5 KB である。WASM はこのインデックスを使って出発座標から近い順に最大 `max_access_entries` 件の入口アクセス地点を選択する。
 
 ### 再現性・決定論的検証
 同一入力から 2 回実行し、`diff -r` によりバイト完全一致（SHA-256 一致）が確認されている。
 - `graph.json`: 禁止遷移（`only_*` および `via=way` を含む）やソート順を決定論的に出力（`schemaVersion: 2`）
-- `snap-index.json`: 入口アクセス地点（Entry エッジの from ノード）の空間インデックス（`schemaVersion: 2`、16 ノード、約 1.5 KB）
+- `snap-index.json`: 入口アクセス地点（Entry エッジの from ノード）の空間インデックス（`schemaVersion: 2`、15 ノード、約 1.5 KB）
 - `manifest.json`: 全成果物の SHA-256、未検証区間一覧、検証済みペア出典情報（`provenance`）を記録
 
 ## 5. 未検証区間（Unverified Sections）

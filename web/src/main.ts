@@ -108,6 +108,10 @@ let mapFailed = false;
 let mapView: MapView | null = null;
 // 位置情報が拒否られたか。一旦拒否されたら許可要求を繰り返さない。
 let geolocationDenied = false;
+// 進行中の現在地取得を識別する世代番号。地図・住所・座標などで出発地点が
+// 後から確定したら加算し、遅れて成功した古い取得結果を捨てる（住所検索の
+// addressRequestSeq とは独立のカウンタ）。
+let geolocationRequestSeq = 0;
 // 地図タップで出発地点を選ぶモード。誤タップで確定しないよう pending を経由する。
 let pickMode = false;
 // 地図タップで置いた候補地点（確定前）。住所は逆ジオコーディングしない。
@@ -213,6 +217,19 @@ function setStatus(text: string): void {
   el.status.textContent = text;
 }
 
+/**
+ * 復帰導線を可視化して、その主操作へフォーカスを移す。
+ * 復帰パネルは地図の下にありモバイルで画面外になりやすいため、
+ * 表示時にスクロールして操作位置を見えるようにする（design F5）。
+ */
+function revealRecovery(focusTarget: HTMLElement | null): void {
+  el.recovery.hidden = false;
+  if (focusTarget !== null) {
+    focusTarget.focus({ preventScroll: true });
+  }
+  el.recovery.scrollIntoView({ block: "nearest" });
+}
+
 function clearRecovery(): void {
   el.recovery.hidden = true;
   el.recovery.replaceChildren();
@@ -232,7 +249,7 @@ function showReloadRecovery(code: string): void {
     window.location.reload();
   });
   el.recovery.replaceChildren(p, wrapActions(button));
-  el.recovery.hidden = false;
+  revealRecovery(button);
 }
 
 /** 候補なし・時間枠不一致からの復帰（時間を広げる案内。自動変更しない）。 */
@@ -253,7 +270,7 @@ function showTimeWindowRecovery(text: string): void {
     el.maxMinutes.focus();
   });
   el.recovery.replaceChildren(p, wrapActions(button));
-  el.recovery.hidden = false;
+  revealRecovery(button);
 }
 
 function wrapActions(...buttons: HTMLButtonElement[]): HTMLElement {
@@ -273,7 +290,7 @@ function showAddressFallback(message: string): void {
     el.addressQuery.focus();
   });
   el.recovery.replaceChildren(p, wrapActions(button));
-  el.recovery.hidden = false;
+  revealRecovery(button);
 }
 
 /**
@@ -309,7 +326,7 @@ function showAreaRecovery(message: string): void {
     el.addressQuery.focus();
   });
   el.recovery.replaceChildren(p, wrapActions(usePreset, pick, search));
-  el.recovery.hidden = false;
+  revealRecovery(usePreset);
 }
 
 /**
@@ -340,7 +357,7 @@ function showUnreachableRecovery(message: string): void {
     p,
     wrapActions(pick, usePreset, wrapSecondaryAddressButton()),
   );
-  el.recovery.hidden = false;
+  revealRecovery(pick);
 }
 
 /** 住所検索へ戻る補助ボタン（復帰導線の共通部品）。 */
@@ -382,6 +399,11 @@ function setOrigin(next: LatLng, sourceLabel: string): void {
     el.addressCandidatesField.hidden = true;
     el.addressCandidates.replaceChildren();
   }
+  if (!sourceLabel.startsWith("現在地")) {
+    // 現在地以外で出発地点が確定したら、進行中の現在地取得を無効化する。
+    // 遅れて成功した取得結果が確定済みの地点を上書きしないようにする（SEC-01）。
+    geolocationRequestSeq += 1;
+  }
   mapView?.setOrigin(next);
   mapView?.focusOrigin(next);
   invalidateResults();
@@ -390,6 +412,8 @@ function setOrigin(next: LatLng, sourceLabel: string): void {
 function clearOrigin(): void {
   origin = null;
   el.originSummary.textContent = "出発地点が未確定です。";
+  // 出発地点を未確定に戻したら、進行中の現在地取得も無効化する。
+  geolocationRequestSeq += 1;
 }
 
 // --- 地図タップによる出発地点指定 ---
@@ -408,11 +432,18 @@ function enterPickMode(): void {
   el.mapPickConfirm.disabled = true;
   el.mapPickStatus.textContent =
     "地図をタップすると候補地点を表示します。確定前にどんどん選び直せます。";
-  el.mapPickConfirm.focus();
+  // disabled の確定ボタンへ focus() してもフォーカスは移らない（design F2）。
+  // 状態文（地図の直下）へフォーカスし、パネルを可視位置へスクロールする。
+  el.mapPickPanel.scrollIntoView({ block: "nearest" });
+  el.mapPickStatus.focus({ preventScroll: true });
 }
 
-/** モードを終了し、pending の候補地点を消す（出発地点は変更しない）。 */
-function exitPickMode(announce: string | null): void {
+/**
+ * モードを終了し、pending の候補地点を消す（出発地点は変更しない）。
+ * restoreFocus を渡すと、hidden になったパネルに残ったフォーカスを
+ * 論理的な起点へ戻す（design F3。body 落ちの防止）。
+ */
+function exitPickMode(announce: string | null, restoreFocus: HTMLElement | null = null): void {
   pickMode = false;
   pendingPick = null;
   mapView?.setPendingOrigin(null);
@@ -421,6 +452,7 @@ function exitPickMode(announce: string | null): void {
   el.mapPickPanel.hidden = true;
   el.mapPickConfirm.disabled = true;
   el.mapPickStatus.textContent = "";
+  restoreFocus?.focus({ preventScroll: true });
   if (announce !== null) {
     setStatus(announce);
   }
@@ -435,6 +467,8 @@ function handlePickOrigin(point: LatLng): void {
   el.mapPickConfirm.disabled = false;
   // 逆ジオコーディングは対象外なので座標ラベルだけを示す。
   el.mapPickStatus.textContent = `候補地点: ${coordinateLabel(point.lat, point.lon)}（住所は取得していません）。「この地点を出発地点にする」で確定します。`;
+  // タップ後に確定/取消が視界に入るよう、パネルを可視位置へスクロールする（design F1）。
+  el.mapPickPanel.scrollIntoView({ block: "nearest" });
 }
 
 function confirmPick(): void {
@@ -448,6 +482,8 @@ function confirmPick(): void {
   setStatus(
     `出発地点を地図の座標（${coordinateLabel(point.lat, point.lon)}）に設定しました。探索ボタンで再検索してください。`,
   );
+  // 確定後は出発地点の要約（新しい起点）へフォーカスを戻す。
+  el.originSummary.focus({ preventScroll: true });
 }
 
 // --- 住所検索 ---
@@ -527,15 +563,24 @@ function renderAddressCandidates(candidates: GeocodeCandidate[]): void {
 
 /** 現在地を一度だけ取得する。拒否・失敗時は住所検索へ誘導する（再要求しない）。 */
 async function handleGeolocate(): Promise<void> {
+  // 取得開始時に世代を採番し、完了時に自分が最新かを確認する。取得中に
+  // 地図・住所・座標で出発地点が確定したら、遅れた結果は無視する（SEC-01）。
+  const seq = (geolocationRequestSeq += 1);
   el.geolocate.disabled = true;
   el.geolocate.textContent = "取得中…";
   try {
     const position = await getCurrentPosition();
+    if (seq !== geolocationRequestSeq) {
+      return; // 後から確定した出発地点を現在地で上書きしない
+    }
     setOrigin(position, "現在地");
     el.addressFeedback.textContent = "";
     clearRecovery();
     setStatus("現在地を出発地点に設定しました。");
   } catch (cause) {
+    if (seq !== geolocationRequestSeq) {
+      return; // 古い取得の失敗も無視する
+    }
     const code = typeof cause === "object" && cause !== null && "code" in cause
       ? Number((cause as { code: unknown }).code)
       : 0;
@@ -1060,7 +1105,7 @@ el.search.addEventListener("click", startSearch);
 el.cancel.addEventListener("click", cancelSearch);
 el.mapPick.addEventListener("click", () => {
   if (pickMode) {
-    exitPickMode("地図タップでの指定をやめました。");
+    exitPickMode("地図タップでの指定をやめました。", el.mapPick);
     return;
   }
   clearRecovery();
@@ -1068,12 +1113,12 @@ el.mapPick.addEventListener("click", () => {
 });
 el.mapPickConfirm.addEventListener("click", confirmPick);
 el.mapPickCancel.addEventListener("click", () => {
-  exitPickMode("地図タップでの指定をキャンセルしました。");
+  exitPickMode("地図タップでの指定をキャンセルしました。", el.mapPick);
 });
 // Esc でモードを抜ける（誤タップを確定させない）。
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && pickMode) {
-    exitPickMode("地図タップでの指定をキャンセルしました。");
+    exitPickMode("地図タップでの指定をキャンセルしました。", el.mapPick);
   }
 });
 

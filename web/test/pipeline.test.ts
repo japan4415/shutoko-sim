@@ -386,9 +386,11 @@ describe("loadRelease（モック fetch）", () => {
     expect(JSON.parse(prepareCalls[0]?.limitsJson ?? "{}")).toEqual({
       maxAccessDistanceMeters: MAX_ACCESS_DISTANCE_METERS,
     });
-    // 導出（240*60/2*(30/3.6)/1.3 ≒ 46.1km）と、解析上界 37.3km・旧既定 30km を上回ること。
+    // 導出（240*60/2*(30/3.6)/1.3 ≒ 46 153.8 m）を下回り、旧既定 30km を上回ること。
+    // 解析上界 46 153.8 m より小さい cap は「アクセス往復だけで製品上限に届く」地点を
+    // 除くだけなので、時間窓で成立し得る候補を隠さない。
     expect(MAX_ACCESS_DISTANCE_METERS).toBe(46_000);
-    expect(MAX_ACCESS_DISTANCE_METERS).toBeGreaterThan(37_300);
+    expect(MAX_ACCESS_DISTANCE_METERS).toBeLessThan(46_154);
     expect(MAX_ACCESS_DISTANCE_METERS).toBeGreaterThan(30_000);
   });
 

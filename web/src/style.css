@@ -403,7 +403,7 @@ button.chip {
 
 .card .roads summary {
   cursor: pointer;
-  min-height: 32px;
+  min-height: 44px; /* 他の操作要素と同じタップ最小サイズ（design F9） */
   display: flex;
   align-items: center;
 }
@@ -449,6 +449,8 @@ button.chip {
 /* 地図タップ指定。モード中だけ地図をクロスヘアにし、確定前の地点を見せる。 */
 .map--pick {
   cursor: crosshair;
+  /* タッチ端末にはカーソルが無いため、枠でもモード中であることを示す。 */
+  box-shadow: inset 0 0 0 3px var(--accent);
 }
 
 .map-pick {
@@ -487,7 +489,8 @@ button.chip {
   box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
 }
 
-/* タップで選んだ確定前の地点。出発地（塗り）と区別できる中抜きの二重丸にする。 */
+/* タップで選んだ確定前の地点。出発地（青の塗り）とも課金対象（オレンジ）とも
+   区別できるよう、アクセント色の破線二重丸にする（design F7）。 */
 .pending-marker {
   background: transparent;
   border: none;
@@ -499,8 +502,8 @@ button.chip {
   height: 22px;
   border-radius: 50%;
   border: 3px solid #fff;
-  outline: 3px solid var(--charged);
-  background: rgb(194 65 12 / 35%);
+  outline: 3px dashed var(--accent);
+  background: rgb(11 92 173 / 30%);
   box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
 }
 
@@ -518,5 +521,14 @@ button.chip {
 
 .leaflet-control-attribution a {
   color: var(--accent);
+}
+
+/* Leaflet 既定のズームボタンは 30px 角でタップ最小 44px を下回る（design F8）。 */
+.leaflet-control-zoom a,
+.leaflet-touch .leaflet-bar a {
+  width: 44px;
+  height: 44px;
+  line-height: 44px;
+  font-size: 1.4rem;
 }
 

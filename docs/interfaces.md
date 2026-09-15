@@ -120,7 +120,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 
 ### 探索結果の status と reason コード
 結果は `requestId`、`releaseId`、`status`（`ok` / `no_candidates` / `truncated`）、`reason`、`rankingMode`、`expandedStates`、`candidates`、`nearestAccess`、`minPlanSeconds` を持つ。`reason` は該当時のみ以下のコードをとる:
-- `NO_CONNECTION`: 入口アクセス地点（Entry エッジ from ノード）が1件も得られない、または最寄りの入口アクセス地点が `SearchLimits.max_access_distance_meters` を超える
+- `NO_CONNECTION`: 入口アクセス地点（Entry エッジ from ノード）が1件も得られない、最寄りの入口アクセス地点が `SearchLimits.max_access_distance_meters` を超える、または `SearchLimits.max_access_entries` により検証済み課金ペアの入口がアクセス候補に含まれない。前2者は原点がデータ被覆の外側であることを意味し、`nearestAccess` は cap 超過の距離になる（cap を 0 = 無制限にした場合はこの限りでない）。3者目は `nearestAccess` が近距離でも生じ得るため、UI は距離キャップ超過を確認してから「到達不能」を断定する。
 - `NO_BILLING_PAIR`: 有効な課金ペアが 1 件も存在しない
 - `NO_LOOP`: 周回ループが見つからない、または進入不可
 - `TIME_WINDOW`: 指定所要時間枠（minMinutes〜maxMinutes）に収まる候補がない
@@ -132,7 +132,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | フィールド | 型 | 内容 |
 | --- | --- | --- |
 | `nearestAccess` | `SnappedOrigin \| null` | 座標入力（`origin`）における最近接の入口アクセス地点（`{ nodeId, lat, lon, distanceMeters }`）。距離キャップ超過の `NO_CONNECTION` でも返す。`originNodeId` 入力および Entry アクセス地点が0件のときは `null` |
-| `minPlanSeconds` | `number \| null` | グラフ上で合法（禁止遷移を満たす）な全周回の `planSeconds`（`baseSeconds + bufferSeconds`）の最小値。指定時間枠で棄却した周回も含む。合法な周回が1件も無い場合は `null`。`TIME_WINDOW` の数値根拠（最寄り入口までの距離は `nearestAccess.distanceMeters`）として使う |
+| `minPlanSeconds` | `number \| null` | ループ時間が製品上限 240 分以内にある合法（禁止遷移を満たす）周回の `planSeconds`（`baseSeconds + bufferSeconds`）の最小値。指定時間枠で棄却した周回も含む。列挙は「ループ部分の秒数 ≤ 240 分」で打ち切られるため、`minPlanSeconds > 240 * 60` は「240 分以内に収まる合法周回が無い」ことの根拠として使える一方、その値は列挙範囲内の最小値であり真の全周回最小を上回り得る（`240 * 60` 以下かどうかの判定は厳密）。合法な周回が1件も無い場合は `null`。`TIME_WINDOW` の数値根拠（最寄り入口までの距離は `nearestAccess.distanceMeters`）として使う |
 
 ### 候補の必須フィールド
 
@@ -178,6 +178,8 @@ URL は座標のみの固定形式を `format!` で組み立て（区切りは `
 OSM のデータライセンスとタイルサーバーの利用条件は別に扱う。地図に OpenStreetMap contributors の帰属と著作権ページへのリンクを表示する。派生グラフの公開時は ODbL に基づく帰属・提供義務を確認し、元データと生成方法を追える形にする。[OpenStreetMap copyright](https://www.openstreetmap.org/copyright)
 
 標準タイルサーバーを本番用の無制限基盤とはみなさない。大量先読み・オフライン取得を行わず、必要な帰属とキャッシュ条件を守る。実際のタイル提供元は利用量・可用性・条件を確認して選ぶ。[OSMF Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)
+
+地図の表示範囲は、出発地点の確定（現在地・住所・地図タップ・座標）および候補表示への追従で移動し、移動後の範囲のタイルを既存の提供元（国土地理院）へ要求する。新しい提供元は追加しない。現在地取得を契機とする位置依存のタイル要求が発生し得るため、UI は地図操作・出発地点確定時の外部通信を説明する文言を表示する。位置情報そのもの（緯度経度）を成果物・ログ・成果物 URL に含めない方針は従来どおりで、現在地は検索リクエストの座標として WASM に渡すだけである。
 
 公開 Nominatim は絶対上限1リクエスト/秒で、クライアント側オートコンプリートは禁止されている。本番はプロバイダー契約または自前運用を選定し、この制約を前提としない構成を確定するまで公開しない。[Nominatim Usage Policy](https://operations.osmfoundation.org/policies/nominatim/)
 

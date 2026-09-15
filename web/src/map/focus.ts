@@ -15,6 +15,14 @@ export interface OriginFocusPlan {
 }
 
 /**
+ * 候補表示時の地図フィットに使うアニメーション指定。
+ * prefers-reduced-motion では `animate: false`（design F4）。
+ */
+export function fitBoundsAnimation(reducedMotion: boolean): { animate: boolean } {
+  return { animate: !reducedMotion };
+}
+
+/**
  * 出発地点が既に表示範囲内なら動かさない（無駄な移動をしない）。
  * 範囲外なら追従し、現在ズームが FOCUS_ORIGIN_MIN_ZOOM 未満なら合わせて寄せる。
  * prefers-reduced-motion ではアニメーションしない。

@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use shutoko_routing_core::search_json;
+use shutoko_routing_core::{search_json, MAX_PRODUCT_MINUTES};
 
 fn graph() -> Value {
     serde_json::from_str(include_str!("../../../fixtures/synthetic-graph.json")).unwrap()
@@ -1398,5 +1398,249 @@ fn max_access_entries_zero_means_unlimited_tries_all_entries() {
     assert!(
         !ids_capped.contains(&"zzz-section"),
         "cap=1: zzz-section must NOT be present (lex-larger entry excluded)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// correct-001: `minPlanSeconds` must cover every legal loop the product can
+// ever accept, not only loops inside the requested window (review TEST-01 /
+// opus5 F1).
+// ---------------------------------------------------------------------------
+
+/// A legal loop of 61 minutes only becomes visible when the *diagnostic*
+/// enumeration is not bounded by the requested 60-minute window.  Before the
+/// fix `minPlanSeconds` was `null` (the 3 660 s loop was pruned at 3 600 s),
+/// so the UI could not tell "widen the window" from "no loop at all".
+#[test]
+fn min_plan_seconds_covers_loops_pruned_by_the_request_window() {
+    let mut g = graph();
+    // Loop ab+bc+ca = 3 × 1220 s = 3 660 s (61 min) > 60 min window.
+    for edge in g["edges"].as_array_mut().unwrap() {
+        if edge["kind"] == "shutoko" {
+            edge["durationSeconds"] = json!(1220);
+        }
+    }
+    // originNodeId "i": access = 0, return = 16 s (same as the base fixture).
+    let r = json!({
+        "requestId": "diag-pruned-loop",
+        "releaseId": "synthetic-v1",
+        "originNodeId": "i",
+        "minMinutes": 30,
+        "maxMinutes": 60,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let result = run(&g, &r, json!({}));
+
+    // The requested window rejects the loop, but a legal loop exists.
+    assert_eq!(
+        result["status"], "no_candidates",
+        "61-min loop cannot fit a 60-min window"
+    );
+    assert_eq!(
+        result["reason"], "TIME_WINDOW",
+        "a legal loop outside the window must be TIME_WINDOW, not NO_LOOP"
+    );
+    // base = 0 + (30 + 3660 + 30) + 16 = 3736; buffer = max(300, ceil(3736/5)) = 748.
+    assert_eq!(
+        result["minPlanSeconds"].as_u64(),
+        Some(4484),
+        "minPlanSeconds must report the pruned 61-min loop (plan 4 484 s)"
+    );
+    assert!(
+        result["minPlanSeconds"].as_u64().unwrap() <= MAX_PRODUCT_MINUTES * 60,
+        "minPlanSeconds must stay inside the product cap"
+    );
+}
+
+/// Cross-pair: the loop-time pruning is a single bound shared by all pairs,
+/// while `planSeconds` adds per-pair access/return.  A shorter *plan* on a
+/// longer-loop pair can therefore be hidden by the requested window.  With a
+/// 45-min window the near pair's 46-min loop is pruned while the far pair's
+/// 44-min loop is enumerated; the reported minimum must still be the near
+/// pair's smaller plan, not the far pair's larger one.
+#[test]
+fn min_plan_seconds_is_not_hidden_by_cross_pair_pruning() {
+    // `MAX_PRODUCT_MINUTES_SECONDS` is asserted below; keep the local alias.
+    const MAX_PRODUCT_MINUTES_SECONDS: u64 = MAX_PRODUCT_MINUTES * 60;
+
+    let g = json!({
+        "schemaVersion": 2,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": [
+            {"id": "near-e", "lat": 35.0, "lon": 139.0},
+            {"id": "near-a", "lat": 35.001, "lon": 139.0},
+            {"id": "near-b", "lat": 35.002, "lon": 139.001},
+            {"id": "near-c", "lat": 35.001, "lon": 139.002},
+            {"id": "near-o", "lat": 35.0, "lon": 139.0},
+            {"id": "far-e", "lat": 35.0, "lon": 139.05},
+            {"id": "far-a", "lat": 35.001, "lon": 139.05},
+            {"id": "far-b", "lat": 35.002, "lon": 139.051},
+            {"id": "far-c", "lat": 35.001, "lon": 139.052},
+            {"id": "far-o", "lat": 35.0, "lon": 139.05}
+        ],
+        "edges": [
+            {"id":"near-entry","from":"near-e","to":"near-a","kind":"entry","durationSeconds":30,"distanceMeters":200},
+            {"id":"near-ab","from":"near-a","to":"near-b","kind":"shutoko","durationSeconds":920,"distanceMeters":10000},
+            {"id":"near-bc","from":"near-b","to":"near-c","kind":"shutoko","durationSeconds":920,"distanceMeters":10000},
+            {"id":"near-ca","from":"near-c","to":"near-a","kind":"shutoko","durationSeconds":920,"distanceMeters":10000},
+            {"id":"near-exit","from":"near-a","to":"near-o","kind":"exit","durationSeconds":30,"distanceMeters":200},
+            {"id":"far-entry","from":"far-e","to":"far-a","kind":"entry","durationSeconds":30,"distanceMeters":200},
+            {"id":"far-ab","from":"far-a","to":"far-b","kind":"shutoko","durationSeconds":880,"distanceMeters":10000},
+            {"id":"far-bc","from":"far-b","to":"far-c","kind":"shutoko","durationSeconds":880,"distanceMeters":10000},
+            {"id":"far-ca","from":"far-c","to":"far-a","kind":"shutoko","durationSeconds":880,"distanceMeters":10000},
+            {"id":"far-exit","from":"far-a","to":"far-o","kind":"exit","durationSeconds":30,"distanceMeters":200}
+        ],
+        "billingPairs": [
+            {
+                "id": "near-section",
+                "entryId": "near-entry",
+                "exitId": "near-exit",
+                "anchorNodeId": "near-a",
+                "entryToAnchorEdgeIds": ["near-entry"],
+                "anchorToExitEdgeIds": ["near-exit"],
+                "status": "verified",
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+            },
+            {
+                "id": "far-section",
+                "entryId": "far-entry",
+                "exitId": "far-exit",
+                "anchorNodeId": "far-a",
+                "entryToAnchorEdgeIds": ["far-entry"],
+                "anchorToExitEdgeIds": ["far-exit"],
+                "status": "verified",
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+            }
+        ],
+        "forbiddenTransitions": []
+    });
+
+    let wide = json!({
+        "requestId": "diag-cross-wide",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.0, "lon": 139.0},
+        "minMinutes": 30,
+        "maxMinutes": 240,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let wide_result = run(&g, &wide, json!({}));
+    assert_eq!(wide_result["status"], "ok");
+    assert_eq!(
+        wide_result["candidates"].as_array().unwrap().len(),
+        2,
+        "both independent networks must be candidate-visible in a wide window"
+    );
+    // The near pair has the shorter plan; ranking is time-per-yen so it leads.
+    let near_plan = candidates(&wide_result)[0]["duration"]["planSeconds"]
+        .as_u64()
+        .unwrap();
+
+    let narrow = json!({
+        "requestId": "diag-cross-narrow",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.0, "lon": 139.0},
+        "minMinutes": 30,
+        "maxMinutes": 45,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let narrow_result = run(&g, &narrow, json!({}));
+    assert_eq!(narrow_result["status"], "no_candidates");
+    assert_eq!(narrow_result["reason"], "TIME_WINDOW");
+    assert_eq!(
+        narrow_result["minPlanSeconds"].as_u64(),
+        Some(near_plan),
+        "minPlanSeconds must reflect the near pair's smaller plan even though its \
+         46-min loop was pruned by the 45-min window"
+    );
+    assert!(
+        near_plan < MAX_PRODUCT_MINUTES_SECONDS,
+        "the near pair must fit the product cap"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// correct-001: NO_CONNECTION has a second origin — a reachable nearest Entry
+// that belongs to no accessible verified pair (opus5 F2).  The UI must be able
+// to tell this apart from the cap-exceeded case.
+// ---------------------------------------------------------------------------
+
+/// The nearest Entry from-node exists and is close (≈111 m), but it has no
+/// verified billing pair.  With `maxAccessEntries = 1` only that entry is
+/// selected, so no verified pair is reachable → `NO_CONNECTION` with a *close*
+/// `nearestAccess` and `minPlanSeconds = null`.  The UI must not claim "the
+/// access round trip alone takes four hours" for such a result.
+#[test]
+fn no_connection_can_report_a_close_nearest_entry_without_a_verified_pair() {
+    let g = json!({
+        "schemaVersion": 2,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": [
+            {"id": "close-e", "lat": 35.001, "lon": 139.0},
+            {"id": "close-a", "lat": 35.0011, "lon": 139.0},
+            {"id": "far-e", "lat": 35.01, "lon": 139.0},
+            {"id": "far-a", "lat": 35.011, "lon": 139.0},
+            {"id": "far-b", "lat": 35.012, "lon": 139.001},
+            {"id": "far-c", "lat": 35.011, "lon": 139.002},
+            {"id": "far-o", "lat": 35.01, "lon": 139.0}
+        ],
+        "edges": [
+            {"id":"close-entry","from":"close-e","to":"close-a","kind":"entry","durationSeconds":30,"distanceMeters":200},
+            {"id":"far-entry","from":"far-e","to":"far-a","kind":"entry","durationSeconds":30,"distanceMeters":200},
+            {"id":"far-ab","from":"far-a","to":"far-b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"far-bc","from":"far-b","to":"far-c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"far-ca","from":"far-c","to":"far-a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"far-exit","from":"far-a","to":"far-o","kind":"exit","durationSeconds":30,"distanceMeters":200}
+        ],
+        "billingPairs": [{
+            "id": "far-section",
+            "entryId": "far-entry",
+            "exitId": "far-exit",
+            "anchorNodeId": "far-a",
+            "entryToAnchorEdgeIds": ["far-entry"],
+            "anchorToExitEdgeIds": ["far-exit"],
+            "status": "verified",
+            "vehicleProfile": "passenger-car-etc",
+            "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+        }],
+        "forbiddenTransitions": []
+    });
+    let r = json!({
+        "requestId": "no-connection-close-entry",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.0, "lon": 139.0},
+        "minMinutes": 30,
+        "maxMinutes": 240,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let result = run(&g, &r, json!({"maxAccessEntries": 1}));
+
+    assert_eq!(result["status"], "no_candidates");
+    assert_eq!(
+        result["reason"], "NO_CONNECTION",
+        "only the close, unpaired entry is accessible → no verified pair is reachable"
+    );
+    // The nearest entry is reported and is *close* (well inside the 46 km cap).
+    let nearest = &result["nearestAccess"];
+    assert_eq!(nearest["nodeId"], "close-e");
+    let distance = nearest["distanceMeters"].as_f64().unwrap();
+    assert!(
+        (50.0..=300.0).contains(&distance),
+        "nearest entry must be ~111 m away, got {distance}"
+    );
+    assert!(
+        distance < 46_000.0,
+        "close-entry NO_CONNECTION must not look like the cap-exceeded case"
+    );
+    assert!(
+        result["minPlanSeconds"].is_null(),
+        "no loop enumeration runs when no verified pair is reachable"
     );
 }

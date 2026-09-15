@@ -68,21 +68,21 @@
         </details>
 
         <!-- 確定済みの出発地点。地図上の位置と住所を確認できる。 -->
-        <p id="origin-summary" class="origin-summary" role="status">出発地点が未確定です。</p>
+        <p id="origin-summary" class="origin-summary" role="status" tabindex="-1">出発地点が未確定です。</p>
 
         <!-- 地図タップでの指定は誤タップを避けるため専用モード + 確定ボタン方式にする。
-             住所は逆ジオコーディングしないので座標ラベルで示す。キーボード利用者には
-             折りたたみ内の座標直接入力が等価な手段。 -->
-        <button id="map-pick-btn" type="button" class="secondary" aria-pressed="false">
+             確定・取消は地図の直下（map-pick-panel は map-section 内）に置き、タップ後に
+             操作位置が見えるようにする。住所は逆ジオコーディングしないので座標ラベルで示す。
+             キーボード利用者には折りたたみ内の座標直接入力が等価な手段。 -->
+        <button
+          id="map-pick-btn"
+          type="button"
+          class="secondary"
+          aria-pressed="false"
+          aria-controls="map-pick-panel"
+        >
           地図をタップして出発地点を指定
         </button>
-        <div id="map-pick-panel" class="map-pick" hidden>
-          <p id="map-pick-status" role="status" aria-live="polite"></p>
-          <div class="row">
-            <button id="map-pick-confirm" type="button" disabled>この地点を出発地点にする</button>
-            <button id="map-pick-cancel" type="button" class="secondary">キャンセル</button>
-          </div>
-        </div>
       </section>
 
       <section class="panel" aria-labelledby="time-heading">
@@ -139,9 +139,24 @@
       <section class="map-section" aria-labelledby="map-heading">
         <h2 id="map-heading">地図</h2>
         <div id="map" class="map" role="region" aria-label="選択した経路の地図"></div>
+        <!-- 地図タップ指定の確定・取消。地図の直下に置き、タップ後に操作位置が見える。 -->
+        <div id="map-pick-panel" class="map-pick" hidden>
+          <p id="map-pick-status" role="status" aria-live="polite" tabindex="-1"></p>
+          <div class="row">
+            <button id="map-pick-confirm" type="button" disabled>この地点を出発地点にする</button>
+            <button id="map-pick-cancel" type="button" class="secondary">キャンセル</button>
+          </div>
+        </div>
         <p id="map-fallback" class="map-fallback" hidden>
           地図を読み込めませんでした。条件は保持されています。
           <button type="button" id="map-retry-btn" class="secondary">地図を再読み込み</button>
+        </p>
+        <!-- 地図追従に伴う外部通信の説明。新しい提供元は追加せず、既存のタイル提供元へ
+             表示範囲のタイルを要求することを利用者に知らせる。 -->
+        <p class="field-note">
+          地図の表示範囲は、出発地点の確定（現在地・住所・地図タップ・座標）や候補の表示に
+          合わせて移動し、移動後の範囲の地図タイルを国土地理院へ要求します。
+          「現在地を使う」を押すと、取得した位置の周辺のタイル要求が発生します。
         </p>
       </section>
 

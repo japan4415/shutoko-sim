@@ -3,14 +3,14 @@
 // 座標は GeoJSON が [lon, lat]、Leaflet が [lat, lon] のため、境界で必ず反転する。
 import L from "leaflet";
 import type { Candidate } from "../worker/types";
-import { planOriginFocus } from "./focus";
+import { fitBoundsAnimation, planOriginFocus } from "./focus";
 import { deriveSegments } from "./segments";
 import type { Coords } from "./segments";
 import { DEFAULT_TILE_SOURCE, tileAttribution } from "./tiles";
 import type { TileSource } from "./tiles";
 
 export type { Coords } from "./segments";
-export { FOCUS_ORIGIN_MIN_ZOOM, planOriginFocus } from "./focus";
+export { FOCUS_ORIGIN_MIN_ZOOM, planOriginFocus, fitBoundsAnimation } from "./focus";
 export type { OriginFocusPlan } from "./focus";
 
 /** Leaflet 地図の操作インターフェース。DOM 直操作を main.ts から隠蔽する。 */
@@ -250,6 +250,14 @@ export function createMapView(
   function setPickMode(enabled: boolean): void {
     pickModeEnabled = enabled;
     container.classList.toggle("map--pick", enabled);
+    if (enabled) {
+      // タッチ端末にはカーソルが無いため、モード中は枠でも状態を示す（design F6）。
+      // ダブルタップズームは 1 回目のタップで pending を置いた直後にズームし
+      // 意図しない地点が残るため、モード中は無効化する（design F11）。
+      map.doubleClickZoom.disable();
+    } else {
+      map.doubleClickZoom.enable();
+    }
   }
 
   function onPickOrigin(cb: (p: { lat: number; lon: number }) => void): void {
@@ -333,7 +341,8 @@ export function createMapView(
       bounds.extend(origin.getLatLng());
     }
     if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [24, 24] });
+      // prefers-reduced-motion では fitBounds のアニメーションも止める（design F4）。
+      map.fitBounds(bounds, { padding: [24, 24], ...fitBoundsAnimation(reducedMotion()) });
     }
   }
 

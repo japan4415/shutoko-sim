@@ -1,6 +1,7 @@
 // UI 純粋関数（src/ui/model.ts）のユニットテスト。
 import { describe, expect, it } from "vitest";
 import {
+  MAX_ACCESS_DISTANCE_METERS,
   MAX_PRODUCT_MINUTES,
   MAX_PRODUCT_SECONDS,
   SEARCH_TIMEOUT_MS,
@@ -16,6 +17,7 @@ import {
   formatRank,
   geocodeErrorMessage,
   geolocationErrorMessage,
+  isAccessBeyondCap,
   minutesFromSeconds,
   nearestAccessText,
   reasonText,
@@ -31,6 +33,7 @@ import {
   validateInputs,
   warningText,
 } from "../src/ui/model";
+import { MAX_ACCESS_DISTANCE_METERS as PIPELINE_MAX_ACCESS_DISTANCE_METERS } from "../src/worker/pipeline";
 import type { Candidate, SearchResult, SnappedOrigin } from "../src/worker/types";
 
 function sampleCandidate(overrides: Partial<Candidate> = {}): Candidate {
@@ -163,6 +166,31 @@ describe("statusMessage / errorMessage", () => {
     expect(text).toContain("最大 4 時間では周回できません");
     expect(text).not.toContain("30km");
     expect(text).toContain(SUPPORTED_AREA_TEXT);
+  });
+
+  it("NO_CONNECTION でも最寄りが近距離なら時間の断定をしない（opus5 F2）", () => {
+    // maxAccessEntries により検証済み入口が候補に含まれない経路。nearestAccess は近い。
+    const close = { ...result("NO_CONNECTION"), nearestAccess: snapped(5_000) };
+    const text = statusMessage(close, 15, 60);
+    expect(text).toContain("検証済みの入口が見つかりませんでした");
+    expect(text).toContain("最寄り入口まで直線 約 5.0 km");
+    expect(text).not.toContain("最大 4 時間");
+    expect(text).not.toContain("アクセス往復だけで");
+    expect(classifyNoCandidates(close)).toBe("unsupported_area");
+  });
+
+  it("isAccessBeyondCap は cap 超過だけを真とする", () => {
+    expect(isAccessBeyondCap(snapped(MAX_ACCESS_DISTANCE_METERS))).toBe(false);
+    expect(isAccessBeyondCap(snapped(MAX_ACCESS_DISTANCE_METERS + 1))).toBe(true);
+  });
+
+  it("MAX_ACCESS_DISTANCE_METERS は pipeline と一致し、往復が製品上限以内", () => {
+    // Rust 既定 30km を変更せず web だけ 46km を明示するため、二重定義の一致を固定する。
+    expect(MAX_ACCESS_DISTANCE_METERS).toBe(PIPELINE_MAX_ACCESS_DISTANCE_METERS);
+    // cap 地点のアクセス往復は 240 分を超えない（超える地点は cap の外側）。
+    expect(accessSecondsFromMeters(MAX_ACCESS_DISTANCE_METERS) * 2).toBeLessThanOrEqual(
+      MAX_PRODUCT_SECONDS,
+    );
   });
 
   it("TIME_WINDOW で最短計画が 240 分を超えるなら数値根拠つきで到達不能を示す", () => {

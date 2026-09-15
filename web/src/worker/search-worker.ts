@@ -130,8 +130,16 @@ function ensureLoaded(
   if (benchState !== null) {
     benchState.marks.loadStartEpochMs = epochNow();
   }
-  loadPromise = loadRelease(fetch, releaseId, undefined, controller.signal, { cacheBust })
+  const previousRelease =
+    loaded !== null && loaded.releaseId !== releaseId ? loaded.state : undefined;
+  loadPromise = loadRelease(fetch, releaseId, undefined, controller.signal, {
+    cacheBust,
+    previousRelease,
+  })
     .then((state) => {
+      if (loaded !== null && loaded.releaseId !== releaseId) {
+        loaded.state.free();
+      }
       loaded = { releaseId, state };
       loadingReleaseId = null;
       if (benchState !== null) {
@@ -172,7 +180,7 @@ async function handleSearch(msg: UiSearchMessage): Promise<void> {
       benchState.memory = { beforeMiB: sampleHeapMiB(), afterMiB: null };
       benchState.marks.searchStartEpochMs = epochNow();
     }
-    const resultJson = state.search(state.graphJson, requestJson, "{}");
+    const resultJson = state.searchPrepared(requestJson);
     if (benchState !== null) {
       benchState.marks.searchEndEpochMs = epochNow();
       if (benchState.memory !== null) {

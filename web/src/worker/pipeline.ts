@@ -41,15 +41,24 @@ export interface FetchResponseLike {
 export type FetchLike = (url: string, init?: { signal?: AbortSignal }) => Promise<FetchResponseLike>;
 export type ImportLike = (url: string) => Promise<WasmGlueModule>;
 
+/** WasmPreparedGraph の最小インターフェース（free() を持つ）。 */
+export interface WasmPreparedGraphLike {
+  free(): void;
+}
+
 /** JS glue（wasm-bindgen --target web）が公開する最小の形。 */
 export interface WasmGlueModule {
   default (params: { module_or_path: Uint8Array | ArrayBuffer }): Promise<unknown>;
-  search (graphJson: string, requestJson: string, limitsJson: string): string;
+  prepare (graphJson: string, limitsJson: string): WasmPreparedGraphLike;
+  searchPrepared (pg: WasmPreparedGraphLike, requestJson: string): string;
+  search? (graphJson: string, requestJson: string, limitsJson: string): string;
 }
 
 export interface LoadedRelease {
-  graphJson: string;
-  search (graphJson: string, requestJson: string, limitsJson: string): string;
+  preparedGraph: WasmPreparedGraphLike;
+  searchPrepared (requestJson: string): string;
+  searchPrepared (pg: WasmPreparedGraphLike, requestJson: string): string;
+  free (): void;
 }
 
 /** ArrayBuffer から SHA-256 の小文字 hex を返す。 */
@@ -187,11 +196,16 @@ export interface LoadReleaseOptions {
    * 省略時は URL を一切変えない（通常経路の挙動は不変）。
    */
   cacheBust?: string;
+  /**
+   * releaseId 切り替え時に解放する古いリリース。
+   * 新リリースの prepare 完了後に free() が呼ばれる。
+   */
+  previousRelease?: LoadedRelease;
 }
 
 /**
  * 1 リリース分の成果物を manifest → engine.json → graph.json → wasm → glue の順で
- * 取得・照合し、WASM を初期化して検索境界を返す。
+ * 取得・照合し、WASM を初期化・グラフを prepare して検索境界を返す。
  *
  * - graph.json の期待ハッシュは manifest の artifacts から取る
  * - wasm / glue の期待ハッシュは配信側 engine.json から取る（固定定数は持たない）
@@ -199,6 +213,9 @@ export interface LoadReleaseOptions {
  *   （以降の fetch は呼ばれない）
  * - glue は text 取得して照合後、同じ URL を importImpl で import し、
  *   init({ module_or_path: wasmBytes }) で初期化する
+ * - 初期化後、prepare(graphJson, "{}") を即座に実行して WasmPreparedGraph を構築し、
+ *   graphJson は保持せず V8 GC 対象にする
+ * - options.previousRelease が渡されている場合、新リリースの prepare 完了後に古い release を free() する
  */
 export async function loadRelease(
   fetchImpl: FetchLike,
@@ -265,7 +282,28 @@ export async function loadRelease(
 
   await glue.default({ module_or_path: wasmBytes });
 
-  return { graphJson, search: glue.search };
+  const preparedGraph = glue.prepare(graphJson, "{}");
+
+  if (options.previousRelease !== undefined) {
+    options.previousRelease.free();
+  }
+
+  let freed = false;
+  return {
+    preparedGraph,
+    searchPrepared(arg0: string | WasmPreparedGraphLike, arg1?: string): string {
+      if (typeof arg0 === "string") {
+        return glue.searchPrepared(preparedGraph, arg0);
+      }
+      return glue.searchPrepared(arg0, arg1!);
+    },
+    free() {
+      if (!freed) {
+        freed = true;
+        preparedGraph.free();
+      }
+    },
+  };
 }
 
 /** search() の戻り値 JSON 文字列を SearchResult に展開する。 */

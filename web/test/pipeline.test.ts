@@ -10,7 +10,9 @@ import {
   verifyArtifact,
   type FetchLike,
   type FetchResponseLike,
+  type LoadedRelease,
   type WasmGlueModule,
+  type WasmPreparedGraphLike,
 } from "../src/worker/pipeline";
 import type { SearchResult, UiSearchMessage } from "../src/worker/types";
 
@@ -67,6 +69,14 @@ const stubGlue = (calls: unknown[]): WasmGlueModule => ({
   async default(params: { module_or_path: Uint8Array | ArrayBuffer }): Promise<unknown> {
     calls.push(params.module_or_path);
     return undefined;
+  },
+  prepare(): WasmPreparedGraphLike {
+    return {
+      free() {},
+    };
+  },
+  searchPrepared(): string {
+    return JSON.stringify({ status: "ok", candidates: [] });
   },
   search(): string {
     return JSON.stringify({ status: "ok", candidates: [] });
@@ -226,7 +236,7 @@ describe("loadRelease の cacheBust（bench 計測フック）", () => {
       "/releases/c1-real-v1/shutoko_routing.js?bench=nonce-1",
     ]);
     // クエリ付与でも照合・初期化は従来どおり成功する。
-    expect(state.graphJson).toBe('{"nodes":[],"edges":[]}');
+    expect(state.preparedGraph).toBeDefined();
     expect(initCalls).toHaveLength(1);
   });
 
@@ -344,8 +354,8 @@ describe("loadRelease（モック fetch）", () => {
       "/releases/c1-real-v1/shutoko_routing_bg.wasm",
       "/releases/c1-real-v1/shutoko_routing.js",
     ]);
-    expect(state.graphJson).toBe('{"nodes":[],"edges":[]}');
-    expect(JSON.parse(state.search(state.graphJson, "{}", "{}"))).toEqual({
+    expect(state.preparedGraph).toBeDefined();
+    expect(JSON.parse(state.searchPrepared("{}"))).toEqual({
       status: "ok",
       candidates: [],
     });
@@ -454,5 +464,60 @@ describe("loadRelease（モック fetch）", () => {
     await expect(loadRelease(failing, "c1-real-v1")).rejects.toMatchObject({
       code: "FETCH_FAILED",
     });
+  });
+
+  it("loadRelease 後に graphJson が保持されていない", async () => {
+    const files = await buildFiles();
+    const { fetch } = mockFetch(files);
+    const state = await loadRelease(fetch, "c1-real-v1", async () => stubGlue([]));
+    expect(state).not.toHaveProperty("graphJson");
+    expect((state as unknown as { graphJson?: unknown }).graphJson).toBeUndefined();
+  });
+
+  it("releaseId 切り替え時に古い WasmPreparedGraph の free() が呼ばれる", async () => {
+    const files = await buildFiles();
+    const { fetch } = mockFetch(files);
+    let freedCount = 0;
+    const oldPreparedGraph: WasmPreparedGraphLike = {
+      free() {
+        freedCount += 1;
+      },
+    };
+    const oldRelease: LoadedRelease = {
+      preparedGraph: oldPreparedGraph,
+      searchPrepared: () => "{}",
+      free() {
+        oldPreparedGraph.free();
+      },
+    };
+    await loadRelease(fetch, "c1-real-v1", async () => stubGlue([]), undefined, {
+      previousRelease: oldRelease,
+    });
+    expect(freedCount).toBe(1);
+  });
+
+  it("新リリースの取得失敗時は古い WasmPreparedGraph の free() は呼ばれない", async () => {
+    const failing: FetchLike = async (url: string) => {
+      throw new Error(`offline: ${url}`);
+    };
+    let freedCount = 0;
+    const oldPreparedGraph: WasmPreparedGraphLike = {
+      free() {
+        freedCount += 1;
+      },
+    };
+    const oldRelease: LoadedRelease = {
+      preparedGraph: oldPreparedGraph,
+      searchPrepared: () => "{}",
+      free() {
+        oldPreparedGraph.free();
+      },
+    };
+    await expect(
+      loadRelease(failing, "c1-real-v1", async () => stubGlue([]), undefined, {
+        previousRelease: oldRelease,
+      }),
+    ).rejects.toThrow();
+    expect(freedCount).toBe(0);
   });
 });

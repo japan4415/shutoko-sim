@@ -45,7 +45,16 @@ pub struct RestrictionReport {
     /// These edges are conservatively classified as Shutoko. Regenerate with an updated
     /// OSM extract that includes surface roads for accurate classification.
     pub undecidable_ramp_edges: usize,
-    /// Human-readable diagnostic messages detailing skipped or notable relations.
+    /// Human-readable diagnostic messages from two sources:
+    ///
+    /// 1. **Classification warnings** — entry/exit ramp decisions that required
+    ///    conflict resolution between primary (surface-connection) and secondary
+    ///    (OSM node tag) signals, or fell back to the conservative Shutoko default
+    ///    because both signals were absent.
+    ///
+    /// 2. **Restriction notes** — turn restriction relations that were skipped
+    ///    (conditional, missing via, outside graph, disconnected, unsupported only_*
+    ///    via-way, unrecognised restriction value) or otherwise notable.
     pub notes: Vec<String>,
 }
 
@@ -199,26 +208,67 @@ pub fn is_shutoko_motorway(element: &OsmElement) -> bool {
     false
 }
 
-/// Classifies an OSM `highway` value as vehicle-accessible (for surface-connection evidence),
-/// non-vehicle (ignored for Entry/Exit signal), or ambiguous.
+/// Classifies an OSM `highway` value (and, for `highway=service`, the `service=*` sub-tag)
+/// as vehicle-accessible (surface-connection evidence), non-vehicle, or ambiguous.
 ///
 /// Returns `Some(true)` when the way is a road vehicles (cars) can drive on — a ramp
 /// descending to such a way is a real street-level Entry or Exit.
-/// Returns `Some(false)` when the way is a non-vehicle path (footway, cycleway, steps, …)
-/// or part of the motorway network already captured in the graph.
-/// Returns `None` for uncommon or ambiguous values; callers should emit a warning and treat
-/// the way conservatively (i.e. not count it as surface-connection evidence).
+/// Returns `Some(false)` when the way is a non-vehicle path (footway, cycleway, steps, …),
+/// a clearly private/facility-internal access lane, or part of the motorway network already
+/// captured in the graph.
+/// Returns `None` for values that are ambiguous or structurally unresolvable without
+/// additional context; callers should emit a warning and treat the way conservatively
+/// (i.e. not count it as surface-connection evidence).
 ///
-/// This uses OSM's documented structural `highway` taxonomy (what *type* of road is this?)
-/// rather than brittle string-pattern matching on road names.  Non-vehicle paths can share
-/// a node with a motorway_link incidentally (e.g. a footbridge alongside a ramp); counting
-/// them as evidence would produce false Entry/Exit classifications.
-pub(crate) fn is_vehicle_highway(highway: &str) -> Option<bool> {
+/// This uses OSM's documented structural `highway` and `service` taxonomies (what *type*
+/// of road is this?) rather than brittle string-pattern matching on road names.
+///
+/// # `highway=service` classification rationale
+/// `highway=service` broadly covers publicly-accessible alleys, private driveways, parking
+/// aisles, JCT management roads, and toll-gate vehicle lanes.  Accepting all service ways
+/// as surface-connection evidence would silently misclassify JCT connectors whose endpoints
+/// share a management/access road.  The `service=*` sub-tag resolves the ambiguity:
+///
+/// - `parking_aisle` / `driveway` / `drive-through` / `emergency_access` / `slipway`:
+///   private or facility-internal — confirmed NOT street-level evidence → `Some(false)`.
+/// - `alley`: publicly-accessible back-lane connecting to the street network → `Some(true)`.
+/// - Absent or unrecognised sub-tag: management roads, toll-gate lanes, and other
+///   facility-internal roads are common here.  Conservative `None` is returned so the
+///   caller emits a warning and excludes the way from surface_nodes rather than silently
+///   misclassifying.
+///
+/// # `highway=road` classification rationale
+/// `highway=road` is an OSM placeholder meaning "type unknown to the contributor".  It may
+/// ultimately be a public road or a private track; treating it as confirmed evidence would
+/// introduce silent false positives.  Conservative `None` is returned.
+pub(crate) fn is_vehicle_highway(highway: &str, service: Option<&str>) -> Option<bool> {
     match highway {
         // Motor-vehicle roads — confirmed surface connection evidence
         "trunk" | "trunk_link" | "primary" | "primary_link" | "secondary" | "secondary_link"
-        | "tertiary" | "tertiary_link" | "unclassified" | "residential" | "living_street"
-        | "service" | "road" => Some(true),
+        | "tertiary" | "tertiary_link" | "unclassified" | "residential" | "living_street" => {
+            Some(true)
+        }
+
+        // Service roads: resolve by the service=* sub-tag to distinguish publicly-accessible
+        // alleys from private/facility-internal access paths.  JCT management roads, toll-gate
+        // vehicle lanes, and parking aisles are commonly tagged highway=service; accepting all
+        // service ways without sub-tag discrimination would silently misclassify JCT connectors.
+        "service" => match service {
+            // Clearly private or facility-internal access — not street-level evidence.
+            Some(
+                "parking_aisle" | "driveway" | "drive-through" | "emergency_access" | "slipway",
+            ) => Some(false),
+            // Publicly-accessible alleys connecting to the street network.
+            Some("alley") => Some(true),
+            // Unknown or absent sub-tag: management roads, toll-gate lanes, and
+            // other facility-internal roads are common here.  Return None so the
+            // caller emits a warning and conservatively excludes from surface_nodes.
+            _ => None,
+        },
+
+        // Placeholder / unknown classification: may be any road type.
+        // Conservative None prevents silent false positives.
+        "road" => None,
 
         // Non-vehicle paths — share nodes with ramps only incidentally
         "footway" | "path" | "pedestrian" | "cycleway" | "steps" | "bridleway" => Some(false),
@@ -293,7 +343,7 @@ pub fn build_topology_with_report(
             Some(h) => h,
             None => continue,
         };
-        match is_vehicle_highway(highway) {
+        match is_vehicle_highway(highway, elem.get_tag("service")) {
             Some(true) => {
                 // Vehicle-accessible surface road: record its node IDs as evidence that a
                 // ramp endpoint touching this way is at street level (Entry or Exit).
@@ -305,15 +355,29 @@ pub fn build_topology_with_report(
             }
             Some(false) => {
                 // Non-vehicle path or motorway-network way: not surface-connection evidence.
-                // (footways, cycleways, steps, etc. can share a node with a ramp incidentally
-                // without that implying the ramp descends to street level.)
+                // (footways, cycleways, steps, parking aisles, private driveways, etc. can
+                // share a node with a ramp incidentally without implying the ramp descends
+                // to street level.)
             }
             None => {
-                // Ambiguous highway value: conservatively exclude from surface_nodes and warn.
+                // Ambiguous or unresolvable highway type: conservatively exclude from
+                // surface_nodes and warn.  For highway=service without a recognised
+                // service= sub-tag, this prevents management roads and toll-gate lanes
+                // from silently contributing false Entry/Exit evidence.
+                let detail = if highway == "service" {
+                    match elem.get_tag("service") {
+                        Some(st) => format!(" (service={st}, sub-tag not a recognised public-road type)"),
+                        None => " (no service= sub-tag; management roads and toll-gate lanes are common here)".to_string(),
+                    }
+                } else if highway == "road" {
+                    " (placeholder value — highway type not yet determined)".to_string()
+                } else {
+                    String::new()
+                };
                 ambiguous_highway_warnings.push(format!(
-                    "Way {}: unrecognised highway type {:?} — \
+                    "Way {}: ambiguous or unrecognised highway type {:?}{} — \
                      not counted as surface-connection evidence (conservative)",
-                    elem.id, highway
+                    elem.id, highway, detail
                 ));
             }
         }
@@ -329,12 +393,26 @@ pub fn build_topology_with_report(
     let has_surface_context = !surface_nodes.is_empty();
 
     if !has_surface_context {
+        let ambiguous_note = if ambiguous_highway_warnings.is_empty() {
+            " No vehicle-accessible surface road ways (e.g. primary, secondary, residential) \
+             were found in the extract."
+                .to_string()
+        } else {
+            format!(
+                " {} way(s) had ambiguous or unrecognised highway values and were \
+                 conservatively excluded (see warnings above); none contributed \
+                 vehicle-accessible surface evidence.",
+                ambiguous_highway_warnings.len()
+            )
+        };
         eprintln!(
-            "Warning: OSM extract contains no surface (non-motorway/non-motorway_link) \
-             road ways. Ramp Entry/Exit classification will use OSM node tags only (secondary \
+            "Warning: OSM extract contains no vehicle-accessible surface road ways \
+             that can serve as definitive Entry/Exit evidence.{} \
+             Ramp Entry/Exit classification will use OSM node tags only (secondary \
              signal). Edges with no discriminating node tag are conservatively classified as \
              Shutoko. Re-run with an updated OSM extract that includes surface roads for \
-             accurate classification."
+             accurate classification.",
+            ambiguous_note
         );
     }
 
@@ -714,6 +792,10 @@ pub fn build_topology_with_report(
                 }
             }
             EdgeKind::Entry | EdgeKind::Exit => RAMP_SPEED_KMH,
+            // NOTE: Local edges are never created in the way-parsing step above —
+            // all non-motorway, non-motorway_link ways are skipped and do not appear
+            // in intermediate_edges.  This arm is kept for exhaustiveness to guard
+            // against future EdgeKind additions, but is unreachable at runtime.
             EdgeKind::Local => LOCAL_SPEED_KMH,
         };
 

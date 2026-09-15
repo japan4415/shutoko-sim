@@ -361,6 +361,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     all_unverified.extend(unverified_from_seeds);
     all_unverified.extend(unverified_edge_sections);
 
+    // Note ramp edges that could not be classified due to missing surface context.
+    // Non-zero counts indicate the OSM extract lacked vehicle-accessible surface road
+    // ways at the ramp endpoints; downstream tooling can detect this quality signal.
+    if top_report.undecidable_ramp_edges > 0 {
+        all_unverified.push(format!(
+            "undecidable-ramp-classification: {} ramp edge(s) could not be classified \
+             as Entry/Exit (no vehicle-accessible surface road context and no discriminating \
+             OSM node tag); conservatively classified as Shutoko — re-run with updated OSM \
+             extract for accurate classification",
+            top_report.undecidable_ramp_edges
+        ));
+    }
+
     // Note excluded routes and skipped/unsupported restrictions
     all_unverified.push(
         "excluded-route: Metropolitan Expressway lines other than C1 (e.g. B, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, K, S, Y)".to_string(),

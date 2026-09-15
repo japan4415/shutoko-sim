@@ -1,4 +1,5 @@
 // パイプライン純粋関数のユニットテスト（node 環境、fetch/import はモック注入）。
+import inspector from "node:inspector";
 import { describe, expect, it } from "vitest";
 import {
   buildResultResponse,
@@ -7,10 +8,13 @@ import {
   loadRelease,
   parseWasmError,
   PipelineError,
+  ReleaseStore,
   verifyArtifact,
   type FetchLike,
   type FetchResponseLike,
+  type LoadedRelease,
   type WasmGlueModule,
+  type WasmPreparedGraphLike,
 } from "../src/worker/pipeline";
 import type { SearchResult, UiSearchMessage } from "../src/worker/types";
 
@@ -67,6 +71,14 @@ const stubGlue = (calls: unknown[]): WasmGlueModule => ({
   async default(params: { module_or_path: Uint8Array | ArrayBuffer }): Promise<unknown> {
     calls.push(params.module_or_path);
     return undefined;
+  },
+  prepare(): WasmPreparedGraphLike {
+    return {
+      free() {},
+    };
+  },
+  searchPrepared(): string {
+    return JSON.stringify({ status: "ok", candidates: [] });
   },
   search(): string {
     return JSON.stringify({ status: "ok", candidates: [] });
@@ -226,7 +238,7 @@ describe("loadRelease の cacheBust（bench 計測フック）", () => {
       "/releases/c1-real-v1/shutoko_routing.js?bench=nonce-1",
     ]);
     // クエリ付与でも照合・初期化は従来どおり成功する。
-    expect(state.graphJson).toBe('{"nodes":[],"edges":[]}');
+    expect(state.preparedGraph).toBeDefined();
     expect(initCalls).toHaveLength(1);
   });
 
@@ -344,8 +356,8 @@ describe("loadRelease（モック fetch）", () => {
       "/releases/c1-real-v1/shutoko_routing_bg.wasm",
       "/releases/c1-real-v1/shutoko_routing.js",
     ]);
-    expect(state.graphJson).toBe('{"nodes":[],"edges":[]}');
-    expect(JSON.parse(state.search(state.graphJson, "{}", "{}"))).toEqual({
+    expect(state.preparedGraph).toBeDefined();
+    expect(JSON.parse(state.searchPrepared("{}"))).toEqual({
       status: "ok",
       candidates: [],
     });
@@ -454,5 +466,292 @@ describe("loadRelease（モック fetch）", () => {
     await expect(loadRelease(failing, "c1-real-v1")).rejects.toMatchObject({
       code: "FETCH_FAILED",
     });
+  });
+
+  function getClosureVariables(fn: Function): Promise<Record<string, unknown>> {
+    return new Promise((resolve) => {
+      const session = new inspector.Session();
+      session.connect();
+      const vars: Record<string, unknown> = {};
+      session.post("Runtime.enable", () => {
+        (globalThis as unknown as { __closure_target?: Function }).__closure_target = fn;
+        session.post("Runtime.evaluate", { expression: "globalThis.__closure_target" }, (err, evalRes: any) => {
+          if (err || !evalRes?.result?.objectId) {
+            session.disconnect();
+            delete (globalThis as unknown as { __closure_target?: unknown }).__closure_target;
+            return resolve(vars);
+          }
+          session.post("Runtime.getProperties", { objectId: evalRes.result.objectId }, (err, propRes: any) => {
+            const scopes = propRes?.internalProperties?.find((p: any) => p.name === "[[Scopes]]");
+            if (!scopes?.value?.objectId) {
+              session.disconnect();
+              delete (globalThis as unknown as { __closure_target?: unknown }).__closure_target;
+              return resolve(vars);
+            }
+            session.post("Runtime.getProperties", { objectId: scopes.value.objectId }, (err, scopeList: any) => {
+              const closureScopes = (scopeList?.result || []).filter(
+                (s: any) =>
+                  s?.value?.description?.startsWith("Closure") ||
+                  s?.value?.description?.startsWith("Block"),
+              );
+              if (closureScopes.length === 0) {
+                session.disconnect();
+                delete (globalThis as unknown as { __closure_target?: unknown }).__closure_target;
+                return resolve(vars);
+              }
+              let pending = closureScopes.length;
+              for (const scope of closureScopes) {
+                if (!scope?.value?.objectId) {
+                  pending--;
+                  if (pending === 0) {
+                    session.disconnect();
+                    delete (globalThis as unknown as { __closure_target?: unknown }).__closure_target;
+                    resolve(vars);
+                  }
+                  continue;
+                }
+                session.post("Runtime.getProperties", { objectId: scope.value.objectId }, (err, varList: any) => {
+                  for (const v of varList?.result || []) {
+                    vars[v.name] = v.value?.value;
+                  }
+                  pending--;
+                  if (pending === 0) {
+                    session.disconnect();
+                    delete (globalThis as unknown as { __closure_target?: unknown }).__closure_target;
+                    resolve(vars);
+                  }
+                });
+              }
+            });
+          });
+        });
+      });
+    });
+  }
+
+  it("loadRelease 後に graphJson がプロパティおよびクロージャ変数として保持されていない", async () => {
+    const files = await buildFiles();
+    const { fetch } = mockFetch(files);
+    const state = await loadRelease(fetch, "c1-real-v1", async () => stubGlue([]));
+
+    // 1. プロパティとして保持されていないこと
+    expect(state).not.toHaveProperty("graphJson");
+    expect((state as unknown as { graphJson?: unknown }).graphJson).toBeUndefined();
+
+    // 2. searchPrepared のクロージャ変数として保持されていないこと
+    const closureVars = await getClosureVariables(state.searchPrepared);
+    expect(closureVars).not.toHaveProperty("graphJson");
+    expect(closureVars).not.toHaveProperty("graphBytes");
+
+    // 3. 別名ローカル変数を介した保持も検出（文字列内容がクロージャ変数値に含まれていないこと）
+    const graphJsonString = new TextDecoder().decode(graphBytes);
+    const leakedValue = Object.values(closureVars).some(
+      (val) => typeof val === "string" && val.includes(graphJsonString),
+    );
+    expect(leakedValue).toBe(false);
+
+    state.free();
+  });
+
+  it("LoadedRelease.free() 後の searchPrepared は USE_AFTER_FREE エラーを投げる", async () => {
+    const files = await buildFiles();
+    const { fetch } = mockFetch(files);
+    const state = await loadRelease(fetch, "c1-real-v1", async () => stubGlue([]));
+
+    state.free();
+
+    expect(() => state.searchPrepared("{}")).toThrowError(PipelineError);
+    expect(() => state.searchPrepared("{}")).toThrowError(/already been freed/);
+    try {
+      state.searchPrepared("{}");
+    } catch (err) {
+      expect((err as PipelineError).code).toBe("USE_AFTER_FREE");
+    }
+
+    expect(() => state.retain()).toThrowError(PipelineError);
+  });
+
+  it("LoadedRelease の retain / release による参照カウント管理で安全に解放される", async () => {
+    const files = await buildFiles();
+    let freedCount = 0;
+    const glueStub: WasmGlueModule = {
+      default: async () => {},
+      prepare: () => ({
+        free() {
+          freedCount += 1;
+        },
+      }),
+      searchPrepared: () => "{}",
+    };
+    const { fetch } = mockFetch(files);
+    const state = await loadRelease(fetch, "c1-real-v1", async () => glueStub);
+
+    state.retain(); // refCount: 1 -> 2
+    state.release(); // refCount: 2 -> 1
+    expect(freedCount).toBe(0); // まだ解放されない
+
+    // 検索可能
+    expect(state.searchPrepared("{}")).toBe("{}");
+
+    state.release(); // refCount: 1 -> 0
+    expect(freedCount).toBe(1); // ここで解放
+
+    // 解放後の追加 release や free は二重 free しない
+    state.release();
+    state.free();
+    expect(freedCount).toBe(1);
+  });
+
+  it("ReleaseStore: releaseId 切り替え時に古いリリースの free() が呼ばれる", async () => {
+    const files1 = await buildFiles();
+    let freed1 = 0;
+    let freed2 = 0;
+    const glueStub = (id: string): WasmGlueModule => ({
+      default: async () => {},
+      prepare: () => ({
+        free() {
+          if (id === "v1") freed1 += 1;
+          if (id === "v2") freed2 += 1;
+        },
+      }),
+      searchPrepared: () => "{}",
+    });
+
+    const files2: Record<string, Uint8Array> = {};
+    for (const [key, val] of Object.entries(files1)) {
+      files2[key.replace("c1-real-v1", "c1-real-v2")] = val;
+    }
+    // engine.json の releaseId を更新
+    const engine2 = JSON.parse(new TextDecoder().decode(files2["/releases/c1-real-v2/engine.json"]));
+    engine2.releaseId = "c1-real-v2";
+    files2["/releases/c1-real-v2/engine.json"] = encoder.encode(JSON.stringify(engine2));
+
+    const allFiles = { ...files1, ...files2 };
+    const { fetch } = mockFetch(allFiles);
+
+    const store = new ReleaseStore({
+      fetchImpl: fetch,
+      importImpl: async (url) => {
+        if (url.includes("c1-real-v1")) return glueStub("v1");
+        return glueStub("v2");
+      },
+      knownReleases: ["c1-real-v1", "c1-real-v2"],
+    });
+
+    const state1 = await store.acquire("c1-real-v1");
+    expect(store.currentLoaded?.releaseId).toBe("c1-real-v1");
+    state1.release(); // caller 分を手放す（store キャッシュ分が保持）
+    expect(freed1).toBe(0);
+
+    const state2 = await store.acquire("c1-real-v2");
+    expect(store.currentLoaded?.releaseId).toBe("c1-real-v2");
+    expect(freed1).toBe(1); // v1 が解放された
+    expect(freed2).toBe(0);
+
+    state2.release();
+    store.dispose();
+    expect(freed2).toBe(1);
+  });
+
+  it("ReleaseStore: 新リリースの取得失敗時は古いリリースの free() は呼ばれない", async () => {
+    const files = await buildFiles();
+    let freedCount = 0;
+    const glueStub: WasmGlueModule = {
+      default: async () => {},
+      prepare: () => ({
+        free() {
+          freedCount += 1;
+        },
+      }),
+      searchPrepared: () => "{}",
+    };
+    const { fetch } = mockFetch(files);
+    let failNext = false;
+    const conditionalFetch: FetchLike = async (url, init) => {
+      if (failNext && url.includes("c1-real-v2")) {
+        throw new Error("network error");
+      }
+      return fetch(url, init);
+    };
+
+    const store = new ReleaseStore({
+      fetchImpl: conditionalFetch,
+      importImpl: async () => glueStub,
+      knownReleases: ["c1-real-v1", "c1-real-v2"],
+    });
+
+    const state1 = await store.acquire("c1-real-v1");
+    state1.release();
+    expect(freedCount).toBe(0);
+
+    failNext = true;
+    await expect(store.acquire("c1-real-v2")).rejects.toThrow();
+    expect(freedCount).toBe(0); // v1 は解放されていない
+    expect(store.currentLoaded?.releaseId).toBe("c1-real-v1");
+
+    store.dispose();
+    expect(freedCount).toBe(1);
+  });
+
+  it("ReleaseStore: ロード進行中に dispose() された場合、ロード完了時にキャッシュへ載せずその場で PreparedGraph を解放する", async () => {
+    const files = await buildFiles();
+    let freedCount = 0;
+    let isFreed = false;
+    const glueStub: WasmGlueModule = {
+      default: async () => {},
+      prepare: () => ({
+        free() {
+          if (isFreed) {
+            throw new Error("DOUBLE FREE");
+          }
+          isFreed = true;
+          freedCount += 1;
+        },
+      }),
+      searchPrepared: () => "{}",
+    };
+
+    let resolveFetch: (() => void) | null = null;
+    const fetchPromise = new Promise<void>((resolve) => {
+      resolveFetch = resolve;
+    });
+
+    const { fetch } = mockFetch(files);
+    const controlledFetch: FetchLike = async (url, init) => {
+      if (url.includes("graph.json")) {
+        // graph.json の取得を保留
+        await fetchPromise;
+      }
+      return fetch(url, init);
+    };
+
+    const store = new ReleaseStore({
+      fetchImpl: controlledFetch,
+      importImpl: async () => glueStub,
+      knownReleases: ["c1-real-v1"],
+    });
+
+    // 1. ロード開始（in-flight にする）
+    const acquirePromise = store.acquire("c1-real-v1");
+
+    // 2. ロード進行中に store を破棄
+    store.dispose();
+    expect(store.currentLoaded).toBeNull();
+    expect(freedCount).toBe(0);
+
+    // 3. fetch を解放してロードを完了させる
+    resolveFetch!();
+
+    // 4. acquirePromise は DISPOSED で reject されること
+    await expect(acquirePromise).rejects.toThrow();
+
+    // 5. キャッシュが復活していないこと
+    expect(store.currentLoaded).toBeNull();
+
+    // 6. dispose 後に完了した PreparedGraph がその場で解放されていること（メモリリーク防止）
+    expect(freedCount).toBe(1);
+
+    // 7. dispose 後の acquire() は即座に拒否されること
+    await expect(store.acquire("c1-real-v1")).rejects.toThrow();
   });
 });

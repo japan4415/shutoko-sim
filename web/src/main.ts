@@ -807,13 +807,16 @@ function updateDepartButtons(): void {
 /**
  * 条件変更時に前回の候補・選択・出発リンクを無効化する。
  * 入力エラーは消さない（design-review-002 N1）。消去は探索ボタン押下時の再検証だけに任せる。
+ * 探索実行中（in-flight）の場合のみ stopWorker() で中断し、アイドル時は Worker と PreparedGraph を維持する。
  */
 function invalidateResults(): void {
   el.results.replaceChildren();
   currentResult = null;
   selectedCandidateId = null;
   mapView?.renderCandidates([]);
-  stopWorker();
+  if (inflightRequestId !== null) {
+    stopWorker();
+  }
   setSearching(false);
   if (hasSearched) {
     setStatus("条件が変更されました。探索ボタンで再検索してください。");

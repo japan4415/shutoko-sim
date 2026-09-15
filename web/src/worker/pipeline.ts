@@ -1,5 +1,7 @@
 // 探索パイプラインの純粋関数群。Worker 本体（search-worker.ts）はこれらを配線するだけ。
 // fetch と import は引数注入にし、Vitest からモックで決定論的に検証できるようにする。
+
+import { KNOWN_RELEASES } from "./artifact-hashes";
 import type {
   BenchPayload,
   SearchResult,
@@ -41,15 +43,25 @@ export interface FetchResponseLike {
 export type FetchLike = (url: string, init?: { signal?: AbortSignal }) => Promise<FetchResponseLike>;
 export type ImportLike = (url: string) => Promise<WasmGlueModule>;
 
+/** WasmPreparedGraph の最小インターフェース（free() を持つ）。 */
+export interface WasmPreparedGraphLike {
+  free(): void;
+}
+
 /** JS glue（wasm-bindgen --target web）が公開する最小の形。 */
 export interface WasmGlueModule {
   default (params: { module_or_path: Uint8Array | ArrayBuffer }): Promise<unknown>;
-  search (graphJson: string, requestJson: string, limitsJson: string): string;
+  prepare (graphJson: string, limitsJson: string): WasmPreparedGraphLike;
+  searchPrepared (pg: WasmPreparedGraphLike, requestJson: string): string;
+  search? (graphJson: string, requestJson: string, limitsJson: string): string;
 }
 
 export interface LoadedRelease {
-  graphJson: string;
-  search (graphJson: string, requestJson: string, limitsJson: string): string;
+  readonly preparedGraph: WasmPreparedGraphLike;
+  searchPrepared(requestJson: string): string;
+  free(): void;
+  retain(): void;
+  release(): void;
 }
 
 /** ArrayBuffer から SHA-256 の小文字 hex を返す。 */
@@ -191,7 +203,7 @@ export interface LoadReleaseOptions {
 
 /**
  * 1 リリース分の成果物を manifest → engine.json → graph.json → wasm → glue の順で
- * 取得・照合し、WASM を初期化して検索境界を返す。
+ * 取得・照合し、WASM を初期化・グラフを prepare して検索境界を返す。
  *
  * - graph.json の期待ハッシュは manifest の artifacts から取る
  * - wasm / glue の期待ハッシュは配信側 engine.json から取る（固定定数は持たない）
@@ -199,6 +211,8 @@ export interface LoadReleaseOptions {
  *   （以降の fetch は呼ばれない）
  * - glue は text 取得して照合後、同じ URL を importImpl で import し、
  *   init({ module_or_path: wasmBytes }) で初期化する
+ * - 初期化後、prepare(graphJson, "{}") を即座に実行して WasmPreparedGraph を構築し、
+ *   graphJson は保持せず V8 GC 対象にする
  */
 export async function loadRelease(
   fetchImpl: FetchLike,
@@ -265,7 +279,42 @@ export async function loadRelease(
 
   await glue.default({ module_or_path: wasmBytes });
 
-  return { graphJson, search: glue.search };
+  const preparedGraph = glue.prepare(graphJson, "{}");
+
+  let refCount = 1;
+  let freed = false;
+  const release: LoadedRelease = {
+    preparedGraph,
+    searchPrepared(requestJson: string): string {
+      if (freed) {
+        throw new PipelineError(
+          "USE_AFTER_FREE",
+          `LoadedRelease for ${releaseId} has already been freed`,
+        );
+      }
+      return glue.searchPrepared(preparedGraph, requestJson);
+    },
+    retain(): void {
+      if (freed) {
+        throw new PipelineError(
+          "USE_AFTER_FREE",
+          `LoadedRelease for ${releaseId} has already been freed`,
+        );
+      }
+      refCount += 1;
+    },
+    release(): void {
+      refCount -= 1;
+      if (refCount <= 0 && !freed) {
+        freed = true;
+        preparedGraph.free();
+      }
+    },
+    free(): void {
+      release.release();
+    },
+  };
+  return release;
 }
 
 /** search() の戻り値 JSON 文字列を SearchResult に展開する。 */
@@ -288,4 +337,134 @@ export function buildResultResponse(
     result,
     ...(bench === undefined ? {} : { bench }),
   };
+}
+
+export interface ReleaseStoreOptions {
+  fetchImpl?: FetchLike;
+  importImpl?: ImportLike;
+  knownReleases?: readonly string[];
+  onLoadStart?: (releaseId: string) => void;
+  onLoadEnd?: (releaseId: string) => void;
+}
+
+/**
+ * リリースのロード・キャッシュ・世代管理・参照解放を一元管理するストア。
+ * - releaseId のロードを重複排除
+ * - 世代管理（latestGeneration）により、古いリクエストの遅延完了で新しい loaded キャッシュが上書きされるのを防止
+ * - 呼び出し側が acquire() すると retain() され、利用中は release() されるまで決して free() されない
+ * - 二重 free() の排除と use-after-free の数学的防止
+ */
+export class ReleaseStore {
+  private loaded: { releaseId: string; state: LoadedRelease; generation: number } | null = null;
+  private latestGeneration = 0;
+  private readonly inFlightLoads = new Map<string, Promise<LoadedRelease>>();
+  private readonly inFlightControllers = new Map<string, AbortController>();
+  private disposed = false;
+  private readonly fetchImpl: FetchLike;
+  private readonly importImpl?: ImportLike;
+  private readonly knownReleases: readonly string[];
+  private readonly onLoadStart?: (releaseId: string) => void;
+  private readonly onLoadEnd?: (releaseId: string) => void;
+
+  constructor(options: ReleaseStoreOptions = {}) {
+    this.fetchImpl =
+      options.fetchImpl ??
+      (typeof fetch !== "undefined"
+        ? fetch
+        : async () => {
+            throw new Error("fetch is not available");
+          });
+    this.importImpl = options.importImpl;
+    this.knownReleases = options.knownReleases ?? KNOWN_RELEASES;
+    this.onLoadStart = options.onLoadStart;
+    this.onLoadEnd = options.onLoadEnd;
+  }
+
+  get currentLoaded(): { releaseId: string; state: LoadedRelease } | null {
+    if (this.loaded === null) return null;
+    return { releaseId: this.loaded.releaseId, state: this.loaded.state };
+  }
+
+  /**
+   * releaseId の LoadedRelease を確保し、呼び出し元のために retain() して返す。
+   * 呼び出し側は使い終わったら必ず state.release() を呼ぶこと。
+   */
+  async acquire(releaseId: string, cacheBust?: string): Promise<LoadedRelease> {
+    if (this.disposed) {
+      throw new PipelineError("DISPOSED", "ReleaseStore has been disposed");
+    }
+
+    if (!this.knownReleases.includes(releaseId)) {
+      throw new PipelineError("ARTIFACT_MISMATCH", `未知の releaseId です: ${releaseId}`);
+    }
+
+    if (this.loaded !== null && this.loaded.releaseId === releaseId) {
+      this.loaded.state.retain();
+      return this.loaded.state;
+    }
+
+    const generation = ++this.latestGeneration;
+
+    let inFlight = this.inFlightLoads.get(releaseId);
+    if (inFlight === undefined) {
+      if (this.onLoadStart !== undefined) {
+        this.onLoadStart(releaseId);
+      }
+      const controller = new AbortController();
+      this.inFlightControllers.set(releaseId, controller);
+      const loadPromise = loadRelease(this.fetchImpl, releaseId, this.importImpl, controller.signal, {
+        cacheBust,
+      })
+        .then((state) => {
+          this.inFlightLoads.delete(releaseId);
+          this.inFlightControllers.delete(releaseId);
+          if (this.disposed) {
+            state.release(); // dispose 済みのためキャッシュに載せずその場で解放
+            throw new PipelineError("DISPOSED", `ReleaseStore was disposed while loading ${releaseId}`);
+          }
+          if (this.onLoadEnd !== undefined) {
+            this.onLoadEnd(releaseId);
+          }
+          if (this.loaded === null || generation >= this.loaded.generation) {
+            const oldLoaded = this.loaded;
+            state.retain(); // loaded キャッシュ用の参照 (+1)
+            this.loaded = { releaseId, state, generation };
+            if (oldLoaded !== null) {
+              oldLoaded.state.release(); // 旧 loaded キャッシュの解放 (-1)
+            }
+          }
+          return state; // 初期 refCount=1 をこの最初の caller が保持
+        })
+        .catch((err: unknown) => {
+          this.inFlightLoads.delete(releaseId);
+          this.inFlightControllers.delete(releaseId);
+          throw err;
+        });
+
+      this.inFlightLoads.set(releaseId, loadPromise);
+      return loadPromise;
+    } else {
+      // 進行中の同一 releaseId ロードに相乗りする 2人目以降の caller
+      return inFlight.then((state) => {
+        if (this.disposed) {
+          throw new PipelineError("DISPOSED", `ReleaseStore was disposed while loading ${releaseId}`);
+        }
+        state.retain();
+        return state;
+      });
+    }
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    if (this.loaded !== null) {
+      this.loaded.state.release();
+      this.loaded = null;
+    }
+    for (const controller of this.inFlightControllers.values()) {
+      controller.abort();
+    }
+    this.inFlightControllers.clear();
+    this.inFlightLoads.clear();
+  }
 }

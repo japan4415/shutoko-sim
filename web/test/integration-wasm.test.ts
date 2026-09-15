@@ -128,7 +128,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
     };
 
     const started = performance.now();
-    const result = parseSearchResult(state.search(state.graphJson, JSON.stringify(buildSearchRequest(msg)), "{}"));
+    const result = parseSearchResult(state.searchPrepared(JSON.stringify(buildSearchRequest(msg))));
     const elapsedMs = performance.now() - started;
 
     expect(result.status).toBe("ok");
@@ -146,27 +146,31 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
     // 前テストと同じプロセス内で初期化済みのはずだが、単独実行にも耐えるよう再度初期化する
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
     await glue.default({ module_or_path: toBinary(wasmBytes) });
-    const err = (() => {
-      try {
-        glue.search(
-          graphJson,
-          JSON.stringify({
-            requestId: "integration-2",
-            releaseId: "c1-real-v1",
-            origin: { lat: 35.6896727, lon: 139.7644248 },
-            minMinutes: 15,
-            maxMinutes: 0,
-            vehicleProfile: "passenger-car-etc",
-            pricingAt: "2026-09-10T00:00:00Z",
-          }),
-          "{}",
-        );
-        return null;
-      } catch (e) {
-        return e;
-      }
-    })();
-    expect(err).toBeInstanceOf(Error);
-    expect(JSON.parse((err as Error).message)).toMatchObject({ code: "INVALID_INPUT" });
+    const pg = glue.prepare(graphJson, "{}");
+    try {
+      const err = (() => {
+        try {
+          glue.searchPrepared(
+            pg,
+            JSON.stringify({
+              requestId: "integration-2",
+              releaseId: "c1-real-v1",
+              origin: { lat: 35.6896727, lon: 139.7644248 },
+              minMinutes: 15,
+              maxMinutes: 0,
+              vehicleProfile: "passenger-car-etc",
+              pricingAt: "2026-09-10T00:00:00Z",
+            }),
+          );
+          return null;
+        } catch (e) {
+          return e;
+        }
+      })();
+      expect(err).toBeInstanceOf(Error);
+      expect(JSON.parse((err as Error).message)).toMatchObject({ code: "INVALID_INPUT" });
+    } finally {
+      pg.free();
+    }
   }, 30_000);
 });

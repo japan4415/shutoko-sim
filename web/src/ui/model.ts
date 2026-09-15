@@ -1,6 +1,6 @@
 // UI 用の純粋関数群。DOM を触らず、Vitest から決定論的に検証できる。
 // 文言対応表は scout-002 F5（docs/interfaces.md:96-104 の status/reason コード）に従う。
-import type { Candidate, GeoJsonLineString, SearchResult, Toll } from "../worker/types";
+import type { Candidate, GeoJsonLineString, SearchResult, SnappedOrigin, Toll } from "../worker/types";
 
 export const RELEASE_ID = "c1-real-v1";
 export const VEHICLE_PROFILE = "passenger-car-etc";
@@ -12,6 +12,29 @@ export const PRESET_KANDABASHI = { lat: 35.6896727, lon: 139.7644248 } as const;
 export const SEARCH_TIMEOUT_MS = 10_000;
 
 export const TIMEOUT_TEXT = "探索が 10 秒を超えました。再度検索してください。";
+
+/** UI が受理する計画時間の上限（分）。index.html の max 属性（240）と一致させる。 */
+export const MAX_PRODUCT_MINUTES = 240;
+export const MAX_PRODUCT_SECONDS = MAX_PRODUCT_MINUTES * 60;
+
+/** 一般道アクセスの想定速度（m/s）。エンジンと同じ 30 km/h。 */
+const ACCESS_SPEED_MPS = 30 / 3.6;
+/** 直線距離に対する迂回係数。エンジンと同じ 1.3。 */
+const ACCESS_DETOUR_FACTOR = 1.3;
+
+/**
+ * 直線距離（m）から片道アクセス秒を概算する。
+ * エンジン（routing-core の `estimated_access_seconds`）と同じ式
+ * （直線距離 × 1.3 ÷ 30 km/h、切り上げ）。一般道は探索せず直線距離の概算である。
+ */
+export function accessSecondsFromMeters(meters: number): number {
+  return Math.ceil((meters * ACCESS_DETOUR_FACTOR) / ACCESS_SPEED_MPS);
+}
+
+/** 片道アクセス時間（分、四捨五入）。 */
+export function accessMinutesFromMeters(meters: number): number {
+  return minutesFromSeconds(accessSecondsFromMeters(meters));
+}
 
 /** 入力欄ごとのエラー文言。null は正常。range は最小・最大の両方に係る条件エラー。 */
 export interface InputFieldErrors {
@@ -92,6 +115,13 @@ export function minutesFromSeconds(seconds: number): number {
  * 探索結果の status / reason から UI 文言を作る（scout-002 F5 の対応表）。
  * 候補付き result は候補カード描画が担い、この関数は no_candidates / truncated の
  * ステータス文言と、reason 無し（null）の補助文言を返す。
+ *
+ * reason ごとの真実の根拠（この版の契約）:
+ * - NO_CONNECTION: 検証済み入口が 1 件も無い、または最寄り入口が cap（46 km）超。
+ *   nearestAccess があれば距離とアクセス往復時間を示し、直線接続を実経路として出さない。
+ * - TIME_WINDOW: 指定枠に収まらない。minPlanSeconds が最大 4 時間を超えるなら
+ *   時間枠を広げても届かないため「最大 4 時間では周回できない」と数値で示す。
+ *   超えないなら指定枠が原因なので従来どおり時間枠を広げる導線につなぐ。
  */
 export function statusMessage(
   result: SearchResult,
@@ -102,14 +132,27 @@ export function statusMessage(
     return `候補が ${String(result.candidates.length)} 件見つかりました。`;
   }
   switch (result.reason) {
-    case "NO_CONNECTION":
-      return `出発地点が対応範囲外です（最寄り入口まで 30km を超えています）。${SUPPORTED_AREA_TEXT}`;
+    case "NO_CONNECTION": {
+      if (result.nearestAccess !== null) {
+        return `出発地点はこの版の対応範囲外です。${unreachableText(result.nearestAccess, result.minPlanSeconds)}`;
+      }
+      return `出発地点がこの版の対応範囲外です（検証済みの入口が見つかりません）。${SUPPORTED_AREA_TEXT}`;
+    }
     case "NO_BILLING_PAIR":
       return "この版には検証済み課金ペアがありません。";
-    case "NO_LOOP":
-      return "周回ルートが見つかりませんでした。出発地点が対応範囲外の可能性があります。";
-    case "TIME_WINDOW":
+    case "NO_LOOP": {
+      // 合法な周回が無い場合は「最短でも N 分」を主張しない（数値の根拠が無い）。
+      if (result.nearestAccess !== null) {
+        return `周回ルートが見つかりませんでした。${nearestAccessText(result.nearestAccess)}${SUPPORTED_AREA_TEXT}`;
+      }
+      return `周回ルートが見つかりませんでした。${SUPPORTED_AREA_TEXT}`;
+    }
+    case "TIME_WINDOW": {
+      if (result.minPlanSeconds !== null && result.minPlanSeconds > MAX_PRODUCT_SECONDS) {
+        return unreachableText(result.nearestAccess, result.minPlanSeconds);
+      }
       return `指定時間枠（${String(minMinutes)}〜${String(maxMinutes)} 分）に収まる候補がありません。時間枠を広げると見つかる可能性があります。`;
+    }
     case "NO_HANDOFF":
       return "地図引き継ぎ URL が上限超過のため除外されました。";
     case "SEARCH_LIMIT":
@@ -119,9 +162,72 @@ export function statusMessage(
   }
 }
 
-/** 対応範囲の説明。グラフに含まれる首都高 C1 とその接続ランプを利用者へ示す。 */
+/**
+ * 対応範囲の説明。候補にできるのは検証済み C1 入出口の組み合わせだけで、
+ * アクセス・帰着は一般道探索ではなく直線距離の概算であることを明示する。
+ */
 export const SUPPORTED_AREA_TEXT =
-  "対応範囲は首都高速 都心環状線（C1）とその接続ランプです。範囲外の地点では候補を作れません。";
+  "対応範囲は首都高速 都心環状線（C1）とその接続ランプの検証済み入出口です。アクセス・帰着は一般道探索ではなく直線距離の概算で、入口までの往復を含む計画時間が指定の範囲に収まる地点だけを候補にします。";
+
+/**
+ * 最寄り入口へのアクセス情報。直線距離と片道の概算時間を示す。
+ * 実際の一般道経路ではないため「概算」を必ず添える。
+ */
+export function nearestAccessText(nearestAccess: SnappedOrigin): string {
+  return `最寄り入口まで直線 約 ${distanceText(nearestAccess.distanceMeters)}・片道 約 ${String(
+    accessMinutesFromMeters(nearestAccess.distanceMeters),
+  )} 分（概算）。`;
+}
+
+/**
+ * 最大 4 時間では周回できないことの数値根拠を示す文言。
+ * - minPlanSeconds があれば「最短でも約 N 分」
+ * - nearestAccess があれば「アクセスの往復だけで約 N 分」「最寄り入口まで直線 約 N km」
+ * 数値の根拠が 1 つも無ければ距離・時間を捏造しない。
+ */
+export function unreachableText(
+  nearestAccess: SnappedOrigin | null,
+  minPlanSeconds: number | null,
+): string {
+  const reasons: string[] = [];
+  if (minPlanSeconds !== null) {
+    reasons.push(`周回できる最短の計画時間でも 約 ${String(minutesFromSeconds(minPlanSeconds))} 分`);
+  }
+  if (nearestAccess !== null) {
+    reasons.push(
+      `最寄り入口までのアクセス往復だけで 約 ${String(
+        accessMinutesFromMeters(nearestAccess.distanceMeters) * 2,
+      )} 分`,
+    );
+  }
+  const head = reasons.length > 0 ? `${reasons.join("、")}かかるため、` : "";
+  const access = nearestAccess !== null ? nearestAccessText(nearestAccess) : "";
+  return `${head}最大 4 時間では周回できません。${access}${SUPPORTED_AREA_TEXT}`;
+}
+
+/** 候補ゼロの原因分類。復帰導線（時間を広げる / 出発地点を変える）を分けるために使う。 */
+export type NoCandidateCase = "unreachable" | "time_window" | "unsupported_area" | "other";
+
+/**
+ * 候補ゼロ時の原因を分類する。
+ * - unreachable: 指定枠が最大 4 時間でも届かない（数値根拠あり）。時間を広げる案内は誤り。
+ * - time_window: 指定枠が狭いだけで、広げれば見つかる可能性がある。
+ * - unsupported_area: 対応範囲・検証済みペア・周回の制約でこの版では作れない。
+ */
+export function classifyNoCandidates(result: SearchResult): NoCandidateCase {
+  if (result.reason === "NO_CONNECTION") {
+    return "unsupported_area";
+  }
+  if (result.reason === "TIME_WINDOW") {
+    return result.minPlanSeconds !== null && result.minPlanSeconds > MAX_PRODUCT_SECONDS
+      ? "unreachable"
+      : "time_window";
+  }
+  if (result.reason === "NO_LOOP" || result.reason === "NO_BILLING_PAIR") {
+    return "unsupported_area";
+  }
+  return "other";
+}
 
 /** Worker error / ステータス文言の一覧（docs/interfaces.md の error.code と対応）。 */
 export function errorMessage(code: string): string {

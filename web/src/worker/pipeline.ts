@@ -18,6 +18,24 @@ export interface ArtifactExpectation {
 
 /** 配信側 engine.json のスキーマ版。 */
 export const ENGINE_SCHEMA_VERSION = 1;
+
+/**
+ * prepare 時に渡す入口アクセス距離の上界（m）。
+ *
+ * 導出: 片道アクセスの往復だけで最大 240 分を使い切る直線距離は
+ * `240*60/2*(30/3.6)/1.3 ≒ 46.1 km`（30 km/h・迂回係数 1.3）。実データから解析した
+ * 到達上界は約 37.3 km（docs/routing.md「精度の制約」）なので、この cap が
+ * 時間窓で成立し得る候補を隠すことはない。真の到達判定はエンジン側の
+ * 時間窓（`T_plan <= U*60`）が行い、46 km を超える地点はエンジンが
+ * `NO_CONNECTION` + `nearestAccess` を返して UI が距離と条件を提示する。
+ * Rust 既定値（30,000 m）は変更しない。
+ */
+export const MAX_ACCESS_DISTANCE_METERS = 46_000;
+
+/** `prepare` の第 2 引数へ渡す SearchLimits JSON。 */
+export const SEARCH_LIMITS_JSON = JSON.stringify({
+  maxAccessDistanceMeters: MAX_ACCESS_DISTANCE_METERS,
+});
 /** engine.json で期待値を持つ成果物（照合対象）。 */
 export const WASM_ARTIFACT_PATH = "shutoko_routing_bg.wasm";
 export const GLUE_ARTIFACT_PATH = "shutoko_routing.js";
@@ -211,8 +229,8 @@ export interface LoadReleaseOptions {
  *   （以降の fetch は呼ばれない）
  * - glue は text 取得して照合後、同じ URL を importImpl で import し、
  *   init({ module_or_path: wasmBytes }) で初期化する
- * - 初期化後、prepare(graphJson, "{}") を即座に実行して WasmPreparedGraph を構築し、
- *   graphJson は保持せず V8 GC 対象にする
+ * - 初期化後、prepare(graphJson, SEARCH_LIMITS_JSON) を即座に実行して WasmPreparedGraph を構築し、
+ *   graphJson は保持せず V8 GC 対象にする（limits は接続判定の上界だけで、成立判定は時間窓）
  */
 export async function loadRelease(
   fetchImpl: FetchLike,
@@ -279,7 +297,7 @@ export async function loadRelease(
 
   await glue.default({ module_or_path: wasmBytes });
 
-  const preparedGraph = glue.prepare(graphJson, "{}");
+  const preparedGraph = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
 
   let refCount = 1;
   let freed = false;

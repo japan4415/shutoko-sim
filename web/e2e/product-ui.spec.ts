@@ -493,3 +493,146 @@ test("(16) 対応範囲外の出発地点は対応範囲を示し、有効な地
   await page.click("#search-btn");
   await expect(page.locator("#results .card").first()).toBeVisible();
 });
+
+// --- 広域（23 区 + 多摩）座標の境界と地図追従（web-001 追加分） ---
+
+/** 座標入力で出発地点を確定する（キーボード利用者と等価な手段）。 */
+async function setCoordinateOrigin(page: Page, lat: string, lon: string): Promise<void> {
+  await page.fill("#lat", lat);
+  await page.fill("#lon", lon);
+  // change は blur で発火するため、検索ボタンへフォーカスを移して確定させる。
+  await page.locator("#search-btn").focus();
+  await expect(page.locator("#origin-summary")).toContainText("座標入力");
+}
+
+/** 座標を直接指定して探索する。 */
+async function searchFromCoordinate(
+  page: Page,
+  lat: string,
+  lon: string,
+  min: string,
+  max: string,
+): Promise<void> {
+  await openApp(page);
+  await setCoordinateOrigin(page, lat, lon);
+  await setTimeRange(page, min, max);
+  await page.click("#search-btn");
+}
+
+test("(17) 立川駅（29.6km）は 15〜240 分で候補が返る", async ({ page }) => {
+  // 従来の 30km 固定 cap では NO_CONNECTION だった地点。46km cap + 時間窓で成立する。
+  await searchFromCoordinate(page, "35.6979", "139.4139", "15", "240");
+
+  const firstCard = page.locator("#results .card").first();
+  await expect(firstCard).toBeVisible();
+  // アクセスが長い地点なので「入り」の内訳が表示され、直線距離も出る。
+  await expect(firstCard).toContainText("入り");
+  await expect(firstCard).toContainText("入口まで（直線）");
+});
+
+test("(18) 八王子駅（36.1km）は 15〜240 分でも候補なしで数値理由を出す", async ({ page }) => {
+  await searchFromCoordinate(page, "35.6556", "139.3388", "15", "240");
+
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  const status = page.locator("#status");
+  // 最短計画が 240 分を超えるため、時間枠ではなく距離・時間の数値で説明する。
+  await expect(status).toContainText("最大 4 時間では周回できません");
+  await expect(status).toContainText("最短の計画時間でも");
+  await expect(status).toContainText("km");
+
+  // 時間を広げても届かないので「時間の上限を広げる」は出さない。
+  await expect(page.locator("#recovery-actions")).toBeVisible();
+  await expect(page.locator("#recovery-actions button", { hasText: "時間の上限を広げる" })).toHaveCount(0);
+  // 有効な地点へ切り替える導線は残す。
+  await expect(
+    page.locator("#recovery-actions button", { hasText: "神田橋を出発地点にする" }),
+  ).toBeVisible();
+});
+
+test("(19) 奥多摩（cap 超）は対応範囲外と最寄り入口の距離を示す", async ({ page }) => {
+  // C1 最寄り入口が 46km cap を超える地点。NO_CONNECTION + nearestAccess を表示する。
+  await searchFromCoordinate(page, "35.8106", "139.0937", "15", "240");
+
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  const status = page.locator("#status");
+  await expect(status).toContainText("対応範囲外");
+  await expect(status).toContainText("最寄り入口まで直線");
+  await expect(status).toContainText("km");
+  await expect(status).toContainText("都心環状線");
+  await expect(page.locator("#recovery-actions")).toBeVisible();
+});
+
+test("(20) 立川駅でも指定枠 60 分なら従来どおり時間枠を広げる導線のまま", async ({ page }) => {
+  await searchFromCoordinate(page, "35.6979", "139.4139", "15", "60");
+
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  await expect(page.locator("#status")).toContainText("時間枠を広げる");
+  const widen = page.locator("#recovery-actions button", { hasText: "時間の上限を広げる" });
+  await expect(widen).toBeVisible();
+  await widen.click();
+  await expect(page.locator("#max-minutes")).toHaveValue("90");
+});
+
+test("(21) 座標確定で地図が追従し、マーカーが表示範囲内に入る", async ({ page }) => {
+  await searchFromCoordinate(page, "35.6979", "139.4139", "15", "240");
+
+  const mapBox = await page.locator("#map").boundingBox();
+  const markerBox = await page.locator("#map .origin-marker").boundingBox();
+  expect(mapBox).not.toBeNull();
+  expect(markerBox).not.toBeNull();
+  if (mapBox !== null && markerBox !== null) {
+    expect(markerBox.x).toBeGreaterThanOrEqual(mapBox.x);
+    expect(markerBox.y).toBeGreaterThanOrEqual(mapBox.y);
+    expect(markerBox.x + markerBox.width).toBeLessThanOrEqual(mapBox.x + mapBox.width + 1);
+    expect(markerBox.y + markerBox.height).toBeLessThanOrEqual(mapBox.y + mapBox.height + 1);
+  }
+});
+
+test("(22) 地図タップで指定した地点を確定して探索できる", async ({ page }) => {
+  await stubGeocode(page, { candidates: CANDIDATES });
+  await openApp(page);
+
+  // 専用モードに入ってからタップする（ドラッグ・ズームと競合しない）。
+  await page.click("#map-pick-btn");
+  await expect(page.locator("#map-pick-panel")).toBeVisible();
+  await expect(page.locator("#map-pick-confirm")).toBeDisabled();
+
+  const mapBox = await page.locator("#map").boundingBox();
+  expect(mapBox).not.toBeNull();
+  if (mapBox !== null) {
+    // 都心（初期中心）付近をタップする。
+    await page.locator("#map").click({
+      position: { x: Math.round(mapBox.width / 2), y: Math.round(mapBox.height / 2) },
+    });
+  }
+  await expect(page.locator("#map-pick-status")).toContainText("候補地点");
+  await expect(page.locator("#map .pending-marker")).toBeAttached();
+  await expect(page.locator("#map-pick-confirm")).toBeEnabled();
+
+  await page.click("#map-pick-confirm");
+  // 逆ジオコーディングはしないので座標ラベルで示す。
+  await expect(page.locator("#origin-summary")).toContainText("地図で指定（住所は未取得）");
+  await expect(page.locator("#origin-summary")).toContainText("35.");
+  await expect(page.locator("#map-pick-panel")).toBeHidden();
+
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+});
+
+test("(23) 地図タップ指定は Esc でキャンセルできる", async ({ page }) => {
+  await openApp(page);
+  await page.click("#map-pick-btn");
+  const mapBox = await page.locator("#map").boundingBox();
+  if (mapBox !== null) {
+    await page.locator("#map").click({
+      position: { x: Math.round(mapBox.width / 2), y: Math.round(mapBox.height / 2) },
+    });
+  }
+  await expect(page.locator("#map-pick-confirm")).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#map-pick-panel")).toBeHidden();
+  await expect(page.locator("#map .pending-marker")).toHaveCount(0);
+  // 出発地点は神田橋（起動時プリセット）のまま変わらない。
+  await expect(page.locator("#origin-summary")).toContainText("神田橋");
+});

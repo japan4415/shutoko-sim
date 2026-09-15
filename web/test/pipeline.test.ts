@@ -6,9 +6,11 @@ import {
   buildSearchRequest,
   hexDigest,
   loadRelease,
+  MAX_ACCESS_DISTANCE_METERS,
   parseWasmError,
   PipelineError,
   ReleaseStore,
+  SEARCH_LIMITS_JSON,
   verifyArtifact,
   type FetchLike,
   type FetchResponseLike,
@@ -363,6 +365,31 @@ describe("loadRelease（モック fetch）", () => {
     });
     expect(initCalls).toHaveLength(1);
     expect(initCalls[0]).toBeInstanceOf(Uint8Array);
+  });
+
+  it("prepare には 46km cap の明示 limits を渡し、既定 30km に依存しない", async () => {
+    const files = await buildFiles();
+    const { fetch } = mockFetch(files);
+    const prepareCalls: { graphJson: string; limitsJson: string }[] = [];
+    const glue: WasmGlueModule = {
+      default: async () => {},
+      prepare(graphJson: string, limitsJson: string): WasmPreparedGraphLike {
+        prepareCalls.push({ graphJson, limitsJson });
+        return { free() {} };
+      },
+      searchPrepared: () => "{}",
+    };
+    await loadRelease(fetch, "c1-real-v1", async () => glue);
+
+    expect(prepareCalls).toHaveLength(1);
+    expect(prepareCalls[0]?.limitsJson).toBe(SEARCH_LIMITS_JSON);
+    expect(JSON.parse(prepareCalls[0]?.limitsJson ?? "{}")).toEqual({
+      maxAccessDistanceMeters: MAX_ACCESS_DISTANCE_METERS,
+    });
+    // 導出（240*60/2*(30/3.6)/1.3 ≒ 46.1km）と、解析上界 37.3km・旧既定 30km を上回ること。
+    expect(MAX_ACCESS_DISTANCE_METERS).toBe(46_000);
+    expect(MAX_ACCESS_DISTANCE_METERS).toBeGreaterThan(37_300);
+    expect(MAX_ACCESS_DISTANCE_METERS).toBeGreaterThan(30_000);
   });
 
   it("graph.json 改ざん時は ARTIFACT_MISMATCH で停止し、以降の fetch を呼ばない", async () => {

@@ -446,6 +446,31 @@ button.chip {
   }
 }
 
+/* 地図タップ指定。モード中だけ地図をクロスヘアにし、確定前の地点を見せる。 */
+.map--pick {
+  cursor: crosshair;
+}
+
+.map-pick {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-pick[hidden] {
+  display: none;
+}
+
+.map-pick p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
 /* Leaflet の出発地マーカー。画像依存を避けた CSS 描画。 */
 .origin-marker {
   background: transparent;
@@ -459,6 +484,23 @@ button.chip {
   border-radius: 50%;
   background: #fff;
   border: 3px solid var(--accent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
+}
+
+/* タップで選んだ確定前の地点。出発地（塗り）と区別できる中抜きの二重丸にする。 */
+.pending-marker {
+  background: transparent;
+  border: none;
+}
+
+.pending-marker__ring {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  outline: 3px solid var(--charged);
+  background: rgb(194 65 12 / 35%);
   box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
 }
 

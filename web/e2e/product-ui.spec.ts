@@ -575,17 +575,22 @@ test("(20) 立川駅でも指定枠 60 分なら従来どおり時間枠を広�
 
 test("(21) 座標確定で地図が追従し、マーカーが表示範囲内に入る", async ({ page }) => {
   await searchFromCoordinate(page, "35.6979", "139.4139", "15", "240");
+  await expect(page.locator("#results .card").first()).toBeVisible();
 
-  const mapBox = await page.locator("#map").boundingBox();
-  const markerBox = await page.locator("#map .origin-marker").boundingBox();
-  expect(mapBox).not.toBeNull();
-  expect(markerBox).not.toBeNull();
-  if (mapBox !== null && markerBox !== null) {
-    expect(markerBox.x).toBeGreaterThanOrEqual(mapBox.x);
-    expect(markerBox.y).toBeGreaterThanOrEqual(mapBox.y);
+  // pan/zoom はアニメーションするため、収束するまでポーリングして確認する。
+  await expect(async () => {
+    const mapBox = await page.locator("#map").boundingBox();
+    const markerBox = await page.locator("#map .origin-marker").boundingBox();
+    expect(mapBox).not.toBeNull();
+    expect(markerBox).not.toBeNull();
+    if (mapBox === null || markerBox === null) {
+      return;
+    }
+    expect(markerBox.x).toBeGreaterThanOrEqual(mapBox.x - 1);
+    expect(markerBox.y).toBeGreaterThanOrEqual(mapBox.y - 1);
     expect(markerBox.x + markerBox.width).toBeLessThanOrEqual(mapBox.x + mapBox.width + 1);
     expect(markerBox.y + markerBox.height).toBeLessThanOrEqual(mapBox.y + mapBox.height + 1);
-  }
+  }).toPass({ timeout: 5000 });
 });
 
 test("(22) 地図タップで指定した地点を確定して探索できる", async ({ page }) => {

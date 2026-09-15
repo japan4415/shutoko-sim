@@ -1,7 +1,6 @@
-// Exercise the exact web-target glue and binary produced for a browser Worker.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import init, { search } from '../dist/wasm/shutoko_routing.js';
+import init, { search, prepare, searchPrepared } from '../dist/wasm/shutoko_routing.js';
 
 const graph = await readFile(new URL('../fixtures/synthetic-graph.json', import.meta.url), 'utf8');
 const request = await readFile(new URL('../fixtures/synthetic-request.json', import.meta.url), 'utf8');
@@ -77,5 +76,50 @@ assert.throws(
   () => search(JSON.stringify(oversizedTimestamp), request, '{}'),
   'oversized timestamps must be rejected before candidate cloning',
 );
-console.log('Web-target WASM loaded; synthetic loop search, new fields, coordinate snap, NO_CONNECTION, determinism and errors passed.');
+
+// PreparedGraph validation
+const pg = prepare(graph, '{}');
+const preparedRes = searchPrepared(pg, request);
+assert.equal(preparedRes, first, 'searchPrepared must match one-shot search result');
+const coordPreparedRes = searchPrepared(pg, JSON.stringify(coordReq));
+assert.equal(coordPreparedRes, JSON.stringify(coordRes), 'searchPrepared coordinate result must match one-shot');
+
+// Performance benchmark (measure prepare, search, searchPrepared)
+const WARMUP_ITERS = 5;
+const BENCH_ITERS = 20;
+
+for (let i = 0; i < WARMUP_ITERS; i++) {
+  const p = prepare(graph, '{}');
+  searchPrepared(p, request);
+  p.free();
+  search(graph, request, '{}');
+}
+
+const tPrepareStart = performance.now();
+for (let i = 0; i < BENCH_ITERS; i++) {
+  const p = prepare(graph, '{}');
+  p.free();
+}
+const avgPrepareMs = (performance.now() - tPrepareStart) / BENCH_ITERS;
+
+const benchPg = prepare(graph, '{}');
+const tSearchPreparedStart = performance.now();
+for (let i = 0; i < BENCH_ITERS; i++) {
+  searchPrepared(benchPg, request);
+}
+const avgSearchPreparedMs = (performance.now() - tSearchPreparedStart) / BENCH_ITERS;
+benchPg.free();
+
+const tSearchStart = performance.now();
+for (let i = 0; i < BENCH_ITERS; i++) {
+  search(graph, request, '{}');
+}
+const avgSearchMs = (performance.now() - tSearchStart) / BENCH_ITERS;
+
+// Free validation
+pg.free();
+assert.throws(() => searchPrepared(pg, request), 'use-after-free on WasmPreparedGraph must throw');
+
+console.log(`[bench] prepare=${avgPrepareMs.toFixed(2)}ms / search=${avgSearchMs.toFixed(2)}ms / searchPrepared=${avgSearchPreparedMs.toFixed(2)}ms`);
+console.log('Web-target WASM loaded; synthetic loop search, new fields, coordinate snap, NO_CONNECTION, determinism, PreparedGraph and errors passed.');
 

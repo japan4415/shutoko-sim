@@ -10,10 +10,12 @@ import {
   hexDigest,
   loadRelease,
   parseSearchResult,
+  SEARCH_LIMITS_JSON,
   type ArtifactExpectation,
   type FetchLike,
   type FetchResponseLike,
 } from "../src/worker/pipeline";
+import { accessSecondsFromMeters } from "../src/ui/model";
 import type { UiSearchMessage } from "../src/worker/types";
 
 const root = new URL("../../", import.meta.url);
@@ -169,6 +171,71 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       })();
       expect(err).toBeInstanceOf(Error);
       expect(JSON.parse((err as Error).message)).toMatchObject({ code: "INVALID_INPUT" });
+    } finally {
+      pg.free();
+    }
+  }, 30_000);
+
+  it("実エンジンの accessSeconds は web の概算式（直線×1.3÷30km/h 切り上げ）と一致する", async () => {
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    const glue = await import("../../dist/wasm/shutoko_routing.js");
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
+    const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+    try {
+      const msg: UiSearchMessage = {
+        type: "search",
+        requestId: "integration-access-contract",
+        releaseId: "c1-real-v1",
+        pricingAt: "2026-09-10T00:00:00Z",
+        // 立川駅: 最寄り入口まで約 29.6 km で、アクセス時間が 0 でない候補が返る。
+        origin: { lat: 35.6979, lon: 139.4139 },
+        minMinutes: 15,
+        maxMinutes: 240,
+        vehicleProfile: "passenger-car-etc",
+      };
+      const result = parseSearchResult(
+        glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
+      );
+      expect(result.status).toBe("ok");
+      expect(result.candidates.length).toBeGreaterThan(0);
+      for (const candidate of result.candidates) {
+        const distance = candidate.snappedOrigin.distanceMeters;
+        expect(distance).toBeGreaterThan(0);
+        // Rust の estimated_access_seconds と web の accessSecondsFromMeters が一致すること。
+        expect(candidate.duration.accessSeconds).toBe(accessSecondsFromMeters(distance));
+      }
+    } finally {
+      pg.free();
+    }
+  }, 30_000);
+
+  it("狭い 60 分窓でも実エンジンが minPlanSeconds を返す（診断の上界 240 分）", async () => {
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    const glue = await import("../../dist/wasm/shutoko_routing.js");
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
+    const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+    try {
+      const msg: UiSearchMessage = {
+        type: "search",
+        requestId: "integration-narrow-minplan",
+        releaseId: "c1-real-v1",
+        pricingAt: "2026-09-10T00:00:00Z",
+        origin: { lat: 35.6979, lon: 139.4139 },
+        minMinutes: 15,
+        maxMinutes: 60,
+        vehicleProfile: "passenger-car-etc",
+      };
+      const result = parseSearchResult(
+        glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
+      );
+      expect(result.status).toBe("no_candidates");
+      expect(result.reason).toBe("TIME_WINDOW");
+      // 60 分窓では候補にならないが、240 分以内の合法周回の最短計画は診断として返る。
+      expect(result.minPlanSeconds).not.toBeNull();
+      expect(result.minPlanSeconds ?? 0).toBeGreaterThan(60 * 60);
+      expect(result.minPlanSeconds ?? 0).toBeLessThanOrEqual(240 * 60);
     } finally {
       pg.free();
     }

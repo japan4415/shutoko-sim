@@ -14,6 +14,16 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Kept here so `grid.rs` can import it via `crate::SNAP_RADIUS_METERS`.
 pub const SNAP_RADIUS_METERS: f64 = 200.0;
 
+/// Upper bound (minutes) on the planning time the product UI can ever accept.
+///
+/// Mirrors `SearchRequest::max_minutes`'s validation limit (240) and the UI's
+/// `max` attribute.  It is used to bound the *diagnostic* loop enumeration that
+/// feeds `minPlanSeconds`: because `planSeconds >= loop time`, every legal loop
+/// whose plan fits inside the product cap is enumerated by this bound, so the
+/// UI can decide "can any window up to 240 minutes ever work?" without the
+/// requested window silently pruning the evidence.
+pub const MAX_PRODUCT_MINUTES: u64 = 240;
+
 /// Detour factor for Tokyo urban areas. Straight-line distances underestimate
 /// actual driving distance due to the dense grid of one-way streets and turns.
 /// A value of 1.3 is a conservative estimate for the Tokyo metropolitan area.
@@ -1057,6 +1067,11 @@ pub fn search_prepared(
         verified_pairs.push((p, pre, post));
     }
 
+    // Separate budget for the diagnostic (product-cap) enumeration so that the
+    // extra loops it explores can never consume the candidate-search budget or
+    // trigger `SEARCH_LIMIT` truncation.
+    let mut diagnostic_budget = Budget::default();
+
     'pairs: for (p, pre, post) in verified_pairs {
         let entry_edge = pre[0];
         let exit_edge = post.last().unwrap();
@@ -1253,6 +1268,51 @@ pub fn search_prepared(
                 ],
                 handoff: handoff_payload,
             });
+        }
+
+        // Diagnostic extension: the candidate enumeration above is bounded by
+        // the *requested* max window, so a legal loop longer than
+        // `max_minutes` is pruned and can never reach `minPlanSeconds`.  The UI
+        // compares `minPlanSeconds` against the 240-minute product cap to
+        // decide whether widening the window can ever help, so re-enumerate up
+        // to the product cap with a separate budget.  Loops beyond the request
+        // window are always time-rejected, so this only feeds the diagnostic
+        // and never changes candidate generation.
+        if r.max_minutes < MAX_PRODUCT_MINUTES {
+            let diagnostic_seconds = MAX_PRODUCT_MINUTES * 60;
+            let reachable = cached_reachable_set(pg, p.anchor_node_id.as_str(), diagnostic_seconds);
+            let diagnostic_loops = paths_pg(
+                pg,
+                &p.anchor_node_id,
+                &p.anchor_node_id,
+                EdgeKind::Shutoko,
+                pg.limits.max_loop_edges,
+                diagnostic_seconds,
+                &reachable,
+                &mut diagnostic_budget,
+            );
+            for cycle in &diagnostic_loops {
+                if !diagnostic_budget.take(&pg.limits) {
+                    break;
+                }
+                let highway: Vec<_> = pre.iter().chain(cycle).chain(&post).copied().collect();
+                if !allowed_pg(pg, &highway) {
+                    continue;
+                }
+                let base = access_secs + seconds(&highway) + return_secs;
+                let buffer = 300.max(base.div_ceil(5));
+                let plan_seconds = base + buffer;
+                min_plan_seconds =
+                    Some(min_plan_seconds.map_or(plan_seconds, |m| m.min(plan_seconds)));
+                // These loops were pruned by the request bound, so their loop
+                // time (and therefore their base) exceeds the requested window:
+                // a legal loop exists, it just cannot fit.  Reflect that in the
+                // reason decision so `TIME_WINDOW` (widen the window) is
+                // reported instead of the misleading `NO_LOOP`.
+                found_loop = true;
+                legal_route = true;
+                time_rejected = true;
+            }
         }
     }
     let time_ranking = candidates.iter().any(|c| c.toll.amount_yen.is_none());

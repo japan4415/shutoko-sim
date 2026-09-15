@@ -17,6 +17,13 @@ export const TIMEOUT_TEXT = "探索が 10 秒を超えました。再度検索�
 export const MAX_PRODUCT_MINUTES = 240;
 export const MAX_PRODUCT_SECONDS = MAX_PRODUCT_MINUTES * 60;
 
+/**
+ * 探索時に prepare へ渡す入口アクセス距離の上界（m）。
+ * web/src/worker/pipeline.ts の MAX_ACCESS_DISTANCE_METERS と同じ値でなければならない。
+ * 契約テスト（ui-model.test.ts）が両者の一致を検証する。
+ */
+export const MAX_ACCESS_DISTANCE_METERS = 46_000;
+
 /** 一般道アクセスの想定速度（m/s）。エンジンと同じ 30 km/h。 */
 const ACCESS_SPEED_MPS = 30 / 3.6;
 /** 直線距離に対する迂回係数。エンジンと同じ 1.3。 */
@@ -133,8 +140,13 @@ export function statusMessage(
   }
   switch (result.reason) {
     case "NO_CONNECTION": {
-      if (result.nearestAccess !== null) {
+      if (result.nearestAccess !== null && isAccessBeyondCap(result.nearestAccess)) {
+        // cap 超過: 最寄り入口が遠く、時間枠でも到達できない。距離と時間を数値で示す。
         return `出発地点はこの版の対応範囲外です。${unreachableText(result.nearestAccess, result.minPlanSeconds)}`;
+      }
+      if (result.nearestAccess !== null) {
+        // 最寄りは近いのに検証済み入口へ接続できない経路。時間の話とは切り離す。
+        return `出発地点に接続できる検証済みの入口が見つかりませんでした。${nearestAccessText(result.nearestAccess)}${SUPPORTED_AREA_TEXT}`;
       }
       return `出発地点がこの版の対応範囲外です（検証済みの入口が見つかりません）。${SUPPORTED_AREA_TEXT}`;
     }
@@ -160,6 +172,20 @@ export function statusMessage(
     default:
       return "候補が見つかりませんでした。";
   }
+}
+
+/**
+ * 座標入力の NO_CONNECTION が「最寄り入口が cap 超過」によるものかを判定する。
+ *
+ * エンジンの NO_CONNECTION には別経路がある: `max_access_entries` により
+ * 検証済み課金ペアの入口がアクセス候補に含まれない場合で、このとき
+ * `nearestAccess` は近距離でも返る。その場合に「アクセス往復だけで 4 時間」と
+ * 断定すると嘘になるため、UI はこの判定でガードする（opus5 F2）。
+ * エンジンは `distanceMeters > cap` のときだけ cap 超過 NO_CONNECTION を返し、
+ * `nearestAccess` は cap 判定前に構築されるため、同じ比較で正確に区別できる。
+ */
+export function isAccessBeyondCap(nearestAccess: SnappedOrigin): boolean {
+  return nearestAccess.distanceMeters > MAX_ACCESS_DISTANCE_METERS;
 }
 
 /**

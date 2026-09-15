@@ -129,10 +129,16 @@ export interface SearchResult {
    */
   nearestAccess: SnappedOrigin | null;
   /**
-   * Shortest `planSeconds` (`baseSeconds + bufferSeconds`) over every legal
-   * loop found, including loops the requested time window rejects. This is the
-   * numeric basis for a `TIME_WINDOW` rejection. `null` when no legal loop
-   * exists.
+   * Shortest `planSeconds` (`baseSeconds + bufferSeconds`) among legal loops
+   * whose loop time is within the 240-minute product cap. Loops the requested
+   * time window rejects are included, so this is the numeric basis for a
+   * `TIME_WINDOW` rejection: `minPlanSeconds > 240 * 60` means no window up to
+   * the 240-minute product limit can ever succeed. The enumeration is bounded
+   * by the product cap (loop seconds only), so a value above `240 * 60` is the
+   * smallest *enumerated* loop and may overstate the true global minimum; the
+   * `minPlanSeconds <= 240 * 60` decision is exact. `null` when no legal loop
+   * exists (e.g. `NO_CONNECTION`, `NO_LOOP`, or a search that never reached the
+   * loop-enumeration stage).
    */
   minPlanSeconds: number | null;
 }

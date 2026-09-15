@@ -980,3 +980,78 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         "originNodeId input must still report minPlanSeconds"
     );
 }
+
+// ---------------------------------------------------------------------------
+// correct-001: narrow windows must still report the true minimum plan time.
+// Before this fix a 60-minute request pruned every legal loop (all C1 loops
+// take > 60 min once access/return are added), so `minPlanSeconds` was `null`
+// and the UI could not tell "widen the window" from "no legal loop".
+// ---------------------------------------------------------------------------
+
+/// 立川駅 (35.6979, 139.4139) の 60 分窓: 候補にはならないが、診断は製品上限
+/// 240 分までの合法周回を見て最短計画秒を返す。八王子駅では 240 分を超える値が
+/// 返り、UI が「時間を広げても届かない」と正しく断定できる。
+/// 併せて同一入力の決定論と 10 秒以内の応答を確認する。
+#[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn tokyo_wide_narrow_window_reports_min_plan_and_is_deterministic() {
+    let g = real_graph();
+    let wide = wide_access_limits();
+
+    // ── 立川駅 60 分窓: legal loop は存在するが窓に収まらない（TIME_WINDOW）──
+    let started = std::time::Instant::now();
+    let tachikawa = search(
+        &g,
+        &coordinate_request("req-tachikawa-narrow", 35.6979, 139.4139, 60),
+        &wide,
+    )
+    .expect("tachikawa narrow search must not error");
+    let elapsed = started.elapsed();
+
+    assert_eq!(tachikawa.status, "no_candidates");
+    assert_eq!(tachikawa.reason.as_deref(), Some("TIME_WINDOW"));
+    let min_plan = tachikawa
+        .min_plan_seconds
+        .expect("narrow window must still report the true minimum plan time");
+    assert!(
+        min_plan > 60 * 60,
+        "tachikawa minimum plan ({min_plan} s) must exceed the 60 min window"
+    );
+    assert!(
+        min_plan <= FOUR_HOURS_SECONDS,
+        "tachikawa minimum plan ({min_plan} s) must fit the 240 min product cap"
+    );
+    assert!(
+        elapsed < std::time::Duration::from_secs(10),
+        "narrow-window diagnostic must answer within 10 s, took {elapsed:?}"
+    );
+
+    // ── 決定論: 同一入力の再実行で診断値が一致する ──
+    let repeat = search(
+        &g,
+        &coordinate_request("req-tachikawa-narrow", 35.6979, 139.4139, 60),
+        &wide,
+    )
+    .expect("repeat search must not error");
+    assert_eq!(repeat.min_plan_seconds, tachikawa.min_plan_seconds);
+    assert_eq!(repeat.reason, tachikawa.reason);
+    assert_eq!(repeat.expanded_states, tachikawa.expanded_states);
+    assert_eq!(repeat.candidates.len(), tachikawa.candidates.len());
+
+    // ── 八王子駅 60 分窓: 最短計画は 240 分を超える（unreachable の根拠）──
+    let hachioji = search(
+        &g,
+        &coordinate_request("req-hachioji-narrow", 35.6556, 139.3388, 60),
+        &wide,
+    )
+    .expect("hachioji narrow search must not error");
+    assert_eq!(hachioji.status, "no_candidates");
+    assert_eq!(hachioji.reason.as_deref(), Some("TIME_WINDOW"));
+    let hachioji_min_plan = hachioji
+        .min_plan_seconds
+        .expect("hachioji narrow window must report the minimum plan time");
+    assert!(
+        hachioji_min_plan > FOUR_HOURS_SECONDS,
+        "hachioji minimum plan ({hachioji_min_plan} s) must exceed the product cap"
+    );
+}

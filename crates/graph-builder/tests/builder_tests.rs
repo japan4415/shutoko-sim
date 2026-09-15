@@ -22,13 +22,14 @@ fn test_oneway_expansion() {
             {"type": "node", "id": 2, "lat": 35.6810, "lon": 139.7600},
             {"type": "node", "id": 3, "lat": 35.6820, "lon": 139.7600},
             {"type": "node", "id": 4, "lat": 35.6830, "lon": 139.7600},
-            // Way 101: oneway=yes
+            // Way 101: oneway=yes — use motorway (Shutoko) so the edge is generated in the new impl
             {
                 "type": "way",
                 "id": 101,
                 "nodes": [1, 2],
                 "tags": {
-                    "highway": "primary",
+                    "highway": "motorway",
+                    "ref": "C1",
                     "oneway": "yes"
                 }
             },
@@ -38,7 +39,8 @@ fn test_oneway_expansion() {
                 "id": 102,
                 "nodes": [2, 3],
                 "tags": {
-                    "highway": "primary",
+                    "highway": "motorway",
+                    "ref": "C1",
                     "oneway": "-1"
                 }
             },
@@ -48,7 +50,8 @@ fn test_oneway_expansion() {
                 "id": 103,
                 "nodes": [3, 4],
                 "tags": {
-                    "highway": "primary",
+                    "highway": "motorway",
+                    "ref": "C1",
                     "oneway": "no"
                 }
             }
@@ -77,7 +80,7 @@ fn test_oneway_expansion() {
 }
 
 #[test]
-fn test_edge_kind_classification_shutoko_entry_exit_local() {
+fn test_edge_kind_classification_no_local_edges() {
     let json_data = json!({
         "elements": [
             // Local nodes
@@ -149,13 +152,22 @@ fn test_edge_kind_classification_shutoko_entry_exit_local() {
 
     let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
     let config = TopologyConfig::default();
-    let (graph, snap) = build_topology(&resp, &config).unwrap();
+    let (graph, snap, report) = build_topology_with_report(&resp, &config).unwrap();
 
     // Verify kinds
     let edge_kinds: std::collections::HashMap<String, EdgeKind> =
         graph.edges.iter().map(|e| (e.id.clone(), e.kind)).collect();
 
-    assert_eq!(edge_kinds.get("e:w1:0:f"), Some(&EdgeKind::Local));
+    // Surface-only way 1 (highway=primary) must NOT appear as a graph edge in the new impl.
+    // The new implementation uses surface ways as classification context only — they never
+    // become graph edges (Local edge count is always 0).
+    assert!(
+        !edge_kinds.contains_key("e:w1:0:f"),
+        "surface-only way 1 (highway=primary) must not appear as a graph edge"
+    );
+    // Surface context still makes node 11 (from-node of entry ramp) recognisable as Entry,
+    // and node 10 (to-node of exit ramp) recognisable as Exit — ramp classification is correct.
+    assert_eq!(report.undecidable_ramp_edges, 0);
     assert_eq!(edge_kinds.get("e:w2:0:f"), Some(&EdgeKind::Shutoko));
 
     // Entry ramp segments
@@ -187,7 +199,9 @@ fn test_grade_separation_different_layers_do_not_connect() {
     // but they are on different layers (0 and 1) and do not share any OSM node IDs.
     let json_data = json!({
         "elements": [
-            // Way 10: Local road (layer 0) running West-East
+            // Way 10: Shutoko mainline (layer 0) running West-East.
+            // Changed from highway=primary so the edge is generated in the new impl,
+            // while preserving the layer-separation test intent (no shared OSM nodes).
             {"type": "node", "id": 1, "lat": 35.6810, "lon": 139.7600},
             {"type": "node", "id": 2, "lat": 35.6810, "lon": 139.7620},
             {
@@ -195,7 +209,8 @@ fn test_grade_separation_different_layers_do_not_connect() {
                 "id": 10,
                 "nodes": [1, 2],
                 "tags": {
-                    "highway": "primary",
+                    "highway": "motorway",
+                    "ref": "C1",
                     "layer": "0",
                     "oneway": "yes"
                 }
@@ -260,26 +275,26 @@ fn test_turn_restriction_extraction() {
             {"type": "node", "id": 3, "lat": 35.6810, "lon": 139.7590}, // left turn destination
             {"type": "node", "id": 4, "lat": 35.6820, "lon": 139.7600}, // straight destination
 
-            // Way 10: 1 -> 2
+            // Way 10: 1 -> 2 — motorway (Shutoko) so the edge appears in the graph
             {
                 "type": "way",
                 "id": 10,
                 "nodes": [1, 2],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 20: 2 -> 3 (left turn)
             {
                 "type": "way",
                 "id": 20,
                 "nodes": [2, 3],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 30: 2 -> 4 (straight)
             {
                 "type": "way",
                 "id": 30,
                 "nodes": [2, 4],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
 
             // Relation: no_left_turn from Way 10 to Way 20 via Node 2
@@ -321,13 +336,13 @@ fn test_deterministic_output_and_sorting() {
                 "type": "way",
                 "id": 99,
                 "nodes": [50, 10],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             {
                 "type": "way",
                 "id": 11,
                 "nodes": [10, 30],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             }
         ]
     });
@@ -831,13 +846,16 @@ fn test_reject_disconnected_path() {
 fn test_reject_invalid_edge_kinds() {
     let (graph, _snap) = create_test_loop_graph();
 
-    // Entry edge is actually Local
+    // Use a Shutoko mainline edge (e:w3:0:f, kind=Shutoko) as the billing-pair entry_id.
+    // The validator must reject this with INVALID_EDGE_KIND because entry must be kind=Entry.
+    // (In the previous implementation the test used e:w1:0:f which was kind=Local; Local edges
+    // no longer exist, so we use a Shutoko edge to exercise the same INVALID_EDGE_KIND path.)
     let pair = BillingPair {
         id: "bp-wrong-kind".into(),
-        entry_id: "e:w1:0:f".into(),
+        entry_id: "e:w3:0:f".into(),
         exit_id: "e:w6:0:f".into(),
         anchor_node_id: "n:3".into(),
-        entry_to_anchor_edge_ids: vec!["e:w1:0:f".into()],
+        entry_to_anchor_edge_ids: vec!["e:w3:0:f".into()],
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
@@ -1215,20 +1233,20 @@ fn test_turn_restriction_only_straight_on_forbids_alternative_outgoings() {
             {"type": "node", "id": 3, "lat": 35.6810, "lon": 139.7590}, // left branch
             {"type": "node", "id": 4, "lat": 35.6820, "lon": 139.7600}, // straight branch
 
-            // Way 10: 1 -> 2
+            // Way 10: 1 -> 2 — motorway (Shutoko) so the edge appears in the graph
             {
                 "type": "way", "id": 10, "nodes": [1, 2],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 20: 2 -> 3 (left branch)
             {
                 "type": "way", "id": 20, "nodes": [2, 3],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 30: 2 -> 4 (straight branch)
             {
                 "type": "way", "id": 30, "nodes": [2, 4],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
 
             // Relation: only_straight_on from Way 10 to Way 30 via Node 2
@@ -1271,20 +1289,20 @@ fn test_turn_restriction_via_way_sequence() {
             {"type": "node", "id": 3, "lat": 35.6820, "lon": 139.7600},
             {"type": "node", "id": 4, "lat": 35.6830, "lon": 139.7600},
 
-            // Way 10: 1 -> 2 (from)
+            // Way 10: 1 -> 2 (from) — motorway (Shutoko) so the edge appears in the graph
             {
                 "type": "way", "id": 10, "nodes": [1, 2],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 20: 2 -> 3 (via)
             {
                 "type": "way", "id": 20, "nodes": [2, 3],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             // Way 30: 3 -> 4 (to)
             {
                 "type": "way", "id": 30, "nodes": [3, 4],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
 
             // Relation: no_u_turn from Way 10 to Way 30 via Way 20
@@ -1369,17 +1387,19 @@ fn test_turn_restriction_only_via_way_skipped() {
             {"type": "node", "id": 3, "lat": 35.6820, "lon": 139.7600},
             {"type": "node", "id": 4, "lat": 35.6830, "lon": 139.7600},
 
+            // Changed to motorway so edges appear in the graph; tests that only_*
+            // with via=way is still skipped (unsupported in static graph).
             {
                 "type": "way", "id": 10, "nodes": [1, 2],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             {
                 "type": "way", "id": 20, "nodes": [2, 3],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             {
                 "type": "way", "id": 30, "nodes": [3, 4],
-                "tags": {"highway": "primary", "oneway": "yes"}
+                "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}
             },
             {
                 "type": "relation",
@@ -1452,12 +1472,12 @@ fn test_turn_restriction_only_turn_deduplication() {
             {"type": "node", "id": 3, "lat": 35.6820, "lon": 139.7600},
             {"type": "node", "id": 4, "lat": 35.6810, "lon": 139.7610},
 
-            // From: Way 10 (1 -> 2)
-            {"type": "way", "id": 10, "nodes": [1, 2], "tags": {"highway": "primary", "oneway": "yes"}},
+            // From: Way 10 (1 -> 2) — motorway so the edge appears in the graph
+            {"type": "way", "id": 10, "nodes": [1, 2], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
             // To: Way 20 (2 -> 3)
-            {"type": "way", "id": 20, "nodes": [2, 3], "tags": {"highway": "primary", "oneway": "yes"}},
+            {"type": "way", "id": 20, "nodes": [2, 3], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
             // Alternative outgoing: Way 30 (2 -> 4)
-            {"type": "way", "id": 30, "nodes": [2, 4], "tags": {"highway": "primary", "oneway": "yes"}},
+            {"type": "way", "id": 30, "nodes": [2, 4], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
 
             // Relation 1: only_straight_on (Way 10 -> Way 20) => forbids Way 10 -> Way 30
             {
@@ -1549,7 +1569,7 @@ fn test_real_c1_first_exit_and_benchmark() {
     let resp: OverpassResponse = serde_json::from_str(&osm_content).unwrap();
 
     let config = TopologyConfig::default();
-    let (graph, _snap) = build_topology(&resp, &config).unwrap();
+    let (graph, _snap, report) = build_topology_with_report(&resp, &config).unwrap();
     // New motorway-only fixture has 1,719 edges (was 9,726 with local roads).
     assert_eq!(graph.edges.len(), 1719, "C1 graph must have 1,719 edges");
 
@@ -1571,11 +1591,42 @@ fn test_real_c1_first_exit_and_benchmark() {
         .iter()
         .filter(|e| e.kind == EdgeKind::Local)
         .count();
-    assert_eq!(entry_count, 16, "C1 must have exactly 16 Entry edges");
+    // Entry count changed from 16 → 15: way 4848898 ("首都高速都心環状線", motorway_link)
+    // was previously misclassified as Entry by the old name/distance heuristic.
+    // The new surface-connection logic correctly classifies it as Shutoko (issue #32 fix).
+    assert_eq!(entry_count, 15, "C1 must have exactly 15 Entry edges");
     assert_eq!(exit_count, 17, "C1 must have exactly 17 Exit edges");
     assert_eq!(
         local_count, 0,
         "C1 motorway-only graph must have 0 Local edges"
+    );
+
+    // --- Issue #32 regression: e:w4848898:0:f must be Shutoko, not Entry ------
+    // Way 4848898 ("首都高速都心環状線", highway=motorway_link, ref=C1) is a JCT
+    // connector on the C1 ring road.  The old name/distance heuristic incorrectly
+    // classified its first segment as Entry; the new surface-connection logic
+    // correctly identifies it as Shutoko because its from-node is not connected
+    // to any vehicle-accessible surface road.
+    {
+        let edge_kinds_map: std::collections::HashMap<&str, EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        assert_eq!(
+            edge_kinds_map.get("e:w4848898:0:f"),
+            Some(&EdgeKind::Shutoko),
+            "e:w4848898:0:f (way 4848898 '首都高速都心環状線') must be Shutoko, not Entry (issue #32)"
+        );
+    }
+
+    // --- undecidable_ramp_edges must be 0 for real C1 data --------------------
+    // The new fixture includes 88 surface-road context ways.  Every ramp endpoint
+    // must be decidable — if this count ever grows it means the OSM extract is
+    // missing surface context and ramp classification has silently degraded.
+    assert_eq!(
+        report.undecidable_ramp_edges, 0,
+        "real C1 fixture must have 0 undecidable ramp edges (surface context fully available)"
     );
 
     // --- Individual billing-pair edge classification ---------------------------
@@ -3403,55 +3454,64 @@ fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
 }
 
 // =============================================================================
-// Critical-1 / Critical-3 fix: JCT_DETECTION_MAX_ENTRY_DIST_METERS boundary
+// Regression tests for the surface-connection-based Entry/Exit classification
+// (issue #32: replace brittle name-pattern and distance heuristics with
+// structural OSM signals)
 //
-// These two synthetic tests pin the exact distance threshold that separates
-// "real surface Exit" from "JCT connector classified as Shutoko".
-//
-// Topology used in both tests:
+// Common topology used in both tests:
 //   Shutoko mainline loop:  n10 → n11 → n12 → n10 (highway=motorway, ref=C1)
-//   Entry ramp:             n1 → n5 → n10          (highway=motorway_link)
-//     • n1 is the Entry-candidate from-node (the proximity reference point)
-//   Exit ramp:              n11 → n25 → n20         (highway=motorway_link)
-//     • n20 is the exit dead-end; its distance to n1 determines classification
+//   Entry ramp:             n1 → n5 → n10           (highway=motorway_link)
+//     • A surface road (n0 → n1, highway=secondary) provides n1 ∈ surface_nodes
+//       → n1 classified as Entry
+//   Exit ramp / JCT:        n11 → n25 → n20          (highway=motorway_link)
+//     • Classification depends on what (if anything) is connected to n20
 // =============================================================================
 
-/// When the exit dead-end is 549 m from the entry candidate (≤ 550 m threshold),
-/// the edge is classified as Exit — a real surface interchange exists nearby.
+/// A motorway_link ramp whose street-side to-node shares a node with a
+/// vehicle-accessible surface road (highway=secondary) must be classified as Exit.
 ///
-/// Coordinate derivation (Haversine, R = 6 371 000 m):
-///   n1  = (35.6800, 139.7600)  — entry candidate from-node
-///   n20 = (35.6849373, 139.7600) — 549 m due north → rounds to 549 m ≤ 550 m
+/// This is the primary regression test for issue #32: surface-connection
+/// evidence takes precedence over old distance or name heuristics.
 #[test]
-fn test_jct_threshold_within_550m_classified_as_exit() {
+fn test_surface_connected_exit_ramp_classified_as_exit() {
     let json_data = json!({
         "elements": [
-            // Entry candidate from-node (proximity reference)
-            {"type": "node", "id": 1,  "lat": 35.6800,    "lon": 139.7600},
+            // Surface road nodes (context-only, not graph edges)
+            {"type": "node", "id": 0,  "lat": 35.6790, "lon": 139.7600},
+            {"type": "node", "id": 1,  "lat": 35.6800, "lon": 139.7600},
             // Shutoko mainline loop nodes
-            {"type": "node", "id": 10, "lat": 35.6820,    "lon": 139.7640},
-            {"type": "node", "id": 11, "lat": 35.6820,    "lon": 139.7680},
-            {"type": "node", "id": 12, "lat": 35.6840,    "lon": 139.7660},
+            {"type": "node", "id": 10, "lat": 35.6820, "lon": 139.7640},
+            {"type": "node", "id": 11, "lat": 35.6820, "lon": 139.7680},
+            {"type": "node", "id": 12, "lat": 35.6840, "lon": 139.7660},
             // Entry ramp intermediate node
-            {"type": "node", "id": 5,  "lat": 35.6815,    "lon": 139.7620},
+            {"type": "node", "id": 5,  "lat": 35.6815, "lon": 139.7620},
             // Exit ramp intermediate node
-            {"type": "node", "id": 25, "lat": 35.6835,    "lon": 139.7620},
-            // Exit dead-end: 549 m from n1 (rounds to 549 ≤ 550 → real exit)
-            {"type": "node", "id": 20, "lat": 35.6849373, "lon": 139.7600},
+            {"type": "node", "id": 25, "lat": 35.6835, "lon": 139.7620},
+            // Exit dead-end — shares node with surface road below → Exit
+            {"type": "node", "id": 20, "lat": 35.6849, "lon": 139.7600},
+            {"type": "node", "id": 21, "lat": 35.6860, "lon": 139.7600},
+
+            // Surface road: n0 → n1 (highway=secondary) — context only, no graph edge.
+            // Adds n0 and n1 to surface_nodes so the entry ramp from-node n1 → Entry.
+            {"type":"way","id":1,"nodes":[0,1],"tags":{"highway":"secondary","oneway":"yes"}},
+            // Surface road: n20 → n21 (highway=secondary) — context only, no graph edge.
+            // Adds n20 to surface_nodes so the exit ramp to-node n20 → Exit.
+            {"type":"way","id":2,"nodes":[20,21],"tags":{"highway":"secondary","oneway":"yes"}},
 
             // Shutoko mainline loop: n10 → n11 → n12 → n10
             {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
             {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
             {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
-            // Entry ramp: n1 → n5 → n10
+            // Entry ramp: n1 → n5 → n10 (n1 ∈ surface_nodes → Entry)
             {"type":"way","id":200,"nodes":[1,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}},
-            // Exit ramp: n11 → n25 → n20
+            // Exit ramp: n11 → n25 → n20 (n20 ∈ surface_nodes → Exit)
             {"type":"way","id":300,"nodes":[11,25,20],"tags":{"highway":"motorway_link","oneway":"yes"}}
         ]
     });
 
     let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
-    let (graph, _snap) = build_topology(&resp, &TopologyConfig::default()).unwrap();
+    let (graph, _snap, report) =
+        build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
 
     let edge_kinds: std::collections::HashMap<&str, EdgeKind> = graph
         .edges
@@ -3459,58 +3519,76 @@ fn test_jct_threshold_within_550m_classified_as_exit() {
         .map(|e| (e.id.as_str(), e.kind))
         .collect();
 
-    // Entry ramp first segment: n1 has 0 incoming ramp/mainline → Entry
+    // Entry ramp first segment: n1 ∈ surface_nodes (from secondary way 1) → Entry
     assert_eq!(
         edge_kinds.get("e:w200:0:f"),
         Some(&EdgeKind::Entry),
-        "entry ramp first segment must be Entry"
+        "entry ramp from-node n1 is in surface_nodes → must be Entry"
     );
-    // Exit ramp last segment dead-ends at n20, which is 549 m from entry candidate n1
-    // → within 550 m threshold → classified as real Exit
+    // Exit ramp last segment: n20 ∈ surface_nodes (from secondary way 2) → Exit
     assert_eq!(
         edge_kinds.get("e:w300:1:f"),
         Some(&EdgeKind::Exit),
-        "exit dead-end at 549 m from entry candidate must be classified as Exit (≤ 550 m)"
+        "exit ramp to-node n20 is in surface_nodes → must be Exit"
+    );
+    // No undecidable ramps — surface context is fully available
+    assert_eq!(
+        report.undecidable_ramp_edges, 0,
+        "all ramps must be decidable when surface roads are present"
     );
 }
 
-/// When the exit dead-end is 551 m from the entry candidate (> 550 m threshold),
-/// no surface entry ramp is nearby and the edge is classified as Shutoko
-/// (JCT connector at the OSM-extract boundary).
+/// A motorway_link ramp whose street-side to-node is shared ONLY with a footway
+/// (highway=footway) must be classified as Shutoko, not Exit.
 ///
-/// Coordinate derivation (Haversine, R = 6 371 000 m):
-///   n1  = (35.6800, 139.7600)  — entry candidate from-node
-///   n20 = (35.6849553, 139.7600) — 551 m due north → rounds to 551 m > 550 m
+/// Footways are explicitly excluded from surface-connection evidence
+/// (is_vehicle_highway("footway") = Some(false)).  Only vehicle-accessible
+/// roads provide Entry/Exit evidence; a footbridge next to a ramp is incidental
+/// and must not trigger a false Exit classification.
+///
+/// This is also a regression test for the JCT-connector scenario: a ramp that
+/// has no vehicle surface connection (here the to-node touches only a footway)
+/// falls back to Shutoko even when surface context IS present in the extract.
 #[test]
-fn test_jct_threshold_beyond_550m_classified_as_shutoko() {
+fn test_footway_only_connected_ramp_not_classified_as_exit() {
     let json_data = json!({
         "elements": [
-            // Entry candidate from-node (proximity reference)
-            {"type": "node", "id": 1,  "lat": 35.6800,    "lon": 139.7600},
+            // Surface road nodes for entry ramp context
+            {"type": "node", "id": 0,  "lat": 35.6790, "lon": 139.7600},
+            {"type": "node", "id": 1,  "lat": 35.6800, "lon": 139.7600},
             // Shutoko mainline loop nodes
-            {"type": "node", "id": 10, "lat": 35.6820,    "lon": 139.7640},
-            {"type": "node", "id": 11, "lat": 35.6820,    "lon": 139.7680},
-            {"type": "node", "id": 12, "lat": 35.6840,    "lon": 139.7660},
+            {"type": "node", "id": 10, "lat": 35.6820, "lon": 139.7640},
+            {"type": "node", "id": 11, "lat": 35.6820, "lon": 139.7680},
+            {"type": "node", "id": 12, "lat": 35.6840, "lon": 139.7660},
             // Entry ramp intermediate node
-            {"type": "node", "id": 5,  "lat": 35.6815,    "lon": 139.7620},
-            // Exit ramp intermediate node
-            {"type": "node", "id": 25, "lat": 35.6835,    "lon": 139.7620},
-            // Exit dead-end: 551 m from n1 (rounds to 551 > 550 → JCT, not real exit)
-            {"type": "node", "id": 20, "lat": 35.6849553, "lon": 139.7600},
+            {"type": "node", "id": 5,  "lat": 35.6815, "lon": 139.7620},
+            // JCT connector ramp intermediate and dead-end nodes
+            {"type": "node", "id": 25, "lat": 35.6835, "lon": 139.7620},
+            {"type": "node", "id": 20, "lat": 35.6849, "lon": 139.7600},
+            // Footway-only node alongside ramp dead-end (should NOT count as surface evidence)
+            {"type": "node", "id": 99, "lat": 35.6850, "lon": 139.7601},
+
+            // Surface road: n0 → n1 (highway=secondary) — gives surface context so
+            // has_surface_context = true; n1 ∈ surface_nodes → Entry ramp is classified Entry.
+            {"type":"way","id":1,"nodes":[0,1],"tags":{"highway":"secondary","oneway":"yes"}},
+            // Footway touching the JCT dead-end n20 — must NOT add n20 to surface_nodes.
+            {"type":"way","id":2,"nodes":[20,99],"tags":{"highway":"footway"}},
 
             // Shutoko mainline loop: n10 → n11 → n12 → n10
             {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
             {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
             {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
-            // Entry ramp: n1 → n5 → n10
+            // Entry ramp: n1 → n5 → n10 (n1 ∈ surface_nodes → Entry)
             {"type":"way","id":200,"nodes":[1,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}},
-            // Exit ramp: n11 → n25 → n20
+            // JCT connector ramp: n11 → n25 → n20.
+            // n20 is NOT in surface_nodes (footway doesn't count) → Shutoko.
             {"type":"way","id":300,"nodes":[11,25,20],"tags":{"highway":"motorway_link","oneway":"yes"}}
         ]
     });
 
     let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
-    let (graph, _snap) = build_topology(&resp, &TopologyConfig::default()).unwrap();
+    let (graph, _snap, report) =
+        build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
 
     let edge_kinds: std::collections::HashMap<&str, EdgeKind> = graph
         .edges
@@ -3518,17 +3596,118 @@ fn test_jct_threshold_beyond_550m_classified_as_shutoko() {
         .map(|e| (e.id.as_str(), e.kind))
         .collect();
 
-    // Entry ramp first segment still classified as Entry
+    // Entry ramp: n1 ∈ surface_nodes (from secondary way 1) → Entry
     assert_eq!(
         edge_kinds.get("e:w200:0:f"),
         Some(&EdgeKind::Entry),
-        "entry ramp first segment must be Entry"
+        "entry ramp from-node n1 is in surface_nodes → must be Entry"
     );
-    // Exit ramp last segment dead-ends at n20, which is 551 m from entry candidate n1
-    // → beyond 550 m threshold → no real surface interchange nearby → classified as Shutoko
+    // JCT connector ramp: n20 NOT in surface_nodes (footway excluded) → Shutoko
     assert_eq!(
         edge_kinds.get("e:w300:1:f"),
         Some(&EdgeKind::Shutoko),
-        "exit dead-end at 551 m from entry candidate must be classified as Shutoko (> 550 m)"
+        "JCT ramp to-node n20 shares only a footway (non-vehicle) → must be Shutoko, not Exit"
+    );
+    // No undecidable ramps — has_surface_context=true; n20 is confirmed not-surface → Shutoko
+    assert_eq!(
+        report.undecidable_ramp_edges, 0,
+        "ramp must be decidable (confirmed no vehicle surface connection) when surface context present"
+    );
+}
+
+// =============================================================================
+// Additional regression tests required by issue #32
+// =============================================================================
+
+/// When the OSM extract contains NO surface (non-motorway/non-motorway_link) road ways,
+/// ramp endpoints are undecidable and the builder must increment undecidable_ramp_edges
+/// (no-silent-caps: the count must be non-zero so callers can detect degraded classification).
+///
+/// Both the entry-candidate from-node and the exit-candidate to-node have no surface
+/// context AND no discriminating OSM node tag, so each contributes one to the count.
+#[test]
+fn test_no_surface_context_undecidable_ramps_counted() {
+    let json_data = json!({
+        "elements": [
+            // Shutoko mainline loop nodes
+            {"type": "node", "id": 10, "lat": 35.6820, "lon": 139.7640},
+            {"type": "node", "id": 11, "lat": 35.6820, "lon": 139.7680},
+            {"type": "node", "id": 12, "lat": 35.6840, "lon": 139.7660},
+            // Entry ramp nodes — no surface road touches n1
+            {"type": "node", "id": 1,  "lat": 35.6800, "lon": 139.7600},
+            {"type": "node", "id": 5,  "lat": 35.6815, "lon": 139.7620},
+            // Exit ramp nodes — no surface road touches n20
+            {"type": "node", "id": 25, "lat": 35.6835, "lon": 139.7620},
+            {"type": "node", "id": 20, "lat": 35.6849, "lon": 139.7600},
+
+            // Shutoko mainline loop (no surface roads in this extract)
+            {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            // Entry ramp: n1 → n5 → n10 (undecidable — no surface context)
+            {"type":"way","id":200,"nodes":[1,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}},
+            // Exit ramp: n11 → n25 → n20 (undecidable — no surface context)
+            {"type":"way","id":300,"nodes":[11,25,20],"tags":{"highway":"motorway_link","oneway":"yes"}}
+        ]
+    });
+
+    let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
+    let (_graph, _snap, report) =
+        build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+
+    // Both ramp dead-ends are undecidable: no surface-road context AND no node tag.
+    // Conservative default (Shutoko) is used, but the count must be non-zero so
+    // downstream tooling can detect the degraded classification.
+    assert_eq!(
+        report.undecidable_ramp_edges, 2,
+        "two undecidable ramp dead-ends must be counted when no surface context is present"
+    );
+}
+
+/// An OSM extract that contains a way with an unrecognised highway value (e.g. "track")
+/// must not crash; the way must be treated conservatively (not added to surface_nodes)
+/// and a warning emitted.  This verifies that is_vehicle_highway(None) → None
+/// is handled without panic throughout the pipeline.
+#[test]
+fn test_unknown_highway_value_does_not_crash() {
+    let json_data = json!({
+        "elements": [
+            // Shutoko mainline loop nodes
+            {"type": "node", "id": 10, "lat": 35.6820, "lon": 139.7640},
+            {"type": "node", "id": 11, "lat": 35.6820, "lon": 139.7680},
+            {"type": "node", "id": 12, "lat": 35.6840, "lon": 139.7660},
+            // Entry ramp nodes
+            {"type": "node", "id": 1,  "lat": 35.6800, "lon": 139.7600},
+            {"type": "node", "id": 5,  "lat": 35.6815, "lon": 139.7620},
+            // Unknown-highway node
+            {"type": "node", "id": 50, "lat": 35.6800, "lon": 139.7610},
+            {"type": "node", "id": 51, "lat": 35.6801, "lon": 139.7615},
+
+            // Way with an ambiguous / unrecognised highway value.
+            // is_vehicle_highway("track") → None → warning emitted, NOT added to surface_nodes.
+            {"type":"way","id":50,"nodes":[50,51],"tags":{"highway":"track","oneway":"yes"}},
+
+            // Shutoko mainline loop
+            {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+            // Entry ramp: n1 → n5 → n10 (undecidable — track way does not count as surface)
+            {"type":"way","id":200,"nodes":[1,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}}
+        ]
+    });
+
+    let resp: OverpassResponse = serde_json::from_value(json_data).unwrap();
+    // Must not panic; build must succeed even with unknown highway values.
+    let result = build_topology_with_report(&resp, &TopologyConfig::default());
+    assert!(
+        result.is_ok(),
+        "build must succeed when unknown highway values are present"
+    );
+
+    let (_graph, _snap, report) = result.unwrap();
+    // The "track" way does not add n50/n51 to surface_nodes, so n1 is undecidable.
+    assert_eq!(
+        report.undecidable_ramp_edges, 1,
+        "ramp with only unknown-highway context must still be counted as undecidable"
     );
 }

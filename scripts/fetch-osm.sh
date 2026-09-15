@@ -5,8 +5,11 @@ set -euo pipefail
 # Fetch Shutoko (Tokyo Metropolitan Expressway) routes and their entry/exit ramps
 # from OpenStreetMap via Overpass API [out:json].
 #
-# Local surface streets are intentionally excluded: the routing model assumes
-# "board at the nearest entrance" so there is no need to solve surface-road paths.
+# Surface streets are fetched as classification context but are NOT used in the
+# routing graph. The routing model assumes "board at the nearest entrance" so
+# there is no need to solve surface-road paths. The graph builder identifies
+# context-only ways by their highway type (anything other than motorway /
+# motorway_link) and uses them solely for entry/exit ramp classification.
 #
 # Usage:
 #   ./scripts/fetch-osm.sh [OUTPUT_PATH] [ENDPOINT]
@@ -32,8 +35,19 @@ mkdir -p "$(dirname "${OUTPUT_PATH}")"
 #    motorway_link ways. Four hops of expansion capture all ramp geometry.
 # 3. Turn restrictions for the expressway ways and ramps are included so the
 #    router can honour prohibited manoeuvres.
-# 4. No bbox or local-road queries: general surface streets are not needed.
-OVERPASS_QUERY='[out:json][timeout:90];
+# 4. Surface-road context (final hop): after the 4-hop motorway_link expansion,
+#    one additional hop fetches every highway way that shares a node with the
+#    motorway_link ways (NOT the main-line motorway ways). This lets the graph
+#    builder distinguish real exit ramps (terminal node shared with a surface-road
+#    way) from JCT connectors (terminal node shared only with motorway/motorway_link
+#    or with nothing). Scope is limited to motorway_link nodes because ramp termini
+#    are always nodes of motorway_link ways; expanding from main-line motorway nodes
+#    would pull in large numbers of surface roads running under the elevated C1 loop
+#    that contribute nothing to terminus classification. Context ways are output in
+#    a separate "out body" pass without their node elements — the builder needs only
+#    the nd-ref lists (contained in way elements) for node-ID matching, not
+#    coordinates. Context ways are NOT added to the routing graph.
+OVERPASS_QUERY='[out:json][timeout:120];
 relation(id:4256008) -> .expressways;
 (
   .expressways;
@@ -56,6 +70,23 @@ way(bn.ew_nodes)["highway"="motorway_link"] -> .links;
 ( .links; node(w.links); ) -> .l_nodes;
 ( .links; way(bn.l_nodes)["highway"="motorway_link"]; ) -> .links;
 
+// Context-only final hop: surface highway ways sharing a node with any of
+// the motorway_link ways captured above (NOT the main-line motorway ways).
+// Scope rationale: ramp termini are always motorway_link nodes. Expanding
+// from main-line motorway nodes would pull in surface roads under the
+// elevated C1 loop that never serve as ramp termini, inflating query cost
+// for zero classification benefit.
+// motorway and motorway_link are excluded because they are already present
+// in .ew_all / .links; re-fetching them would be redundant.
+// All other highway values (trunk, primary, secondary, tertiary,
+// unclassified, residential, service, living_street, etc.) are left
+// unrestricted: any surface type can be the landing road of an exit ramp,
+// so type-based filtering risks misclassifying a real exit as a JCT.
+node(w.links) -> .link_nodes;
+way(bn.link_nodes)["highway"]["highway"!="motorway"]["highway"!="motorway_link"]
+  -> .ctx_ways;
+
+// Routing elements: full geometry and tags needed by the graph builder.
 (
   .ew_all;
   .links;
@@ -63,6 +94,13 @@ way(bn.ew_nodes)["highway"="motorway_link"] -> .links;
   relation(bw.ew_all)["type"="restriction"];
   relation(bw.links)["type"="restriction"];
 );
+out body;
+// Context ways: output way elements only (tags + nd refs).
+// "out body" for ways includes the nodes[] array (nd refs) which is all
+// the builder needs for terminus-node detection. Node coordinates are NOT
+// output — the builder performs node-ID containment checks, not geometry
+// operations, so omitting node(w.ctx_ways) saves the bulk of the extra data.
+( .ctx_ways; );
 out body;'
 
 echo "Fetching OSM data from ${ENDPOINT}..."

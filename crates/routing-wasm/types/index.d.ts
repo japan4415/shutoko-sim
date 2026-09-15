@@ -121,6 +121,20 @@ export interface SearchResult {
   rankingMode: "shutoko_time" | "time_per_yen" | string;
   expandedStates: number;
   candidates: Candidate[];
+  /**
+   * Nearest Entry access point to the coordinate origin (`origin` input).
+   * Reported even when no candidate is produced, including the cap-exceeded
+   * `NO_CONNECTION` early return. `null` for `originNodeId` input and when the
+   * graph has no Entry access points at all.
+   */
+  nearestAccess: SnappedOrigin | null;
+  /**
+   * Shortest `planSeconds` (`baseSeconds + bufferSeconds`) over every legal
+   * loop found, including loops the requested time window rejects. This is the
+   * numeric basis for a `TIME_WINDOW` rejection. `null` when no legal loop
+   * exists.
+   */
+  minPlanSeconds: number | null;
 }
 
 export interface RoutingErrorPayload {

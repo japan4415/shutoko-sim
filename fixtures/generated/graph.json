@@ -12900,7 +12900,7 @@
       "from": "n:260710778",
       "to": "n:9326102270",
       "kind": "shutoko",
-      "durationSeconds": 2,
+      "durationSeconds": 4,
       "distanceMeters": 39,
       "name": "首都高速3号渋谷線"
     },
@@ -13044,7 +13044,7 @@
       "from": "n:7884454098",
       "to": "n:264006972",
       "kind": "shutoko",
-      "durationSeconds": 4,
+      "durationSeconds": 6,
       "distanceMeters": 63,
       "name": "首都高速3号渋谷線"
     },
@@ -20251,7 +20251,7 @@
       "id": "e:w4848898:0:f",
       "from": "n:57529600",
       "to": "n:10129712728",
-      "kind": "entry",
+      "kind": "shutoko",
       "durationSeconds": 3,
       "distanceMeters": 30,
       "name": "首都高速都心環状線"
@@ -21777,7 +21777,7 @@
       "from": "n:574460620",
       "to": "n:31297025",
       "kind": "shutoko",
-      "durationSeconds": 6,
+      "durationSeconds": 9,
       "distanceMeters": 100,
       "name": "首都高速2号目黒線"
     },
@@ -21822,7 +21822,7 @@
       "from": "n:8327619208",
       "to": "n:31296994",
       "kind": "shutoko",
-      "durationSeconds": 1,
+      "durationSeconds": 2,
       "distanceMeters": 17,
       "name": "首都高速2号目黒線"
     },
@@ -21840,7 +21840,7 @@
       "from": "n:8327660313",
       "to": "n:574460576",
       "kind": "shutoko",
-      "durationSeconds": 4,
+      "durationSeconds": 6,
       "distanceMeters": 72,
       "name": "首都高速2号目黒線"
     },
@@ -21930,7 +21930,7 @@
       "from": "n:31297000",
       "to": "n:8327660314",
       "kind": "shutoko",
-      "durationSeconds": 4,
+      "durationSeconds": 6,
       "distanceMeters": 71,
       "name": "首都高速2号目黒線"
     },
@@ -22002,7 +22002,7 @@
       "from": "n:574460591",
       "to": "n:252175569",
       "kind": "shutoko",
-      "durationSeconds": 4,
+      "durationSeconds": 6,
       "distanceMeters": 67,
       "name": "首都高速2号目黒線"
     },
@@ -22020,7 +22020,7 @@
       "from": "n:8327619209",
       "to": "n:31297040",
       "kind": "shutoko",
-      "durationSeconds": 1,
+      "durationSeconds": 2,
       "distanceMeters": 17,
       "name": "首都高速2号目黒線"
     },

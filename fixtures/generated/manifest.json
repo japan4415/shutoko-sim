@@ -39,7 +39,6 @@
     "entry:e:w24402014:0:f (飯倉入口)",
     "entry:e:w27155742:0:f (神田橋入口)",
     "entry:e:w46151740:0:f",
-    "entry:e:w4848898:0:f (首都高速都心環状線)",
     "entry:e:w4848936:0:f (銀座入口)",
     "entry:e:w861095931:0:f",
     "excluded-route: Metropolitan Expressway lines other than C1 (e.g. B, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, K, S, Y)",
@@ -108,13 +107,13 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "1ddd2027c3d984244a05afb6b6e9faf2e9dc1ba211e91a8dca4897d5ba2787c5",
-      "byteLength": 563385
+      "sha256": "f69b4356526701069636a4ee9f3bd0348e05eedabfa8ca2d40687e0ee19eb651",
+      "byteLength": 563387
     },
     {
       "path": "snap-index.json",
-      "sha256": "90500c848b9e0462a710b0b6173fadc754dfb1793d484c9911e7c190ed54e4e9",
-      "byteLength": 1509
+      "sha256": "f36abd9041e77934e60d7b42efeaec40868d021ff4f23778aab2c89301edb221",
+      "byteLength": 1420
     }
   ]
 }

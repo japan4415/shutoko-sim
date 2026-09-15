@@ -114,17 +114,25 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 ### 空間スナップ契約
 - スナップ対象: Entry エッジの from ノード（入口アクセス地点）のみ。一般道ノードはスナップ対象に含まない。
 - スナップ距離計算: 等距円筒近似（Equirectangular approximation、東京付近 `cos(lat)` 補正）。
-- 選択件数: 近い順に最大 `SearchLimits.max_access_entries`（デフォルト 5）件。スナップ半径（200m 固定）の概念は廃止。
-- 入口アクセス地点が1件も得られない場合: エラーとせず、`status: "no_candidates"`, `reason: "NO_CONNECTION"`, `candidates: []` を正常返却する。
+- 選択件数: 近い順に最大 `SearchLimits.max_access_entries` 件（デフォルト 0 = 無制限、グラフ内の全 Entry アクセス地点）。スナップ半径（200m 固定）の概念は廃止。
+- 距離キャップ: `SearchLimits.max_access_distance_meters`（デフォルト 30,000 m、0 は無制限）を超える最寄り入口は探索対象外とし、`status: "no_candidates"`, `reason: "NO_CONNECTION"` を返す。このときも最近接の入口アクセス地点を `nearestAccess` として返す。
+- 入口アクセス地点が1件も得られない場合: エラーとせず、`status: "no_candidates"`, `reason: "NO_CONNECTION"`, `candidates: []`, `nearestAccess: null` を正常返却する。
 
 ### 探索結果の status と reason コード
-結果は `requestId`、`releaseId`、`status`（`ok` / `no_candidates` / `truncated`）、`reason`、`candidates` を持つ。`reason` は該当時のみ以下のコードをとる:
-- `NO_CONNECTION`: 入口アクセス地点（Entry エッジ from ノード）が1件も得られない
+結果は `requestId`、`releaseId`、`status`（`ok` / `no_candidates` / `truncated`）、`reason`、`rankingMode`、`expandedStates`、`candidates`、`nearestAccess`、`minPlanSeconds` を持つ。`reason` は該当時のみ以下のコードをとる:
+- `NO_CONNECTION`: 入口アクセス地点（Entry エッジ from ノード）が1件も得られない、または最寄りの入口アクセス地点が `SearchLimits.max_access_distance_meters` を超える
 - `NO_BILLING_PAIR`: 有効な課金ペアが 1 件も存在しない
 - `NO_LOOP`: 周回ループが見つからない、または進入不可
 - `TIME_WINDOW`: 指定所要時間枠（minMinutes〜maxMinutes）に収まる候補がない
 - `NO_HANDOFF`: Maps URL 長が 2,048 文字を超過したため候補が除外された
 - `SEARCH_LIMIT`: 探索状態数・候補数の上限に達した（`status: "truncated"`）
+
+診断情報（候補の有無にかかわらず返す）:
+
+| フィールド | 型 | 内容 |
+| --- | --- | --- |
+| `nearestAccess` | `SnappedOrigin \| null` | 座標入力（`origin`）における最近接の入口アクセス地点（`{ nodeId, lat, lon, distanceMeters }`）。距離キャップ超過の `NO_CONNECTION` でも返す。`originNodeId` 入力および Entry アクセス地点が0件のときは `null` |
+| `minPlanSeconds` | `number \| null` | グラフ上で合法（禁止遷移を満たす）な全周回の `planSeconds`（`baseSeconds + bufferSeconds`）の最小値。指定時間枠で棄却した周回も含む。合法な周回が1件も無い場合は `null`。`TIME_WINDOW` の数値根拠（最寄り入口までの距離は `nearestAccess.distanceMeters`）として使う |
 
 ### 候補の必須フィールド
 

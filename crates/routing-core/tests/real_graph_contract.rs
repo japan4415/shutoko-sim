@@ -744,3 +744,239 @@ fn shinjuku_and_shibuya_stations_return_candidates() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// engine-001: 都内境界の診断契約（nearestAccess / minPlanSeconds）
+// ---------------------------------------------------------------------------
+
+/// Rust の既定 cap（30 km）は変更しない。web 側が prepare limits で 46 km を明示する
+/// 前提の境界を実データで固定する。
+const WIDE_ACCESS_CAP_METERS: f64 = 46_000.0;
+/// 製品上限は 240 分（`validate_request` と同じ）。
+const FOUR_HOURS_SECONDS: u64 = 240 * 60;
+
+fn wide_access_limits() -> SearchLimits {
+    SearchLimits {
+        max_access_distance_meters: WIDE_ACCESS_CAP_METERS,
+        ..SearchLimits::default()
+    }
+}
+
+fn coordinate_request(request_id: &str, lat: f64, lon: f64, max_minutes: u64) -> SearchRequest {
+    SearchRequest {
+        request_id: request_id.into(),
+        release_id: "c1-real-v1".into(),
+        origin_node_id: None,
+        origin: Some(LatLng { lat, lon }),
+        min_minutes: 15,
+        max_minutes,
+        vehicle_profile: "passenger-car-etc".into(),
+        pricing_at: "2026-09-10T00:00:00Z".into(),
+    }
+}
+
+/// 日野市役所 (35.6711, 139.3952) / 立川駅 (35.6979, 139.4139) /
+/// 八王子駅 (35.6556, 139.3388) / 神田橋入口 (35.6896727, 139.7644248) の
+/// 実データ境界。cap 46 km の下で日野・立川は候補が成立し、八王子は時間窓で
+/// 棄却されるが診断（最近接距離・最短計画秒数）が返ることを確認する。
+#[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn tokyo_wide_coordinate_diagnostics_contract() {
+    let g = real_graph();
+    let wide = wide_access_limits();
+
+    // ── 1. 日野市役所: 最寄り入口まで約 31.0 km。既定 30 km cap では NO_CONNECTION ──
+    // ただし cap 超過でも最近接距離は返す（診断契約）。
+    let hino_default_cap = search(
+        &g,
+        &coordinate_request("req-hino-default-cap", 35.6711, 139.3952, 240),
+        &SearchLimits::default(),
+    )
+    .expect("hino default-cap search must not error");
+    assert_eq!(hino_default_cap.status, "no_candidates");
+    assert_eq!(hino_default_cap.reason.as_deref(), Some("NO_CONNECTION"));
+    let default_nearest = hino_default_cap
+        .nearest_access
+        .as_ref()
+        .expect("cap-exceeded NO_CONNECTION must still report nearestAccess");
+    assert!(
+        (30_000.0..32_000.0).contains(&default_nearest.distance_meters),
+        "hino default-cap nearest entry must be ~31.0 km, got {:.0} m",
+        default_nearest.distance_meters
+    );
+    assert!(
+        hino_default_cap.min_plan_seconds.is_none(),
+        "cap-exceeded early return must not report minPlanSeconds"
+    );
+
+    // ── 2. 日野市役所（cap 46 km）: 240 分窓に収まる候補が成立する ──
+    let hino_wide = search(
+        &g,
+        &coordinate_request("req-hino-wide-cap", 35.6711, 139.3952, 240),
+        &wide,
+    )
+    .expect("hino wide-cap search must not error");
+    eprintln!(
+        "hino wide-cap: status={}, reason={:?}, candidates={}, nearest={:.0}m, minPlan={:?}s",
+        hino_wide.status,
+        hino_wide.reason,
+        hino_wide.candidates.len(),
+        hino_wide
+            .nearest_access
+            .as_ref()
+            .map_or(f64::NAN, |n| n.distance_meters),
+        hino_wide.min_plan_seconds
+    );
+    assert_eq!(
+        hino_wide.status, "ok",
+        "hino with 46 km cap must produce candidates; reason={:?}",
+        hino_wide.reason
+    );
+    assert!(!hino_wide.candidates.is_empty());
+    let hino_nearest = hino_wide
+        .nearest_access
+        .as_ref()
+        .expect("coordinate input must report nearestAccess");
+    assert!(
+        (30_000.0..32_000.0).contains(&hino_nearest.distance_meters),
+        "hino nearest entry must be ~31.0 km, got {:.0} m",
+        hino_nearest.distance_meters
+    );
+    let hino_min_plan = hino_wide
+        .min_plan_seconds
+        .expect("hino must report minPlanSeconds when candidates exist");
+    assert!(
+        hino_min_plan <= FOUR_HOURS_SECONDS,
+        "hino minPlanSeconds ({hino_min_plan}) must fit the 240 min window"
+    );
+
+    // ── 3. 立川駅（cap 46 km）: 240 分窓に収まる候補が成立する ──
+    let tachikawa_wide = search(
+        &g,
+        &coordinate_request("req-tachikawa-wide-cap", 35.6979, 139.4139, 240),
+        &wide,
+    )
+    .expect("tachikawa wide-cap search must not error");
+    eprintln!(
+        "tachikawa wide-cap: status={}, reason={:?}, candidates={}, nearest={:.0}m, minPlan={:?}s",
+        tachikawa_wide.status,
+        tachikawa_wide.reason,
+        tachikawa_wide.candidates.len(),
+        tachikawa_wide
+            .nearest_access
+            .as_ref()
+            .map_or(f64::NAN, |n| n.distance_meters),
+        tachikawa_wide.min_plan_seconds
+    );
+    assert_eq!(
+        tachikawa_wide.status, "ok",
+        "tachikawa with 46 km cap must produce candidates; reason={:?}",
+        tachikawa_wide.reason
+    );
+    assert!(!tachikawa_wide.candidates.is_empty());
+    let tachikawa_nearest = tachikawa_wide
+        .nearest_access
+        .as_ref()
+        .expect("coordinate input must report nearestAccess");
+    assert!(
+        (29_000.0..30_500.0).contains(&tachikawa_nearest.distance_meters),
+        "tachikawa nearest entry must be ~29.6 km, got {:.0} m",
+        tachikawa_nearest.distance_meters
+    );
+    let tachikawa_min_plan = tachikawa_wide
+        .min_plan_seconds
+        .expect("tachikawa must report minPlanSeconds when candidates exist");
+    assert!(
+        tachikawa_min_plan <= FOUR_HOURS_SECONDS,
+        "tachikawa minPlanSeconds ({tachikawa_min_plan}) must fit the 240 min window"
+    );
+
+    // ── 4. 八王子駅（cap 46 km）: 240 分窓では到達不能。診断だけを返す ──
+    let hachioji_wide = search(
+        &g,
+        &coordinate_request("req-hachioji-wide-cap", 35.6556, 139.3388, 240),
+        &wide,
+    )
+    .expect("hachioji wide-cap search must not error");
+    eprintln!(
+        "hachioji wide-cap: status={}, reason={:?}, candidates={}, nearest={:.0}m, minPlan={:?}s",
+        hachioji_wide.status,
+        hachioji_wide.reason,
+        hachioji_wide.candidates.len(),
+        hachioji_wide
+            .nearest_access
+            .as_ref()
+            .map_or(f64::NAN, |n| n.distance_meters),
+        hachioji_wide.min_plan_seconds
+    );
+    assert_eq!(hachioji_wide.status, "no_candidates");
+    assert_eq!(
+        hachioji_wide.reason.as_deref(),
+        Some("TIME_WINDOW"),
+        "hachioji must be rejected by the time window, not by NO_CONNECTION"
+    );
+    assert!(hachioji_wide.candidates.is_empty());
+    let hachioji_nearest = hachioji_wide
+        .nearest_access
+        .as_ref()
+        .expect("hachioji must report nearestAccess for coordinate input");
+    assert!(
+        (35_500.0..37_000.0).contains(&hachioji_nearest.distance_meters),
+        "hachioji nearest entry must be ~36.1 km, got {:.0} m",
+        hachioji_nearest.distance_meters
+    );
+    let hachioji_min_plan = hachioji_wide
+        .min_plan_seconds
+        .expect("hachioji must report minPlanSeconds for a TIME_WINDOW rejection");
+    assert!(
+        hachioji_min_plan > FOUR_HOURS_SECONDS,
+        "hachioji minPlanSeconds ({hachioji_min_plan}) must exceed the 240 min window"
+    );
+    assert!(
+        hachioji_min_plan < 24_000,
+        "hachioji minPlanSeconds ({hachioji_min_plan}) is unexpectedly large"
+    );
+
+    // ── 5. 神田橋入口: 座標入力で距離 0、originNodeId 入力で nearestAccess は null ──
+    let kandabashi_coord = search(
+        &g,
+        &coordinate_request("req-kandabashi-coord", 35.6896727, 139.7644248, 60),
+        &wide,
+    )
+    .expect("kandabashi coordinate search must not error");
+    assert_eq!(kandabashi_coord.status, "ok");
+    let kandabashi_nearest = kandabashi_coord
+        .nearest_access
+        .as_ref()
+        .expect("kandabashi must report nearestAccess for coordinate input");
+    assert!(
+        kandabashi_nearest.distance_meters < 1.0,
+        "kandabashi entry coordinates must snap with ~0 m, got {:.1} m",
+        kandabashi_nearest.distance_meters
+    );
+
+    let kandabashi_node = search(
+        &g,
+        &SearchRequest {
+            request_id: "req-kandabashi-node".into(),
+            release_id: "c1-real-v1".into(),
+            origin_node_id: Some("n:1070862943".into()),
+            origin: None,
+            min_minutes: 15,
+            max_minutes: 60,
+            vehicle_profile: "passenger-car-etc".into(),
+            pricing_at: "2026-09-10T00:00:00Z".into(),
+        },
+        &wide,
+    )
+    .expect("kandabashi originNodeId search must not error");
+    assert_eq!(kandabashi_node.status, "ok");
+    assert!(
+        kandabashi_node.nearest_access.is_none(),
+        "originNodeId input must not report nearestAccess"
+    );
+    assert!(
+        kandabashi_node.min_plan_seconds.is_some(),
+        "originNodeId input must still report minPlanSeconds"
+    );
+}

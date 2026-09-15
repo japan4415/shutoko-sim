@@ -1076,6 +1076,24 @@ fn distance_cap_enforced_and_zero_means_unlimited() {
         res_inside["reason"], "NO_CONNECTION",
         "3 km cap: entry at ~4 km must trigger NO_CONNECTION"
     );
+    // Cap-exceeded NO_CONNECTION must still report the nearest Entry access
+    // point (distance in metres) so the UI can explain why the origin is out
+    // of range.  No loop enumeration runs, so minPlanSeconds stays null.
+    assert_eq!(
+        res_inside["nearestAccess"]["nodeId"], "e",
+        "cap-exceeded NO_CONNECTION must report the nearest Entry from-node"
+    );
+    let capped_distance = res_inside["nearestAccess"]["distanceMeters"]
+        .as_f64()
+        .expect("nearestAccess.distanceMeters must be a number");
+    assert!(
+        (3900.0..=4100.0).contains(&capped_distance),
+        "nearest entry is ~4 007 m away, got {capped_distance}"
+    );
+    assert!(
+        res_inside["minPlanSeconds"].is_null(),
+        "cap-exceeded early return must not report minPlanSeconds"
+    );
 
     // 5 km cap: entry ~4 007 m is within range → search proceeds (status ≠ NO_CONNECTION).
     let res_within: Value = serde_json::from_str(
@@ -1090,6 +1108,20 @@ fn distance_cap_enforced_and_zero_means_unlimited() {
     assert_ne!(
         res_within["reason"], "NO_CONNECTION",
         "5 km cap: entry at ~4 km must NOT trigger NO_CONNECTION"
+    );
+    // Coordinate input always reports the nearest access point, even when the
+    // search succeeds, and the only loop found equals the single candidate.
+    let within_distance = res_within["nearestAccess"]["distanceMeters"]
+        .as_f64()
+        .expect("nearestAccess must be reported for coordinate input");
+    assert!(
+        (3900.0..=4100.0).contains(&within_distance),
+        "nearest access must be the same ~4 007 m entry, got {within_distance}"
+    );
+    assert_eq!(
+        res_within["minPlanSeconds"].as_u64(),
+        res_within["candidates"][0]["duration"]["planSeconds"].as_u64(),
+        "single-candidate search: minPlanSeconds must equal the candidate planSeconds"
     );
 
     // 0.0 (unlimited): entry accessible regardless of distance.
@@ -1111,6 +1143,54 @@ fn distance_cap_enforced_and_zero_means_unlimited() {
         res_within["status"], res_unlimited["status"],
         "5 km cap and unlimited must produce the same search outcome"
     );
+    assert!(
+        res_unlimited["nearestAccess"].is_object(),
+        "unlimited cap: nearestAccess must still be reported for coordinate input"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// engine-001: nearestAccess / minPlanSeconds diagnostics
+// ---------------------------------------------------------------------------
+
+/// With `originNodeId` input no snapping happens, so `nearestAccess` is null.
+/// `minPlanSeconds` is independent of the input mode and must equal the single
+/// candidate's plan when that candidate's loop is the only legal loop.
+#[test]
+fn origin_node_input_has_no_nearest_access_but_reports_min_plan_seconds() {
+    let result = run(&graph(), &request(), json!({}));
+    assert_eq!(result["status"], "ok");
+    assert!(
+        result["nearestAccess"].is_null(),
+        "originNodeId input must not report nearestAccess, got {}",
+        result["nearestAccess"]
+    );
+    assert_eq!(
+        result["minPlanSeconds"].as_u64(),
+        candidates(&result)[0]["duration"]["planSeconds"].as_u64(),
+        "minPlanSeconds must equal the only legal loop's plan_seconds"
+    );
+}
+
+/// When no legal loop exists, `minPlanSeconds` is null and the reason is
+/// `NO_LOOP`, keeping the existing reason semantics unchanged.
+#[test]
+fn min_plan_seconds_is_null_when_no_legal_loop_exists() {
+    let mut g = graph();
+    g["edges"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|edge| edge["kind"] != "shutoko");
+    let mut r = request();
+    r["minMinutes"] = json!(1);
+    let result = run(&g, &r, json!({}));
+    assert_eq!(result["reason"], "NO_LOOP");
+    assert!(
+        result["minPlanSeconds"].is_null(),
+        "no legal loop must yield null minPlanSeconds, got {}",
+        result["minPlanSeconds"]
+    );
+    assert!(result["nearestAccess"].is_null());
 }
 
 // ---------------------------------------------------------------------------
@@ -1185,6 +1265,22 @@ fn access_time_from_coordinate_origin_affects_base_seconds_and_time_window() {
         res_far_narrow["reason"], "TIME_WINDOW",
         "far origin, window [30,40]: rejection reason must be TIME_WINDOW, not NO_CONNECTION"
     );
+    // TIME_WINDOW diagnostics: the nearest entry distance and the shortest plan
+    // time must be reported so the UI can explain why no candidate fits.
+    let narrow_nearest = res_far_narrow["nearestAccess"]["distanceMeters"]
+        .as_f64()
+        .expect("coordinate input must report nearestAccess");
+    assert!(
+        (3800.0..=3900.0).contains(&narrow_nearest),
+        "far origin nearest entry is ~3 842 m away, got {narrow_nearest}"
+    );
+    let narrow_min_plan = res_far_narrow["minPlanSeconds"]
+        .as_u64()
+        .expect("TIME_WINDOW must report minPlanSeconds");
+    assert!(
+        narrow_min_plan > 40 * 60,
+        "minPlanSeconds ({narrow_min_plan}) must exceed the 40 min window (2 400 s)"
+    );
 
     // ── Case 3: same far origin, wider window [30, 70] — candidate found ──
     let r_far_wide = json!({
@@ -1214,6 +1310,11 @@ fn access_time_from_coordinate_origin_affects_base_seconds_and_time_window() {
     assert!(
         base_far > 1876,
         "far origin base_seconds ({base_far}) must exceed the zero-access case (1876)"
+    );
+    assert_eq!(
+        res_far_wide["minPlanSeconds"].as_u64(),
+        c_far["duration"]["planSeconds"].as_u64(),
+        "single legal loop must be reported as minPlanSeconds"
     );
 }
 

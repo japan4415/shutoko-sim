@@ -282,6 +282,22 @@ pub struct SearchResult {
     pub ranking_mode: String,
     pub expanded_states: usize,
     pub candidates: Vec<Candidate>,
+    /// Nearest Entry access point to the coordinate origin, reported
+    /// independently of whether a candidate was produced (including the
+    /// cap-exceeded `NO_CONNECTION` early return).
+    ///
+    /// `None` for `originNodeId` input (no snapping happens) and when the
+    /// graph has no Entry access points at all.
+    #[serde(default)]
+    pub nearest_access: Option<SnappedOrigin>,
+    /// Shortest `plan_seconds` (`base + buffer`) over every legal loop found,
+    /// including loops rejected by the requested time window.  It is the
+    /// numeric basis for a `TIME_WINDOW` rejection.
+    ///
+    /// `None` when no legal loop exists (e.g. `NO_CONNECTION`, `NO_LOOP`, or a
+    /// search that never reached the loop-enumeration stage).
+    #[serde(default)]
+    pub min_plan_seconds: Option<u64>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RoutingError {
@@ -930,67 +946,84 @@ pub fn search_prepared(
     //      Entry from-nodes in the graph are candidates.
     //   2. If the snap grid is empty (no Entry edges at all), `NO_CONNECTION` is returned.
     //   3. If `max_access_distance_meters > 0.0` and the nearest entry exceeds that
-    //      distance, `NO_CONNECTION` is returned (out-of-service-area guard).
+    //      distance, `NO_CONNECTION` is returned (out-of-service-area guard).  The
+    //      nearest Entry access point is still reported in `nearestAccess`.
     // ---------------------------------------------------------------------------
-    let (origin_ll, access_node_indices): (LatLng, BTreeSet<usize>) =
-        match (&r.origin_node_id, &r.origin) {
-            (Some(id), None) => {
-                if !pg.has_node(id.as_str()) {
-                    return Err(invalid("unknown origin node"));
-                }
-                let node = pg.node(id.as_str());
-                let origin_ll = LatLng {
-                    lat: node.lat,
-                    lon: node.lon,
-                };
-                let idx = pg.index.node_pos[id.as_str()];
-                (origin_ll, std::iter::once(idx).collect())
+    let (origin_ll, access_node_indices, nearest_access): (
+        LatLng,
+        BTreeSet<usize>,
+        Option<SnappedOrigin>,
+    ) = match (&r.origin_node_id, &r.origin) {
+        (Some(id), None) => {
+            if !pg.has_node(id.as_str()) {
+                return Err(invalid("unknown origin node"));
             }
-            (None, Some(ll)) => {
-                // max_access_entries == 0 means "unlimited": pass usize::MAX so that
-                // k_nearest returns every entry in the graph.
-                let k = if pg.limits.max_access_entries == 0 {
-                    usize::MAX
-                } else {
-                    pg.limits.max_access_entries
-                };
-                let results = pg
-                    .index
-                    .snap_grid
-                    .k_nearest(ll.lat, ll.lon, k, &pg.graph.nodes);
-                if results.is_empty() {
-                    // Snap grid is empty — no Entry edges in the graph.
-                    return Ok(SearchResult {
-                        request_id: r.request_id.clone(),
-                        release_id: r.release_id.clone(),
-                        status: "no_candidates".into(),
-                        reason: Some("NO_CONNECTION".into()),
-                        ranking_mode: "shutoko_time".into(),
-                        expanded_states: 0,
-                        candidates: Vec::new(),
-                    });
-                }
-                // Distance sanity cap: if even the nearest Entry access point exceeds the
-                // allowed maximum, the origin is outside the operational area.
-                // 0.0 means unlimited (no cap applied).
-                if pg.limits.max_access_distance_meters > 0.0
-                    && results[0].0 > pg.limits.max_access_distance_meters
-                {
-                    return Ok(SearchResult {
-                        request_id: r.request_id.clone(),
-                        release_id: r.release_id.clone(),
-                        status: "no_candidates".into(),
-                        reason: Some("NO_CONNECTION".into()),
-                        ranking_mode: "shutoko_time".into(),
-                        expanded_states: 0,
-                        candidates: Vec::new(),
-                    });
-                }
-                let indices = results.into_iter().map(|(_, idx)| idx).collect();
-                (ll.clone(), indices)
+            let node = pg.node(id.as_str());
+            let origin_ll = LatLng {
+                lat: node.lat,
+                lon: node.lon,
+            };
+            let idx = pg.index.node_pos[id.as_str()];
+            (origin_ll, std::iter::once(idx).collect(), None)
+        }
+        (None, Some(ll)) => {
+            // max_access_entries == 0 means "unlimited": pass usize::MAX so that
+            // k_nearest returns every entry in the graph.
+            let k = if pg.limits.max_access_entries == 0 {
+                usize::MAX
+            } else {
+                pg.limits.max_access_entries
+            };
+            let results = pg
+                .index
+                .snap_grid
+                .k_nearest(ll.lat, ll.lon, k, &pg.graph.nodes);
+            if results.is_empty() {
+                // Snap grid is empty — no Entry edges in the graph.
+                return Ok(SearchResult {
+                    request_id: r.request_id.clone(),
+                    release_id: r.release_id.clone(),
+                    status: "no_candidates".into(),
+                    reason: Some("NO_CONNECTION".into()),
+                    ranking_mode: "shutoko_time".into(),
+                    expanded_states: 0,
+                    candidates: Vec::new(),
+                    nearest_access: None,
+                    min_plan_seconds: None,
+                });
             }
-            _ => return Err(invalid("origin resolution state unreachable")),
-        };
+            // Nearest Entry access point, independent of the distance cap below.
+            let (nearest_dist, nearest_idx) = results[0];
+            let nearest_node = &pg.graph.nodes[nearest_idx];
+            let nearest_access = Some(SnappedOrigin {
+                node_id: nearest_node.id.clone(),
+                lat: nearest_node.lat,
+                lon: nearest_node.lon,
+                distance_meters: nearest_dist,
+            });
+            // Distance sanity cap: if even the nearest Entry access point exceeds the
+            // allowed maximum, the origin is outside the operational area.
+            // 0.0 means unlimited (no cap applied).
+            if pg.limits.max_access_distance_meters > 0.0
+                && nearest_dist > pg.limits.max_access_distance_meters
+            {
+                return Ok(SearchResult {
+                    request_id: r.request_id.clone(),
+                    release_id: r.release_id.clone(),
+                    status: "no_candidates".into(),
+                    reason: Some("NO_CONNECTION".into()),
+                    ranking_mode: "shutoko_time".into(),
+                    expanded_states: 0,
+                    candidates: Vec::new(),
+                    nearest_access,
+                    min_plan_seconds: None,
+                });
+            }
+            let indices = results.into_iter().map(|(_, idx)| idx).collect();
+            (ll.clone(), indices, nearest_access)
+        }
+        _ => return Err(invalid("origin resolution state unreachable")),
+    };
 
     let mut budget = Budget::default();
     let mut candidates = Vec::new();
@@ -1012,6 +1045,9 @@ pub fn search_prepared(
     let mut legal_route = false;
     let mut time_rejected = false;
     let mut handoff_rejected = false;
+    // Shortest plan_seconds among legal loops, including loops the requested
+    // time window rejects. Reported as `minPlanSeconds`.
+    let mut min_plan_seconds: Option<u64> = None;
 
     let mut verified_pairs: Vec<(&BillingPair, Vec<&Edge>, Vec<&Edge>)> =
         Vec::with_capacity(pairs.len());
@@ -1083,6 +1119,8 @@ pub fn search_prepared(
             legal_route = true;
             let base = access_secs + seconds(&highway) + return_secs;
             let buffer = 300.max(base.div_ceil(5));
+            let plan_seconds = base + buffer;
+            min_plan_seconds = Some(min_plan_seconds.map_or(plan_seconds, |m| m.min(plan_seconds)));
             if base < r.min_minutes * 60 || base + buffer > r.max_minutes * 60 {
                 time_rejected = true;
                 continue;
@@ -1293,6 +1331,8 @@ pub fn search_prepared(
         .into(),
         expanded_states: budget.expanded,
         candidates: selected,
+        nearest_access,
+        min_plan_seconds,
     })
 }
 

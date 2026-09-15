@@ -1,3 +1,4 @@
+// Exercise the exact web-target glue and binary produced for a browser Worker.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import init, { search, prepare, searchPrepared } from '../dist/wasm/shutoko_routing.js';

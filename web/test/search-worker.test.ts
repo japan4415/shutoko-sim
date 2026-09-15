@@ -309,4 +309,162 @@ describe("search-worker: 並行リリース切り替え時のライフサイク�
       code: "ARTIFACT_MISMATCH",
     });
   });
+
+  it("世代管理: 古い世代のロードが遅延して新しい世代より後に完了しても最新世代キャッシュを上書きしない（out-of-order 解決）", async () => {
+    const filesA = await buildReleaseFiles("release-a");
+    const filesB = await buildReleaseFiles("release-b");
+    const allFiles = { ...filesA, ...filesB };
+
+    let resolveFetchA: (() => void) | null = null;
+    const fetchPromiseA = new Promise<void>((resolve) => {
+      resolveFetchA = resolve;
+    });
+
+    const fetchImpl: FetchLike = async (url: string) => {
+      if (url.includes("release-a") && url.endsWith("graph.json")) {
+        // release-a (世代1) のロードを意図的に保留し、release-b (世代2) を先に完了させる
+        await fetchPromiseA;
+      }
+      const bytes = allFiles[url];
+      if (bytes === undefined) {
+        return {
+          ok: false,
+          status: 404,
+          async arrayBuffer() {
+            return new ArrayBuffer(0);
+          },
+          async text() {
+            return "";
+          },
+        };
+      }
+      return responseFrom(bytes);
+    };
+
+    let freedA = 0;
+    let freedB = 0;
+    let searchedA = 0;
+    let searchedB = 0;
+
+    const createGlue = (id: string): WasmGlueModule => {
+      let isFreed = false;
+      const pg: WasmPreparedGraphLike = {
+        free() {
+          if (isFreed) {
+            throw new Error(`DOUBLE FREE on ${id}`);
+          }
+          isFreed = true;
+          if (id === "release-a") freedA += 1;
+          if (id === "release-b") freedB += 1;
+        },
+      };
+
+      return {
+        default: async () => {},
+        prepare: () => pg,
+        searchPrepared: () => {
+          if (isFreed) {
+            throw new Error(`use after free: ${id}`);
+          }
+          if (id === "release-a") searchedA += 1;
+          if (id === "release-b") searchedB += 1;
+          return JSON.stringify({
+            status: "ok",
+            candidates: [
+              {
+                edgeIds: ["e1"],
+                duration: { baseSeconds: 100, planSeconds: 120 },
+                toll: { amountYen: 300, chargedSectionCount: 1 },
+                geometry: { type: "LineString", coordinates: [] },
+                handoff: { mapsUrl: "https://maps.example.com" },
+                snappedOrigin: { nodeId: "n1", distanceMeters: 0 },
+                warnings: [],
+              },
+            ],
+          });
+        },
+      };
+    };
+
+    const importImpl = async (url: string): Promise<WasmGlueModule> => {
+      if (url.includes("release-a")) {
+        return createGlue("release-a");
+      }
+      return createGlue("release-b");
+    };
+
+    const store = new ReleaseStore({
+      fetchImpl,
+      importImpl,
+      knownReleases: ["release-a", "release-b"],
+    });
+
+    const responses: WorkerResponse[] = [];
+    const handler = createSearchWorkerHandler({
+      post: (msg) => responses.push(msg),
+      store,
+      isBench: true,
+    });
+
+    const msgA: UiSearchMessage = {
+      type: "search",
+      requestId: "req-a-delayed",
+      releaseId: "release-a",
+      pricingAt: "2026-09-10T00:00:00Z",
+      vehicleProfile: "passenger-car-etc",
+      originNodeId: "n1",
+      minMinutes: 10,
+      maxMinutes: 60,
+    };
+
+    const msgB: UiSearchMessage = {
+      type: "search",
+      requestId: "req-b-fast",
+      releaseId: "release-b",
+      pricingAt: "2026-09-10T00:00:00Z",
+      vehicleProfile: "passenger-car-etc",
+      originNodeId: "n1",
+      minMinutes: 10,
+      maxMinutes: 60,
+    };
+
+    // 1. release-a (世代1) の検索を開始（保留される）
+    const searchPromiseA = handler.handleSearch(msgA);
+
+    // 2. release-b (世代2) の検索を開始（保留されずに先行完了する）
+    const searchPromiseB = handler.handleSearch(msgB);
+
+    // release-b が完了するのを待機
+    await searchPromiseB;
+
+    // この時点で release-b (世代2) がキャッシュされていること
+    expect(store.currentLoaded?.releaseId).toBe("release-b");
+    expect(freedB).toBe(0);
+
+    // 3. 保留していた release-a (世代1) の fetch を解決させて完了させる
+    resolveFetchA!();
+    await searchPromiseA;
+
+    // 検証:
+    // 1. エラーは一切発生していないこと
+    const errors = responses.filter((r) => r.type === "error");
+    expect(errors).toEqual([]);
+
+    // 2. 両方の検索結果が返っていること
+    expect(searchedA).toBe(1);
+    expect(searchedB).toBe(1);
+
+    // 3. 【世代ガードの検証】古い世代 release-a はキャッシュを上書きせず、
+    //    探索終了後に即時解放されたこと (freedA === 1)
+    expect(freedA).toBe(1);
+
+    // 4. 【世代ガードの検証】最新世代 release-b はキャッシュに残っており、未解放であること (freedB === 0)
+    expect(freedB).toBe(0);
+    expect(store.currentLoaded?.releaseId).toBe("release-b");
+
+    // 5. store.dispose() により release-b が 1 回だけ安全に解放されること
+    store.dispose();
+    expect(freedB).toBe(1);
+    expect(freedA).toBe(1);
+  });
 });

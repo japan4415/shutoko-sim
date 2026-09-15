@@ -1,3 +1,4 @@
+// パイプライン純粋関数のユニットテスト（node 環境、fetch/import はモック注入）。
 import inspector from "node:inspector";
 import { describe, expect, it } from "vitest";
 import {
@@ -690,5 +691,67 @@ describe("loadRelease（モック fetch）", () => {
 
     store.dispose();
     expect(freedCount).toBe(1);
+  });
+
+  it("ReleaseStore: ロード進行中に dispose() された場合、ロード完了時にキャッシュへ載せずその場で PreparedGraph を解放する", async () => {
+    const files = await buildFiles();
+    let freedCount = 0;
+    let isFreed = false;
+    const glueStub: WasmGlueModule = {
+      default: async () => {},
+      prepare: () => ({
+        free() {
+          if (isFreed) {
+            throw new Error("DOUBLE FREE");
+          }
+          isFreed = true;
+          freedCount += 1;
+        },
+      }),
+      searchPrepared: () => "{}",
+    };
+
+    let resolveFetch: (() => void) | null = null;
+    const fetchPromise = new Promise<void>((resolve) => {
+      resolveFetch = resolve;
+    });
+
+    const { fetch } = mockFetch(files);
+    const controlledFetch: FetchLike = async (url, init) => {
+      if (url.includes("graph.json")) {
+        // graph.json の取得を保留
+        await fetchPromise;
+      }
+      return fetch(url, init);
+    };
+
+    const store = new ReleaseStore({
+      fetchImpl: controlledFetch,
+      importImpl: async () => glueStub,
+      knownReleases: ["c1-real-v1"],
+    });
+
+    // 1. ロード開始（in-flight にする）
+    const acquirePromise = store.acquire("c1-real-v1");
+
+    // 2. ロード進行中に store を破棄
+    store.dispose();
+    expect(store.currentLoaded).toBeNull();
+    expect(freedCount).toBe(0);
+
+    // 3. fetch を解放してロードを完了させる
+    resolveFetch!();
+
+    // 4. acquirePromise は DISPOSED で reject されること
+    await expect(acquirePromise).rejects.toThrow();
+
+    // 5. キャッシュが復活していないこと
+    expect(store.currentLoaded).toBeNull();
+
+    // 6. dispose 後に完了した PreparedGraph がその場で解放されていること（メモリリーク防止）
+    expect(freedCount).toBe(1);
+
+    // 7. dispose 後の acquire() は即座に拒否されること
+    await expect(store.acquire("c1-real-v1")).rejects.toThrow();
   });
 });

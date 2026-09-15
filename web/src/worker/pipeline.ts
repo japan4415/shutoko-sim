@@ -1,3 +1,6 @@
+// 探索パイプラインの純粋関数群。Worker 本体（search-worker.ts）はこれらを配線するだけ。
+// fetch と import は引数注入にし、Vitest からモックで決定論的に検証できるようにする。
+
 import { KNOWN_RELEASES } from "./artifact-hashes";
 import type {
   BenchPayload,
@@ -355,6 +358,8 @@ export class ReleaseStore {
   private loaded: { releaseId: string; state: LoadedRelease; generation: number } | null = null;
   private latestGeneration = 0;
   private readonly inFlightLoads = new Map<string, Promise<LoadedRelease>>();
+  private readonly inFlightControllers = new Map<string, AbortController>();
+  private disposed = false;
   private readonly fetchImpl: FetchLike;
   private readonly importImpl?: ImportLike;
   private readonly knownReleases: readonly string[];
@@ -385,6 +390,10 @@ export class ReleaseStore {
    * 呼び出し側は使い終わったら必ず state.release() を呼ぶこと。
    */
   async acquire(releaseId: string, cacheBust?: string): Promise<LoadedRelease> {
+    if (this.disposed) {
+      throw new PipelineError("DISPOSED", "ReleaseStore has been disposed");
+    }
+
     if (!this.knownReleases.includes(releaseId)) {
       throw new PipelineError("ARTIFACT_MISMATCH", `未知の releaseId です: ${releaseId}`);
     }
@@ -402,11 +411,17 @@ export class ReleaseStore {
         this.onLoadStart(releaseId);
       }
       const controller = new AbortController();
+      this.inFlightControllers.set(releaseId, controller);
       const loadPromise = loadRelease(this.fetchImpl, releaseId, this.importImpl, controller.signal, {
         cacheBust,
       })
         .then((state) => {
           this.inFlightLoads.delete(releaseId);
+          this.inFlightControllers.delete(releaseId);
+          if (this.disposed) {
+            state.release(); // dispose 済みのためキャッシュに載せずその場で解放
+            throw new PipelineError("DISPOSED", `ReleaseStore was disposed while loading ${releaseId}`);
+          }
           if (this.onLoadEnd !== undefined) {
             this.onLoadEnd(releaseId);
           }
@@ -422,6 +437,7 @@ export class ReleaseStore {
         })
         .catch((err: unknown) => {
           this.inFlightLoads.delete(releaseId);
+          this.inFlightControllers.delete(releaseId);
           throw err;
         });
 
@@ -430,6 +446,9 @@ export class ReleaseStore {
     } else {
       // 進行中の同一 releaseId ロードに相乗りする 2人目以降の caller
       return inFlight.then((state) => {
+        if (this.disposed) {
+          throw new PipelineError("DISPOSED", `ReleaseStore was disposed while loading ${releaseId}`);
+        }
         state.retain();
         return state;
       });
@@ -437,10 +456,15 @@ export class ReleaseStore {
   }
 
   dispose(): void {
+    this.disposed = true;
     if (this.loaded !== null) {
       this.loaded.state.release();
       this.loaded = null;
     }
+    for (const controller of this.inFlightControllers.values()) {
+      controller.abort();
+    }
+    this.inFlightControllers.clear();
     this.inFlightLoads.clear();
   }
 }

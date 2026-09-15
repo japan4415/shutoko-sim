@@ -95,9 +95,10 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | `FETCH_FAILED` | Worker（パイプライン） | 成果物取得の HTTP 失敗・通信失敗 |
 | `INVALID_INPUT` | WASM 境界（`RoutingErrorPayload`） | 座標・時間・版などの入力検証失敗。理由を入力欄付近に表示 |
 | `WASM_ERROR` | WASM 境界 | `RoutingErrorPayload` JSON でない例外メッセージのフォールバック |
+| `USE_AFTER_FREE` | Worker（パイプライン） | 解放済みの `PreparedGraph`（`LoadedRelease`）に対する呼び出しの検出。設計上到達しない防御的ガード |
 | `TIMEOUT` | UI 側 | 探索押下から 10 秒以内に `result` / `error` が返らず、UI が Worker を terminate した |
 
-`TIMEOUT` は Worker が送る応答ではなく UI 側が生成する状態であり、次回検索時に新しい Worker を再生成して `ready` を待ってから再送する。ブート時の初期化失敗の `error` は `requestId: ""` で送られ、UI は再読み込みを案内する。WASM 呼出は `search(graph, request, limits)` に相当する純粋な境界とし、JS glue が型とメモリ管理を担う。UI の制限を信用せず Rust 側でも座標の有限性・範囲（`-90.0..=90.0`, `-180.0..=180.0`）、`origin` と `originNodeId` の排他性、分の整数・大小関係、版・車両の一致、`pricingAt` の有効な UTC 時刻を検証する。構造や値の不正は `Err(RoutingError { code: "INVALID_INPUT", message })` を返し、WASM 境界で JSON シリアライズされた `RoutingErrorPayload` として JS 例外をスローする。
+`TIMEOUT` は Worker が送る応答ではなく UI 側が生成する状態であり、次回検索時に新しい Worker を再生成して `ready` を待ってから再送する。ブート時の初期化失敗の `error` は `requestId: ""` で送られ、UI は再読み込みを案内する。WASM 呼出は `search(graph, request, limits)` に加え、グラフのパース・インデックス構築を 1 度だけ行い再利用する `prepare(graph, limits)` と `searchPrepared(pg, request)` の 2 段境界を提供する。`prepare` が返す `WasmPreparedGraph` は WASM リニアメモリ上に保持され、JS glue の `free()` により明示的に解放される。Worker パイプライン（`ReleaseStore` / `LoadedRelease`）は参照カウント（`retain` / `release`）と世代管理によりこのライフサイクルを一元管理し、検索実行中の安全な再利用とリリース切替・破棄時のメモリ解放を両立する。UI の制限を信用せず Rust 側でも座標の有限性・範囲（`-90.0..=90.0`, `-180.0..=180.0`）、`origin` と `originNodeId` の排他性、分の整数・大小関係、版・車両の一致、`pricingAt` の有効な UTC 時刻を検証する。構造や値の不正は `Err(RoutingError { code: "INVALID_INPUT", message })` を返し、WASM 境界で JSON シリアライズされた `RoutingErrorPayload` として JS 例外をスローする。
 
 ### 計測フック（`bench`、任意・#13）
 

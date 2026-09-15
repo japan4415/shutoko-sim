@@ -5,11 +5,13 @@
 // - 10 秒で setTimeout → worker.terminate() → TIMEOUT 文言 → 次回検索時に Worker を再生成する
 // - 候補カードと地図は同じ候補 ID に紐付け、条件変更で選択と出発リンクを失効させる
 import {
+  MAX_PRODUCT_MINUTES,
   PRESET_KANDABASHI,
   RELEASE_ID,
   SEARCH_TIMEOUT_MS,
   SUPPORTED_AREA_TEXT,
   VEHICLE_PROFILE,
+  classifyNoCandidates,
   coordinateLabel,
   errorMessage,
   formatRank,
@@ -46,6 +48,11 @@ const el = {
   maxMinutes: mustGet<HTMLInputElement>("max-minutes"),
   search: mustGet<HTMLButtonElement>("search-btn"),
   cancel: mustGet<HTMLButtonElement>("cancel-btn"),
+  mapPick: mustGet<HTMLButtonElement>("map-pick-btn"),
+  mapPickPanel: mustGet<HTMLDivElement>("map-pick-panel"),
+  mapPickStatus: mustGet<HTMLParagraphElement>("map-pick-status"),
+  mapPickConfirm: mustGet<HTMLButtonElement>("map-pick-confirm"),
+  mapPickCancel: mustGet<HTMLButtonElement>("map-pick-cancel"),
   inputErrors: mustGet<HTMLOListElement>("input-errors"),
   status: mustGet<HTMLParagraphElement>("status"),
   map: mustGet<HTMLDivElement>("map"),
@@ -101,6 +108,10 @@ let mapFailed = false;
 let mapView: MapView | null = null;
 // 位置情報が拒否られたか。一旦拒否されたら許可要求を繰り返さない。
 let geolocationDenied = false;
+// 地図タップで出発地点を選ぶモード。誤タップで確定しないよう pending を経由する。
+let pickMode = false;
+// 地図タップで置いた候補地点（確定前）。住所は逆ジオコーディングしない。
+let pendingPick: LatLng | null = null;
 
 // --- Worker 管理 ---
 
@@ -266,7 +277,7 @@ function showAddressFallback(message: string): void {
 }
 
 /**
- * 出発地点が対応範囲外・接続不能なときの復帰導線（docs/requirements.md:39）。
+ * 出発地点が対応範囲外・到達不能なときの復帰導線（docs/requirements.md:39）。
  * 対応範囲を明示し、検証済みの有効な出発地点（神田橋）をワンタップで設定できるようにする。
  * 近い高速道路へ直線接続するような誤った代替は出さない。
  */
@@ -282,6 +293,14 @@ function showAreaRecovery(message: string): void {
     clearRecovery();
     setStatus("出発地点を神田橋に設定しました。探索ボタンで再検索してください。");
   });
+  const pick = document.createElement("button");
+  pick.type = "button";
+  pick.className = "secondary";
+  pick.textContent = "地図で出発地点を指定";
+  pick.addEventListener("click", () => {
+    clearRecovery();
+    enterPickMode();
+  });
   const search = document.createElement("button");
   search.type = "button";
   search.className = "secondary";
@@ -289,8 +308,51 @@ function showAreaRecovery(message: string): void {
   search.addEventListener("click", () => {
     el.addressQuery.focus();
   });
-  el.recovery.replaceChildren(p, wrapActions(usePreset, search));
+  el.recovery.replaceChildren(p, wrapActions(usePreset, pick, search));
   el.recovery.hidden = false;
+}
+
+/**
+ * 指定枠では周回できない地点の復帰導線。時間を広げても届かないため
+ * 「時間枠を広げる」は出さず、出発地点そのものの見直しを案内する。
+ */
+function showUnreachableRecovery(message: string): void {
+  const p = document.createElement("p");
+  p.textContent = message;
+  const pick = document.createElement("button");
+  pick.type = "button";
+  pick.textContent = "地図で出発地点を指定";
+  pick.addEventListener("click", () => {
+    clearRecovery();
+    enterPickMode();
+  });
+  const usePreset = document.createElement("button");
+  usePreset.type = "button";
+  usePreset.className = "secondary";
+  usePreset.textContent = "神田橋を出発地点にする";
+  usePreset.addEventListener("click", () => {
+    setOrigin({ lat: PRESET_KANDABASHI.lat, lon: PRESET_KANDABASHI.lon }, "対応範囲内の地点");
+    el.preset.value = "kandabashi";
+    clearRecovery();
+    setStatus("出発地点を神田橋に設定しました。探索ボタンで再検索してください。");
+  });
+  el.recovery.replaceChildren(
+    p,
+    wrapActions(pick, usePreset, wrapSecondaryAddressButton()),
+  );
+  el.recovery.hidden = false;
+}
+
+/** 住所検索へ戻る補助ボタン（復帰導線の共通部品）。 */
+function wrapSecondaryAddressButton(): HTMLButtonElement {
+  const search = document.createElement("button");
+  search.type = "button";
+  search.className = "secondary";
+  search.textContent = "住所を検索し直す";
+  search.addEventListener("click", () => {
+    el.addressQuery.focus();
+  });
+  return search;
 }
 
 // --- 出発地点 ---
@@ -303,12 +365,17 @@ function readOriginFromFields(): LatLng {
  * 出発地点を確定する。座標欄・地図マーカー・要約表示を同期し、旧結果を失効させる。
  * sourceLabel は確定手段（住所・現在地・座標）を利用者へ示す。
  * 確定手段が変わったら、古い住所候補リストは破棄する（誤って旧候補へ巻き戻さない）。
+ * あわせて地図を確定地点へ追従させ（表示範囲外なら pan/zoom）、プリセット select を
+ * 実出発地点と矛盾しないよう manual に同期する（プリセット経由なら維持する）。
  */
 function setOrigin(next: LatLng, sourceLabel: string): void {
   origin = next;
   el.lat.value = String(next.lat);
   el.lon.value = String(next.lon);
   el.originSummary.textContent = `出発地点: ${coordinateLabel(next.lat, next.lon)}（${sourceLabel}）`;
+  if (!sourceLabel.startsWith("プリセット")) {
+    el.preset.value = "manual";
+  }
   if (!sourceLabel.startsWith("住所:")) {
     // 進行中の住所検索を無効化し、候補リストを閉じる。
     addressRequestSeq += 1;
@@ -316,12 +383,71 @@ function setOrigin(next: LatLng, sourceLabel: string): void {
     el.addressCandidates.replaceChildren();
   }
   mapView?.setOrigin(next);
+  mapView?.focusOrigin(next);
   invalidateResults();
 }
 
 function clearOrigin(): void {
   origin = null;
   el.originSummary.textContent = "出発地点が未確定です。";
+}
+
+// --- 地図タップによる出発地点指定 ---
+
+/**
+ * 地図タップでの出発地点指定を開始する。ドラッグ/ズームと競合しないよう
+ * 専用モード中だけ地図クリックを拾い、タップ結果は pending として表示する。
+ */
+function enterPickMode(): void {
+  pickMode = true;
+  pendingPick = null;
+  mapView?.setPendingOrigin(null);
+  mapView?.setPickMode(true);
+  el.mapPick.setAttribute("aria-pressed", "true");
+  el.mapPickPanel.hidden = false;
+  el.mapPickConfirm.disabled = true;
+  el.mapPickStatus.textContent =
+    "地図をタップすると候補地点を表示します。確定前にどんどん選び直せます。";
+  el.mapPickConfirm.focus();
+}
+
+/** モードを終了し、pending の候補地点を消す（出発地点は変更しない）。 */
+function exitPickMode(announce: string | null): void {
+  pickMode = false;
+  pendingPick = null;
+  mapView?.setPendingOrigin(null);
+  mapView?.setPickMode(false);
+  el.mapPick.setAttribute("aria-pressed", "false");
+  el.mapPickPanel.hidden = true;
+  el.mapPickConfirm.disabled = true;
+  el.mapPickStatus.textContent = "";
+  if (announce !== null) {
+    setStatus(announce);
+  }
+}
+
+function handlePickOrigin(point: LatLng): void {
+  if (!pickMode) {
+    return;
+  }
+  pendingPick = point;
+  mapView?.setPendingOrigin(point);
+  el.mapPickConfirm.disabled = false;
+  // 逆ジオコーディングは対象外なので座標ラベルだけを示す。
+  el.mapPickStatus.textContent = `候補地点: ${coordinateLabel(point.lat, point.lon)}（住所は取得していません）。「この地点を出発地点にする」で確定します。`;
+}
+
+function confirmPick(): void {
+  if (pendingPick === null) {
+    return;
+  }
+  const point = pendingPick;
+  exitPickMode(null);
+  setOrigin(point, "地図で指定（住所は未取得）");
+  clearRecovery();
+  setStatus(
+    `出発地点を地図の座標（${coordinateLabel(point.lat, point.lon)}）に設定しました。探索ボタンで再検索してください。`,
+  );
 }
 
 // --- 住所検索 ---
@@ -584,22 +710,27 @@ function renderResult(result: SearchResult): void {
   if (candidates.length === 0) {
     el.results.replaceChildren();
     mapView?.renderCandidates([]);
-    // 出発地点が対応範囲外・接続不能なときは、対応範囲を示して有効な地点を案内する。
-    if (
-      result.reason === "NO_CONNECTION" ||
-      result.reason === "NO_LOOP" ||
-      result.reason === "NO_BILLING_PAIR"
-    ) {
-      showAreaRecovery(SUPPORTED_AREA_TEXT);
-      return;
+    // 候補ゼロの原因で復帰導線を分ける。届かない地点に「時間枠を広げる」を出すと誤りになる。
+    switch (classifyNoCandidates(result)) {
+      case "unreachable":
+        // 数値根拠（最短計画分・最寄り入口距離）を本文と復帰導線の両方で示す。
+        showUnreachableRecovery(
+          `この地点では周回できる候補を作れません（${String(MAX_PRODUCT_MINUTES)} 分が上限です）。時間を広げても届かないため、出発地点そのものを見直してください。`,
+        );
+        return;
+      case "unsupported_area":
+        // 出発地点が対応範囲外・接続不能なときは、対応範囲を示して有効な地点を案内する。
+        showAreaRecovery(SUPPORTED_AREA_TEXT);
+        return;
+      case "time_window":
+        // 指定枠が狭いだけの場合は、従来どおり時間を広げる導線を出す（自動変更しない）。
+        showTimeWindowRecovery(
+          "指定条件に収まる周回候補が見つかりませんでした。時間の範囲を広げると見つかる可能性があります。",
+        );
+        return;
+      case "other":
+        return;
     }
-    // それ以外の候補なしは時間条件が原因のことが多いため、時間を広げる導線を出す。
-    if (result.status === "no_candidates" || result.status === "truncated") {
-      showTimeWindowRecovery(
-        "指定条件に収まる周回候補が見つかりませんでした。時間の範囲を広げると見つかる可能性があります。",
-      );
-    }
-    return;
   }
 
   clearRecovery();
@@ -838,6 +969,8 @@ function initMap(): void {
   mapView.onTileError(() => markMapFailed(false));
   // タイルが実際に読めたら失敗状態を解除する（自然回復を反映）。
   mapView.onTileLoad(() => clearMapFailed());
+  // 地図タップは pending として受け取り、確定ボタンで出発地点にする。
+  mapView.onPickOrigin((point) => handlePickOrigin(point));
   if (origin !== null) {
     mapView.setOrigin(origin);
   }
@@ -904,13 +1037,13 @@ el.preset.addEventListener("change", () => {
 });
 for (const input of [el.lat, el.lon, el.minMinutes, el.maxMinutes]) {
   input.addEventListener("change", () => {
-    // 座標欄を直接編集した場合は、その座標を出発地点として扱う。
+    // 座標欄を直接編集した場合は、その座標を出発地点として扱う
+    // （キーボード利用者にとって地図タップと等価な入力手段）。
     if (input === el.lat || input === el.lon) {
       const next = readOriginFromFields();
       if (Number.isFinite(next.lat) && Number.isFinite(next.lon)) {
-        origin = next;
-        el.originSummary.textContent = `出発地点: ${coordinateLabel(next.lat, next.lon)}（座標入力）`;
-        mapView?.setOrigin(next);
+        setOrigin(next, "座標入力");
+        return;
       }
     }
     invalidateResults();
@@ -925,6 +1058,24 @@ for (const chip of document.querySelectorAll<HTMLButtonElement>(".presets .chip"
 }
 el.search.addEventListener("click", startSearch);
 el.cancel.addEventListener("click", cancelSearch);
+el.mapPick.addEventListener("click", () => {
+  if (pickMode) {
+    exitPickMode("地図タップでの指定をやめました。");
+    return;
+  }
+  clearRecovery();
+  enterPickMode();
+});
+el.mapPickConfirm.addEventListener("click", confirmPick);
+el.mapPickCancel.addEventListener("click", () => {
+  exitPickMode("地図タップでの指定をキャンセルしました。");
+});
+// Esc でモードを抜ける（誤タップを確定させない）。
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && pickMode) {
+    exitPickMode("地図タップでの指定をキャンセルしました。");
+  }
+});
 
 el.preset.value = "kandabashi";
 setSearching(false);

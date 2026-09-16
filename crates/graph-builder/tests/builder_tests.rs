@@ -496,7 +496,12 @@ fn test_routing_core_search_integration() {
         pricing_at: "2026-09-10T00:00:00Z".into(),
     };
 
-    let limits = SearchLimits::default();
+    // This tiny topology fixture models connectivity, not the production 5km
+    // mainline-loop contract.
+    let limits = SearchLimits {
+        min_loop_meters: 0,
+        ..SearchLimits::default()
+    };
     let res = search(&graph, &req, &limits).expect("search should succeed");
     assert_eq!(res.status, "ok");
     assert!(!res.candidates.is_empty(), "expected candidates found");
@@ -637,9 +642,11 @@ fn test_billing_pair_seed_and_pathfinding_success() {
         vehicle_profile: "passenger-car-etc".into(),
         pricing_at: "2026-09-10T00:00:00Z".into(),
     };
-    let res =
-        shutoko_routing_core::search(&graph, &req, &shutoko_routing_core::SearchLimits::default())
-            .expect("search should succeed");
+    let limits = shutoko_routing_core::SearchLimits {
+        min_loop_meters: 0,
+        ..shutoko_routing_core::SearchLimits::default()
+    };
+    let res = shutoko_routing_core::search(&graph, &req, &limits).expect("search should succeed");
     assert_eq!(res.status, "ok");
     assert_eq!(res.candidates[0].toll.amount_yen, Some(300));
 }

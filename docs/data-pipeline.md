@@ -220,7 +220,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 - **分離方式**:
   - `boundary_in` / `boundary_out` を `general_entry` / `general_exit` と明確に区別。
   - 出発地・帰着地の一般道スナップ対象ノードインデックス（`snap-index.json`）には `general_entry` のみを含め、`boundary_in` は地表スナップ候補から除外。
-  - 境界 JCT 発着の広域シミュレーションや他社線乗り継ぎ経路は、明示的なランプ ID クエリ（`entryRampId` / `exitRampId`）によってルーティング可能。
+  - 境界 JCT、閉鎖、unsupported は明示的な `entryRampId` / `exitRampId` でも拒否し、公開ルーティング端点にしない。他社線乗り継ぎは現行契約の対象外。
 
 ## 9. OD 料金マトリクスと普通車 ETC 計算規則（`data/od-tariffs.json`）
 

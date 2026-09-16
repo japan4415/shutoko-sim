@@ -125,10 +125,10 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 
 ### 探索制限パラメータ（`SearchLimits`）
 - `max_expanded_states`: 全体展開状態数上限（デフォルト 100,000）
-- `beam_width`: 各深さごとの保持状態数（デフォルト 200）
-- `max_loop_edges`: 本線閉路探索エッジ数上限（デフォルト 5,000、広域周回対応）
+- `beam_width`: 小規模グラフの全単純閉路列挙で各深さに保持する状態数（デフォルト 200）。全線グラフはSCC/逆Dijkstra閉路カタログを使う
+- `max_loop_edges`: 本線閉路探索エッジ数上限（デフォルト 2,000、入力として受理する上限 5,000）
 - `min_loop_meters`: 最小ループ距離（デフォルト 5,000m、マイクロループ排除）
-- `max_pairs`: 探索対象ペア数上限（デフォルト 64）
+- `max_pairs`: 従来の課金ペア探索対象上限（デフォルト 10）。入口・出口双方を指定する明示OD探索には適用しない
 - `max_access_distance_meters`: 最大アクセス距離（デフォルト 30,000m）
 - `max_access_entries`: 最大アクセス入口数（デフォルト 0 = 無制限）
 

@@ -209,7 +209,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         requestId: "integration-access-contract",
         releaseId,
         pricingAt: "2026-09-10T00:00:00Z",
-        // 立川駅: 最寄り入口まで約 29.6 km で、アクセス時間が 0 でない候補が返る。
+        // 立川駅: 全線fixtureの最寄り入口まで約18.6kmで、アクセス時間が0でない。
         origin: { lat: 35.6979, lon: 139.4139 },
         minMinutes: 15,
         maxMinutes: 240,
@@ -226,6 +226,42 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         // Rust の estimated_access_seconds と web の accessSecondsFromMeters が一致すること。
         expect(candidate.duration.accessSeconds).toBe(accessSecondsFromMeters(distance));
       }
+    } finally {
+      pg.free();
+    }
+  }, 30_000);
+
+  it("明示した神奈川の verified-bound OD を課金ペアseedなしで探索できる", async () => {
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    const glue = await import("../../dist/wasm/shutoko_routing.js");
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
+    const graphObj = JSON.parse(graphJson) as { releaseId: string };
+    const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+    try {
+      const msg: UiSearchMessage = {
+        type: "search",
+        requestId: "integration-explicit-k1",
+        releaseId: graphObj.releaseId,
+        pricingAt: "2026-09-10T00:00:00Z",
+        entryRampId: "ramp:k1-inbound:daishi-entry",
+        exitRampId: "ramp:k1-inbound:minato-mirai-exit",
+        minMinutes: 1,
+        maxMinutes: 240,
+        vehicleProfile: "passenger-car-etc",
+      };
+      const requestJson = JSON.stringify(buildSearchRequest(msg));
+      const first = glue.searchPrepared(pg, requestJson);
+      const second = glue.searchPrepared(pg, requestJson);
+      expect(second).toBe(first);
+      const result = parseSearchResult(first);
+      expect(result.status).toBe("ok");
+      expect(result.reason).toBeNull();
+      expect(result.expandedStates).toBeLessThan(100_000);
+      expect(result.candidates[0]?.entry.rampId).toBe(msg.entryRampId);
+      expect(result.candidates[0]?.exit.rampId).toBe(msg.exitRampId);
+      expect(result.candidates[0]?.loop.distanceMeters).toBeGreaterThanOrEqual(5_000);
+      expect(result.candidates[0]?.toll.amountYen).toBeNull();
     } finally {
       pg.free();
     }

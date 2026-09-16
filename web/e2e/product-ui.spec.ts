@@ -1130,4 +1130,3 @@ test("(38) ランプ台帳の読み込み失敗時にエラーパネルと再試
   await expect(page.locator("#ramps-loading-status")).toContainText("399 件を検証完了");
   await expect(page.locator("#entry-ramp-list .ramp-item")).toHaveCount(399);
 });
-

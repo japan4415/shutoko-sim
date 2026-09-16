@@ -19,6 +19,7 @@ import {
   geocodeErrorMessage,
   geolocationErrorMessage,
   isAccessBeyondCap,
+  lowerMinClickOutcome,
   minutesCeilFromSeconds,
   minutesFromSeconds,
   nearestAccessText,
@@ -350,6 +351,75 @@ describe("statusMessage / errorMessage", () => {
     // SEARCH_LIMIT は打切りの意味を status 文言に残す。
     expect(statusMessage(result("SEARCH_LIMIT"), 15, 60)).toContain("上限に達し");
     expect(statusMessage(result("SEARCH_LIMIT"), 15, 60)).not.toContain("時間枠を広げる");
+  });
+
+  it("SEARCH_LIMIT は打切りを確定事実として述べ、候補ありなら一部表示を落とさない（R3-05）", () => {
+    // budget.truncated のときだけ reason=SEARCH_LIMIT が立つので「可能性」ではない。
+    const zero = statusMessage({ ...result("SEARCH_LIMIT"), status: "truncated" }, 15, 60);
+    expect(zero).toContain("打ち切られています");
+    expect(zero).not.toContain("可能性");
+
+    // 候補が残る打切りでは「一部だけ」であることを示す。
+    const partial = statusMessage(
+      {
+        ...result("SEARCH_LIMIT"),
+        status: "truncated",
+        candidates: [sampleCandidate()],
+      },
+      15,
+      60,
+    );
+    expect(partial).toContain("打ち切られています");
+    expect(partial).toContain("一部の候補だけ");
+    expect(partial).not.toContain("可能性");
+  });
+
+  it("base 60 秒未満の周回は最小 1 分でも含められないため下限操作を出さない（R3-02 境界）", () => {
+    // plan = base + max(300, ceil(base/5))、エンジンは base < min*60 を棄却する。
+    // base=59s（plan 359s）は製品下限 1 分でも除外される（59 < 60）。
+    expect(baseSecondsFromPlanSeconds(359)).toBe(59);
+    const subMinute: SearchResult = { ...result("TIME_WINDOW"), minPlanSeconds: 359 };
+    expect(timeWindowActions(subMinute, 2, 240)).toEqual({
+      lowerMinMinutes: null,
+      widenMaxMinutes: null,
+    });
+    const text = statusMessage(subMinute, 2, 240);
+    expect(text).toContain("時間枠を広げられないため");
+    expect(text).not.toContain("最小時間を 1 分に下げる");
+
+    // base=60s（plan 360s）はちょうど下限 1 分で含められる。
+    expect(baseSecondsFromPlanSeconds(360)).toBe(60);
+    const atMinute: SearchResult = { ...result("TIME_WINDOW"), minPlanSeconds: 360 };
+    expect(timeWindowActions(atMinute, 2, 240)).toEqual({
+      lowerMinMinutes: 1,
+      widenMaxMinutes: null,
+    });
+    // 現在値が既に 1 分なら変わる操作は無い。
+    expect(timeWindowActions(atMinute, 1, 240)).toEqual({
+      lowerMinMinutes: null,
+      widenMaxMinutes: null,
+    });
+  });
+
+  it("lowerMinClickOutcome は下げられるときだけ適用し、同値・引上げと不正値を成功と告げない（R3-01）", () => {
+    // 240 → 23 は適用。
+    expect(lowerMinClickOutcome(240, 23)).toEqual({
+      nextValue: 23,
+      message: "最小時間を 23 分に下げました。再検索してください。",
+    });
+    // 同値は値を変えず、成功も告げない。
+    const same = lowerMinClickOutcome(23, 23);
+    expect(same.nextValue).toBeNull();
+    expect(same.message).not.toContain("下げました");
+    // 引上げ（15 → 23）も同様。
+    const raise = lowerMinClickOutcome(15, 23);
+    expect(raise.nextValue).toBeNull();
+    expect(raise.message).not.toContain("下げました");
+    expect(raise.message).toContain("15 分のまま");
+    // 不正な現在値も値を書き換えない。
+    const invalid = lowerMinClickOutcome(Number.NaN, 23);
+    expect(invalid.nextValue).toBeNull();
+    expect(invalid.message).not.toContain("下げました");
   });
 
   it("unreachableText / nearestAccessText は km と分だけを出す", () => {

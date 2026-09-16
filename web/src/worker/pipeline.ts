@@ -104,8 +104,7 @@ export async function verifyArtifact(
 
 /**
  * UI メッセージから SearchRequest JSON のオブジェクトを作る。
- * index.d.ts の 8 フィールド（requestId, releaseId, originNodeId, origin,
- * minMinutes, maxMinutes, vehicleProfile, pricingAt）のみを含め、`type` は含めない。
+ * index.d.ts の公開フィールドのみを含め、`type` は含めない。
  */
 export function buildSearchRequest(msg: UiSearchMessage): SearchRequest {
   return {
@@ -113,6 +112,8 @@ export function buildSearchRequest(msg: UiSearchMessage): SearchRequest {
     releaseId: msg.releaseId,
     ...(msg.originNodeId !== undefined ? { originNodeId: msg.originNodeId } : {}),
     ...(msg.origin !== undefined ? { origin: msg.origin } : {}),
+    ...(msg.entryRampId !== undefined ? { entryRampId: msg.entryRampId } : {}),
+    ...(msg.exitRampId !== undefined ? { exitRampId: msg.exitRampId } : {}),
     minMinutes: msg.minMinutes,
     maxMinutes: msg.maxMinutes,
     vehicleProfile: msg.vehicleProfile,

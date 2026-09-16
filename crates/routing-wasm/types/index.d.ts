@@ -22,7 +22,7 @@ export interface SearchLimits {
   maxLoopEdges?: number;
   /**
    * Minimum loop distance (metres) required for a valid loop cycle.
-   * Internal JCT micro-loops under this threshold are rejected. Default: 0 (or 5,000m in pipeline).
+   * Internal JCT micro-loops under this threshold are rejected. Default: 5,000m.
    */
   minLoopMeters?: number;
   /**

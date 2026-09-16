@@ -277,7 +277,147 @@ fn real_graph_search_json_wasm_contract_parity() {
     assert_eq!(candidates[0]["toll"]["amountYen"].as_u64(), Some(300));
 }
 
-/// 全 8 ペアの探索契約定数
+#[test]
+#[ignore = "full-network real-graph search; run with --release -- --ignored (CI does)"]
+fn explicit_full_network_ramps_route_deterministically_within_budget() {
+    let g = real_graph();
+    let limits = SearchLimits::default();
+    let pairs = [
+        (
+            "C1",
+            "ramp:c1-outer:kandabashi-entry",
+            "ramp:c1-outer:takaracho-exit",
+        ),
+        (
+            "C2",
+            "ramp:c2-outer:gotanda-entry",
+            "ramp:c2-inner:gotanda-exit",
+        ),
+        (
+            "radial-3",
+            "ramp:3-inbound:shibuya-entry",
+            "ramp:3-outbound:yoga-exit",
+        ),
+        (
+            "kanagawa-K1",
+            "ramp:k1-inbound:daishi-entry",
+            "ramp:k1-inbound:minato-mirai-exit",
+        ),
+        (
+            "saitama-S1",
+            "ramp:s1-inbound:araijuku-entry",
+            "ramp:s1-outbound:shikahamabashi-exit",
+        ),
+    ];
+    for (area, entry, exit) in pairs {
+        let request = SearchRequest {
+            request_id: format!("explicit-{area}"),
+            release_id: g.release_id.clone(),
+            origin_node_id: None,
+            origin: None,
+            entry_ramp_id: Some(entry.into()),
+            exit_ramp_id: Some(exit.into()),
+            min_minutes: 1,
+            max_minutes: 240,
+            vehicle_profile: g.vehicle_profile.clone(),
+            pricing_at: "2026-09-10T00:00:00Z".into(),
+        };
+        let started = std::time::Instant::now();
+        let first = search(&g, &request, &limits)
+            .unwrap_or_else(|error| panic!("{area} explicit search failed: {error}"));
+        let elapsed = started.elapsed();
+        let second = search(&g, &request, &limits)
+            .unwrap_or_else(|error| panic!("{area} repeat search failed: {error}"));
+        eprintln!(
+            "{area}: status={}, reason={:?}, expanded={}, candidates={}, loop={}m, elapsed={elapsed:?}",
+            first.status,
+            first.reason,
+            first.expanded_states,
+            first.candidates.len(),
+            first
+                .candidates
+                .first()
+                .map_or(0, |c| c.r#loop.distance_meters)
+        );
+        assert_eq!(first.status, "ok", "{area}: reason={:?}", first.reason);
+        assert!(first.expanded_states < limits.max_expanded_states);
+        assert!(
+            elapsed < std::time::Duration::from_secs(10),
+            "{area} explicit search exceeded 10s: {elapsed:?}"
+        );
+        assert_eq!(
+            serde_json::to_string(&first).unwrap(),
+            serde_json::to_string(&second).unwrap(),
+            "{area} explicit search must be deterministic"
+        );
+        let candidate = &first.candidates[0];
+        assert_eq!(candidate.entry.ramp_id.as_deref(), Some(entry));
+        assert_eq!(candidate.exit.ramp_id.as_deref(), Some(exit));
+        assert!(candidate.r#loop.distance_meters >= limits.min_loop_meters);
+        assert!(candidate.toll.amount_yen.is_none() || candidate.toll.toll_source.is_some());
+    }
+}
+
+#[test]
+#[ignore = "full-network real-graph search; run with --release -- --ignored (CI does)"]
+fn explicit_ramps_reject_non_public_kinds_and_report_unreachable_od() {
+    let g = real_graph();
+    let limits = SearchLimits::default();
+    let request = |entry: &str, exit: &str| SearchRequest {
+        request_id: format!("explicit-negative-{entry}-{exit}"),
+        release_id: g.release_id.clone(),
+        origin_node_id: None,
+        origin: None,
+        entry_ramp_id: Some(entry.into()),
+        exit_ramp_id: Some(exit.into()),
+        min_minutes: 1,
+        max_minutes: 240,
+        vehicle_profile: g.vehicle_profile.clone(),
+        pricing_at: "2026-09-10T00:00:00Z".into(),
+    };
+
+    for excluded in [
+        "ramp:c1-outer:kyobashi-entry",    // unsupported
+        "boundary:3-inbound:tomei-jct-in", // boundary JCT
+        "ramp:c1-inner:gofukubashi-entry", // closed
+    ] {
+        let error = search(
+            &g,
+            &request(excluded, "ramp:c1-outer:takaracho-exit"),
+            &limits,
+        )
+        .expect_err("non-public inventory record must not become a routing endpoint");
+        assert_eq!(error.code, "INVALID_INPUT");
+        assert!(error.message.contains("unknown or unsupported entry"));
+    }
+
+    let wrong_kind = search(
+        &g,
+        &request(
+            "ramp:c1-outer:takaracho-exit",
+            "ramp:c1-outer:kandabashi-entry",
+        ),
+        &limits,
+    )
+    .expect_err("exit-as-entry and entry-as-exit must be rejected");
+    assert_eq!(wrong_kind.code, "INVALID_INPUT");
+    assert!(wrong_kind.message.contains("not a routable general entry"));
+
+    let unreachable = search(
+        &g,
+        &request(
+            "ramp:k3-outbound:bandobashi-entry",
+            "ramp:k3-inbound:shin-yamashita-exit",
+        ),
+        &limits,
+    )
+    .expect("unreachable OD is a normal no-candidate result");
+    assert_eq!(unreachable.status, "no_candidates");
+    assert_eq!(unreachable.reason.as_deref(), Some("NO_LOOP"));
+    assert_ne!(unreachable.status, "truncated");
+}
+
+/// データ契約上 verified の全 6 ペアの探索契約定数。
 /// 各ペアの C1 一周計画時間が時間窓に収まる max_minutes とその根拠を明示。
 /// 一般道排除（issue #25）により、旧来「一般道が切断されていた」3 ペアも
 /// origin_node_id = Entry エッジの from-node（アクセス時間 0）として直接探索可能になった。
@@ -287,21 +427,11 @@ struct ConnectedPairContract {
     rationale: &'static str,
 }
 
-const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 8] = [
+const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 6] = [
     ConnectedPairContract {
         pair_id: "bp:c1-outer:kandabashi-takaracho",
         max_minutes: 60,
         rationale: "神田橋〜宝町（外回り）。C1 一周の実走行計画時間は約30分（base=1503s, plan=1803s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
-    },
-    ConnectedPairContract {
-        pair_id: "bp:c1-inner:takaracho-kandabashi",
-        max_minutes: 60,
-        rationale: "宝町〜神田橋（内回り）。C1 一周の実走行計画時間は約28.4分（base=1405s, plan=1705s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
-    },
-    ConnectedPairContract {
-        pair_id: "bp:c1-inner:kasumigaseki-shibakoen",
-        max_minutes: 60,
-        rationale: "霞が関〜芝公園（内回り）。C1 一周の実走行計画時間は約34.3分（base=1717s, plan=2060s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
     },
     ConnectedPairContract {
         pair_id: "bp:c1-inner:shibakoen-shiodome",
@@ -343,7 +473,7 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
 
     let start_total = std::time::Instant::now();
 
-    // 1. 全 8 ペアの探索契約（一般道排除後は全ペアで自ペア候補が採択される）
+    // 1. verified 全 6 ペアの探索契約。
     for contract in CONNECTED_SEARCH_PAIRS {
         let pair = g
             .billing_pairs
@@ -418,18 +548,26 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         );
     }
 
-    // 2. 全 8 ペアの fixture 上のメタデータ整合性（verified・料金レコード・経路ワイヤリング）を確認
-    // 注記: issue #25 で一般道の OSM 取得範囲境界による孤立が問題になっていた 3 ペア
-    // （ginza-shibakoen / kasumigaseki-daikancho / daikancho-kasumigaseki）は、
-    // 一般道排除後は Entry from-node を直接起点として探索できるため全て "ok" となる。
-    // 各ペアの探索契約は CONNECTED_SEARCH_PAIRS（8 件）で網羅済み。
-    for pair in &g.billing_pairs {
-        assert_eq!(
-            pair.status,
-            shutoko_routing_core::VerificationStatus::Verified,
-            "pair {} must be verified",
-            pair.id
-        );
+    // 2. verified/unverified の区分を維持し、verified のみ探索対象にする。
+    assert_eq!(
+        g.billing_pairs
+            .iter()
+            .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
+            .count(),
+        6
+    );
+    assert_eq!(
+        g.billing_pairs
+            .iter()
+            .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Unverified)
+            .count(),
+        2
+    );
+    for pair in g
+        .billing_pairs
+        .iter()
+        .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
+    {
         assert_eq!(
             pair.prices.len(),
             2,
@@ -447,12 +585,12 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
 
     let total_elapsed = start_total.elapsed();
     eprintln!(
-        "all 8 billing pairs search contract total elapsed: {:?}",
+        "all 6 verified billing pairs search contract total elapsed: {:?}",
         total_elapsed
     );
     assert!(
         total_elapsed < std::time::Duration::from_secs(60),
-        "total search time for all 8 pairs must be under 60 seconds, took {:?}",
+        "total search time for all 6 verified pairs must be under 60 seconds, took {:?}",
         total_elapsed
     );
 }
@@ -808,36 +946,35 @@ fn coordinate_request(request_id: &str, lat: f64, lon: f64, max_minutes: u64) ->
 
 /// 日野市役所 (35.6711, 139.3952) / 立川駅 (35.6979, 139.4139) /
 /// 八王子駅 (35.6556, 139.3388) / 神田橋入口 (35.6896727, 139.7644248) の
-/// 実データ境界。cap 46 km の下で日野・立川は候補が成立し、八王子は時間窓で
-/// 棄却されるが診断（最近接距離・最短計画秒数）が返ることを確認する。
+/// 全線実データ境界。K7・4号・3号の verified-bound 入口が加わったため、3地点は
+/// いずれも既定30km cap内となる。日野・立川では候補が返り、八王子では往復込み
+/// 最短計画が240分を僅かに超えるため TIME_WINDOW 診断になることを確認する。
 #[test]
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn tokyo_wide_coordinate_diagnostics_contract() {
     let g = real_graph();
     let wide = wide_access_limits();
 
-    // ── 1. 日野市役所: 最寄り入口まで約 31.0 km。既定 30 km cap では NO_CONNECTION ──
-    // ただし cap 超過でも最近接距離は返す（診断契約）。
+    // ── 1. 日野市役所: K7横浜青葉入口まで約18.5km、既定cap内 ──
     let hino_default_cap = search(
         &g,
         &coordinate_request("req-hino-default-cap", 35.6711, 139.3952, 240),
         &SearchLimits::default(),
     )
     .expect("hino default-cap search must not error");
-    assert_eq!(hino_default_cap.status, "no_candidates");
-    assert_eq!(hino_default_cap.reason.as_deref(), Some("NO_CONNECTION"));
+    assert_eq!(hino_default_cap.status, "ok");
     let default_nearest = hino_default_cap
         .nearest_access
         .as_ref()
-        .expect("cap-exceeded NO_CONNECTION must still report nearestAccess");
+        .expect("coordinate search must report nearestAccess");
     assert!(
-        (30_000.0..32_000.0).contains(&default_nearest.distance_meters),
-        "hino default-cap nearest entry must be ~31.0 km, got {:.0} m",
+        (18_000.0..19_000.0).contains(&default_nearest.distance_meters),
+        "hino nearest entry must be ~18.5 km, got {:.0} m",
         default_nearest.distance_meters
     );
     assert!(
-        hino_default_cap.min_plan_seconds.is_none(),
-        "cap-exceeded early return must not report minPlanSeconds"
+        hino_default_cap.min_plan_seconds.is_some(),
+        "successful search must report minPlanSeconds"
     );
 
     // ── 2. 日野市役所（cap 46 km）: 240 分窓に収まる候補が成立する ──
@@ -869,8 +1006,8 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         .as_ref()
         .expect("coordinate input must report nearestAccess");
     assert!(
-        (30_000.0..32_000.0).contains(&hino_nearest.distance_meters),
-        "hino nearest entry must be ~31.0 km, got {:.0} m",
+        (18_000.0..19_000.0).contains(&hino_nearest.distance_meters),
+        "hino nearest entry must be ~18.5 km, got {:.0} m",
         hino_nearest.distance_meters
     );
     let hino_min_plan = hino_wide
@@ -910,8 +1047,8 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         .as_ref()
         .expect("coordinate input must report nearestAccess");
     assert!(
-        (29_000.0..30_500.0).contains(&tachikawa_nearest.distance_meters),
-        "tachikawa nearest entry must be ~29.6 km, got {:.0} m",
+        (18_000.0..19_000.0).contains(&tachikawa_nearest.distance_meters),
+        "tachikawa nearest entry must be ~18.6 km, got {:.0} m",
         tachikawa_nearest.distance_meters
     );
     let tachikawa_min_plan = tachikawa_wide
@@ -922,7 +1059,7 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         "tachikawa minPlanSeconds ({tachikawa_min_plan}) must fit the 240 min window"
     );
 
-    // ── 4. 八王子駅（cap 46 km）: 240 分窓では到達不能。診断だけを返す ──
+    // ── 4. 八王子駅: 入口はcap内だが往復込み最短計画が240分を僅かに超える ──
     let hachioji_wide = search(
         &g,
         &coordinate_request("req-hachioji-wide-cap", 35.6556, 139.3388, 240),
@@ -941,31 +1078,23 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         hachioji_wide.min_plan_seconds
     );
     assert_eq!(hachioji_wide.status, "no_candidates");
-    assert_eq!(
-        hachioji_wide.reason.as_deref(),
-        Some("TIME_WINDOW"),
-        "hachioji must be rejected by the time window, not by NO_CONNECTION"
-    );
+    assert_eq!(hachioji_wide.reason.as_deref(), Some("TIME_WINDOW"));
     assert!(hachioji_wide.candidates.is_empty());
     let hachioji_nearest = hachioji_wide
         .nearest_access
         .as_ref()
         .expect("hachioji must report nearestAccess for coordinate input");
     assert!(
-        (35_500.0..37_000.0).contains(&hachioji_nearest.distance_meters),
-        "hachioji nearest entry must be ~36.1 km, got {:.0} m",
+        (21_000.0..22_000.0).contains(&hachioji_nearest.distance_meters),
+        "hachioji nearest entry must be ~21.4 km, got {:.0} m",
         hachioji_nearest.distance_meters
     );
     let hachioji_min_plan = hachioji_wide
         .min_plan_seconds
-        .expect("hachioji must report minPlanSeconds for a TIME_WINDOW rejection");
+        .expect("hachioji TIME_WINDOW result must report minPlanSeconds");
     assert!(
-        hachioji_min_plan > FOUR_HOURS_SECONDS,
-        "hachioji minPlanSeconds ({hachioji_min_plan}) must exceed the 240 min window"
-    );
-    assert!(
-        hachioji_min_plan < 24_000,
-        "hachioji minPlanSeconds ({hachioji_min_plan}) is unexpectedly large"
+        hachioji_min_plan > FOUR_HOURS_SECONDS && hachioji_min_plan < 16_000,
+        "hachioji minPlanSeconds ({hachioji_min_plan}) must narrowly exceed 240 minutes"
     );
 
     // ── 5. 神田橋入口: 座標入力で距離 0、originNodeId 入力で nearestAccess は null ──

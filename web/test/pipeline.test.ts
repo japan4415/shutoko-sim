@@ -167,6 +167,24 @@ describe("buildSearchRequest", () => {
       pricingAt: "2026-09-10T00:00:00Z",
     });
   });
+
+  it("明示ランプ ID を WASM SearchRequest へ欠落なく渡す", () => {
+    const msg: UiSearchMessage = {
+      type: "search",
+      requestId: "request-explicit-od",
+      releaseId: "all-real-v1",
+      pricingAt: "2026-09-10T00:00:00Z",
+      entryRampId: "ramp:k1-inbound:daishi-entry",
+      exitRampId: "ramp:k1-inbound:minato-mirai-exit",
+      minMinutes: 1,
+      maxMinutes: 240,
+      vehicleProfile: "passenger-car-etc",
+    };
+    expect(buildSearchRequest(msg)).toMatchObject({
+      entryRampId: msg.entryRampId,
+      exitRampId: msg.exitRampId,
+    });
+  });
 });
 
 describe("parseWasmError", () => {

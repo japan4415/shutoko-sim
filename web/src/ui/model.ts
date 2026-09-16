@@ -119,6 +119,35 @@ export function minutesFromSeconds(seconds: number): number {
 }
 
 /**
+ * 秒を分へ切り上げる。上限超過の根拠値を四捨五入で上限以下に見せないための換算
+ * （14401〜14429 秒は Math.round だと 240 分になり「4 時間に収まるのに到達不能」と
+ * 矛盾して読める）。docs/interfaces.md の minPlanSeconds 契約に対応する。
+ */
+export function minutesCeilFromSeconds(seconds: number): number {
+  return Math.ceil(seconds / 60);
+}
+
+/**
+ * 計画時間（`baseSeconds + bufferSeconds`）から `baseSeconds` を復元する。
+ * エンジンは `buffer = max(300, ceil(base/5))`、`plan = base + buffer` の単調増加で
+ * 計算するため plan から base は一意に定まる。UI が「最小時間を何分まで下げれば
+ * 既知の最短周回を下限に含められるか」を数値で示すために使う。
+ */
+export function baseSecondsFromPlanSeconds(planSeconds: number): number {
+  let lo = 0;
+  let hi = Math.max(0, planSeconds);
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2) + 1;
+    if (mid + Math.max(300, Math.ceil(mid / 5)) <= planSeconds) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return lo;
+}
+
+/**
  * 探索結果の status / reason から UI 文言を作る（scout-002 F5 の対応表）。
  * 候補付き result は候補カード描画が担い、この関数は no_candidates / truncated の
  * ステータス文言と、reason 無し（null）の補助文言を返す。
@@ -128,7 +157,9 @@ export function minutesFromSeconds(seconds: number): number {
  *   nearestAccess があれば距離とアクセス往復時間を示し、直線接続を実経路として出さない。
  * - TIME_WINDOW: 指定枠に収まらない。minPlanSeconds が最大 4 時間を超えるなら
  *   時間枠を広げても届かないため「最大 4 時間では周回できない」と数値で示す。
- *   超えないなら指定枠が原因なので従来どおり時間枠を広げる導線につなぐ。
+ *   超えないなら指定枠が原因なので timeWindowActions の判定に従う。既知の最短周回が
+ *   最小時間で除外されている場合は最小時間を下げる案内を出し、上限（240 分）で
+ *   最大時間を広げられないときは拡大を促さない。
  */
 export function statusMessage(
   result: SearchResult,
@@ -163,12 +194,23 @@ export function statusMessage(
       if (result.minPlanSeconds !== null && result.minPlanSeconds > MAX_PRODUCT_SECONDS) {
         return unreachableText(result.nearestAccess, result.minPlanSeconds);
       }
-      return `指定時間枠（${String(minMinutes)}〜${String(maxMinutes)} 分）に収まる候補がありません。時間枠を広げると見つかる可能性があります。`;
+      const actions = timeWindowActions(result, minMinutes, maxMinutes);
+      if (actions.lowerMinMinutes !== null) {
+        // 既知の最短周回が下限（最小時間）で除外されている。最大側ではなく最小側を下げる。
+        return `指定時間枠（${String(minMinutes)}〜${String(maxMinutes)} 分）に収まる候補がありません。最小時間を ${String(
+          actions.lowerMinMinutes,
+        )} 分に下げると見つかる可能性があります。`;
+      }
+      if (actions.widenMaxMinutes !== null) {
+        return `指定時間枠（${String(minMinutes)}〜${String(maxMinutes)} 分）に収まる候補がありません。時間枠を広げると見つかる可能性があります。`;
+      }
+      // 上限（240 分）でこれ以上広げられず、値も証明できない（打切り等）。誤った拡大を促さない。
+      return `指定時間枠（${String(minMinutes)}〜${String(maxMinutes)} 分）に収まる候補がありません。時間枠を広げられないため、出発地点や条件を見直してください。`;
     }
     case "NO_HANDOFF":
       return "地図引き継ぎ URL が上限超過のため除外されました。";
     case "SEARCH_LIMIT":
-      return "探索が上限に達し、一部の候補だけを表示しています。";
+      return "探索が上限に達しました。結果が打ち切られている可能性があります。";
     default:
       return "候補が見つかりませんでした。";
   }
@@ -214,39 +256,92 @@ export function nearestAccessText(nearestAccess: SnappedOrigin): string {
  * minPlanSeconds は「ループ部分が 240 分以内」の周回だけを列挙した範囲での最小値で、
  * 列挙外のより長いループがより小さい plan を持つ可能性を排除できない（docs/interfaces.md）。
  * したがって絶対的な「最短」とは断定せず、値の出所（確認できた範囲）を必ず添える。
- * 「最大 4 時間では周回できません」自体は、列挙が資源上限で打ち切られていない
- * （minPlanSeconds が non-null である）ことから厳密に成立する。
+ *
+ * 表示値は 240 分との比較だけ切り上げる（14401〜14429 秒が丸めで 240 分になり
+ * 「4 時間に収まるのに到達不能」と矛盾して読めるため）。分表示は「約」付きの概数であり、
+ * 切り上げは上限超過という結論を安全側に見せるだけで数値の捏造ではない。
+ *
+ * 「最大 4 時間では周回できません」の根拠は経路で異なる:
+ * - minPlanSeconds が non-null: 列挙が資源上限で打ち切られていないので、列挙された
+ *   最小計画時間が上限を超えることから厳密に成立する。
+ * - minPlanSeconds が null（cap 超過 NO_CONNECTION）: アクセス往復だけで 240 分以上あり、
+ *   さらに周回と余裕時間が加わることから成立する。往復がちょうど 240 分でも単独では
+ *   超えないため、周回・余裕の加算を文言に含める。
  */
 export function unreachableText(
   nearestAccess: SnappedOrigin | null,
   minPlanSeconds: number | null,
 ): string {
-  const evidence: string[] = [];
+  const access = nearestAccess !== null ? nearestAccessText(nearestAccess) : "";
   if (minPlanSeconds !== null) {
-    evidence.push(
-      `確認できた範囲で最も短い計画時間は 約 ${String(minutesFromSeconds(minPlanSeconds))} 分`,
-    );
+    // 計画時間は上限超過の直接の根拠。14401〜14429 秒は丸めると 240 分になり
+    // 「4 時間に収まるのに到達不能」と矛盾して読めるため、切り上げて「4 時間超」を明示する。
+    const evidence = [
+      `確認できた範囲で最も短い計画時間は 約 ${String(minutesCeilFromSeconds(minPlanSeconds))} 分（4 時間超）`,
+    ];
+    if (nearestAccess !== null) {
+      evidence.push(
+        `最寄り入口までのアクセス往復だけで 約 ${String(
+          accessMinutesFromMeters(nearestAccess.distanceMeters) * 2,
+        )} 分`,
+      );
+    }
+    return `${evidence.join("、")}かかるため、最大 4 時間では周回できません。${access}${SUPPORTED_AREA_TEXT}`;
   }
   if (nearestAccess !== null) {
-    evidence.push(
-      `最寄り入口までのアクセス往復だけで 約 ${String(
-        accessMinutesFromMeters(nearestAccess.distanceMeters) * 2,
-      )} 分`,
-    );
+    // minPlanSeconds が無い cap 超過 NO_CONNECTION はアクセス往復だけが数値根拠。
+    // 往復が上限ちょうど（約 240 分）でも単独では超えないため、周回と余裕時間が
+    // 加わって超えることを明示する（往復だけを単独根拠に見せない）。
+    return `最寄り入口までのアクセス往復だけで 約 ${String(
+      accessMinutesFromMeters(nearestAccess.distanceMeters) * 2,
+    )} 分かかるうえ、周回と余裕時間も加わるため、最大 4 時間では周回できません。${access}${SUPPORTED_AREA_TEXT}`;
   }
-  const head = evidence.length > 0 ? `${evidence.join("、")}かかるため、` : "";
-  const access = nearestAccess !== null ? nearestAccessText(nearestAccess) : "";
-  return `${head}最大 4 時間では周回できません。${access}${SUPPORTED_AREA_TEXT}`;
+  return `最大 4 時間では周回できません。${SUPPORTED_AREA_TEXT}`;
 }
 
-/** 候補ゼロの原因分類。復帰導線（時間を広げる / 出発地点を変える）を分けるために使う。 */
-export type NoCandidateCase = "unreachable" | "time_window" | "unsupported_area" | "other";
+/**
+ * TIME_WINDOW の候補ゼロ時に提示する復帰操作。実際に値が変わる操作だけを返す
+ * （値が変わらない操作を成功として告げない）。
+ * - `lowerMinMinutes`: 既知の最短周回が最小時間（下限）で除外されている場合の下限値。
+ *   エンジンの下限判定は `base < minMinutes*60` なので、`baseSecondsFromPlanSeconds` で
+ *   復元した base から「下限以下の最大の分」を求める。
+ * - `widenMaxMinutes`: 最大時間の拡大値。製品上限 240 分では広げられないため `null`。
+ */
+export interface TimeWindowActions {
+  lowerMinMinutes: number | null;
+  widenMaxMinutes: number | null;
+}
+
+export function timeWindowActions(
+  result: SearchResult,
+  minMinutes: number,
+  maxMinutes: number,
+): TimeWindowActions {
+  const widenMaxMinutes =
+    maxMinutes < MAX_PRODUCT_MINUTES
+      ? Math.min(MAX_PRODUCT_MINUTES, Math.max(maxMinutes + 30, 30))
+      : null;
+  let lowerMinMinutes: number | null = null;
+  const planSeconds = result.minPlanSeconds;
+  if (planSeconds !== null && planSeconds <= MAX_PRODUCT_SECONDS) {
+    const next = Math.max(1, Math.floor(baseSecondsFromPlanSeconds(planSeconds) / 60));
+    if (next < minMinutes) {
+      lowerMinMinutes = next;
+    }
+  }
+  return { lowerMinMinutes, widenMaxMinutes };
+}
+
+/** 候補ゼロの原因分類。復帰導線（時間を変える / 出発地点を変える / 再試行）を分けるために使う。 */
+export type NoCandidateCase = "unreachable" | "time_window" | "unsupported_area" | "retry";
 
 /**
  * 候補ゼロ時の原因を分類する。
  * - unreachable: 指定枠が最大 4 時間でも届かない（数値根拠あり）。時間を広げる案内は誤り。
- * - time_window: 指定枠が狭いだけで、広げれば見つかる可能性がある。
+ * - time_window: 指定枠が狭いだけで、時間枠を変えれば見つかる可能性がある。
  * - unsupported_area: 対応範囲・検証済みペア・周回の制約でこの版では作れない。
+ * - retry: 探索打切り（SEARCH_LIMIT）・引き継ぎ除外（NO_HANDOFF）など、時間枠では説明できず
+ *   条件変更や再試行が必要なもの。時間枠を広げれば解決すると偽らない。
  */
 export function classifyNoCandidates(result: SearchResult): NoCandidateCase {
   if (result.reason === "NO_CONNECTION") {
@@ -260,7 +355,7 @@ export function classifyNoCandidates(result: SearchResult): NoCandidateCase {
   if (result.reason === "NO_LOOP" || result.reason === "NO_BILLING_PAIR") {
     return "unsupported_area";
   }
-  return "other";
+  return "retry";
 }
 
 /** Worker error / ステータス文言の一覧（docs/interfaces.md の error.code と対応）。 */
@@ -270,6 +365,8 @@ export function errorMessage(code: string): string {
       return "成果物が期待値と一致しません（ARTIFACT_MISMATCH）。再読み込みしてください。部分データでは探索しません。";
     case "FETCH_FAILED":
       return "成果物の取得に失敗しました（FETCH_FAILED）。再読み込みしてください。";
+    case "RESULT_CONTRACT_MISMATCH":
+      return "探索結果が実行中のエンジンと一致しません（RESULT_CONTRACT_MISMATCH）。再読み込みしてください。";
     case "TIMEOUT":
       return TIMEOUT_TEXT;
     default:

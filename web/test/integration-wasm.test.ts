@@ -30,8 +30,21 @@ function toBinary(bytes: Uint8Array): Uint8Array {
   return bytes;
 }
 
+/**
+ * dist/wasm が現在のエンジン契約（診断フィールド minPlanSeconds）を含むか。
+ * 存在するだけで再ビルドしないと、旧ビルドが残ったローカルで
+ * 「欠落を undefined と誤判定する」失敗が再現しないまま素通りする（review R2-F1）。
+ */
+async function wasmHasDiagnosticField(): Promise<boolean> {
+  const wasmPath = new URL("shutoko_routing_bg.wasm", wasmDir);
+  if (!existsSync(wasmPath)) {
+    return false;
+  }
+  return Buffer.from(await readFile(wasmPath)).includes("minPlanSeconds");
+}
+
 beforeAll(async () => {
-  if (!existsSync(gluePath) || !existsSync(new URL("shutoko_routing_bg.wasm", wasmDir))) {
+  if (!existsSync(gluePath) || !(await wasmHasDiagnosticField())) {
     execFileSync("bash", ["scripts/build-wasm.sh"], {
       cwd: fileURLToPathSafe(root),
       stdio: "inherit",
@@ -233,9 +246,11 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       expect(result.status).toBe("no_candidates");
       expect(result.reason).toBe("TIME_WINDOW");
       // 60 分窓では候補にならないが、240 分以内の合法周回の最短計画は診断として返る。
-      expect(result.minPlanSeconds).not.toBeNull();
-      expect(result.minPlanSeconds ?? 0).toBeGreaterThan(60 * 60);
-      expect(result.minPlanSeconds ?? 0).toBeLessThanOrEqual(240 * 60);
+      // not.toBeNull() は undefined を通す（undefined !== null）ため、型 assertion で固定する。
+      expect(typeof result.minPlanSeconds).toBe("number");
+      const minPlanSeconds = result.minPlanSeconds as number;
+      expect(minPlanSeconds).toBeGreaterThan(60 * 60);
+      expect(minPlanSeconds).toBeLessThanOrEqual(240 * 60);
     } finally {
       pg.free();
     }

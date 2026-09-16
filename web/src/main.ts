@@ -20,6 +20,7 @@ import {
   recommendedLabel,
   statusMessage,
   timeBreakdownText,
+  timeWindowActions,
   toCardModel,
   validateAddressQuery,
   validateInputFields,
@@ -235,9 +236,17 @@ function clearRecovery(): void {
   el.recovery.replaceChildren();
 }
 
-/** 再読み込みでしか復帰できない成果物不整合・通信失敗の案内（docs/requirements.md:43）。 */
+/**
+ * 再読み込みでしか復帰できない成果物不整合・通信失敗・探索結果契約不一致の案内
+ * （docs/requirements.md:43）。部分データでは探索しない。
+ */
 function showReloadRecovery(code: string): void {
-  if (code !== "ARTIFACT_MISMATCH" && code !== "FETCH_FAILED" && code !== "WASM_ERROR") {
+  if (
+    code !== "ARTIFACT_MISMATCH" &&
+    code !== "FETCH_FAILED" &&
+    code !== "WASM_ERROR" &&
+    code !== "RESULT_CONTRACT_MISMATCH"
+  ) {
     return;
   }
   const p = document.createElement("p");
@@ -252,25 +261,96 @@ function showReloadRecovery(code: string): void {
   revealRecovery(button);
 }
 
-/** 候補なし・時間枠不一致からの復帰（時間を広げる案内。自動変更しない）。 */
-function showTimeWindowRecovery(text: string): void {
+/**
+ * 時間枠不一致からの復帰。実際に値が変わる操作（最小時間を下げる / 上限を広げる）だけを並べる。
+ * 上限が製品上限 240 分のときは「上限を広げる」を出さない（値が変わらないため）。
+ * 時間を変えても解決を証明できないとき（打切り等）は、値の変更を成功として告げず出発地点の
+ * 見直しを案内する（review R2-01）。
+ */
+function showTimeWindowRecovery(result: SearchResult, minMinutes: number, maxMinutes: number): void {
+  const actions = timeWindowActions(result, minMinutes, maxMinutes);
+  if (actions.lowerMinMinutes === null && actions.widenMaxMinutes === null) {
+    showAreaRecovery(
+      "指定時間枠に収まる周回候補が見つかりませんでした。時間枠を広げても見つかるとは限らないため、出発地点や条件を見直してください。",
+    );
+    return;
+  }
+  const buttons: HTMLButtonElement[] = [];
+  const hints: string[] = [];
+  if (actions.widenMaxMinutes !== null) {
+    buttons.push(createWidenMaxButton());
+    hints.push("時間の上限を広げる");
+  }
+  if (actions.lowerMinMinutes !== null) {
+    buttons.push(createLowerMinButton(actions.lowerMinMinutes));
+    hints.push(`最小時間を ${String(actions.lowerMinMinutes)} 分に下げる`);
+  }
   const p = document.createElement("p");
-  p.textContent = text;
+  p.textContent = `指定時間枠に収まる周回候補が見つかりませんでした。${hints.join("か、")}と見つかる可能性があります。`;
+  el.recovery.replaceChildren(p, wrapActions(...buttons));
+  revealRecovery(buttons[0] ?? null);
+}
+
+/** 最小時間を下げるボタン。値を実際に変えてから再検索を促す（結果の保証はしない）。 */
+function createLowerMinButton(nextMinMinutes: number): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = `最小時間を ${String(nextMinMinutes)} 分に下げる`;
+  button.addEventListener("click", () => {
+    el.minMinutes.value = String(nextMinMinutes);
+    clearRecovery();
+    setStatus(`最小時間を ${String(nextMinMinutes)} 分に下げました。再検索してください。`);
+    el.minMinutes.focus();
+  });
+  return button;
+}
+
+/** 最大時間を広げるボタン（従来の導線。製品上限 240 分に達しているときは作らない）。 */
+function createWidenMaxButton(): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "時間の上限を広げる";
   button.addEventListener("click", () => {
     const current = Number(el.maxMinutes.value);
-    const next = Math.min(240, Math.max(current + 30, 30));
-    el.maxMinutes.value = String(next);
+    const next = Math.min(MAX_PRODUCT_MINUTES, Math.max(current + 30, 30));
     clearRecovery();
-    if (hasSearched) {
+    if (next !== current) {
+      el.maxMinutes.value = String(next);
       setStatus(`最大時間を ${String(next)} 分に広げました。再検索してください。`);
+    } else {
+      // 値が変わらない操作を成功として告げない（上限 240 分では広げられない）。
+      setStatus(`最大時間はすでに上限（${String(MAX_PRODUCT_MINUTES)} 分）です。出発地点や条件を見直してください。`);
     }
     el.maxMinutes.focus();
   });
-  el.recovery.replaceChildren(p, wrapActions(button));
-  revealRecovery(button);
+  return button;
+}
+
+/**
+ * 候補ゼロが時間枠では説明できないとき（探索打切り・引き継ぎ除外など）の復帰導線。
+ * 時間枠を広げれば解決すると偽らず、再試行・住所検索・出発地点変更の最小限の導線を出す
+ * （review R2-F3）。SEARCH_LIMIT の打切りの意味は status 文言に残す。
+ */
+function showRetryRecovery(message: string): void {
+  const p = document.createElement("p");
+  p.textContent = `${message}出発地点や条件を変えるか、もう一度検索してください。`;
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.textContent = "もう一度検索";
+  retry.addEventListener("click", () => {
+    clearRecovery();
+    startSearch();
+  });
+  const pick = document.createElement("button");
+  pick.type = "button";
+  pick.className = "secondary";
+  pick.textContent = "地図で出発地点を指定";
+  pick.addEventListener("click", () => {
+    clearRecovery();
+    enterPickMode();
+  });
+  el.recovery.replaceChildren(p, wrapActions(retry, wrapSecondaryAddressButton(), pick));
+  revealRecovery(retry);
 }
 
 function wrapActions(...buttons: HTMLButtonElement[]): HTMLElement {
@@ -768,12 +848,12 @@ function renderResult(result: SearchResult): void {
         showAreaRecovery(SUPPORTED_AREA_TEXT);
         return;
       case "time_window":
-        // 指定枠が狭いだけの場合は、従来どおり時間を広げる導線を出す（自動変更しない）。
-        showTimeWindowRecovery(
-          "指定条件に収まる周回候補が見つかりませんでした。時間の範囲を広げると見つかる可能性があります。",
-        );
+        // 指定枠が原因の場合は、実際に値が変わる操作（最小を下げる / 上限を広げる）だけを出す。
+        showTimeWindowRecovery(result, min, max);
         return;
-      case "other":
+      case "retry":
+        // 時間枠では説明できない候補ゼロ（SEARCH_LIMIT / NO_HANDOFF 等）。行き止まりにしない。
+        showRetryRecovery(statusMessage(result, min, max));
         return;
     }
   }

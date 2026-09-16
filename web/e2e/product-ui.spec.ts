@@ -797,3 +797,28 @@ test("(27) prefers-reduced-motion では座標確定の地図追従がアニメ�
     expect(markerBox.y + markerBox.height).toBeLessThanOrEqual(mapBox.y + mapBox.height + 1);
   }
 });
+
+test("(28) 240/240 では上限を広げず、最小時間を下げる導線で値が実際に変わり再検索できる", async ({ page }) => {
+  // 大手町: 確認できた範囲で最も短い周回は約 28 分（plan 1696s）で下限 240 分に届かない。
+  // 上限は既に製品上限 240 分なので「時間の上限を広げる」を出さず、最小時間を下げて
+  // 実際に値を変更する（review R2-01: 240 分へ「広げました」と偽る旧導線の回帰防止）。
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
+
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  await expect(page.locator("#status")).toContainText("候補がありません");
+  const recovery = page.locator("#recovery-actions");
+  await expect(recovery).toBeVisible();
+  // 上限 240 分では拡大操作（値が変わらない）を出さない。
+  await expect(recovery.locator("button", { hasText: "時間の上限を広げる" })).toHaveCount(0);
+  const lower = recovery.locator("button", { hasText: "最小時間を 23 分に下げる" });
+  await expect(lower).toBeVisible();
+
+  await lower.click();
+  // 値が実際に変わる（240 → 23）。上限は変わらない。
+  await expect(page.locator("#min-minutes")).toHaveValue("23");
+  await expect(page.locator("#max-minutes")).toHaveValue("240");
+
+  // 次の検索が実行でき、下限を下げたことで候補が返る。
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+});

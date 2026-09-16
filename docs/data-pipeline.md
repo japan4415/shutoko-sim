@@ -182,8 +182,12 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
   - `boundary_in`: NEXCO（東名・中央・東北・常磐・関越・東関東・京葉・第三京浜・東京外環・東京湾アクアライン等）から首都高速へ流入する境界 JCT
   - `boundary_out`: 首都高速から他社高速道路へ流出する境界 JCT
 - **方向・ハーフIC制限の明示**:
-  - 各ランプには路線（`route`）、方向（`direction`: `inner`, `outer`, `inbound`, `outbound`, `eastbound`, `westbound`, `northbound`, `southbound`, `both` 等）を付与。
-  - 入口専用・出口専用のハーフ IC、ETC 専用ランプ（`restrictions.etcOnly`）、大型車通行禁止（`restrictions.largeVehicleBanned`）などの制約を構造化。
+  - 各ランプには路線（`route`）、方向（`direction`: `inner`, `outer`, `inbound`, `outbound`, `east`, `west`, `north`, `south`）を付与。
+  - 入口専用・出口専用のハーフ IC、ETC 専用ランプなどの制約を構造化。
+- **事実と推定・導出値の厳格な分離（Provenance & Verification）**:
+  - **公式確認事実（Verified Facts）**: 施設名（`facilityName`）、路線（`route`）、方向（`direction`）、ランプ種別（`kind`）、供用状態（`status`）は、首都高速道路公式ウェブサイト（`https://www.shutoko.jp/use/network/`）および各路線案内から確認された正本事実である。
+  - **位置座標の導出（Derived Coordinates）**: 公式サイトには緯度経度の数値データは掲載されていない。各ランプの `lat`, `lon` は `data/osm-ramp-bindings.json` で紐付けられた OpenStreetMap の実ノード・ウェイから導出・照合された値であり、`coordinateSource: "osm"`, `coordinateStatus: "derived"` として明確に出処を区別する。
+  - **利用制約の検証状況（Restriction Verification）**: 首都高では ETC 専用料金所の順次導入（35箇所以上）が進行中であるが、全ランプに対する制約調査は完了していない。そのため、未全数調査のランプは `restrictionStatus: "unverified"` として明示的にモデル化し、公式確認済みのランプ（神田橋、馬場等）のみ `restrictionStatus: "verified"` とする。制約が空配列 `[]` であることをもって「現金利用可能であることが公式確認された」と誤認させない。
 
 ## 7. OSM ランプバインディング（`data/osm-ramp-bindings.json`）
 
@@ -221,7 +225,8 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
   - 上限料金: 1,950 円（普通車 ETC 上限）
 - **料金距離と実走行距離のスキーマ分離**:
   - `shutoko_distance_meters`: 首都高速上の実際の走行距離（エッジ長の積算値）。周回ループを含むため数十〜百キロ超になり得る。
-  - `toll.billing_distance_meters`: 入口〜出口間の最短料金距離（OD テーブルまたはベースライン最短経路長）。
+  - `toll.billing_distance_meters`: 入口〜出口間の公称料金距離（OD テーブルまたはベースライン最短経路長）。
+  - **OSM 幾何距離を公称料金距離として扱わない規律**: グラフ幾何から計算される実走距離（`shutoko_distance_meters`）を公称料金距離として勝手に流用しない。料金計算は `data/od-tariffs.json` の検証済み OD ペアまたは公式料金距離テーブルに明示された値のみを根拠とし、未定義区間では安易な幾何距離代用を行わず未計算（None）として誠実にモデル化する。
   - 周回走行を行っても、料金距離は入口と出口の組み合わせによって決まるため、1区間先退出時は下限 300 円で周回が可能。
 - **検証済み OD ペア**:
   - 頻出・代表的な OD ペア（C1 各ランプ、八重洲線接続、主要放射線連絡等）について公式料金距離および料金額を検証済みデータとして保持。
@@ -251,4 +256,3 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 - コミット済みの `fixtures/osm/shutoko-c1.json` を入力とし、外部 Overpass API にはアクセスしない（外部ネットワーク非依存）。
 - `scripts/generate-fixtures.sh` を実行後、`git diff --exit-code` および `git status --porcelain` でコミット済みの `fixtures/generated/` との差分が一切生じないことを検証する。
 - グラフビルダーのロジックや課金シードの更新時は、再生成された `fixtures/generated/` を同一 PR でコミットする必要があり、意図しない出力の乖離やリグレッションを防ぐ。
-

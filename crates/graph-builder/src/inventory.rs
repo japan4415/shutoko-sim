@@ -26,6 +26,12 @@ pub struct CanonicalRampInventoryItem {
     pub status: String,
     pub source: String,
     pub source_date: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordinate_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordinate_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restriction_status: Option<String>,
 }
 
 /// The root structure of `data/ramp-inventory.json`.
@@ -35,6 +41,8 @@ pub struct RampInventoryFile {
     pub version: u32,
     pub source: String,
     pub source_date: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordinate_source: Option<String>,
     pub description: String,
     pub ramps: Vec<CanonicalRampInventoryItem>,
 }
@@ -162,6 +170,28 @@ pub fn validate_ramp_inventory(inv: &RampInventoryFile) -> Result<(), Vec<String
         }
         if r.direction.is_empty() {
             errors.push(format!("ramp {} has empty direction", r.ramp_id));
+        }
+        if r.source.is_empty() {
+            errors.push(format!("ramp {} has empty source", r.ramp_id));
+        }
+        if r.source_date.is_empty() {
+            errors.push(format!("ramp {} has empty source_date", r.ramp_id));
+        }
+        if let Some(ref cs) = r.coordinate_status {
+            if !matches!(cs.as_str(), "derived" | "verified" | "unknown") {
+                errors.push(format!(
+                    "ramp {} has unrecognized coordinate_status '{}'",
+                    r.ramp_id, cs
+                ));
+            }
+        }
+        if let Some(ref rs) = r.restriction_status {
+            if !matches!(rs.as_str(), "verified" | "unverified" | "unknown") {
+                errors.push(format!(
+                    "ramp {} has unrecognized restriction_status '{}'",
+                    r.ramp_id, rs
+                ));
+            }
         }
 
         // Tokyo/Kanagawa/Saitama coordinate bounds roughly 35.0..=36.2 lat, 139.0..=140.5 lon
@@ -495,27 +525,43 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
+    fn find_data_file(relative: &str) -> std::path::PathBuf {
+        let p1 = Path::new(relative);
+        if p1.exists() {
+            return p1.to_path_buf();
+        }
+        let p2 = Path::new("../../").join(relative);
+        if p2.exists() {
+            return p2;
+        }
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let p3 = manifest_dir.join("../../").join(relative);
+        if p3.exists() {
+            return p3;
+        }
+        panic!("data file '{}' not found in test search paths", relative);
+    }
+
     #[test]
     fn test_validate_real_inventory_file() {
-        let path = Path::new("../../data/ramp-inventory.json");
-        if !path.exists() {
-            // Check from repo root
-            let alt = Path::new("data/ramp-inventory.json");
-            if !alt.exists() {
-                return;
-            }
-        }
-        let real_path = if path.exists() {
-            path
-        } else {
-            Path::new("data/ramp-inventory.json")
-        };
-        let content = fs::read_to_string(real_path).expect("read ramp-inventory.json");
+        let real_path = find_data_file("data/ramp-inventory.json");
+        let content = fs::read_to_string(&real_path).expect("read ramp-inventory.json");
         let inv: RampInventoryFile = serde_json::from_str(&content).expect("parse ramp-inventory");
         let res = validate_ramp_inventory(&inv);
         assert!(res.is_ok(), "ramp inventory validation failed: {:?}", res);
         assert_eq!(inv.ramps.len(), 339, "expected 339 total canonical ramps");
 
+        // Verify uniqueness of ramp_id
+        let mut seen_ids = HashSet::new();
+        for r in &inv.ramps {
+            assert!(
+                seen_ids.insert(&r.ramp_id),
+                "duplicate ramp_id: {}",
+                r.ramp_id
+            );
+        }
+
+        // Verify breakdown by kind: 156 general entries, 159 general exits, 12 boundary in, 12 boundary out
         let general_entries = inv
             .ramps
             .iter()
@@ -537,19 +583,71 @@ mod tests {
             .filter(|r| r.kind == RampKind::BoundaryOut)
             .count();
 
-        assert_eq!(general_entries, 156);
-        assert_eq!(general_exits, 159);
-        assert_eq!(boundary_in, 12);
-        assert_eq!(boundary_out, 12);
+        assert_eq!(general_entries, 156, "expected exactly 156 general entries");
+        assert_eq!(general_exits, 159, "expected exactly 159 general exits");
+        assert_eq!(boundary_in, 12, "expected exactly 12 boundary in ramps");
+        assert_eq!(boundary_out, 12, "expected exactly 12 boundary out ramps");
+        assert_eq!(
+            general_entries + general_exits + boundary_in + boundary_out,
+            339,
+            "sum of kinds must equal 339"
+        );
+
+        // Verify provenance separation:
+        // - source must be non-empty official URL
+        // - coordinateSource must be OSM
+        // - coordinateStatus must be derived
+        // - restrictionStatus must distinguish verified vs unverified
+        let mut verified_restr_count = 0;
+        let mut unverified_restr_count = 0;
+        for r in &inv.ramps {
+            assert!(!r.source.is_empty(), "ramp {} missing source", r.ramp_id);
+            assert_eq!(
+                r.coordinate_source.as_deref(),
+                Some("osm"),
+                "ramp {} coordinateSource should be 'osm'",
+                r.ramp_id
+            );
+            assert_eq!(
+                r.coordinate_status.as_deref(),
+                Some("derived"),
+                "ramp {} coordinateStatus should be 'derived'",
+                r.ramp_id
+            );
+            match r.restriction_status.as_deref() {
+                Some("verified") => {
+                    assert!(
+                        !r.restrictions.is_empty(),
+                        "ramp {} marked verified but has empty restrictions",
+                        r.ramp_id
+                    );
+                    verified_restr_count += 1;
+                }
+                Some("unverified") => {
+                    unverified_restr_count += 1;
+                }
+                other => panic!(
+                    "ramp {} has unexpected restriction_status: {:?}",
+                    r.ramp_id, other
+                ),
+            }
+        }
+        assert_eq!(verified_restr_count, 4);
+        assert_eq!(unverified_restr_count, 335);
+
+        // Verify boundary JCT pairs (12 in + 12 out = 24 boundary ramps)
+        let boundary_ramps: Vec<_> = inv
+            .ramps
+            .iter()
+            .filter(|r| matches!(r.kind, RampKind::BoundaryIn | RampKind::BoundaryOut))
+            .collect();
+        assert_eq!(boundary_ramps.len(), 24);
     }
 
     #[test]
     fn test_validate_real_bindings_file() {
-        let inv_path = Path::new("data/ramp-inventory.json");
-        let bin_path = Path::new("data/osm-ramp-bindings.json");
-        if !inv_path.exists() || !bin_path.exists() {
-            return;
-        }
+        let inv_path = find_data_file("data/ramp-inventory.json");
+        let bin_path = find_data_file("data/osm-ramp-bindings.json");
         let inv_str = fs::read_to_string(inv_path).unwrap();
         let bin_str = fs::read_to_string(bin_path).unwrap();
         let inv: RampInventoryFile = serde_json::from_str(&inv_str).unwrap();
@@ -562,11 +660,8 @@ mod tests {
 
     #[test]
     fn test_validate_real_tariffs_file() {
-        let inv_path = Path::new("data/ramp-inventory.json");
-        let tar_path = Path::new("data/od-tariffs.json");
-        if !inv_path.exists() || !tar_path.exists() {
-            return;
-        }
+        let inv_path = find_data_file("data/ramp-inventory.json");
+        let tar_path = find_data_file("data/od-tariffs.json");
         let inv_str = fs::read_to_string(inv_path).unwrap();
         let tar_str = fs::read_to_string(tar_path).unwrap();
         let inv: RampInventoryFile = serde_json::from_str(&inv_str).unwrap();
@@ -583,6 +678,7 @@ mod tests {
             version: 1,
             source: "test".into(),
             source_date: "2026-09-16".into(),
+            coordinate_source: Some("osm".into()),
             description: "test".into(),
             ramps: vec![
                 CanonicalRampInventoryItem {
@@ -598,6 +694,9 @@ mod tests {
                     status: "active".into(),
                     source: "test".into(),
                     source_date: "2026-09-16".into(),
+                    coordinate_source: Some("osm".into()),
+                    coordinate_status: Some("derived".into()),
+                    restriction_status: Some("unverified".into()),
                 },
                 CanonicalRampInventoryItem {
                     ramp_id: "ramp:test:1".into(),
@@ -612,6 +711,9 @@ mod tests {
                     status: "active".into(),
                     source: "test".into(),
                     source_date: "2026-09-16".into(),
+                    coordinate_source: Some("osm".into()),
+                    coordinate_status: Some("derived".into()),
+                    restriction_status: Some("unverified".into()),
                 },
             ],
         };
@@ -624,6 +726,7 @@ mod tests {
             version: 1,
             source: "test".into(),
             source_date: "2026-09-16".into(),
+            coordinate_source: Some("osm".into()),
             description: "test".into(),
             ramps: vec![CanonicalRampInventoryItem {
                 ramp_id: "ramp:test:osaka".into(),
@@ -638,6 +741,38 @@ mod tests {
                 status: "active".into(),
                 source: "test".into(),
                 source_date: "2026-09-16".into(),
+                coordinate_source: Some("osm".into()),
+                coordinate_status: Some("derived".into()),
+                restriction_status: Some("unverified".into()),
+            }],
+        };
+        assert!(validate_ramp_inventory(&inv).is_err());
+    }
+
+    #[test]
+    fn test_reject_invalid_provenance_status() {
+        let inv = RampInventoryFile {
+            version: 1,
+            source: "test".into(),
+            source_date: "2026-09-16".into(),
+            coordinate_source: Some("osm".into()),
+            description: "test".into(),
+            ramps: vec![CanonicalRampInventoryItem {
+                ramp_id: "ramp:test:invalid".into(),
+                facility_id: "fac:test:invalid".into(),
+                facility_name: "Invalid".into(),
+                route: "C1".into(),
+                direction: "inner".into(),
+                kind: RampKind::GeneralEntry,
+                lat: 35.68,
+                lon: 139.76,
+                restrictions: vec![],
+                status: "active".into(),
+                source: "test".into(),
+                source_date: "2026-09-16".into(),
+                coordinate_source: Some("osm".into()),
+                coordinate_status: Some("bogus_status".into()),
+                restriction_status: Some("unverified".into()),
             }],
         };
         assert!(validate_ramp_inventory(&inv).is_err());

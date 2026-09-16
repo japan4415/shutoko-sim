@@ -121,11 +121,72 @@ describe("ramps.ts: ランプ台帳の検証・正規化・契約チェック", 
       /routableEntryCount 不整合/,
     );
 
-    const badIds: EndpointCapabilities = {
-      ...manifest.coverage.endpointCapabilities,
-      routableEntryRampIds: ["ramp:non-existent-id"],
+    const correct = manifest.coverage.endpointCapabilities as EndpointCapabilities;
+    const missingId = { ...correct, routableEntryRampIds: correct.routableEntryRampIds.slice(1) };
+    expect(() => validateRampsArtifact(rawRamps, missingId)).toThrowError(/件数不整合/);
+
+    const duplicateId = {
+      ...correct,
+      routableEntryRampIds: [correct.routableEntryRampIds[0], ...correct.routableEntryRampIds.slice(0, -1)],
     };
-    expect(() => validateRampsArtifact(rawRamps, badIds)).toThrowError(/不一致/);
+    expect(() => validateRampsArtifact(rawRamps, duplicateId)).toThrowError(/重複 ID/);
+
+    const extraId = {
+      ...correct,
+      routableEntryRampIds: [...correct.routableEntryRampIds, correct.routableExitRampIds[0]],
+    };
+    expect(() => validateRampsArtifact(rawRamps, extraId)).toThrowError(/件数不整合/);
+
+    const missingArray = { ...correct } as Record<string, unknown>;
+    delete missingArray.structuralNoLoopExitRampIds;
+    expect(() => validateRampsArtifact(rawRamps, missingArray)).toThrowError(/文字列配列/);
+
+    expect(() => validateRampsArtifact(rawRamps, { ...correct, routableEntryCount: 1.5 })).toThrowError(
+      /有限非負整数/,
+    );
+  });
+
+  it("台帳宣言件数、bound 型、routable binding の交差制約を改ざん時に拒否する", async () => {
+    const { rawRamps, manifest } = await loadFixtureRampsAndManifest();
+    const capabilities = manifest.coverage.endpointCapabilities;
+    const clone = () => JSON.parse(JSON.stringify(rawRamps));
+
+    const badTotal = clone();
+    badTotal.totalRamps = 1;
+    expect(() => validateRampsArtifact(badTotal, capabilities)).toThrowError(/totalRamps 不整合/);
+
+    const badBoundCount = clone();
+    badBoundCount.boundRamps = 0;
+    expect(() => validateRampsArtifact(badBoundCount, capabilities)).toThrowError(/boundRamps 不整合/);
+
+    const stringBound = clone();
+    stringBound.ramps[0].bound = "true";
+    expect(() => validateRampsArtifact(stringBound, capabilities)).toThrowError(/bound が boolean/);
+
+    for (const mutate of [
+      (item: Record<string, unknown>) => { item.bound = false; },
+      (item: Record<string, unknown>) => { item.supportState = "unsupported"; },
+      (item: Record<string, unknown>) => { delete item.edgeId; },
+      (item: Record<string, unknown>) => { delete item.nodeId; },
+      (item: Record<string, unknown>) => { delete item.mainlineNodeId; },
+    ]) {
+      const badRoutable = clone();
+      mutate(badRoutable.ramps[0]);
+      expect(() => validateRampsArtifact(badRoutable, capabilities)).toThrowError(/不整合|不正/);
+    }
+
+    const badUnsupported = clone();
+    const unsupported = badUnsupported.ramps.find((item: RampItem) => item.routingCapability === "unsupported");
+    unsupported.bound = true;
+    expect(() => validateRampsArtifact(badUnsupported, capabilities)).toThrowError(/unsupported 分類/);
+
+    const emptyRequired = clone();
+    emptyRequired.ramps[0].facilityId = "";
+    expect(() => validateRampsArtifact(emptyRequired, capabilities)).toThrowError(/基本属性/);
+
+    const badCoordinate = clone();
+    badCoordinate.ramps[0].lat = 91;
+    expect(() => validateRampsArtifact(badCoordinate, capabilities)).toThrowError(/有限数値/);
   });
 });
 

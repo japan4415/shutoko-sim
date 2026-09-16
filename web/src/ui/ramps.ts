@@ -40,8 +40,8 @@ export interface EndpointCapabilities {
   structuralNoLoopExitCount: number;
   routableEntryRampIds: string[];
   routableExitRampIds: string[];
-  structuralNoLoopEntryRampIds?: string[];
-  structuralNoLoopExitRampIds?: string[];
+  structuralNoLoopEntryRampIds: string[];
+  structuralNoLoopExitRampIds: string[];
 }
 
 export interface ManifestArtifactEntry {
@@ -55,7 +55,7 @@ export interface ManifestData {
   releaseId: string;
   artifacts?: ManifestArtifactEntry[];
   coverage?: {
-    endpointCapabilities?: EndpointCapabilities;
+    endpointCapabilities?: unknown;
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -65,8 +65,8 @@ export interface RampsArtifact {
   schemaVersion: number;
   releaseId: string;
   sourceDate?: string;
-  totalRamps?: number;
-  boundRamps?: number;
+  totalRamps: number;
+  boundRamps: number;
   ramps: RampItem[];
 }
 
@@ -212,12 +212,93 @@ const ALLOWED_CAPABILITIES = new Set<RoutingCapability>([
   "not_routable",
 ]);
 
+const CAPABILITY_COUNT_KEYS = [
+  "routableEntryCount",
+  "routableExitCount",
+  "structuralNoLoopEntryCount",
+  "structuralNoLoopExitCount",
+] as const;
+
+const CAPABILITY_ID_KEYS = [
+  "routableEntryRampIds",
+  "routableExitRampIds",
+  "structuralNoLoopEntryRampIds",
+  "structuralNoLoopExitRampIds",
+] as const;
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function requireBindingId(
+  ramp: Record<string, unknown>,
+  key: "edgeId" | "nodeId" | "mainlineNodeId",
+): string {
+  const value = ramp[key];
+  if (!isNonEmptyString(value)) {
+    throw new PipelineError("ARTIFACT_MISMATCH", `ramps.json ${String(ramp.id)}.${key} が不正です`);
+  }
+  return value;
+}
+
+function rejectUnexpectedBindingIds(ramp: Record<string, unknown>): void {
+  for (const key of ["edgeId", "nodeId", "mainlineNodeId"] as const) {
+    if (ramp[key] !== undefined) {
+      throw new PipelineError(
+        "ARTIFACT_MISMATCH",
+        `ramps.json ${String(ramp.id)}.${key} は unbound 端点に指定できません`,
+      );
+    }
+  }
+}
+
+/** manifest の endpointCapabilities を配信信頼境界で厳格検証する。 */
+export function validateEndpointCapabilities(raw: unknown): EndpointCapabilities {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new PipelineError("ARTIFACT_MISMATCH", "manifest endpointCapabilities がオブジェクトではありません");
+  }
+  const obj = raw as Record<string, unknown>;
+  for (const key of CAPABILITY_COUNT_KEYS) {
+    const value = obj[key];
+    if (!Number.isSafeInteger(value) || (value as number) < 0) {
+      throw new PipelineError(
+        "ARTIFACT_MISMATCH",
+        `manifest endpointCapabilities.${key} が有限非負整数ではありません`,
+      );
+    }
+  }
+  for (const key of CAPABILITY_ID_KEYS) {
+    const value = obj[key];
+    if (!Array.isArray(value) || value.some((id) => !isNonEmptyString(id))) {
+      throw new PipelineError("ARTIFACT_MISMATCH", `manifest endpointCapabilities.${key} が非空文字列配列ではありません`);
+    }
+    if (new Set(value).size !== value.length) {
+      throw new PipelineError("ARTIFACT_MISMATCH", `manifest endpointCapabilities.${key} に重複 ID があります`);
+    }
+  }
+  return obj as unknown as EndpointCapabilities;
+}
+
+function assertExactIdSet(label: string, actualIds: string[], manifestIds: string[]): void {
+  if (actualIds.length !== manifestIds.length) {
+    throw new PipelineError(
+      "ARTIFACT_MISMATCH",
+      `manifest ${label} 件数不整合（expected ${String(actualIds.length)}, got ${String(manifestIds.length)}）`,
+    );
+  }
+  const manifestSet = new Set(manifestIds);
+  const missing = actualIds.find((id) => !manifestSet.has(id));
+  if (missing !== undefined) {
+    throw new PipelineError("ARTIFACT_MISMATCH", `manifest ${label} に台帳 ID ${missing} がありません`);
+  }
+}
+
 /**
  * ランプ台帳オブジェクトの整合性を検証し、不正があれば PipelineError を投げる（fail closed）。
  */
 export function validateRampsArtifact(
   raw: unknown,
-  capabilities?: EndpointCapabilities,
+  capabilities?: unknown,
   expectedReleaseId?: string,
 ): RampItem[] {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
@@ -246,6 +327,12 @@ export function validateRampsArtifact(
   if (!Array.isArray(obj.ramps) || obj.ramps.length === 0) {
     throw new PipelineError("ARTIFACT_MISMATCH", "ramps.json ramps 配列が空または存在しません");
   }
+  if (!Number.isSafeInteger(obj.totalRamps) || (obj.totalRamps as number) < 0) {
+    throw new PipelineError("ARTIFACT_MISMATCH", "ramps.json totalRamps が有限非負整数ではありません");
+  }
+  if (!Number.isSafeInteger(obj.boundRamps) || (obj.boundRamps as number) < 0) {
+    throw new PipelineError("ARTIFACT_MISMATCH", "ramps.json boundRamps が有限非負整数ではありません");
+  }
 
   const seenIds = new Set<string>();
   const validatedRamps: RampItem[] = [];
@@ -265,7 +352,11 @@ export function validateRampsArtifact(
     }
     seenIds.add(r.id);
 
-    if (typeof r.facilityId !== "string" || typeof r.name !== "string" || typeof r.route !== "string" || typeof r.direction !== "string") {
+    if (
+      ![r.facilityId, r.name, r.route, r.direction, r.supportReason, r.routingCapabilityReason].every(
+        isNonEmptyString,
+      )
+    ) {
       throw new PipelineError("ARTIFACT_MISMATCH", `ramps.json ramps[${i}] の基本属性が不正です`);
     }
 
@@ -281,103 +372,139 @@ export function validateRampsArtifact(
     if (!ALLOWED_CAPABILITIES.has(r.routingCapability as RoutingCapability)) {
       throw new PipelineError("ARTIFACT_MISMATCH", `ramps.json 未知の routingCapability: ${String(r.routingCapability)} (${r.id})`);
     }
-    if (typeof r.lat !== "number" || !Number.isFinite(r.lat) || typeof r.lon !== "number" || !Number.isFinite(r.lon)) {
+    if (
+      typeof r.lat !== "number" ||
+      !Number.isFinite(r.lat) ||
+      r.lat < -90 ||
+      r.lat > 90 ||
+      typeof r.lon !== "number" ||
+      !Number.isFinite(r.lon) ||
+      r.lon < -180 ||
+      r.lon > 180
+    ) {
       throw new PipelineError("ARTIFACT_MISMATCH", `ramps.json ramps[${i}] 座標が有限数値ではありません (${r.id})`);
+    }
+    if (typeof r.bound !== "boolean") {
+      throw new PipelineError("ARTIFACT_MISMATCH", `ramps.json ramps[${i}].bound が boolean ではありません (${r.id})`);
+    }
+
+    const generalKind = r.kind === "general_entry" || r.kind === "general_exit";
+    let edgeId: string | undefined;
+    let nodeId: string | undefined;
+    let mainlineNodeId: string | undefined;
+    if (r.routingCapability === "routable" || r.routingCapability === "structural_no_loop") {
+      if (!generalKind || r.status !== "active" || r.supportState !== "verified_bound" || r.bound !== true) {
+        throw new PipelineError(
+          "ARTIFACT_MISMATCH",
+          `ramps.json ${r.id} の bound/routable 分類が不整合です`,
+        );
+      }
+      edgeId = requireBindingId(r, "edgeId");
+      nodeId = requireBindingId(r, "nodeId");
+      mainlineNodeId = requireBindingId(r, "mainlineNodeId");
+    } else if (r.routingCapability === "unsupported") {
+      if (!generalKind || r.status !== "active" || r.supportState !== "unsupported" || r.bound !== false) {
+        throw new PipelineError("ARTIFACT_MISMATCH", `ramps.json ${r.id} の unsupported 分類が不整合です`);
+      }
+      rejectUnexpectedBindingIds(r);
+    } else {
+      const validNotRoutable =
+        r.supportState === "not_routable" &&
+        r.bound === false &&
+        ((generalKind && r.status === "closed") || (!generalKind && r.status === "active"));
+      if (!validNotRoutable) {
+        throw new PipelineError("ARTIFACT_MISMATCH", `ramps.json ${r.id} の not_routable 分類が不整合です`);
+      }
+      rejectUnexpectedBindingIds(r);
     }
 
     validatedRamps.push({
       id: r.id,
-      facilityId: r.facilityId,
-      name: r.name,
-      route: r.route,
-      direction: r.direction,
+      facilityId: r.facilityId as string,
+      name: r.name as string,
+      route: r.route as string,
+      direction: r.direction as string,
       kind: r.kind as RampKind,
       lat: r.lat,
       lon: r.lon,
       status: r.status as RampStatus,
       supportState: r.supportState as SupportState,
-      supportReason: typeof r.supportReason === "string" ? r.supportReason : "",
+      supportReason: r.supportReason as string,
       routingCapability: r.routingCapability as RoutingCapability,
-      routingCapabilityReason: typeof r.routingCapabilityReason === "string" ? r.routingCapabilityReason : "",
-      bound: Boolean(r.bound),
-      edgeId: typeof r.edgeId === "string" ? r.edgeId : undefined,
-      nodeId: typeof r.nodeId === "string" ? r.nodeId : undefined,
-      mainlineNodeId: typeof r.mainlineNodeId === "string" ? r.mainlineNodeId : undefined,
+      routingCapabilityReason: r.routingCapabilityReason as string,
+      bound: r.bound,
+      edgeId,
+      nodeId,
+      mainlineNodeId,
     });
+  }
+
+  if (obj.totalRamps !== validatedRamps.length) {
+    throw new PipelineError(
+      "ARTIFACT_MISMATCH",
+      `ramps.json totalRamps 不整合（expected ${String(validatedRamps.length)}, got ${String(obj.totalRamps)}）`,
+    );
+  }
+  const actualBoundRamps = validatedRamps.filter((ramp) => ramp.bound).length;
+  if (obj.boundRamps !== actualBoundRamps) {
+    throw new PipelineError(
+      "ARTIFACT_MISMATCH",
+      `ramps.json boundRamps 不整合（expected ${String(actualBoundRamps)}, got ${String(obj.boundRamps)}）`,
+    );
   }
 
   // manifest.coverage.endpointCapabilities との整合性確認
   if (capabilities !== undefined) {
-    const rampMap = new Map(validatedRamps.map((item) => [item.id, item]));
+    const validatedCapabilities = validateEndpointCapabilities(capabilities);
 
-    let routableEntryCount = 0;
-    let routableExitCount = 0;
-    let structuralNoLoopEntryCount = 0;
-    let structuralNoLoopExitCount = 0;
+    const routableEntryIds = validatedRamps
+      .filter((item) => item.kind === "general_entry" && item.routingCapability === "routable")
+      .map((item) => item.id);
+    const routableExitIds = validatedRamps
+      .filter((item) => item.kind === "general_exit" && item.routingCapability === "routable")
+      .map((item) => item.id);
+    const structuralEntryIds = validatedRamps
+      .filter(
+        (item) =>
+          item.kind === "general_entry" && item.routingCapability === "structural_no_loop",
+      )
+      .map((item) => item.id);
+    const structuralExitIds = validatedRamps
+      .filter(
+        (item) =>
+          item.kind === "general_exit" && item.routingCapability === "structural_no_loop",
+      )
+      .map((item) => item.id);
 
-    for (const item of validatedRamps) {
-      if (item.kind === "general_entry") {
-        if (item.routingCapability === "routable") routableEntryCount++;
-        else if (item.routingCapability === "structural_no_loop") structuralNoLoopEntryCount++;
-      } else if (item.kind === "general_exit") {
-        if (item.routingCapability === "routable") routableExitCount++;
-        else if (item.routingCapability === "structural_no_loop") structuralNoLoopExitCount++;
-      }
-    }
-
-    if (routableEntryCount !== capabilities.routableEntryCount) {
+    if (routableEntryIds.length !== validatedCapabilities.routableEntryCount) {
       throw new PipelineError(
         "ARTIFACT_MISMATCH",
-        `routableEntryCount 不整合（expected ${capabilities.routableEntryCount}, got ${routableEntryCount}）`,
+        `routableEntryCount 不整合（expected ${String(validatedCapabilities.routableEntryCount)}, got ${String(routableEntryIds.length)}）`,
       );
     }
-    if (routableExitCount !== capabilities.routableExitCount) {
+    if (routableExitIds.length !== validatedCapabilities.routableExitCount) {
       throw new PipelineError(
         "ARTIFACT_MISMATCH",
-        `routableExitCount 不整合（expected ${capabilities.routableExitCount}, got ${routableExitCount}）`,
+        `routableExitCount 不整合（expected ${String(validatedCapabilities.routableExitCount)}, got ${String(routableExitIds.length)}）`,
       );
     }
-    if (structuralNoLoopEntryCount !== capabilities.structuralNoLoopEntryCount) {
+    if (structuralEntryIds.length !== validatedCapabilities.structuralNoLoopEntryCount) {
       throw new PipelineError(
         "ARTIFACT_MISMATCH",
-        `structuralNoLoopEntryCount 不整合（expected ${capabilities.structuralNoLoopEntryCount}, got ${structuralNoLoopEntryCount}）`,
+        `structuralNoLoopEntryCount 不整合（expected ${String(validatedCapabilities.structuralNoLoopEntryCount)}, got ${String(structuralEntryIds.length)}）`,
       );
     }
-    if (structuralNoLoopExitCount !== capabilities.structuralNoLoopExitCount) {
+    if (structuralExitIds.length !== validatedCapabilities.structuralNoLoopExitCount) {
       throw new PipelineError(
         "ARTIFACT_MISMATCH",
-        `structuralNoLoopExitCount 不整合（expected ${capabilities.structuralNoLoopExitCount}, got ${structuralNoLoopExitCount}）`,
+        `structuralNoLoopExitCount 不整合（expected ${String(validatedCapabilities.structuralNoLoopExitCount)}, got ${String(structuralExitIds.length)}）`,
       );
     }
 
-    for (const id of capabilities.routableEntryRampIds) {
-      const r = rampMap.get(id);
-      if (!r || r.kind !== "general_entry" || r.routingCapability !== "routable") {
-        throw new PipelineError("ARTIFACT_MISMATCH", `manifest routableEntryRampIds [${id}] が台帳と不一致`);
-      }
-    }
-    for (const id of capabilities.routableExitRampIds) {
-      const r = rampMap.get(id);
-      if (!r || r.kind !== "general_exit" || r.routingCapability !== "routable") {
-        throw new PipelineError("ARTIFACT_MISMATCH", `manifest routableExitRampIds [${id}] が台帳と不一致`);
-      }
-    }
-    if (capabilities.structuralNoLoopEntryRampIds) {
-      for (const id of capabilities.structuralNoLoopEntryRampIds) {
-        const r = rampMap.get(id);
-        if (!r || r.kind !== "general_entry" || r.routingCapability !== "structural_no_loop") {
-          throw new PipelineError("ARTIFACT_MISMATCH", `manifest structuralNoLoopEntryRampIds [${id}] が台帳と不一致`);
-        }
-      }
-    }
-    if (capabilities.structuralNoLoopExitRampIds) {
-      for (const id of capabilities.structuralNoLoopExitRampIds) {
-        const r = rampMap.get(id);
-        if (!r || r.kind !== "general_exit" || r.routingCapability !== "structural_no_loop") {
-          throw new PipelineError("ARTIFACT_MISMATCH", `manifest structuralNoLoopExitRampIds [${id}] が台帳と不一致`);
-        }
-      }
-    }
+    assertExactIdSet("routableEntryRampIds", routableEntryIds, validatedCapabilities.routableEntryRampIds);
+    assertExactIdSet("routableExitRampIds", routableExitIds, validatedCapabilities.routableExitRampIds);
+    assertExactIdSet("structuralNoLoopEntryRampIds", structuralEntryIds, validatedCapabilities.structuralNoLoopEntryRampIds);
+    assertExactIdSet("structuralNoLoopExitRampIds", structuralExitIds, validatedCapabilities.structuralNoLoopExitRampIds);
   }
 
   return validatedRamps;
@@ -673,10 +800,11 @@ export async function loadRampsDataset(
     throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: artifacts に ramps.json 無し`);
   }
 
-  const endpointCapabilities = manifest.coverage?.endpointCapabilities;
-  if (!endpointCapabilities) {
+  const rawEndpointCapabilities = manifest.coverage?.endpointCapabilities;
+  if (rawEndpointCapabilities === undefined) {
     throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: coverage.endpointCapabilities 無し`);
   }
+  const endpointCapabilities = validateEndpointCapabilities(rawEndpointCapabilities);
 
   const rampsUrl = `${base}/ramps.json${query}`;
   const rampsBytes = await fetchBytes(fetchImpl, rampsUrl, signal);

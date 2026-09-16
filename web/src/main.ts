@@ -76,10 +76,12 @@ const el = {
   recovery: mustGet<HTMLDivElement>("recovery-actions"),
   results: mustGet<HTMLDivElement>("results"),
   explicitOdSection: mustGet<HTMLElement>("explicit-od-section"),
+  explicitOriginCurrent: mustGet<HTMLSpanElement>("explicit-origin-current"),
   rampsLoadingStatus: mustGet<HTMLDivElement>("ramps-loading-status"),
   rampsErrorPanel: mustGet<HTMLDivElement>("ramps-error-panel"),
   rampsErrorMessage: mustGet<HTMLParagraphElement>("ramps-error-message"),
   rampsRetryBtn: mustGet<HTMLButtonElement>("ramps-retry-btn"),
+  rampPickersContainer: mustGet<HTMLDivElement>("ramp-pickers-container"),
   entryRampSearch: mustGet<HTMLInputElement>("entry-ramp-search"),
   entryClearSearchBtn: mustGet<HTMLButtonElement>("entry-clear-search-btn"),
   entryCountInfo: mustGet<HTMLParagraphElement>("entry-count-info"),
@@ -169,6 +171,11 @@ let entryFilterQuery = "";
 let exitFilterQuery = "";
 let lastSuccessCondition: ExplicitSearchCondition | null = null;
 let isSearching = false;
+let rampsLoading = false;
+let rampsLoadGeneration = 0;
+let rampsLoadAbort: AbortController | null = null;
+let entryRenderFrame: number | null = null;
+let exitRenderFrame: number | null = null;
 
 function createWorker(): Worker {
   const next = new Worker(new URL("./worker/search-worker.ts", import.meta.url), {
@@ -372,7 +379,11 @@ function showTimeWindowRecovery(result: SearchResult, minMinutes: number, maxMin
     hints.push("時間の上限を広げる");
   }
   const p = document.createElement("p");
-  p.textContent = `指定時間枠に収まる周回候補が見つかりませんでした。${hints.join("か、")}と見つかる可能性があります。`;
+  const explicitContext =
+    searchMode === "explicit"
+      ? "選択した入口・出口は端点単体では利用可能ですが、出発地点からのアクセス・帰着概算を含めると TIME_WINDOW になりました。"
+      : "";
+  p.textContent = `${explicitContext}指定時間枠に収まる周回候補が見つかりませんでした。${hints.join("か、")}と見つかる可能性があります。出発地点または時間条件を見直してください。`;
   recoveryOrigin = "result";
   el.recovery.replaceChildren(p, wrapActions(...buttons));
   revealRecovery(buttons[0] ?? null);
@@ -567,6 +578,7 @@ function setOrigin(next: LatLng, sourceLabel: string): void {
   el.lat.value = String(next.lat);
   el.lon.value = String(next.lon);
   el.originSummary.textContent = `出発地点: ${coordinateLabel(next.lat, next.lon)}（${sourceLabel}）`;
+  updateExplicitOriginCallout();
   if (!sourceLabel.startsWith("プリセット")) {
     el.preset.value = "manual";
   }
@@ -589,8 +601,16 @@ function setOrigin(next: LatLng, sourceLabel: string): void {
 function clearOrigin(): void {
   origin = null;
   el.originSummary.textContent = "出発地点が未確定です。";
+  updateExplicitOriginCallout();
   // 出発地点を未確定に戻したら、進行中の現在地取得も無効化する。
   geolocationRequestSeq += 1;
+}
+
+function updateExplicitOriginCallout(): void {
+  el.explicitOriginCurrent.textContent =
+    origin === null
+      ? "現在の出発地点: 未確定です。下の出発地点パネルで指定してください。"
+      : `現在の出発地点: ${el.originSummary.textContent?.replace(/^出発地点:\s*/, "") ?? coordinateLabel(origin.lat, origin.lon)}`;
 }
 
 // --- 地図タップによる出発地点指定 ---
@@ -851,7 +871,11 @@ function updateSearchButtonState(): void {
     return;
   }
   if (searchMode === "explicit") {
-    el.search.disabled = selectedEntryRampId === null || selectedExitRampId === null;
+    el.search.disabled =
+      rampsLoading ||
+      rampsDataset === null ||
+      selectedEntryRampId === null ||
+      selectedExitRampId === null;
   } else {
     el.search.disabled = false;
   }
@@ -968,6 +992,21 @@ function renderRampList(role: "entry" | "exit"): void {
   listContainer.replaceChildren(fragment);
 }
 
+/** 入力イベントを1フレームに集約し、連続入力中の399件DOM再生成を抑える。 */
+function scheduleRampListRender(role: "entry" | "exit"): void {
+  const previous = role === "entry" ? entryRenderFrame : exitRenderFrame;
+  if (previous !== null) {
+    cancelAnimationFrame(previous);
+  }
+  const frame = requestAnimationFrame(() => {
+    if (role === "entry") entryRenderFrame = null;
+    else exitRenderFrame = null;
+    renderRampList(role);
+  });
+  if (role === "entry") entryRenderFrame = frame;
+  else exitRenderFrame = frame;
+}
+
 function setEntryRamp(ramp: RampItem): void {
   selectedEntryRampId = ramp.id;
   el.entrySelectedName.textContent = `${formatRoute(ramp.route)} ${formatDirection(ramp.direction)} ${ramp.name} (${ramp.id})`;
@@ -1005,21 +1044,69 @@ function clearExitRamp(): void {
 }
 
 async function initRamps(): Promise<void> {
+  const generation = (rampsLoadGeneration += 1);
+  rampsLoadAbort?.abort();
+  const abort = new AbortController();
+  rampsLoadAbort = abort;
+  rampsLoading = true;
+  rampsDataset = null;
   el.rampsLoadingStatus.hidden = false;
   el.rampsLoadingStatus.textContent = "ランプ台帳を読み込み中…";
   el.rampsErrorPanel.hidden = true;
+  el.rampPickersContainer.hidden = true;
+  el.rampsRetryBtn.disabled = true;
+  el.entryRampSearch.disabled = true;
+  el.exitRampSearch.disabled = true;
+  el.entryCountInfo.textContent = "ランプ台帳を読み込み中です。";
+  el.exitCountInfo.textContent = "ランプ台帳を読み込み中です。";
+  updateSearchButtonState();
   try {
-    rampsDataset = await loadRampsDataset(window.fetch.bind(window), RELEASE_ID);
+    const dataset = await loadRampsDataset(window.fetch.bind(window), RELEASE_ID, abort.signal);
+    if (generation !== rampsLoadGeneration) {
+      return;
+    }
+    rampsDataset = dataset;
     el.rampsLoadingStatus.textContent = `正規ランプ台帳 ${String(rampsDataset.ramps.length)} 件を検証完了（選択可能: 入口 ${String(rampsDataset.capabilities.routableEntryCount)} / 出口 ${String(rampsDataset.capabilities.routableExitCount)}）`;
+    el.rampPickersContainer.hidden = false;
     renderRampList("entry");
     renderRampList("exit");
     updateExplicitSelectionStatus();
   } catch (err) {
+    if (generation !== rampsLoadGeneration) {
+      return;
+    }
     el.rampsLoadingStatus.hidden = true;
     el.rampsErrorPanel.hidden = false;
+    el.rampPickersContainer.hidden = true;
+    el.entryCountInfo.textContent = "台帳を読み込めないため件数を表示できません。";
+    el.exitCountInfo.textContent = "台帳を読み込めないため件数を表示できません。";
     const msg = err instanceof Error ? err.message : String(err);
     el.rampsErrorMessage.textContent = `ランプ台帳の読み込みまたは検証に失敗しました（${msg}）。再読み込みをお試しください。`;
+  } finally {
+    if (generation === rampsLoadGeneration) {
+      rampsLoading = false;
+      rampsLoadAbort = null;
+      el.rampsRetryBtn.disabled = false;
+      el.entryRampSearch.disabled = false;
+      el.exitRampSearch.disabled = false;
+      updateSearchButtonState();
+    }
   }
+}
+
+function cancelRampsLoad(): void {
+  if (!rampsLoading) {
+    return;
+  }
+  rampsLoadGeneration += 1;
+  rampsLoadAbort?.abort();
+  rampsLoadAbort = null;
+  rampsLoading = false;
+  el.rampsLoadingStatus.textContent = "ランプ台帳の読み込みを中断しました。ランプ指定モードで再開します。";
+  el.rampsRetryBtn.disabled = false;
+  el.entryRampSearch.disabled = false;
+  el.exitRampSearch.disabled = false;
+  updateSearchButtonState();
 }
 
 // --- 探索 ---
@@ -1149,12 +1236,18 @@ function renderResult(result: SearchResult): void {
       case "unreachable":
         // 数値根拠（最短計画分・最寄り入口距離）を本文と復帰導線の両方で示す。
         showUnreachableRecovery(
-          `この地点では周回できる候補を作れません（${String(MAX_PRODUCT_MINUTES)} 分が上限です）。時間を広げても届かないため、出発地点そのものを見直してください。`,
+          searchMode === "explicit"
+            ? `選択した入口・出口は端点単体では利用可能ですが、現在の出発地点から接続できません（NO_CONNECTION）。この地点では周回できる候補を作れないため、出発地点を見直してください。`
+            : `この地点では周回できる候補を作れません（${String(MAX_PRODUCT_MINUTES)} 分が上限です）。時間を広げても届かないため、出発地点そのものを見直してください。`,
         );
         return;
       case "unsupported_area":
         // 出発地点が対応範囲外・接続不能なときは、対応範囲を示して有効な地点を案内する。
-        showAreaRecovery(SUPPORTED_AREA_TEXT);
+        showAreaRecovery(
+          searchMode === "explicit"
+            ? `選択した入口・出口は端点単体では利用可能ですが、現在の出発地点から接続できません（NO_CONNECTION）。出発地点を見直してください。${SUPPORTED_AREA_TEXT}`
+            : SUPPORTED_AREA_TEXT,
+        );
         return;
       case "time_window":
         // 指定枠が原因の場合は、実際に値が変わる操作（最小を下げる / 上限を広げる）だけを出す。
@@ -1526,6 +1619,11 @@ for (const radio of searchModeRadios) {
     if (radio.checked) {
       searchMode = radio.value as SearchMode;
       el.explicitOdSection.hidden = searchMode !== "explicit";
+      if (searchMode === "explicit" && rampsDataset === null && !rampsLoading) {
+        void initRamps();
+      } else if (searchMode === "coord") {
+        cancelRampsLoad();
+      }
       invalidateResults();
       updateExplicitSelectionStatus();
     }
@@ -1535,7 +1633,7 @@ for (const radio of searchModeRadios) {
 // 入口・出口ランプ検索・解除操作
 el.entryRampSearch.addEventListener("input", () => {
   entryFilterQuery = el.entryRampSearch.value;
-  renderRampList("entry");
+  scheduleRampListRender("entry");
 });
 el.entryClearSearchBtn.addEventListener("click", () => {
   el.entryRampSearch.value = "";
@@ -1555,7 +1653,7 @@ el.entryDeselectBtn.addEventListener("click", () => {
 
 el.exitRampSearch.addEventListener("input", () => {
   exitFilterQuery = el.exitRampSearch.value;
-  renderRampList("exit");
+  scheduleRampListRender("exit");
 });
 el.exitClearSearchBtn.addEventListener("click", () => {
   el.exitRampSearch.value = "";
@@ -1584,7 +1682,6 @@ initMap();
 // 地図生成後にプリセットを適用し、出発地マーカーと要約を同期させる。
 applyPreset();
 createWorker(); // ブート: ready が来たらステータスへ反映される
-void initRamps();
 
 function applyPreset(): void {
   if (el.preset.value === "kandabashi") {

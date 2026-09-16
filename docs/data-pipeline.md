@@ -163,11 +163,11 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって `manifest.json` の `unverifiedSections` 配列に自動列挙される。
 - **自動列挙対象**: グラフ内に存在するすべての入口・出口エッジのうち、検証済み課金ペアに採用されていないエッジ。OSM ウェイに `name` タグが存在する場合は「エッジID（ウェイ名）」の形式で可読性を担保。
 - **除外路線・通行規制スキップの注記**: C1 外の分岐路線（八重洲線、1号上野線、6号向島線等）や、静的道路グラフで適用外となった通行規制（conditional / no via / outside graph / disconnected / unrecognized 等のスキップカテゴリ）に関する注記も件数付きで同リストに収録。
-- **現状**: 現行リリース `all-real-v1` は課金ペア 8 件を保持するが、全線 topology で最初の出口にならない 2 件は `unverified` であり、検索対象となる `verified` は 6 件である。公式一般ランプ371件のうち282件を施設単位の exact directed segment に bind し、89件は根拠付き `unsupported` としてグラフ外に隔離している。
+- **現状**: 現行リリース `all-real-v1` は監査用課金ペア8件を保持するが、両端点のexact edgeが一意なverified-boundランプへ逆引きでき、公式施設名とも一致する2件だけが `verified` である。残る6件は `unverified` として候補生成から除外する。公式一般ランプ371件のうち232件を exact directed segment に bindし、139件は根拠付き `unsupported` としてグラフ外に隔離している。
 
 ## 6. 全24路線・正規ランプ台帳（Canonical Ramp Inventory）
 
-首都高速道路全線（東京・神奈川・埼玉の全 24 路線）を網羅する正規ランプ台帳を導入した。
+首都高速道路全線（東京・神奈川・埼玉の公式24路線区分）を網羅する正規ランプ台帳を導入した。台帳の `route` はデータ上の運用識別子を保持するため25種類あり、1号線を `1H`（羽田）/`1U`（上野）に分ける。したがって「全24路線」は公式路線区分の被覆を表し、JSON値の distinct 数を表さない。
 
 - **台帳ファイル**: `data/ramp-inventory.json`
 - **対象路線（全24路線）**:
@@ -187,7 +187,8 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 - **事実と推定・導出値の厳格な分離（Provenance & Verification）**:
   - **公式確認事実（Verified Facts）**: 施設名（`facilityName`）、路線（`route`）、方向（`direction`）、ランプ種別（`kind`）、供用状態（`status`）は、首都高速道路公式検索データ（`https://search.shutoko.jp/`）と現行の路線・出入口案内（`https://www.shutoko.jp/driving/route/`）を 2026-09-16 に照合した正本事実である。
   - **位置座標の導出（Derived Coordinates）**: 公式サイトには緯度経度の数値データは掲載されていない。active 一般ランプの `lat`, `lon` は `data/osm-ramp-bindings.json` の OpenStreetMap 候補から導出した値であり、`coordinateSource: "osm"`, `coordinateStatus: "derived"` として公式事実と区別する。境界 JCT と閉鎖済みランプは公開選択対象外で、OSM binding を持たない。
-  - **利用可能性（Support State）**: active 一般ランプは `supportState` が `verified_bound`（282件）または `unsupported`（89件）のどちらか一方である。後者も公式台帳から削除せず、`supportReason` と `supportEvidence` を保持する。境界 JCT と閉鎖済み施設は `not_routable` とする。
+  - **利用可能性（Support State）**: active 一般ランプは `supportState` が `verified_bound`（232件）または `unsupported`（139件）のどちらか一方である。後者も公式台帳から削除せず、個別の `supportReason` と `supportEvidence` を保持する。境界 JCT と閉鎖済み施設は `not_routable` とする。
+  - **端点能力（Routing Capability）**: verified-bound 232件を、有向Shutoko実グラフ上で5km以上の循環SCCへ接続する `routable` 197件と、接続できない `structural_no_loop` 35件（入口13・出口22）へ全件分類する。分類と理由は台帳・`ramps.json`・manifestへ出力し、生成時に再計算値との完全一致をassertする。
   - **八重洲線の扱い**: 八重洲4件と丸の内1件は公式snapshotに保持する一方、現行fixtureのY線が construction/abandoned 状態でactive `motorway_link`を確認できず、公式liveページも再確認できなかったため `unsupported` とする。閉鎖を断定せず、宝町・C1・霞が関の近傍segmentを流用しない。
   - **利用制約の検証状況（Restriction Verification）**: 首都高では ETC 専用料金所の順次導入（35箇所以上）が進行中であるが、全ランプに対する制約調査は完了していない。そのため、未全数調査のランプは `restrictionStatus: "unverified"` として明示的にモデル化し、公式確認済みのランプ（神田橋、馬場等）のみ `restrictionStatus: "verified"` とする。制約が空配列 `[]` であることをもって「現金利用可能であることが公式確認された」と誤認させない。
 
@@ -195,7 +196,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 
 `crates/graph-builder` は探索用グラフ `graph.json` に加え、正規ランプ台帳をグラフの各エッジ・ノードに紐付けた公開成果物 `fixtures/generated/ramps.json` を同時に生成する。
 
-- `ramps.json`: 正規ランプ台帳全399件を保持し、`verified_bound` 282件だけを公開選択対象として bound にする。`unsupported` 89件、境界JCT 24件、閉鎖済み4件は unbound とする。
+- `ramps.json`: 正規ランプ台帳全399件を保持し、`verified_bound` 232件を bound にする。そのうち `routable` 197件だけが周回候補端点であり、`structural_no_loop` 35件はdisabled/診断表示に使う。`unsupported` 139件、境界JCT 24件、閉鎖済み4件は unbound とする。
 
 ## 7. OSM ランプバインディング（`data/osm-ramp-bindings.json`）
 
@@ -208,7 +209,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
   - `osmWayId`: ランプを表す OSM `motorway_link` ウェイ ID
   - `osmNodeId`: 一般道接続端点ノード（入口の乗込ノードまたは出口の流出ノード）
   - `motorwayNodeId`: 首都高本線（`motorway`）との分合流ノード ID
-  - `sharedPhysicalOverrides`: 公式番号が異なる共有物理segmentである G15/G27/G53 の完全なメンバー集合、directed segment triplet、理由、証拠。検証は表示名ではなく `facilityId` を用い、同名施設を暗黙のaliasとして許可しない。
+  - `sharedPhysicalOverrides`: 公式番号が異なる共有物理segmentである G15/G27/G53 の完全なメンバー集合、directed segment triplet、理由、証拠。同一facility・別directionも例外にせず、すべてのduplicate triplet集合とoverride集合の完全一致を強制する。方向一意性を立証できない旧22組は `unsupported` としbindingを削除した。
 - **Overpass クエリ戦略**:
   - 首都高速道路のリレーション（全 24 路線）および `network="首都高速道路"` タグを起点とし、関連する `motorway_link` を多ホップ展開（1〜4 ホップ）して抽出。
   - 一般道との接続判定は、地表コンテキストウェイ（車両通行可能な `highway` ウェイ）のノード集合との積集合により機械的・決定論的に特定。
@@ -246,7 +247,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 グラフビルダーは、ビルド時に以下のアーティファクトを生成・出力する:
 - `graph.json`: 道路ネットワークグラフ（ノード、エッジ、バインド済みランプ、OD 料金）
 - `snap-index.json`: 地表スナップ用入口アクセス地点インデックス
-- `ramps.json`: 正規ランプ台帳全399件の属性・座標・support state・グラフバインド状態を格納した公開成果物（`verified_bound` 282件のみ bound）
+- `ramps.json`: 正規ランプ台帳全399件の属性・座標・support state・routing capability・グラフバインド状態を格納した公開成果物（`verified_bound` 232件のみ bound）
 - `manifest.json`: 全成果物の SHA-256、未検証区間、検証済みペア出典情報
 
 ## 11. 保守・更新ワークフロー（ランプ・路線・料金の追加手順）

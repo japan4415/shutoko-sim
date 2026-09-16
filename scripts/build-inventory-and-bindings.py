@@ -158,7 +158,9 @@ def main():
             "coordinateStatus": decision["coordinateStatus"],
             "supportState": support_state,
             "supportReason": decision["supportReason"],
-            "supportEvidence": decision["supportEvidence"]
+            "supportEvidence": decision["supportEvidence"],
+            "routingCapability": decision["routingCapability"],
+            "routingCapabilityReason": decision["routingCapabilityReason"]
         })
 
         binding = decision.get("binding")
@@ -240,7 +242,9 @@ def main():
             "coordinateStatus": "derived",
             "supportState": "not_routable",
             "supportReason": "高速道路境界JCTであり一般選択ランプではない。",
-            "supportEvidence": ["data/official-population-snapshot.json"]
+            "supportEvidence": ["data/official-population-snapshot.json"],
+            "routingCapability": "not_routable",
+            "routingCapabilityReason": "境界JCTは一般選択端点ではない。"
         })
 
     # Add closed ramps (historical Gofukubashi & Edobashi)
@@ -268,7 +272,9 @@ def main():
             "coordinateStatus": "derived",
             "supportState": "not_routable",
             "supportReason": "閉鎖済み施設であり一般選択ランプではない。",
-            "supportEvidence": ["https://www.shutoko.jp/use/network/"]
+            "supportEvidence": ["https://www.shutoko.jp/use/network/"],
+            "routingCapability": "not_routable",
+            "routingCapabilityReason": "閉鎖済み施設は探索端点として使用しない。"
         })
         # Closed historical ramps intentionally have no active graph binding.
         # Reusing an unrelated live C1 edge would make them selectable and would

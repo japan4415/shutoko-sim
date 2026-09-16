@@ -89,6 +89,22 @@ pub struct ManifestCoverage {
 
     /// List of verified exit edge IDs.
     pub verified_exits: Vec<String>,
+
+    /// Machine-readable capability classification for every verified-bound ramp.
+    pub endpoint_capabilities: ManifestEndpointCapabilities,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifestEndpointCapabilities {
+    pub routable_entry_count: usize,
+    pub routable_exit_count: usize,
+    pub structural_no_loop_entry_count: usize,
+    pub structural_no_loop_exit_count: usize,
+    pub routable_entry_ramp_ids: Vec<String>,
+    pub routable_exit_ramp_ids: Vec<String>,
+    pub structural_no_loop_entry_ramp_ids: Vec<String>,
+    pub structural_no_loop_exit_ramp_ids: Vec<String>,
 }
 
 /// Release artifact descriptor containing relative path, SHA-256 digest, and size.
@@ -126,6 +142,10 @@ pub struct ManifestConfig {
     pub billing_pairs_version: String,
     pub unverified_sections: Vec<String>,
     pub provenance: Vec<BillingPairProvenance>,
+    pub routable_entry_ramp_ids: Vec<String>,
+    pub routable_exit_ramp_ids: Vec<String>,
+    pub structural_no_loop_entry_ramp_ids: Vec<String>,
+    pub structural_no_loop_exit_ramp_ids: Vec<String>,
 }
 
 impl Default for ManifestConfig {
@@ -142,6 +162,10 @@ impl Default for ManifestConfig {
             billing_pairs_version: "v1".into(),
             unverified_sections: Vec::new(),
             provenance: Vec::new(),
+            routable_entry_ramp_ids: Vec::new(),
+            routable_exit_ramp_ids: Vec::new(),
+            structural_no_loop_entry_ramp_ids: Vec::new(),
+            structural_no_loop_exit_ramp_ids: Vec::new(),
         }
     }
 }
@@ -178,6 +202,20 @@ pub fn build_manifest(
     let mut sorted_provenance = config.provenance.clone();
     sorted_provenance.sort_by(|a, b| a.id.cmp(&b.id));
 
+    let mut routable_entries = config.routable_entry_ramp_ids.clone();
+    let mut routable_exits = config.routable_exit_ramp_ids.clone();
+    let mut no_loop_entries = config.structural_no_loop_entry_ramp_ids.clone();
+    let mut no_loop_exits = config.structural_no_loop_exit_ramp_ids.clone();
+    for ids in [
+        &mut routable_entries,
+        &mut routable_exits,
+        &mut no_loop_entries,
+        &mut no_loop_exits,
+    ] {
+        ids.sort();
+        ids.dedup();
+    }
+
     Manifest {
         schema_version: 1,
         release_id: config.release_id.clone(),
@@ -189,6 +227,16 @@ pub fn build_manifest(
             area: config.coverage_area.clone(),
             verified_entries: sorted_entries,
             verified_exits: sorted_exits,
+            endpoint_capabilities: ManifestEndpointCapabilities {
+                routable_entry_count: routable_entries.len(),
+                routable_exit_count: routable_exits.len(),
+                structural_no_loop_entry_count: no_loop_entries.len(),
+                structural_no_loop_exit_count: no_loop_exits.len(),
+                routable_entry_ramp_ids: routable_entries,
+                routable_exit_ramp_ids: routable_exits,
+                structural_no_loop_entry_ramp_ids: no_loop_entries,
+                structural_no_loop_exit_ramp_ids: no_loop_exits,
+            },
         },
         vehicle_profile: config.vehicle_profile.clone(),
         time_model_version: config.time_model_version.clone(),

@@ -1035,6 +1035,10 @@ fn test_manifest_generation_and_checksum_verification() {
         billing_pairs_version: "v1".into(),
         unverified_sections: vec!["unverified-ramp-x".into()],
         provenance: vec![],
+        routable_entry_ramp_ids: vec![],
+        routable_exit_ramp_ids: vec![],
+        structural_no_loop_entry_ramp_ids: vec![],
+        structural_no_loop_exit_ramp_ids: vec![],
     };
 
     let manifest = build_manifest(
@@ -1113,6 +1117,10 @@ fn test_deterministic_byte_identical_output_two_runs() {
         billing_pairs_version: "v1".into(),
         unverified_sections: vec![],
         provenance: vec![],
+        routable_entry_ramp_ids: vec![],
+        routable_exit_ramp_ids: vec![],
+        structural_no_loop_entry_ramp_ids: vec![],
+        structural_no_loop_exit_ramp_ids: vec![],
     };
     let manifest_1 = build_manifest(
         &manifest_cfg,
@@ -3385,14 +3393,14 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     let verified_pair_ids = [
         "bp:c1-outer:kandabashi-takaracho",
         "bp:c1-outer:kasumigaseki-daikancho",
-        "bp:c1-outer:ginza-shibakoen",
-        "bp:c1-outer:shibakoen-iikura",
-        "bp:c1-inner:daikancho-kasumigaseki",
-        "bp:c1-inner:shibakoen-shiodome",
     ];
     let unverified_pair_ids = [
         "bp:c1-inner:kasumigaseki-shibakoen",
         "bp:c1-inner:takaracho-kandabashi",
+        "bp:c1-outer:ginza-shibakoen",
+        "bp:c1-outer:shibakoen-iikura",
+        "bp:c1-inner:daikancho-kasumigaseki",
+        "bp:c1-inner:shibakoen-shiodome",
     ];
 
     for expected_id in &verified_pair_ids {
@@ -3843,7 +3851,9 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
             {
                 "id": "bp-kandabashi-1",
                 "entryOsmWayId": 27155742,
+                "entryName": "神田橋入口",
                 "exitOsmWayId": 390441534,
+                "exitName": "神田橋出口",
                 "anchorOsmNodeId": 3,
                 "status": "verified",
                 "oneSectionAheadVerified": true,
@@ -4112,7 +4122,15 @@ fn test_cli_with_full_fixtures() {
     let ramps_raw = std::fs::read_to_string(out_dir.join("ramps.json")).unwrap();
     let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
     assert_eq!(ramps_json["totalRamps"], 399);
-    assert_eq!(ramps_json["boundRamps"], 282);
+    assert_eq!(ramps_json["boundRamps"], 232);
+
+    let manifest_raw = std::fs::read_to_string(out_dir.join("manifest.json")).unwrap();
+    let manifest_json: serde_json::Value = serde_json::from_str(&manifest_raw).unwrap();
+    let capabilities = &manifest_json["coverage"]["endpointCapabilities"];
+    assert_eq!(capabilities["routableEntryCount"], 99);
+    assert_eq!(capabilities["routableExitCount"], 98);
+    assert_eq!(capabilities["structuralNoLoopEntryCount"], 13);
+    assert_eq!(capabilities["structuralNoLoopExitCount"], 22);
 
     let ramps = ramps_json["ramps"].as_array().expect("ramps array");
     let active_general = ramps
@@ -4128,14 +4146,28 @@ fn test_cli_with_full_fixtures() {
             .iter()
             .filter(|r| r["supportState"] == "verified_bound" && r["bound"] == true)
             .count(),
-        282
+        232
     );
     assert_eq!(
         active_general
             .iter()
             .filter(|r| r["supportState"] == "unsupported" && r["bound"] == false)
             .count(),
-        89
+        139
+    );
+    assert_eq!(
+        active_general
+            .iter()
+            .filter(|r| r["routingCapability"] == "routable")
+            .count(),
+        197
+    );
+    assert_eq!(
+        active_general
+            .iter()
+            .filter(|r| r["routingCapability"] == "structural_no_loop")
+            .count(),
+        35
     );
     assert!(ramps.iter().filter(|r| r["bound"] == true).all(|r| {
         r["status"] == "active"

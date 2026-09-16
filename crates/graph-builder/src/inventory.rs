@@ -38,6 +38,10 @@ pub struct CanonicalRampInventoryItem {
     pub support_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub support_evidence: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing_capability: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing_capability_reason: Option<String>,
 }
 
 /// The root structure of `data/ramp-inventory.json`.
@@ -145,6 +149,10 @@ pub struct RampArtifactEntry {
     pub support_state: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub support_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing_capability: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing_capability_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restrictions: Vec<String>,
     pub bound: bool,
@@ -271,6 +279,35 @@ pub fn validate_ramp_inventory(inv: &RampInventoryFile) -> Result<(), Vec<String
             }
             if r.support_evidence.is_empty() {
                 errors.push(format!("ramp {} has no supportEvidence", r.ramp_id));
+            }
+            let expected_capabilities: &[&str] = if expected_general {
+                if r.support_state.as_deref() == Some("verified_bound") {
+                    &["routable", "structural_no_loop"]
+                } else {
+                    &["unsupported"]
+                }
+            } else {
+                &["not_routable"]
+            };
+            if !r
+                .routing_capability
+                .as_deref()
+                .is_some_and(|value| expected_capabilities.contains(&value))
+            {
+                errors.push(format!(
+                    "ramp {} has routingCapability {:?} inconsistent with support state",
+                    r.ramp_id, r.routing_capability
+                ));
+            }
+            if r.routing_capability_reason
+                .as_deref()
+                .unwrap_or_default()
+                .is_empty()
+            {
+                errors.push(format!(
+                    "ramp {} has empty routingCapabilityReason",
+                    r.ramp_id
+                ));
             }
         }
     }
@@ -462,26 +499,10 @@ pub fn validate_osm_ramp_bindings(
                 override_.id, segment, declared_members, actual_members
             ));
         }
-        let facility_ids: HashSet<&str> = actual_members
-            .iter()
-            .filter_map(|ramp_id| inventory_by_ramp_id.get(*ramp_id))
-            .map(|ramp| ramp.facility_id.as_str())
-            .collect();
-        if facility_ids.len() <= 1 {
-            errors.push(format!(
-                "shared physical override '{}' does not describe a cross-facility directed segment",
-                override_.id
-            ));
-        }
     }
 
     for (segment, members) in &segment_members {
-        let facility_ids: HashSet<&str> = members
-            .iter()
-            .filter_map(|binding| inventory_by_ramp_id.get(binding.ramp_id.as_str()))
-            .map(|ramp| ramp.facility_id.as_str())
-            .collect();
-        if facility_ids.len() > 1 {
+        if members.len() > 1 {
             let actual_members: HashSet<&str> = members
                 .iter()
                 .map(|binding| binding.ramp_id.as_str())
@@ -495,11 +516,11 @@ pub fn validate_osm_ramp_bindings(
                         .collect::<HashSet<_>>()
                         == actual_members => {}
                 Some(override_) => errors.push(format!(
-                    "cross-facility duplicate directed segment {:?} does not exactly match override '{}': {:?}",
+                    "duplicate directed segment {:?} does not exactly match override '{}': {:?}",
                     segment, override_.id, actual_members
                 )),
                 None => errors.push(format!(
-                    "cross-facility duplicate directed segment {:?} lacks an exact override: {:?}",
+                    "duplicate directed segment {:?} lacks an exact override: {:?}",
                     segment, actual_members
                 )),
             }
@@ -519,19 +540,20 @@ pub fn validate_osm_ramp_bindings(
 /// 3. `motorway_node_id` exists in the OSM nodes.
 pub fn validate_osm_ramp_bindings_against_osm(
     bindings: &OsmRampBindingsFile,
+    inv: &RampInventoryFile,
     osm_resp: &crate::osm::OverpassResponse,
 ) -> Result<(), Vec<String>> {
     let mut errors = Vec::new();
-    let mut way_map: HashMap<i64, Vec<i64>> = HashMap::new();
-    let mut node_set: HashSet<i64> = HashSet::new();
+    let inventory_by_ramp_id: HashMap<&str, &CanonicalRampInventoryItem> =
+        inv.ramps.iter().map(|r| (r.ramp_id.as_str(), r)).collect();
+    let mut way_map: HashMap<i64, &crate::osm::OsmElement> = HashMap::new();
+    let mut node_map: HashMap<i64, &crate::osm::OsmElement> = HashMap::new();
 
     for elem in &osm_resp.elements {
         if elem.is_way() {
-            if let Some(nodes) = elem.nodes.as_ref() {
-                way_map.insert(elem.id, nodes.clone());
-            }
+            way_map.insert(elem.id, elem);
         } else if elem.is_node() {
-            node_set.insert(elem.id);
+            node_map.insert(elem.id, elem);
         }
     }
 
@@ -543,21 +565,60 @@ pub fn validate_osm_ramp_bindings_against_osm(
                     b.ramp_id, b.osm_way_id
                 ));
             }
-            Some(nodes) => {
-                if !nodes.contains(&b.osm_node_id) {
+            Some(way) => {
+                if !way
+                    .nodes
+                    .as_ref()
+                    .is_some_and(|nodes| nodes.contains(&b.osm_node_id))
+                {
                     errors.push(format!(
                         "binding for '{}': osmNodeId {} is not a member of osmWayId {} nodes",
                         b.ramp_id, b.osm_node_id, b.osm_way_id
                     ));
                 }
+
+                // name/ref/destination are all inspected. Only an explicit
+                // access-facility label is a hard identity signal; generic road
+                // names and destinations may legitimately omit the facility.
+                if let Some(ramp) = inventory_by_ramp_id.get(b.ramp_id.as_str()) {
+                    for key in ["name", "ref", "destination"] {
+                        let Some(value) = way.get_tag(key) else {
+                            continue;
+                        };
+                        let explicitly_names_access =
+                            value.contains("入口") || value.contains("出口");
+                        if explicitly_names_access && !value.contains(&ramp.facility_name) {
+                            errors.push(format!(
+                                "binding for '{}' conflicts with OSM {}='{}' (official facility='{}')",
+                                b.ramp_id, key, value, ramp.facility_name
+                            ));
+                        }
+                    }
+                }
             }
         }
 
-        if !node_set.contains(&b.motorway_node_id) {
+        if !node_map.contains_key(&b.motorway_node_id) {
             errors.push(format!(
                 "binding for '{}' references non-existent motorwayNodeId {}",
                 b.ramp_id, b.motorway_node_id
             ));
+        }
+
+        if let (Some(ramp), Some(node)) = (
+            inventory_by_ramp_id.get(b.ramp_id.as_str()),
+            node_map.get(&b.osm_node_id),
+        ) {
+            if let (Some(lat), Some(lon)) = (node.lat, node.lon) {
+                let distance =
+                    crate::topology::haversine_distance_meters(ramp.lat, ramp.lon, lat, lon);
+                if distance > 5_000 {
+                    errors.push(format!(
+                        "binding for '{}' is {}m from its official inventory coordinate (limit 5000m)",
+                        b.ramp_id, distance
+                    ));
+                }
+            }
         }
     }
 
@@ -577,26 +638,34 @@ pub fn validate_od_tariffs(
     let entry_ramp_ids: HashSet<&str> = inv
         .ramps
         .iter()
-        .filter(|r| matches!(r.kind, RampKind::GeneralEntry | RampKind::BoundaryIn))
+        .filter(|r| {
+            r.status == "active"
+                && r.kind == RampKind::GeneralEntry
+                && (inv.version < 3 || r.support_state.as_deref() == Some("verified_bound"))
+        })
         .map(|r| r.ramp_id.as_str())
         .collect();
     let exit_ramp_ids: HashSet<&str> = inv
         .ramps
         .iter()
-        .filter(|r| matches!(r.kind, RampKind::GeneralExit | RampKind::BoundaryOut))
+        .filter(|r| {
+            r.status == "active"
+                && r.kind == RampKind::GeneralExit
+                && (inv.version < 3 || r.support_state.as_deref() == Some("verified_bound"))
+        })
         .map(|r| r.ramp_id.as_str())
         .collect();
 
     for (i, pair) in tariffs.verified_od_pairs.iter().enumerate() {
         if !entry_ramp_ids.contains(pair.entry_ramp_id.as_str()) {
             errors.push(format!(
-                "tariff[{}] entry_ramp_id '{}' is not a valid entry ramp in inventory",
+                "tariff[{}] entry_ramp_id '{}' is not a verified-bound active entry ramp",
                 i, pair.entry_ramp_id
             ));
         }
         if !exit_ramp_ids.contains(pair.exit_ramp_id.as_str()) {
             errors.push(format!(
-                "tariff[{}] exit_ramp_id '{}' is not a valid exit ramp in inventory",
+                "tariff[{}] exit_ramp_id '{}' is not a verified-bound active exit ramp",
                 i, pair.exit_ramp_id
             ));
         }
@@ -739,6 +808,8 @@ pub fn bind_ramps_to_graph(
                 status: item.status.clone(),
                 support_state: item.support_state.clone(),
                 support_reason: item.support_reason.clone(),
+                routing_capability: item.routing_capability.clone(),
+                routing_capability_reason: item.routing_capability_reason.clone(),
                 restrictions: item.restrictions.clone(),
                 bound: true,
                 edge_id: Some(edge.id.clone()),
@@ -762,6 +833,8 @@ pub fn bind_ramps_to_graph(
                 status: item.status.clone(),
                 support_state: item.support_state.clone(),
                 support_reason: item.support_reason.clone(),
+                routing_capability: item.routing_capability.clone(),
+                routing_capability_reason: item.routing_capability_reason.clone(),
                 restrictions: item.restrictions.clone(),
                 bound: false,
                 edge_id: None,
@@ -791,21 +864,27 @@ pub fn apply_od_tariffs_to_graph(graph: &mut Graph, tariffs: &OdTariffsFile) {
         .collect();
 
     // Map edge_id -> ramp_id from graph.ramps
-    let edge_to_ramp: HashMap<&str, &str> = graph
-        .ramps
-        .iter()
-        .map(|r| (r.edge_id.as_str(), r.id.as_str()))
-        .collect();
+    let mut edge_to_ramps: HashMap<&str, Vec<&str>> = HashMap::new();
+    for ramp in &graph.ramps {
+        edge_to_ramps
+            .entry(ramp.edge_id.as_str())
+            .or_default()
+            .push(ramp.id.as_str());
+    }
 
     for p in &mut graph.billing_pairs {
         if p.entry_ramp_id.is_none() {
-            if let Some(&rid) = edge_to_ramp.get(p.entry_id.as_str()) {
-                p.entry_ramp_id = Some(rid.to_string());
+            if let Some(rids) = edge_to_ramps.get(p.entry_id.as_str()) {
+                if let [rid] = rids.as_slice() {
+                    p.entry_ramp_id = Some((*rid).to_string());
+                }
             }
         }
         if p.exit_ramp_id.is_none() {
-            if let Some(&rid) = edge_to_ramp.get(p.exit_id.as_str()) {
-                p.exit_ramp_id = Some(rid.to_string());
+            if let Some(rids) = edge_to_ramps.get(p.exit_id.as_str()) {
+                if let [rid] = rids.as_slice() {
+                    p.exit_ramp_id = Some((*rid).to_string());
+                }
             }
         }
         if p.billing_distance_meters.is_none() {
@@ -815,6 +894,290 @@ pub fn apply_od_tariffs_to_graph(graph: &mut Graph, tariffs: &OdTariffsFile) {
                 }
             }
         }
+    }
+}
+
+/// Classifies every bound endpoint against the directed Shutoko topology.
+/// A routable entry must reach, and a routable exit must be reachable from, a
+/// cyclic SCC containing at least 5 km of internal mainline edges.
+pub fn classify_endpoint_capabilities(graph: &Graph) -> HashMap<String, String> {
+    let node_index: HashMap<&str, usize> = graph
+        .nodes
+        .iter()
+        .enumerate()
+        .map(|(index, node)| (node.id.as_str(), index))
+        .collect();
+    let mut outgoing = vec![Vec::new(); graph.nodes.len()];
+    let mut incoming = vec![Vec::new(); graph.nodes.len()];
+    let mut shutoko_edges = Vec::new();
+    for edge in graph
+        .edges
+        .iter()
+        .filter(|edge| edge.kind == EdgeKind::Shutoko)
+    {
+        let (Some(&from), Some(&to)) = (
+            node_index.get(edge.from.as_str()),
+            node_index.get(edge.to.as_str()),
+        ) else {
+            continue;
+        };
+        outgoing[from].push(to);
+        incoming[to].push(from);
+        shutoko_edges.push((from, to, edge.distance_meters));
+    }
+
+    let mut visited = vec![false; graph.nodes.len()];
+    let mut order = Vec::with_capacity(graph.nodes.len());
+    for start in 0..graph.nodes.len() {
+        if visited[start] {
+            continue;
+        }
+        visited[start] = true;
+        let mut stack = vec![(start, 0_usize)];
+        while let Some((node, next_index)) = stack.last_mut() {
+            if *next_index < outgoing[*node].len() {
+                let next = outgoing[*node][*next_index];
+                *next_index += 1;
+                if !visited[next] {
+                    visited[next] = true;
+                    stack.push((next, 0));
+                }
+            } else {
+                order.push(*node);
+                stack.pop();
+            }
+        }
+    }
+
+    let mut component = vec![usize::MAX; graph.nodes.len()];
+    let mut components: Vec<Vec<usize>> = Vec::new();
+    for &start in order.iter().rev() {
+        if component[start] != usize::MAX {
+            continue;
+        }
+        let component_id = components.len();
+        component[start] = component_id;
+        let mut nodes = Vec::new();
+        let mut stack = vec![start];
+        while let Some(node) = stack.pop() {
+            nodes.push(node);
+            for &next in &incoming[node] {
+                if component[next] == usize::MAX {
+                    component[next] = component_id;
+                    stack.push(next);
+                }
+            }
+        }
+        components.push(nodes);
+    }
+
+    let mut internal_distance = vec![0_u64; components.len()];
+    let mut cyclic = vec![false; components.len()];
+    for &(from, to, distance) in &shutoko_edges {
+        if component[from] == component[to] {
+            internal_distance[component[from]] =
+                internal_distance[component[from]].saturating_add(distance);
+            if from == to || components[component[from]].len() > 1 {
+                cyclic[component[from]] = true;
+            }
+        }
+    }
+    let qualifying_nodes: Vec<usize> = components
+        .iter()
+        .enumerate()
+        .filter(|(id, _)| cyclic[*id] && internal_distance[*id] >= 5_000)
+        .flat_map(|(_, nodes)| nodes.iter().copied())
+        .collect();
+
+    fn closure(starts: &[usize], adjacency: &[Vec<usize>]) -> HashSet<usize> {
+        let mut seen: HashSet<usize> = starts.iter().copied().collect();
+        let mut stack = starts.to_vec();
+        while let Some(node) = stack.pop() {
+            for &next in &adjacency[node] {
+                if seen.insert(next) {
+                    stack.push(next);
+                }
+            }
+        }
+        seen
+    }
+
+    let can_reach_loop = closure(&qualifying_nodes, &incoming);
+    let reachable_from_loop = closure(&qualifying_nodes, &outgoing);
+    graph
+        .ramps
+        .iter()
+        .map(|ramp| {
+            let capable = node_index
+                .get(ramp.mainline_node_id.as_str())
+                .is_some_and(|node| match ramp.kind {
+                    RampKind::GeneralEntry => can_reach_loop.contains(node),
+                    RampKind::GeneralExit => reachable_from_loop.contains(node),
+                    _ => false,
+                });
+            (
+                ramp.id.clone(),
+                if capable {
+                    "routable"
+                } else {
+                    "structural_no_loop"
+                }
+                .to_string(),
+            )
+        })
+        .collect()
+}
+
+/// Hard assertion that the machine-readable inventory declaration exactly
+/// matches the current directed topology classification for every bound ramp.
+pub fn validate_endpoint_capability_contract(
+    graph: &Graph,
+    inv: &RampInventoryFile,
+) -> Result<(), Vec<String>> {
+    let actual = classify_endpoint_capabilities(graph);
+    let inventory_by_id: HashMap<&str, &CanonicalRampInventoryItem> =
+        inv.ramps.iter().map(|r| (r.ramp_id.as_str(), r)).collect();
+    let mut errors = Vec::new();
+    for (ramp_id, capability) in actual {
+        let declared = inventory_by_id
+            .get(ramp_id.as_str())
+            .and_then(|ramp| ramp.routing_capability.as_deref());
+        if declared != Some(capability.as_str()) {
+            errors.push(format!(
+                "endpoint capability mismatch for '{}': declared={:?}, actual={}",
+                ramp_id, declared, capability
+            ));
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+/// Ensures every verified billing pair resolves both endpoint edges to exactly
+/// one verified-bound ramp and that declared endpoint names match the official
+/// facility names. Unverified seeds remain diagnostic-only.
+pub fn validate_verified_billing_pair_endpoints(graph: &Graph) -> Result<(), Vec<String>> {
+    let mut errors = Vec::new();
+    let ramps_by_id: HashMap<&str, &Ramp> =
+        graph.ramps.iter().map(|r| (r.id.as_str(), r)).collect();
+    let mut ramps_by_edge: HashMap<&str, Vec<&Ramp>> = HashMap::new();
+    for ramp in &graph.ramps {
+        ramps_by_edge
+            .entry(ramp.edge_id.as_str())
+            .or_default()
+            .push(ramp);
+    }
+
+    for pair in &graph.billing_pairs {
+        if pair.status != crate::model::VerificationStatus::Verified {
+            continue;
+        }
+        let Some(entry_id) = pair.entry_ramp_id.as_deref() else {
+            errors.push(format!(
+                "verified billing pair '{}' has null entryRampId",
+                pair.id
+            ));
+            continue;
+        };
+        let Some(exit_id) = pair.exit_ramp_id.as_deref() else {
+            errors.push(format!(
+                "verified billing pair '{}' has null exitRampId",
+                pair.id
+            ));
+            continue;
+        };
+        let Some(entry) = ramps_by_id.get(entry_id) else {
+            errors.push(format!(
+                "verified billing pair '{}' entryRampId '{}' is not verified-bound",
+                pair.id, entry_id
+            ));
+            continue;
+        };
+        let Some(exit) = ramps_by_id.get(exit_id) else {
+            errors.push(format!(
+                "verified billing pair '{}' exitRampId '{}' is not verified-bound",
+                pair.id, exit_id
+            ));
+            continue;
+        };
+        if entry.kind != RampKind::GeneralEntry || exit.kind != RampKind::GeneralExit {
+            errors.push(format!(
+                "verified billing pair '{}' resolves to wrong endpoint kinds",
+                pair.id
+            ));
+        }
+        if !pair
+            .entry_name
+            .as_deref()
+            .is_some_and(|name| name.contains(&entry.name))
+        {
+            errors.push(format!(
+                "verified billing pair '{}' entryName {:?} conflicts with ramp '{}' ({})",
+                pair.id, pair.entry_name, entry.id, entry.name
+            ));
+        }
+        if !pair
+            .exit_name
+            .as_deref()
+            .is_some_and(|name| name.contains(&exit.name))
+        {
+            errors.push(format!(
+                "verified billing pair '{}' exitName {:?} conflicts with ramp '{}' ({})",
+                pair.id, pair.exit_name, exit.id, exit.name
+            ));
+        }
+        let expected_route_direction = pair.id.split(':').nth(1);
+        let entry_route_direction = format!(
+            "{}-{}",
+            entry.route.to_ascii_lowercase(),
+            entry.direction.to_ascii_lowercase()
+        );
+        let exit_route_direction = format!(
+            "{}-{}",
+            exit.route.to_ascii_lowercase(),
+            exit.direction.to_ascii_lowercase()
+        );
+        if expected_route_direction.is_some_and(|expected| {
+            expected.contains('-')
+                && (expected != entry_route_direction || expected != exit_route_direction)
+        }) {
+            errors.push(format!(
+                "verified billing pair '{}' route/direction conflicts with entry '{}' and exit '{}'",
+                pair.id, entry.id, exit.id
+            ));
+        }
+        if entry.edge_id != pair.entry_id || exit.edge_id != pair.exit_id {
+            errors.push(format!(
+                "verified billing pair '{}' ramp IDs do not reverse-map its exact endpoint edges",
+                pair.id
+            ));
+        }
+        for (role, edge_id, ramp_id) in [
+            ("entry", pair.entry_id.as_str(), entry.id.as_str()),
+            ("exit", pair.exit_id.as_str(), exit.id.as_str()),
+        ] {
+            let reverse_mapped = ramps_by_edge
+                .get(edge_id)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            if reverse_mapped.len() != 1 || reverse_mapped[0].id != ramp_id {
+                let candidates: Vec<&str> =
+                    reverse_mapped.iter().map(|ramp| ramp.id.as_str()).collect();
+                errors.push(format!(
+                    "verified billing pair '{}' {} edge '{}' does not uniquely reverse-map to '{}': {:?}",
+                    pair.id, role, edge_id, ramp_id, candidates
+                ));
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
     }
 }
 
@@ -1027,7 +1390,7 @@ mod tests {
         assert!(res.is_ok(), "bindings validation failed: {:?}", res);
         assert_eq!(
             bindings.bindings.len(),
-            282,
+            232,
             "only verified active general ramps should have OSM bindings"
         );
 
@@ -1050,14 +1413,14 @@ mod tests {
                 .iter()
                 .filter(|r| r.support_state.as_deref() == Some("verified_bound"))
                 .count(),
-            282
+            232
         );
         assert_eq!(
             active_general
                 .iter()
                 .filter(|r| r.support_state.as_deref() == Some("unsupported"))
                 .count(),
-            89
+            139
         );
         for ramp in &active_general {
             let bound = binding_by_id.contains_key(ramp.ramp_id.as_str());
@@ -1086,7 +1449,7 @@ mod tests {
         let osm_str = fs::read_to_string(osm_path).expect("read shutoko-all.json");
         let osm_resp: crate::osm::OverpassResponse =
             serde_json::from_str(&osm_str).expect("parse shutoko-all.json");
-        let osm_res = validate_osm_ramp_bindings_against_osm(&bindings, &osm_resp);
+        let osm_res = validate_osm_ramp_bindings_against_osm(&bindings, &inv, &osm_resp);
         assert!(
             osm_res.is_ok(),
             "bindings against OSM fixture validation failed: {:?}",
@@ -1096,6 +1459,14 @@ mod tests {
         // Every verified binding names the exact directed graph edge and kind.
         let graph_path = find_data_file("fixtures/generated/graph.json");
         let graph: Graph = serde_json::from_str(&fs::read_to_string(graph_path).unwrap()).unwrap();
+        assert_eq!(
+            classify_endpoint_capabilities(&graph)
+                .values()
+                .filter(|capability| capability.as_str() == "structural_no_loop")
+                .count(),
+            35
+        );
+        assert!(validate_endpoint_capability_contract(&graph, &inv).is_ok());
         for b in &bindings.bindings {
             let ramp = inv.ramps.iter().find(|r| r.ramp_id == b.ramp_id).unwrap();
             let expected_kind = if ramp.kind == RampKind::GeneralEntry {
@@ -1127,11 +1498,9 @@ mod tests {
             );
         }
 
-        // Every directed segment reused across facility IDs must have one
-        // declaration whose triplet and complete member set exactly match.
-        // Display-name equality is intentionally irrelevant.
-        let inventory_by_id: HashMap<_, _> =
-            inv.ramps.iter().map(|r| (r.ramp_id.as_str(), r)).collect();
+        // Every reused directed segment, including two directions of the same
+        // facility, must have one declaration whose triplet and complete member
+        // set exactly match. Display-name/facility equality is irrelevant.
         let mut by_segment: HashMap<(i64, i64, i64), Vec<&OsmRampBinding>> = HashMap::new();
         for b in &bindings.bindings {
             by_segment
@@ -1162,27 +1531,23 @@ mod tests {
             bindings.shared_physical_overrides.len(),
             "each override must declare a unique directed segment"
         );
-        let mut cross_facility_segments = HashSet::new();
+        let mut duplicate_segments = HashSet::new();
         for (segment, group) in &by_segment {
-            let facility_ids: HashSet<_> = group
-                .iter()
-                .map(|b| inventory_by_id[b.ramp_id.as_str()].facility_id.as_str())
-                .collect();
-            if facility_ids.len() > 1 {
-                cross_facility_segments.insert(*segment);
+            if group.len() > 1 {
+                duplicate_segments.insert(*segment);
                 let actual_members: HashSet<_> = group.iter().map(|b| b.ramp_id.as_str()).collect();
                 assert_eq!(
                     declared_by_segment.get(segment),
                     Some(&actual_members),
-                    "cross-facility duplicate must exactly match its declared override: {:?}",
+                    "duplicate must exactly match its declared override: {:?}",
                     segment
                 );
             }
         }
         assert_eq!(
-            cross_facility_segments,
+            duplicate_segments,
             declared_by_segment.keys().copied().collect(),
-            "every declared override must exactly identify a cross-facility duplicate triplet"
+            "override segments and actual duplicate triplets must be identical"
         );
         let override_ids: HashSet<_> = bindings
             .shared_physical_overrides
@@ -1233,6 +1598,28 @@ mod tests {
             .shared_physical_overrides
             .retain(|override_| override_.id != "G53");
         assert!(validate_osm_ramp_bindings(&missing, &inv).is_err());
+
+        // Facility equality is deliberately irrelevant: even when every G27
+        // member is declared as one facility, its duplicate directed triplet
+        // still requires an exact override.
+        let mut same_facility_inventory = inv.clone();
+        for ramp in &mut same_facility_inventory.ramps {
+            if [
+                "ramp:6s-outbound:kahei-exit",
+                "ramp:6s-inbound:kahei-654-exit",
+            ]
+            .contains(&ramp.ramp_id.as_str())
+            {
+                ramp.facility_id = "fac:6s:kahei".into();
+            }
+        }
+        let mut same_facility_missing = bindings.clone();
+        same_facility_missing
+            .shared_physical_overrides
+            .retain(|override_| override_.id != "G27");
+        assert!(
+            validate_osm_ramp_bindings(&same_facility_missing, &same_facility_inventory).is_err()
+        );
 
         // An override may neither omit a real segment member nor declare a
         // different triplet for otherwise valid members.
@@ -1298,6 +1685,8 @@ mod tests {
                     support_state: None,
                     support_reason: None,
                     support_evidence: vec![],
+                    routing_capability: None,
+                    routing_capability_reason: None,
                 },
                 CanonicalRampInventoryItem {
                     ramp_id: "ramp:test:1".into(),
@@ -1318,6 +1707,8 @@ mod tests {
                     support_state: None,
                     support_reason: None,
                     support_evidence: vec![],
+                    routing_capability: None,
+                    routing_capability_reason: None,
                 },
             ],
         };
@@ -1351,6 +1742,8 @@ mod tests {
                 support_state: None,
                 support_reason: None,
                 support_evidence: vec![],
+                routing_capability: None,
+                routing_capability_reason: None,
             }],
         };
         assert!(validate_ramp_inventory(&inv).is_err());
@@ -1383,6 +1776,8 @@ mod tests {
                 support_state: None,
                 support_reason: None,
                 support_evidence: vec![],
+                routing_capability: None,
+                routing_capability_reason: None,
             }],
         };
         assert!(validate_ramp_inventory(&inv).is_err());

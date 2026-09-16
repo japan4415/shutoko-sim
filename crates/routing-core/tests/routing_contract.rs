@@ -1819,3 +1819,395 @@ fn maps_url_length_cannot_trigger_no_handoff_with_three_waypoints() {
         url.len()
     );
 }
+
+#[test]
+fn micro_loop_exclusion_contract() {
+    use shutoko_routing_core::{
+        search, Edge, EdgeKind, Graph, Node, Price, SearchLimits, SearchRequest, VerificationStatus,
+    };
+
+    // Graph with a 1,000m small loop (e.g. internal JCT connector)
+    let g = Graph {
+        schema_version: 3,
+        release_id: "test-micro-loop".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node {
+                id: "n:e".into(),
+                lat: 35.680,
+                lon: 139.760,
+            },
+            Node {
+                id: "n:a".into(),
+                lat: 35.681,
+                lon: 139.761,
+            },
+            Node {
+                id: "n:b".into(),
+                lat: 35.682,
+                lon: 139.762,
+            },
+            Node {
+                id: "n:x".into(),
+                lat: 35.683,
+                lon: 139.763,
+            },
+        ],
+        edges: vec![
+            Edge {
+                id: "e:entry".into(),
+                from: "n:e".into(),
+                to: "n:a".into(),
+                kind: EdgeKind::Entry,
+                duration_seconds: 10,
+                distance_meters: 100,
+                name: Some("Entry".into()),
+            },
+            // Micro loop: a -> b -> a (total 1000m)
+            Edge {
+                id: "e:loop1".into(),
+                from: "n:a".into(),
+                to: "n:b".into(),
+                kind: EdgeKind::Shutoko,
+                duration_seconds: 50,
+                distance_meters: 500,
+                name: Some("Connector".into()),
+            },
+            Edge {
+                id: "e:loop2".into(),
+                from: "n:b".into(),
+                to: "n:a".into(),
+                kind: EdgeKind::Shutoko,
+                duration_seconds: 50,
+                distance_meters: 500,
+                name: Some("Connector".into()),
+            },
+            Edge {
+                id: "e:exit".into(),
+                from: "n:b".into(),
+                to: "n:x".into(),
+                kind: EdgeKind::Exit,
+                duration_seconds: 10,
+                distance_meters: 100,
+                name: Some("Exit".into()),
+            },
+        ],
+        billing_pairs: vec![shutoko_routing_core::BillingPair {
+            id: "bp-1".into(),
+            entry_id: "e:entry".into(),
+            exit_id: "e:exit".into(),
+            anchor_node_id: "n:a".into(),
+            entry_to_anchor_edge_ids: vec!["e:entry".into()],
+            anchor_to_exit_edge_ids: vec!["e:loop1".into(), "e:exit".into()],
+            status: VerificationStatus::Verified,
+            vehicle_profile: "passenger-car-etc".into(),
+            prices: vec![Price {
+                amount_yen: 300,
+                effective_from: "2026-01-01T00:00:00Z".into(),
+                effective_to: None,
+            }],
+            entry_name: None,
+            exit_name: None,
+            entry_ramp_id: None,
+            exit_ramp_id: None,
+            billing_distance_meters: None,
+        }],
+        forbidden_transitions: vec![],
+        ramps: vec![],
+        od_tariffs: vec![],
+    };
+
+    let req = SearchRequest {
+        request_id: "req-1".into(),
+        release_id: "test-micro-loop".into(),
+        origin_node_id: Some("n:e".into()),
+        origin: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        min_minutes: 1,
+        max_minutes: 60,
+        vehicle_profile: "passenger-car-etc".into(),
+        pricing_at: "2026-09-10T00:00:00Z".into(),
+    };
+
+    // Case 1: with min_loop_meters = 5000, 1000m micro-loop is rejected!
+    let limits_strict = SearchLimits {
+        min_loop_meters: 5000,
+        ..SearchLimits::default()
+    };
+    let res_strict = search(&g, &req, &limits_strict).unwrap();
+    assert_eq!(res_strict.status, "no_candidates");
+    assert_eq!(res_strict.reason.as_deref(), Some("NO_LOOP"));
+
+    // Case 2: with min_loop_meters = 0, loop is permitted
+    let limits_permissive = SearchLimits {
+        min_loop_meters: 0,
+        ..SearchLimits::default()
+    };
+    let res_permissive = search(&g, &req, &limits_permissive).unwrap();
+    assert_eq!(res_permissive.status, "ok");
+    assert_eq!(res_permissive.candidates.len(), 1);
+}
+
+#[test]
+fn search_request_explicit_ramp_filters() {
+    use shutoko_routing_core::{
+        search, Edge, EdgeKind, Graph, Node, Price, Ramp, RampKind, SearchLimits, SearchRequest,
+        VerificationStatus,
+    };
+
+    let g = Graph {
+        schema_version: 3,
+        release_id: "test-ramp-filter".into(),
+        vehicle_profile: "passenger-car-etc".into(),
+        nodes: vec![
+            Node {
+                id: "n:e1".into(),
+                lat: 35.680,
+                lon: 139.760,
+            },
+            Node {
+                id: "n:e2".into(),
+                lat: 35.681,
+                lon: 139.760,
+            },
+            Node {
+                id: "n:a".into(),
+                lat: 35.682,
+                lon: 139.761,
+            },
+            Node {
+                id: "n:b".into(),
+                lat: 35.683,
+                lon: 139.762,
+            },
+            Node {
+                id: "n:x1".into(),
+                lat: 35.684,
+                lon: 139.763,
+            },
+        ],
+        edges: vec![
+            Edge {
+                id: "e:entry1".into(),
+                from: "n:e1".into(),
+                to: "n:a".into(),
+                kind: EdgeKind::Entry,
+                duration_seconds: 10,
+                distance_meters: 100,
+                name: Some("Ramp 1 Entry".into()),
+            },
+            Edge {
+                id: "e:entry2".into(),
+                from: "n:e2".into(),
+                to: "n:a".into(),
+                kind: EdgeKind::Entry,
+                duration_seconds: 10,
+                distance_meters: 100,
+                name: Some("Ramp 2 Entry".into()),
+            },
+            Edge {
+                id: "e:loop1".into(),
+                from: "n:a".into(),
+                to: "n:b".into(),
+                kind: EdgeKind::Shutoko,
+                duration_seconds: 50,
+                distance_meters: 500,
+                name: Some("C1".into()),
+            },
+            Edge {
+                id: "e:loop2".into(),
+                from: "n:b".into(),
+                to: "n:a".into(),
+                kind: EdgeKind::Shutoko,
+                duration_seconds: 50,
+                distance_meters: 500,
+                name: Some("C1".into()),
+            },
+            Edge {
+                id: "e:exit1".into(),
+                from: "n:b".into(),
+                to: "n:x1".into(),
+                kind: EdgeKind::Exit,
+                duration_seconds: 10,
+                distance_meters: 100,
+                name: Some("Ramp 1 Exit".into()),
+            },
+        ],
+        billing_pairs: vec![
+            shutoko_routing_core::BillingPair {
+                id: "bp-1".into(),
+                entry_id: "e:entry1".into(),
+                exit_id: "e:exit1".into(),
+                anchor_node_id: "n:a".into(),
+                entry_to_anchor_edge_ids: vec!["e:entry1".into()],
+                anchor_to_exit_edge_ids: vec!["e:loop1".into(), "e:exit1".into()],
+                status: VerificationStatus::Verified,
+                vehicle_profile: "passenger-car-etc".into(),
+                prices: vec![Price {
+                    amount_yen: 300,
+                    effective_from: "2026-01-01T00:00:00Z".into(),
+                    effective_to: None,
+                }],
+                entry_name: None,
+                exit_name: None,
+                entry_ramp_id: Some("ramp:c1:kandabashi-entry".into()),
+                exit_ramp_id: Some("ramp:c1:kandabashi-exit".into()),
+                billing_distance_meters: Some(1500),
+            },
+            shutoko_routing_core::BillingPair {
+                id: "bp-2".into(),
+                entry_id: "e:entry2".into(),
+                exit_id: "e:exit1".into(),
+                anchor_node_id: "n:a".into(),
+                entry_to_anchor_edge_ids: vec!["e:entry2".into()],
+                anchor_to_exit_edge_ids: vec!["e:loop1".into(), "e:exit1".into()],
+                status: VerificationStatus::Verified,
+                vehicle_profile: "passenger-car-etc".into(),
+                prices: vec![Price {
+                    amount_yen: 300,
+                    effective_from: "2026-01-01T00:00:00Z".into(),
+                    effective_to: None,
+                }],
+                entry_name: None,
+                exit_name: None,
+                entry_ramp_id: Some("ramp:c1:ginza-entry".into()),
+                exit_ramp_id: Some("ramp:c1:kandabashi-exit".into()),
+                billing_distance_meters: Some(2500),
+            },
+        ],
+        forbidden_transitions: vec![],
+        ramps: vec![
+            Ramp {
+                id: "ramp:c1:kandabashi-entry".into(),
+                facility_id: "fac:kandabashi".into(),
+                name: "神田橋".into(),
+                route: "C1".into(),
+                direction: "inner".into(),
+                kind: RampKind::GeneralEntry,
+                edge_id: "e:entry1".into(),
+                node_id: "n:e1".into(),
+                mainline_node_id: "n:a".into(),
+                restrictions: vec![],
+            },
+            Ramp {
+                id: "ramp:c1:ginza-entry".into(),
+                facility_id: "fac:ginza".into(),
+                name: "銀座".into(),
+                route: "C1".into(),
+                direction: "inner".into(),
+                kind: RampKind::GeneralEntry,
+                edge_id: "e:entry2".into(),
+                node_id: "n:e2".into(),
+                mainline_node_id: "n:a".into(),
+                restrictions: vec![],
+            },
+            Ramp {
+                id: "ramp:c1:kandabashi-exit".into(),
+                facility_id: "fac:kandabashi".into(),
+                name: "神田橋".into(),
+                route: "C1".into(),
+                direction: "inner".into(),
+                kind: RampKind::GeneralExit,
+                edge_id: "e:exit1".into(),
+                node_id: "n:x1".into(),
+                mainline_node_id: "n:b".into(),
+                restrictions: vec![],
+            },
+        ],
+        od_tariffs: vec![],
+    };
+
+    let limits = SearchLimits {
+        min_loop_meters: 0,
+        ..SearchLimits::default()
+    };
+
+    // 1. Query specifying entry_ramp_id = "ramp:c1:ginza-entry"
+    let req_ginza = SearchRequest {
+        request_id: "req-ginza".into(),
+        release_id: "test-ramp-filter".into(),
+        origin_node_id: Some("n:e2".into()),
+        origin: None,
+        entry_ramp_id: Some("ramp:c1:ginza-entry".into()),
+        exit_ramp_id: None,
+        min_minutes: 1,
+        max_minutes: 60,
+        vehicle_profile: "passenger-car-etc".into(),
+        pricing_at: "2026-09-10T00:00:00Z".into(),
+    };
+    let res_ginza = search(&g, &req_ginza, &limits).unwrap();
+    assert_eq!(res_ginza.status, "ok");
+    assert_eq!(res_ginza.candidates.len(), 1);
+    assert_eq!(
+        res_ginza.candidates[0].entry.ramp_id.as_deref(),
+        Some("ramp:c1:ginza-entry")
+    );
+
+    // 2. Query specifying mismatched entry ramp
+    let req_mismatch = SearchRequest {
+        request_id: "req-mismatch".into(),
+        release_id: "test-ramp-filter".into(),
+        origin_node_id: Some("n:e1".into()),
+        origin: None,
+        entry_ramp_id: Some("ramp:c1:ginza-entry".into()), // origin n:e1 is kandabashi, requested ginza
+        exit_ramp_id: None,
+        min_minutes: 1,
+        max_minutes: 60,
+        vehicle_profile: "passenger-car-etc".into(),
+        pricing_at: "2026-09-10T00:00:00Z".into(),
+    };
+    let res_mismatch = search(&g, &req_mismatch, &limits).unwrap();
+    assert_eq!(res_mismatch.status, "no_candidates");
+}
+
+#[test]
+fn official_etc_toll_calculation_contract() {
+    use shutoko_routing_core::calculate_etc_toll_yen;
+
+    // Below minimum distance threshold (4,300m) -> 300 yen
+    assert_eq!(calculate_etc_toll_yen(0), 300);
+    assert_eq!(calculate_etc_toll_yen(1_000), 300);
+    assert_eq!(calculate_etc_toll_yen(4_300), 300);
+
+    // Intermediate distances
+    // 5 km: (150 + 29.52 * 5) * 1.10 = 297.6 * 1.10 = 327.36 -> rounded to 330
+    assert_eq!(calculate_etc_toll_yen(5_000), 330);
+
+    // 10 km: (150 + 29.52 * 10) * 1.10 = 445.2 * 1.10 = 489.72 -> rounded to 490
+    assert_eq!(calculate_etc_toll_yen(10_000), 490);
+
+    // 20 km: (150 + 29.52 * 20) * 1.10 = 740.4 * 1.10 = 814.44 -> rounded to 810
+    assert_eq!(calculate_etc_toll_yen(20_000), 810);
+
+    // Cap at 1,950 yen
+    assert_eq!(calculate_etc_toll_yen(55_000), 1950);
+    assert_eq!(calculate_etc_toll_yen(100_000), 1950);
+    assert_eq!(calculate_etc_toll_yen(500_000), 1950);
+
+    // Multiple of 10 check for arbitrary distances
+    for d in (0..=100_000).step_by(1_337) {
+        let toll = calculate_etc_toll_yen(d);
+        assert!((300..=1950).contains(&toll));
+        assert_eq!(toll % 10, 0);
+    }
+}
+
+#[test]
+fn boundary_jct_and_half_ic_model_contract() {
+    use shutoko_routing_core::RampKind;
+
+    let kinds = [
+        (RampKind::GeneralEntry, "\"general_entry\""),
+        (RampKind::GeneralExit, "\"general_exit\""),
+        (RampKind::BoundaryIn, "\"boundary_in\""),
+        (RampKind::BoundaryOut, "\"boundary_out\""),
+    ];
+
+    for (k, expected_json) in kinds {
+        let serialized = serde_json::to_string(&k).unwrap();
+        assert_eq!(serialized, expected_json);
+        let deserialized: RampKind = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, k);
+    }
+}

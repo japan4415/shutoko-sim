@@ -8,6 +8,8 @@ export interface SearchRequest {
   releaseId: string;
   originNodeId?: string;
   origin?: LatLng;
+  entryRampId?: string;
+  exitRampId?: string;
   minMinutes: number;
   maxMinutes: number;
   vehicleProfile: string;
@@ -18,6 +20,11 @@ export interface SearchLimits {
   maxExpandedStates?: number;
   beamWidth?: number;
   maxLoopEdges?: number;
+  /**
+   * Minimum loop distance (metres) required for a valid loop cycle.
+   * Internal JCT micro-loops under this threshold are rejected. Default: 0 (or 5,000m in pipeline).
+   */
+  minLoopMeters?: number;
   /**
    * Maximum number of Entry access points to try for coordinate-input searches.
    * 0 (or omit) means unlimited — all Entry access points in the graph are candidates.
@@ -48,6 +55,37 @@ export interface SnappedOrigin {
 export interface RampInfo {
   edgeId: string;
   name: string | null;
+  rampId?: string | null;
+  route?: string | null;
+  direction?: string | null;
+}
+
+export type RampKind =
+  | "general_entry"
+  | "general_exit"
+  | "boundary_in"
+  | "boundary_out";
+
+export interface Ramp {
+  id: string;
+  facilityId: string;
+  name: string;
+  route: string;
+  direction: string;
+  kind: RampKind;
+  edgeId: string;
+  nodeId: string;
+  mainlineNodeId: string;
+  restrictions?: string[];
+}
+
+export interface OdTariff {
+  entryRampId: string;
+  exitRampId: string;
+  billingDistanceMeters: number;
+  amountYen?: number | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
 }
 
 export interface GeoJsonLineString {
@@ -71,6 +109,8 @@ export interface Toll {
   pricingAt: string;
   effectiveFrom: string | null;
   effectiveTo: string | null;
+  billingDistanceMeters?: number | null;
+  tollSource?: string | null;
 }
 
 export interface Loop {

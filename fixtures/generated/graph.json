@@ -24073,7 +24073,10 @@
         }
       ],
       "entryName": "代官町入口",
-      "exitName": "霞が関出口"
+      "exitName": "霞が関出口",
+      "entryRampId": "ramp:c1-inner:daikancho-entry",
+      "exitRampId": "ramp:c1-inner:kasumigaseki-exit",
+      "billingDistanceMeters": 2300
     },
     {
       "id": "bp:c1-inner:kasumigaseki-shibakoen",
@@ -24236,7 +24239,10 @@
         }
       ],
       "entryName": "霞が関入口",
-      "exitName": "芝公園出口"
+      "exitName": "芝公園出口",
+      "entryRampId": "ramp:c1-inner:kasumigaseki-entry",
+      "exitRampId": "ramp:c1-inner:shibakoen-exit",
+      "billingDistanceMeters": 3700
     },
     {
       "id": "bp:c1-inner:shibakoen-shiodome",
@@ -24348,7 +24354,9 @@
         }
       ],
       "entryName": "芝公園入口",
-      "exitName": "汐留出口"
+      "exitName": "汐留出口",
+      "entryRampId": "ramp:c1-inner:shibakoen-entry",
+      "exitRampId": "ramp:c1-outer:shiodome-exit"
     },
     {
       "id": "bp:c1-inner:takaracho-kandabashi",
@@ -24485,7 +24493,10 @@
         }
       ],
       "entryName": "宝町入口",
-      "exitName": "神田橋出口"
+      "exitName": "神田橋出口",
+      "entryRampId": "ramp:c1-inner:takaracho-entry",
+      "exitRampId": "ramp:c1-inner:kandabashi-exit",
+      "billingDistanceMeters": 1700
     },
     {
       "id": "bp:c1-outer:ginza-shibakoen",
@@ -24638,7 +24649,10 @@
         }
       ],
       "entryName": "銀座入口",
-      "exitName": "芝公園出口"
+      "exitName": "芝公園出口",
+      "entryRampId": "ramp:c1-outer:ginza-entry",
+      "exitRampId": "ramp:c1-outer:shibakoen-exit",
+      "billingDistanceMeters": 3400
     },
     {
       "id": "bp:c1-outer:kandabashi-takaracho",
@@ -24775,7 +24789,10 @@
         }
       ],
       "entryName": "神田橋入口",
-      "exitName": "宝町出口"
+      "exitName": "宝町出口",
+      "entryRampId": "ramp:c1-outer:kandabashi-entry",
+      "exitRampId": "ramp:c1-outer:takaracho-exit",
+      "billingDistanceMeters": 1700
     },
     {
       "id": "bp:c1-outer:kasumigaseki-daikancho",
@@ -24901,7 +24918,10 @@
         }
       ],
       "entryName": "霞が関入口",
-      "exitName": "代官町出口"
+      "exitName": "代官町出口",
+      "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
+      "exitRampId": "ramp:c1-outer:daikancho-exit",
+      "billingDistanceMeters": 2300
     },
     {
       "id": "bp:c1-outer:shibakoen-iikura",
@@ -24984,8 +25004,420 @@
         }
       ],
       "entryName": "芝公園入口",
-      "exitName": "飯倉出口"
+      "exitName": "飯倉出口",
+      "entryRampId": "ramp:c1-outer:shibakoen-entry",
+      "exitRampId": "ramp:c1-inner:iikura-exit"
     }
   ],
-  "forbiddenTransitions": []
+  "forbiddenTransitions": [],
+  "ramps": [
+    {
+      "id": "ramp:c1-inner:kandabashi-entry",
+      "facilityId": "fac:c1:kandabashi",
+      "name": "神田橋",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_entry",
+      "edgeId": "e:w27155742:0:f",
+      "nodeId": "n:12881208983",
+      "mainlineNodeId": "n:1891818143",
+      "restrictions": [
+        "etc_only"
+      ]
+    },
+    {
+      "id": "ramp:c1-inner:kandabashi-exit",
+      "facilityId": "fac:c1:kandabashi",
+      "name": "神田橋",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_exit",
+      "edgeId": "e:w390441534:2:f",
+      "nodeId": "n:1070863469",
+      "mainlineNodeId": "n:31254160"
+    },
+    {
+      "id": "ramp:c1-outer:kandabashi-entry",
+      "facilityId": "fac:c1:kandabashi",
+      "name": "神田橋",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_entry",
+      "edgeId": "e:w92243921:0:f",
+      "nodeId": "n:1070862943",
+      "mainlineNodeId": "n:499831338",
+      "restrictions": [
+        "etc_only"
+      ]
+    },
+    {
+      "id": "ramp:c1-outer:kandabashi-exit",
+      "facilityId": "fac:c1:kandabashi",
+      "name": "神田橋",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_exit",
+      "edgeId": "e:w203035343:1:f",
+      "nodeId": "n:260710835",
+      "mainlineNodeId": "n:499831338"
+    },
+    {
+      "id": "ramp:c1-inner:takaracho-entry",
+      "facilityId": "fac:c1:takaracho",
+      "name": "宝町",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_entry",
+      "edgeId": "e:w378284514:0:f",
+      "nodeId": "n:1105125663",
+      "mainlineNodeId": "n:1891818143"
+    },
+    {
+      "id": "ramp:c1-outer:takaracho-exit",
+      "facilityId": "fac:c1:takaracho",
+      "name": "宝町",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_exit",
+      "edgeId": "e:w297864314:11:f",
+      "nodeId": "n:1130812252",
+      "mainlineNodeId": "n:499831338"
+    },
+    {
+      "id": "ramp:c1-inner:kyobashi-exit",
+      "facilityId": "fac:c1:kyobashi",
+      "name": "京橋",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_exit",
+      "edgeId": "e:w4849052:8:f",
+      "nodeId": "n:1105125241",
+      "mainlineNodeId": "n:31254160"
+    },
+    {
+      "id": "ramp:c1-inner:shintomicho-exit",
+      "facilityId": "fac:c1:shintomicho",
+      "name": "新富町",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_exit",
+      "edgeId": "e:w760760233:11:f",
+      "nodeId": "n:31254357",
+      "mainlineNodeId": "n:31254160"
+    },
+    {
+      "id": "ramp:c1-inner:ginza-entry",
+      "facilityId": "fac:c1:ginza",
+      "name": "銀座",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_entry",
+      "edgeId": "e:w4848936:0:f",
+      "nodeId": "n:31254351",
+      "mainlineNodeId": "n:31254160"
+    },
+    {
+      "id": "ramp:c1-inner:ginza-exit",
+      "facilityId": "fac:c1:ginza",
+      "name": "銀座",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_exit",
+      "edgeId": "e:w205411855:4:f",
+      "nodeId": "n:835996365",
+      "mainlineNodeId": "n:31254160"
+    },
+    {
+      "id": "ramp:c1-outer:ginza-entry",
+      "facilityId": "fac:c1:ginza",
+      "name": "銀座",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_entry",
+      "edgeId": "e:w4848922:0:f",
+      "nodeId": "n:835996316",
+      "mainlineNodeId": "n:31254160"
+    },
+    {
+      "id": "ramp:c1-inner:shiodome-entry",
+      "facilityId": "fac:c1:shiodome",
+      "name": "汐留",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_entry",
+      "edgeId": "e:w23705286:0:f",
+      "nodeId": "n:31253688",
+      "mainlineNodeId": "n:31295430"
+    },
+    {
+      "id": "ramp:c1-outer:shiodome-exit",
+      "facilityId": "fac:c1:shiodome",
+      "name": "汐留",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_exit",
+      "edgeId": "e:w45068171:1:f",
+      "nodeId": "n:31253747",
+      "mainlineNodeId": "n:31295430"
+    },
+    {
+      "id": "ramp:c1-inner:shibakoen-entry",
+      "facilityId": "fac:c1:shibakoen",
+      "name": "芝公園",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_entry",
+      "edgeId": "e:w4853797:0:f",
+      "nodeId": "n:254367256",
+      "mainlineNodeId": "n:31295430"
+    },
+    {
+      "id": "ramp:c1-inner:shibakoen-exit",
+      "facilityId": "fac:c1:shibakoen",
+      "name": "芝公園",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_exit",
+      "edgeId": "e:w203873821:2:f",
+      "nodeId": "n:266292094",
+      "mainlineNodeId": "n:264877748"
+    },
+    {
+      "id": "ramp:c1-outer:shibakoen-entry",
+      "facilityId": "fac:c1:shibakoen",
+      "name": "芝公園",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_entry",
+      "edgeId": "e:w4853801:0:f",
+      "nodeId": "n:940044988",
+      "mainlineNodeId": "n:31296971"
+    },
+    {
+      "id": "ramp:c1-outer:shibakoen-exit",
+      "facilityId": "fac:c1:shibakoen",
+      "name": "芝公園",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_exit",
+      "edgeId": "e:w944671542:0:f",
+      "nodeId": "n:254360532",
+      "mainlineNodeId": "n:31254160"
+    },
+    {
+      "id": "ramp:c1-inner:iikura-exit",
+      "facilityId": "fac:c1:iikura",
+      "name": "飯倉",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_exit",
+      "edgeId": "e:w203832842:4:f",
+      "nodeId": "n:255337642",
+      "mainlineNodeId": "n:31296971"
+    },
+    {
+      "id": "ramp:c1-outer:iikura-entry",
+      "facilityId": "fac:c1:iikura",
+      "name": "飯倉",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_entry",
+      "edgeId": "e:w24402014:0:f",
+      "nodeId": "n:266237326",
+      "mainlineNodeId": "n:31296971"
+    },
+    {
+      "id": "ramp:c1-inner:kasumigaseki-entry",
+      "facilityId": "fac:c1:kasumigaseki",
+      "name": "霞が関",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_entry",
+      "edgeId": "e:w916571615:0:f",
+      "nodeId": "n:573233927",
+      "mainlineNodeId": "n:264877748"
+    },
+    {
+      "id": "ramp:c1-inner:kasumigaseki-exit",
+      "facilityId": "fac:c1:kasumigaseki",
+      "name": "霞が関",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_exit",
+      "edgeId": "e:w1232166619:0:f",
+      "nodeId": "n:573233928",
+      "mainlineNodeId": "n:297945194"
+    },
+    {
+      "id": "ramp:c1-outer:kasumigaseki-entry",
+      "facilityId": "fac:c1:kasumigaseki",
+      "name": "霞が関",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_entry",
+      "edgeId": "e:w916571610:0:f",
+      "nodeId": "n:577255402",
+      "mainlineNodeId": "n:577255571"
+    },
+    {
+      "id": "ramp:c1-outer:kasumigaseki-exit",
+      "facilityId": "fac:c1:kasumigaseki",
+      "name": "霞が関",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_exit",
+      "edgeId": "e:w44779775:16:f",
+      "nodeId": "n:251723885",
+      "mainlineNodeId": "n:577255571"
+    },
+    {
+      "id": "ramp:c1-inner:daikancho-entry",
+      "facilityId": "fac:c1:daikancho",
+      "name": "代官町",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_entry",
+      "edgeId": "e:w1091280541:0:f",
+      "nodeId": "n:1866081909",
+      "mainlineNodeId": "n:297945194"
+    },
+    {
+      "id": "ramp:c1-outer:daikancho-exit",
+      "facilityId": "fac:c1:daikancho",
+      "name": "代官町",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_exit",
+      "edgeId": "e:w276920911:6:f",
+      "nodeId": "n:256672387",
+      "mainlineNodeId": "n:577255571"
+    },
+    {
+      "id": "ramp:c1-inner:kitanomaru-entry",
+      "facilityId": "fac:c1:kitanomaru",
+      "name": "北の丸",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_entry",
+      "edgeId": "e:w176046280:0:f",
+      "nodeId": "n:1584417309",
+      "mainlineNodeId": "n:297945194"
+    },
+    {
+      "id": "ramp:c1-outer:kitanomaru-exit",
+      "facilityId": "fac:c1:kitanomaru",
+      "name": "北の丸",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_exit",
+      "edgeId": "e:w1232083939:0:f",
+      "nodeId": "n:573233930",
+      "mainlineNodeId": "n:577255571"
+    },
+    {
+      "id": "ramp:c1-inner:gofukubashi-entry",
+      "facilityId": "fac:c1:gofukubashi",
+      "name": "呉服橋",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_entry",
+      "edgeId": "e:w861095931:0:f",
+      "nodeId": "n:8025624725",
+      "mainlineNodeId": "n:1891818143"
+    },
+    {
+      "id": "ramp:c1-outer:gofukubashi-entry",
+      "facilityId": "fac:c1:gofukubashi",
+      "name": "呉服橋",
+      "route": "C1",
+      "direction": "outer",
+      "kind": "general_entry",
+      "edgeId": "e:w46151740:0:f",
+      "nodeId": "n:588411742",
+      "mainlineNodeId": "n:499831338"
+    },
+    {
+      "id": "ramp:c1-inner:edobashi-exit",
+      "facilityId": "fac:c1:edobashi",
+      "name": "江戸橋",
+      "route": "C1",
+      "direction": "inner",
+      "kind": "general_exit",
+      "edgeId": "e:w760748024:7:f",
+      "nodeId": "n:1105152891",
+      "mainlineNodeId": "n:1891818143"
+    }
+  ],
+  "odTariffs": [
+    {
+      "entryRampId": "ramp:c1-outer:kandabashi-entry",
+      "exitRampId": "ramp:c1-outer:takaracho-exit",
+      "billingDistanceMeters": 1700,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
+      "exitRampId": "ramp:c1-outer:daikancho-exit",
+      "billingDistanceMeters": 2300,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c1-outer:ginza-entry",
+      "exitRampId": "ramp:c1-outer:shibakoen-exit",
+      "billingDistanceMeters": 3400,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c1-inner:shibakoen-entry",
+      "exitRampId": "ramp:c1-inner:iikura-exit",
+      "billingDistanceMeters": 1600,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c1-inner:kasumigaseki-entry",
+      "exitRampId": "ramp:c1-inner:shibakoen-exit",
+      "billingDistanceMeters": 3700,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c1-inner:daikancho-entry",
+      "exitRampId": "ramp:c1-inner:kasumigaseki-exit",
+      "billingDistanceMeters": 2300,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c1-outer:shibakoen-entry",
+      "exitRampId": "ramp:c1-outer:shiodome-exit",
+      "billingDistanceMeters": 2400,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c1-inner:takaracho-entry",
+      "exitRampId": "ramp:c1-inner:kandabashi-exit",
+      "billingDistanceMeters": 1700,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:3-inbound:yoga-entry",
+      "exitRampId": "ramp:3-outbound:yoga-exit",
+      "billingDistanceMeters": 4300,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:4-inbound:takaido-entry",
+      "exitRampId": "ramp:4-outbound:takaido-exit",
+      "billingDistanceMeters": 4300,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z"
+    }
+  ]
 }

@@ -3,12 +3,20 @@
 //! Reuses core types from `shutoko-routing-core` to guarantee schema compliance.
 
 pub mod billing;
+pub mod inventory;
 pub mod manifest;
 pub mod model;
 pub mod osm;
 pub mod seed;
 pub mod topology;
 pub mod validate;
+
+pub use inventory::{
+    apply_od_tariffs_to_graph, bind_ramps_to_graph, ramps_artifact_to_deterministic_json,
+    validate_od_tariffs, validate_osm_ramp_bindings, validate_ramp_inventory,
+    CanonicalRampInventoryItem, OdTariffsFile, OsmRampBinding, OsmRampBindingsFile,
+    RampArtifactEntry, RampInventoryFile, RampsArtifact, TariffRules,
+};
 
 pub use billing::{
     generate_and_validate_billing_pairs, generate_billing_pair, BillingError,
@@ -19,7 +27,8 @@ pub use manifest::{
     Manifest, ManifestArtifact, ManifestConfig, ManifestCoverage,
 };
 pub use model::{
-    BillingPair, Edge, EdgeKind, Graph, Node, Price, SnapIndex, SnapNode, VerificationStatus,
+    BillingPair, Edge, EdgeKind, Graph, Node, OdTariff, Price, Ramp, RampKind, SnapIndex, SnapNode,
+    VerificationStatus,
 };
 pub use osm::{OsmElement, OsmMember, OverpassResponse};
 pub use seed::{BillingPairSeed, BillingPairsSeedFile, SeedPrice, SeedProvenance};

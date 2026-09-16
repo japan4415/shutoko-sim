@@ -47,14 +47,34 @@ mkdir -p "$(dirname "${OUTPUT_PATH}")"
 #    a separate "out body" pass without their node elements — the builder needs only
 #    the nd-ref lists (contained in way elements) for node-ID matching, not
 #    coordinates. Context ways are NOT added to the routing graph.
-OVERPASS_QUERY='[out:json][timeout:120];
-relation(id:4256008) -> .expressways;
+# Target expressway selection:
+# By default, fetch all 24 routes of the Tokyo Metropolitan Expressway network
+# (C1, C2, 1-11, B, Y, K1-K7, S1-S5) via relation["network"="首都高速道路"].
+# For backward compatibility or focused extraction, specific relation IDs
+# (e.g. 4256008 for C1) can be targeted via ROUTES_FILTER.
+ROUTES_FILTER="${ROUTES_FILTER:-"all"}"
+
+if [ "${ROUTES_FILTER}" = "c1" ]; then
+  EXPRESSWAYS_QUERY='relation(id:4256008) -> .expressways;'
+else
+  # Comprehensive query for all Shutoko routes:
+  # Captures all routes tagged network=首都高速道路 plus explicitly listed relations
+  # for C1, C2 (inner/outer), radial lines (1..11, B, Y), Kanagawa (K1..K7), Saitama (S1..S5).
+  EXPRESSWAYS_QUERY='(
+    relation["network"="首都高速道路"];
+    relation(id:4256008); // C1
+    relation(id:3959826,4256011); // C2
+  ) -> .expressways;'
+fi
+
+OVERPASS_QUERY="[out:json][timeout:180];
+${EXPRESSWAYS_QUERY}
 (
   .expressways;
   way(r.expressways);
   node(w);
 ) -> .ew_all;
-node.ew_all -> .ew_nodes;
+node.ew_all -> .ew_nodes;"
 
 way(bn.ew_nodes)["highway"="motorway_link"] -> .links;
 

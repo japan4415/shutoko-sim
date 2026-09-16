@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "source": "https://www.shutoko.jp/tolls/about/price/",
+  "sourceDate": "2026-09-16",
+  "rules": {
+    "vehicleProfile": "passenger-car-etc",
+    "minTollYen": 300,
+    "maxTollYen": 1950,
+    "minDistanceMeters": 4300,
+    "baseRatePerKmYen": 29.52,
+    "roundingYen": 10
+  },
+  "verifiedOdPairs": [
+    {
+      "entryRampId": "ramp:c1-outer:kandabashi-entry",
+      "exitRampId": "ramp:c1-outer:takaracho-exit",
+      "billingDistanceMeters": 1700,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": null
+    },
+    {
+      "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
+      "exitRampId": "ramp:c1-outer:daikancho-exit",
+      "billingDistanceMeters": 2300,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": null
+    },
+    {
+      "entryRampId": "ramp:c1-outer:ginza-entry",
+      "exitRampId": "ramp:c1-outer:shibakoen-exit",
+      "billingDistanceMeters": 3400,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": null
+    },
+    {
+      "entryRampId": "ramp:c1-inner:shibakoen-entry",
+      "exitRampId": "ramp:c1-inner:iikura-exit",
+      "billingDistanceMeters": 1600,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": null
+    },
+    {
+      "entryRampId": "ramp:c1-inner:kasumigaseki-entry",
+      "exitRampId": "ramp:c1-inner:shibakoen-exit",
+      "billingDistanceMeters": 3700,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": null
+    },
+    {
+      "entryRampId": "ramp:c1-inner:daikancho-entry",
+      "exitRampId": "ramp:c1-inner:kasumigaseki-exit",
+      "billingDistanceMeters": 2300,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": null
+    },
+    {
+      "entryRampId": "ramp:c1-outer:shibakoen-entry",
+      "exitRampId": "ramp:c1-outer:shiodome-exit",
+      "billingDistanceMeters": 2400,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": null
+    },
+    {
+      "entryRampId": "ramp:c1-inner:takaracho-entry",
+      "exitRampId": "ramp:c1-inner:kandabashi-exit",
+      "billingDistanceMeters": 1700,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": null
+    },
+    {
+      "entryRampId": "ramp:3-inbound:yoga-entry",
+      "exitRampId": "ramp:3-outbound:yoga-exit",
+      "billingDistanceMeters": 4300,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": null
+    },
+    {
+      "entryRampId": "ramp:4-inbound:takaido-entry",
+      "exitRampId": "ramp:4-outbound:takaido-exit",
+      "billingDistanceMeters": 4300,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": null
+    }
+  ]
+}

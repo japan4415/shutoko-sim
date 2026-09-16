@@ -209,8 +209,14 @@ export function statusMessage(
     }
     case "NO_HANDOFF":
       return "地図引き継ぎ URL が上限超過のため除外されました。";
-    case "SEARCH_LIMIT":
-      return "探索が上限に達しました。結果が打ち切られている可能性があります。";
+    case "SEARCH_LIMIT": {
+      // 打切りは「可能性」ではなく確定事実（`status: "truncated"` のときだけ reason が立つ）。
+      // 候補が残っている場合は「一部だけ」であることを落とさない（review R3-05）。
+      const truncated = "探索が上限に達したため、結果は打ち切られています。";
+      return result.candidates.length > 0
+        ? `${truncated}表示しているのは検証済みの一部の候補だけです。`
+        : truncated;
+    }
     default:
       return "候補が見つかりませんでした。";
   }
@@ -304,7 +310,8 @@ export function unreachableText(
  * （値が変わらない操作を成功として告げない）。
  * - `lowerMinMinutes`: 既知の最短周回が最小時間（下限）で除外されている場合の下限値。
  *   エンジンの下限判定は `base < minMinutes*60` なので、`baseSecondsFromPlanSeconds` で
- *   復元した base から「下限以下の最大の分」を求める。
+ *   復元した base から「下限以下の最大の分」を求める。base が 60 秒未満の周回は製品下限
+ *   1 分でも含められないため `null`（review R3-02）。
  * - `widenMaxMinutes`: 最大時間の拡大値。製品上限 240 分では広げられないため `null`。
  */
 export interface TimeWindowActions {
@@ -324,12 +331,53 @@ export function timeWindowActions(
   let lowerMinMinutes: number | null = null;
   const planSeconds = result.minPlanSeconds;
   if (planSeconds !== null && planSeconds <= MAX_PRODUCT_SECONDS) {
-    const next = Math.max(1, Math.floor(baseSecondsFromPlanSeconds(planSeconds) / 60));
-    if (next < minMinutes) {
-      lowerMinMinutes = next;
+    const baseSeconds = baseSecondsFromPlanSeconds(planSeconds);
+    // エンジンは `base < minMinutes*60` の周回を棄却する。製品下限は 1 分（60 秒）なので、
+    // base が 60 秒未満の合法周回はどの最小時間でも含められない。1 分へ下げれば含められると
+    // 誤案内しないため、その場合は操作を出さない（review R3-02）。
+    if (baseSeconds >= 60) {
+      const next = Math.floor(baseSeconds / 60);
+      if (next < minMinutes) {
+        lowerMinMinutes = next;
+      }
     }
   }
   return { lowerMinMinutes, widenMaxMinutes };
+}
+
+/**
+ * 「最小時間を N 分に下げる」ボタン押下時の結果。押下時点の現在値と比較して、実際に
+ * 値を下げられる場合だけ適用する。復帰パネルは条件変更で失効させるが、手入力と競合しても
+ * 同値・引上げを「下げました」と偽らないための実行時ガードを二重に持つ（review R3-01）。
+ * 値が変わらない操作は成功として告げず、利用者に条件の見直しを促す。
+ */
+export interface LowerMinClick {
+  /** 適用する新しい最小時間（分）。null なら値も文言も変えない。 */
+  nextValue: number | null;
+  /** #status へ出す文言。 */
+  message: string;
+}
+
+export function lowerMinClickOutcome(
+  currentMinutes: number,
+  nextMinMinutes: number,
+): LowerMinClick {
+  if (!Number.isFinite(currentMinutes)) {
+    return {
+      nextValue: null,
+      message: "最小時間の入力が有効な数値ではありません。値を確認してください。",
+    };
+  }
+  if (nextMinMinutes >= currentMinutes) {
+    return {
+      nextValue: null,
+      message: `最小時間は ${String(currentMinutes)} 分のままです。値を下げられないため、出発地点や条件を見直してください。`,
+    };
+  }
+  return {
+    nextValue: nextMinMinutes,
+    message: `最小時間を ${String(nextMinMinutes)} 分に下げました。再検索してください。`,
+  };
 }
 
 /** 候補ゼロの原因分類。復帰導線（時間を変える / 出発地点を変える / 再試行）を分けるために使う。 */

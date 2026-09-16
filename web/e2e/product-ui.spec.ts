@@ -822,3 +822,83 @@ test("(28) 240/240 では上限を広げず、最小時間を下げる導線で�
   await page.click("#search-btn");
   await expect(page.locator("#results .card").first()).toBeVisible();
 });
+
+test("(29) 240/240 の復帰導線は最小時間を手入力すると失効し、そのまま再検索できる", async ({ page }) => {
+  // 復帰ボタンと同じ 23 を手入力（change は blur で発火）。古い「下げる」ボタンが
+  // 残ると 23→23 の no-op を『下げました』と偽る（review R3-01）。
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
+  const recovery = page.locator("#recovery-actions");
+  await expect(recovery).toBeVisible();
+  await expect(
+    recovery.locator("button", { hasText: "最小時間を 23 分に下げる" }),
+  ).toBeVisible();
+
+  await page.locator("#min-minutes").fill("23");
+  await page.locator("#max-minutes").focus(); // change を確定させる
+  await expect(recovery).toBeHidden();
+  await expect(page.locator("#status")).toContainText("条件が変更");
+
+  // 手入力した条件のまま再検索でき、候補が返る。
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+});
+
+test("(30) 復帰ボタンより小さい 15 を手入力しても古い導線は残らず、引上げを成功と告げない", async ({ page }) => {
+  // 23 より小さい 15 を手入力すると、残ったボタンは 15→23 の引上げになる（review R3-01）。
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
+  const recovery = page.locator("#recovery-actions");
+  await expect(recovery).toBeVisible();
+
+  await page.locator("#min-minutes").fill("15");
+  await page.locator("#max-minutes").focus();
+  await expect(recovery).toBeHidden();
+  await expect(page.locator("#min-minutes")).toHaveValue("15");
+  await expect(page.locator("#status")).not.toContainText("下げました");
+
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+});
+
+test("(31) 復帰ボタン押下時も現在値と比較し、引上げや no-op を成功と告げない", async ({ page }) => {
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
+  const recovery = page.locator("#recovery-actions");
+  const lower = recovery.locator("button", { hasText: "最小時間を 23 分に下げる" });
+  await expect(lower).toBeVisible();
+
+  // change を発火させずに値を 15 へ変える（描画後に現在値が変わった状態を模す）。
+  await page.evaluate(() => {
+    const input = document.getElementById("min-minutes");
+    if (input instanceof HTMLInputElement) {
+      input.value = "15";
+    }
+  });
+  await lower.click();
+
+  // 15 → 23 の引上げは行わず、成功も告げない。値は手入力のまま。
+  await expect(page.locator("#min-minutes")).toHaveValue("15");
+  await expect(page.locator("#status")).toContainText("ままです");
+  await expect(page.locator("#status")).not.toContainText("下げました");
+});
+
+test("(32) 成果物不一致の再読み込み案内は条件変更では消えない", async ({ page }) => {
+  await page.route(PRODUCT_GRAPH_URL, async (route) => {
+    const res = await route.fetch();
+    const body = await res.text();
+    await route.fulfill({ response: res, body: `${body}\n` }); // 末尾 1 バイト追加で不一致
+  });
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const recovery = page.locator("#recovery-actions");
+  await expect(recovery).toBeVisible();
+  await expect(recovery).toContainText("成果物を読み込めませんでした");
+
+  // 結果取得前の再読み込み案内は前回結果に基づかないため、条件変更でも残す。
+  await page.locator("#min-minutes").fill("20");
+  await page.locator("#max-minutes").focus();
+  await expect(recovery).toBeVisible();
+  await expect(
+    recovery.locator("button", { hasText: "再読み込み" }),
+  ).toBeVisible();
+});

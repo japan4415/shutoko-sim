@@ -17,6 +17,7 @@ import {
   formatRank,
   geocodeErrorMessage,
   geolocationErrorMessage,
+  lowerMinClickOutcome,
   recommendedLabel,
   statusMessage,
   timeBreakdownText,
@@ -117,6 +118,9 @@ let geolocationRequestSeq = 0;
 let pickMode = false;
 // 地図タップで置いた候補地点（確定前）。住所は逆ジオコーディングしない。
 let pendingPick: LatLng | null = null;
+// 復帰パネルの由来。'result' は探索結果の候補ゼロに基づく導線で、条件変更で失効させる。
+// 'error' は結果取得前の成果物不一致・通信失敗の再読み込み案内で、条件を変えても残す。
+let recoveryOrigin: "result" | "error" | null = null;
 
 // --- Worker 管理 ---
 
@@ -234,11 +238,26 @@ function revealRecovery(focusTarget: HTMLElement | null): void {
 function clearRecovery(): void {
   el.recovery.hidden = true;
   el.recovery.replaceChildren();
+  recoveryOrigin = null;
+}
+
+/**
+ * 条件変更で失効させるべき復帰導線だけを消す。
+ * `result`（探索結果の候補ゼロに基づく導線）は前回結果が無効になった時点で消すが、
+ * `error`（結果取得前の成果物不一致・通信失敗）の再読み込み案内は、時間や出発地点を
+ * 変えても有効なままなので消さない（review R3-01 / docs/requirements.md:43,52）。
+ */
+function clearResultRecovery(): void {
+  if (recoveryOrigin === "result") {
+    clearRecovery();
+  }
 }
 
 /**
  * 再読み込みでしか復帰できない成果物不整合・通信失敗・探索結果契約不一致の案内
  * （docs/requirements.md:43）。部分データでは探索しない。
+ * RESULT_CONTRACT_MISMATCH は「成果物（エンジン成果物）が読めない」のではなく、探索結果 JSON が
+ * 実行中エンジンの形式と合わない失敗なので、失敗種別を正しく名指しする（design D3-2）。
  */
 function showReloadRecovery(code: string): void {
   if (
@@ -250,13 +269,17 @@ function showReloadRecovery(code: string): void {
     return;
   }
   const p = document.createElement("p");
-  p.textContent = "成果物を読み込めませんでした。部分データでは探索しません。";
+  p.textContent =
+    code === "RESULT_CONTRACT_MISMATCH"
+      ? "探索結果の形式が実行中のエンジンと一致しません。再読み込みしてください。部分データでは探索しません。"
+      : "成果物を読み込めませんでした。部分データでは探索しません。";
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "再読み込み";
   button.addEventListener("click", () => {
     window.location.reload();
   });
+  recoveryOrigin = "error";
   el.recovery.replaceChildren(p, wrapActions(button));
   revealRecovery(button);
 }
@@ -266,6 +289,8 @@ function showReloadRecovery(code: string): void {
  * 上限が製品上限 240 分のときは「上限を広げる」を出さない（値が変わらないため）。
  * 時間を変えても解決を証明できないとき（打切り等）は、値の変更を成功として告げず出発地点の
  * 見直しを案内する（review R2-01）。
+ * 原因に対応する操作（最小時間を下げる）を先頭・フォーカス対象にし、#status の主導線と
+ * 一致させる（design D3-1）。上限拡大は後段に残す。
  */
 function showTimeWindowRecovery(result: SearchResult, minMinutes: number, maxMinutes: number): void {
   const actions = timeWindowActions(result, minMinutes, maxMinutes);
@@ -277,16 +302,23 @@ function showTimeWindowRecovery(result: SearchResult, minMinutes: number, maxMin
   }
   const buttons: HTMLButtonElement[] = [];
   const hints: string[] = [];
-  if (actions.widenMaxMinutes !== null) {
-    buttons.push(createWidenMaxButton());
-    hints.push("時間の上限を広げる");
-  }
   if (actions.lowerMinMinutes !== null) {
+    // 下限起因なら最小時間の引き下げが原因に対応する主操作。
     buttons.push(createLowerMinButton(actions.lowerMinMinutes));
     hints.push(`最小時間を ${String(actions.lowerMinMinutes)} 分に下げる`);
   }
+  if (actions.widenMaxMinutes !== null) {
+    const widen = createWidenMaxButton();
+    if (buttons.length > 0) {
+      // 主操作が別にある場合は補助に下げる（先頭だけを強調する）。
+      widen.className = "secondary";
+    }
+    buttons.push(widen);
+    hints.push("時間の上限を広げる");
+  }
   const p = document.createElement("p");
   p.textContent = `指定時間枠に収まる周回候補が見つかりませんでした。${hints.join("か、")}と見つかる可能性があります。`;
+  recoveryOrigin = "result";
   el.recovery.replaceChildren(p, wrapActions(...buttons));
   revealRecovery(buttons[0] ?? null);
 }
@@ -297,9 +329,13 @@ function createLowerMinButton(nextMinMinutes: number): HTMLButtonElement {
   button.type = "button";
   button.textContent = `最小時間を ${String(nextMinMinutes)} 分に下げる`;
   button.addEventListener("click", () => {
-    el.minMinutes.value = String(nextMinMinutes);
+    // 描画後に手入力で現在値が変わっていても、下げられないときは値を変えず成功も告げない。
+    const outcome = lowerMinClickOutcome(Number(el.minMinutes.value), nextMinMinutes);
     clearRecovery();
-    setStatus(`最小時間を ${String(nextMinMinutes)} 分に下げました。再検索してください。`);
+    if (outcome.nextValue !== null) {
+      el.minMinutes.value = String(outcome.nextValue);
+    }
+    setStatus(outcome.message);
     el.minMinutes.focus();
   });
   return button;
@@ -328,29 +364,32 @@ function createWidenMaxButton(): HTMLButtonElement {
 
 /**
  * 候補ゼロが時間枠では説明できないとき（探索打切り・引き継ぎ除外など）の復帰導線。
- * 時間枠を広げれば解決すると偽らず、再試行・住所検索・出発地点変更の最小限の導線を出す
- * （review R2-F3）。SEARCH_LIMIT の打切りの意味は status 文言に残す。
+ * 時間枠を広げれば解決すると偽らず、条件変更・再試行の最小限の導線を出す（review R2-F3）。
+ * 同じ入力での再検索はリリース成果物に対して決定論的に同じ結果（同一の打切り）を返すため、
+ * 「もう一度検索」を第一候補にせず、出発地点を変える操作を先頭・フォーカス対象にする
+ * （review R3-03）。SEARCH_LIMIT の打切りの意味は status 文言に残す。
  */
 function showRetryRecovery(message: string): void {
   const p = document.createElement("p");
   p.textContent = `${message}出発地点や条件を変えるか、もう一度検索してください。`;
-  const retry = document.createElement("button");
-  retry.type = "button";
-  retry.textContent = "もう一度検索";
-  retry.addEventListener("click", () => {
-    clearRecovery();
-    startSearch();
-  });
   const pick = document.createElement("button");
   pick.type = "button";
-  pick.className = "secondary";
   pick.textContent = "地図で出発地点を指定";
   pick.addEventListener("click", () => {
     clearRecovery();
     enterPickMode();
   });
-  el.recovery.replaceChildren(p, wrapActions(retry, wrapSecondaryAddressButton(), pick));
-  revealRecovery(retry);
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "secondary";
+  retry.textContent = "もう一度検索";
+  retry.addEventListener("click", () => {
+    clearRecovery();
+    startSearch();
+  });
+  recoveryOrigin = "result";
+  el.recovery.replaceChildren(p, wrapActions(pick, wrapSecondaryAddressButton(), retry));
+  revealRecovery(pick);
 }
 
 function wrapActions(...buttons: HTMLButtonElement[]): HTMLElement {
@@ -369,6 +408,7 @@ function showAddressFallback(message: string): void {
   button.addEventListener("click", () => {
     el.addressQuery.focus();
   });
+  recoveryOrigin = "error";
   el.recovery.replaceChildren(p, wrapActions(button));
   revealRecovery(button);
 }
@@ -405,6 +445,7 @@ function showAreaRecovery(message: string): void {
   search.addEventListener("click", () => {
     el.addressQuery.focus();
   });
+  recoveryOrigin = "result";
   el.recovery.replaceChildren(p, wrapActions(usePreset, pick, search));
   revealRecovery(usePreset);
 }
@@ -433,6 +474,7 @@ function showUnreachableRecovery(message: string): void {
     clearRecovery();
     setStatus("出発地点を神田橋に設定しました。探索ボタンで再検索してください。");
   });
+  recoveryOrigin = "result";
   el.recovery.replaceChildren(
     p,
     wrapActions(pick, usePreset, wrapSecondaryAddressButton()),
@@ -1062,6 +1104,9 @@ function updateDepartButtons(): void {
 
 /**
  * 条件変更時に前回の候補・選択・出発リンクを無効化する。
+ * 前回の探索結果に基づく復帰導線も失効させる（最小時間を手入力した後に古い「下げる」
+ * ボタンが残り、無変更や引上げを成功として告げるのを防ぐ。review R3-01）。
+ * 結果取得前の成果物不一致・通信失敗の再読み込み案内は条件を変えても有効なため残す。
  * 入力エラーは消さない（design-review-002 N1）。消去は探索ボタン押下時の再検証だけに任せる。
  * 探索実行中（in-flight）の場合のみ stopWorker() で中断し、アイドル時は Worker と PreparedGraph を維持する。
  */
@@ -1070,6 +1115,7 @@ function invalidateResults(): void {
   currentResult = null;
   selectedCandidateId = null;
   mapView?.renderCandidates([]);
+  clearResultRecovery();
   if (inflightRequestId !== null) {
     stopWorker();
   }

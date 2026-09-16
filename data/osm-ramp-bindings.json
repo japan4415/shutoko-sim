@@ -1,2718 +1,2974 @@
 {
-  "version": 1,
+  "version": 2,
   "sourceDate": "2026-09-16",
   "bindings": [
-    {
-      "rampId": "ramp:c1-inner:kandabashi-entry",
-      "osmWayId": 27155742,
-      "osmNodeId": 292850986,
-      "motorwayNodeId": 1891818143,
-      "direction": "inner",
-      "notes": "OSM binding for 神田橋 (C1 inner)"
-    },
-    {
-      "rampId": "ramp:c1-inner:kandabashi-exit",
-      "osmWayId": 390441534,
-      "osmNodeId": 1891818143,
-      "motorwayNodeId": 31254160,
-      "direction": "inner",
-      "notes": "OSM binding for 神田橋 (C1 inner)"
-    },
-    {
-      "rampId": "ramp:c1-outer:kandabashi-entry",
-      "osmWayId": 92243921,
-      "osmNodeId": 1070862943,
-      "motorwayNodeId": 499831338,
-      "direction": "outer",
-      "notes": "OSM binding for 神田橋 (C1 outer)"
-    },
-    {
-      "rampId": "ramp:c1-outer:kandabashi-exit",
-      "osmWayId": 203035343,
-      "osmNodeId": 2132338144,
-      "motorwayNodeId": 499831338,
-      "direction": "outer",
-      "notes": "OSM binding for 神田橋 (C1 outer)"
-    },
     {
       "rampId": "ramp:c1-inner:takaracho-entry",
       "osmWayId": 378284514,
       "osmNodeId": 1105125663,
-      "motorwayNodeId": 1891818143,
+      "motorwayNodeId": 3977436333,
       "direction": "inner",
-      "notes": "OSM binding for 宝町 (C1 inner)"
-    },
-    {
-      "rampId": "ramp:c1-outer:takaracho-exit",
-      "osmWayId": 297864314,
-      "osmNodeId": 1130812252,
-      "motorwayNodeId": 499831338,
-      "direction": "outer",
-      "notes": "OSM binding for 宝町 (C1 outer)"
-    },
-    {
-      "rampId": "ramp:c1-inner:kyobashi-exit",
-      "osmWayId": 4849052,
-      "osmNodeId": 31253018,
-      "motorwayNodeId": 31254160,
-      "direction": "inner",
-      "notes": "OSM binding for 京橋 (C1 inner)"
-    },
-    {
-      "rampId": "ramp:c1-inner:shintomicho-exit",
-      "osmWayId": 760760233,
-      "osmNodeId": 7644331201,
-      "motorwayNodeId": 31254160,
-      "direction": "inner",
-      "notes": "OSM binding for 新富町 (C1 inner)"
+      "notes": "Verified OSM binding for 宝町 (C1 inner)"
     },
     {
       "rampId": "ramp:c1-inner:ginza-entry",
       "osmWayId": 4848936,
-      "osmNodeId": 31252988,
-      "motorwayNodeId": 31254160,
+      "osmNodeId": 31254351,
+      "motorwayNodeId": 1834887244,
       "direction": "inner",
-      "notes": "OSM binding for 銀座 (C1 inner)"
-    },
-    {
-      "rampId": "ramp:c1-inner:ginza-exit",
-      "osmWayId": 205411855,
-      "osmNodeId": 2154215886,
-      "motorwayNodeId": 31254160,
-      "direction": "inner",
-      "notes": "OSM binding for 銀座 (C1 inner)"
+      "notes": "Verified OSM binding for 銀座 (C1 inner)"
     },
     {
       "rampId": "ramp:c1-outer:ginza-entry",
       "osmWayId": 4848922,
       "osmNodeId": 835996316,
-      "motorwayNodeId": 31254160,
+      "motorwayNodeId": 13042475627,
       "direction": "outer",
-      "notes": "OSM binding for 銀座 (C1 outer)"
-    },
-    {
-      "rampId": "ramp:c1-inner:shiodome-entry",
-      "osmWayId": 23705286,
-      "osmNodeId": 254366627,
-      "motorwayNodeId": 31295430,
-      "direction": "inner",
-      "notes": "OSM binding for 汐留 (C1 inner)"
-    },
-    {
-      "rampId": "ramp:c1-outer:shiodome-exit",
-      "osmWayId": 45068171,
-      "osmNodeId": 574223253,
-      "motorwayNodeId": 31295430,
-      "direction": "outer",
-      "notes": "OSM binding for 汐留 (C1 outer)"
+      "notes": "Verified OSM binding for 銀座 (C1 outer)"
     },
     {
       "rampId": "ramp:c1-inner:shibakoen-entry",
-      "osmWayId": 4853797,
-      "osmNodeId": 254367256,
-      "motorwayNodeId": 31295430,
+      "osmWayId": 4853801,
+      "osmNodeId": 940044988,
+      "motorwayNodeId": 6389606756,
       "direction": "inner",
-      "notes": "OSM binding for 芝公園 (C1 inner)"
-    },
-    {
-      "rampId": "ramp:c1-inner:shibakoen-exit",
-      "osmWayId": 203873821,
-      "osmNodeId": 2139824630,
-      "motorwayNodeId": 264877748,
-      "direction": "inner",
-      "notes": "OSM binding for 芝公園 (C1 inner)"
+      "notes": "Verified OSM binding for 芝公園 (C1 inner)"
     },
     {
       "rampId": "ramp:c1-outer:shibakoen-entry",
       "osmWayId": 4853801,
       "osmNodeId": 940044988,
-      "motorwayNodeId": 31296971,
+      "motorwayNodeId": 6389606756,
       "direction": "outer",
-      "notes": "OSM binding for 芝公園 (C1 outer)"
+      "notes": "Verified OSM binding for 芝公園 (C1 outer)"
     },
     {
-      "rampId": "ramp:c1-outer:shibakoen-exit",
-      "osmWayId": 944671542,
-      "osmNodeId": 9890479132,
-      "motorwayNodeId": 31254160,
-      "direction": "outer",
-      "notes": "OSM binding for 芝公園 (C1 outer)"
-    },
-    {
-      "rampId": "ramp:c1-inner:iikura-exit",
-      "osmWayId": 203832842,
-      "osmNodeId": 2139414241,
-      "motorwayNodeId": 31296971,
-      "direction": "inner",
-      "notes": "OSM binding for 飯倉 (C1 inner)"
-    },
-    {
-      "rampId": "ramp:c1-outer:iikura-entry",
+      "rampId": "ramp:c1-inner:iikura-entry",
       "osmWayId": 24402014,
-      "osmNodeId": 261623547,
-      "motorwayNodeId": 31296971,
-      "direction": "outer",
-      "notes": "OSM binding for 飯倉 (C1 outer)"
+      "osmNodeId": 266237326,
+      "motorwayNodeId": 2165350448,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 飯倉 (C1 inner)"
     },
     {
       "rampId": "ramp:c1-inner:kasumigaseki-entry",
       "osmWayId": 916571615,
       "osmNodeId": 573233927,
-      "motorwayNodeId": 264877748,
+      "motorwayNodeId": 8512840452,
       "direction": "inner",
-      "notes": "OSM binding for 霞が関 (C1 inner)"
-    },
-    {
-      "rampId": "ramp:c1-inner:kasumigaseki-exit",
-      "osmWayId": 1232166619,
-      "osmNodeId": 11456950785,
-      "motorwayNodeId": 297945194,
-      "direction": "inner",
-      "notes": "OSM binding for 霞が関 (C1 inner)"
+      "notes": "Verified OSM binding for 霞が関 (C1 inner)"
     },
     {
       "rampId": "ramp:c1-outer:kasumigaseki-entry",
       "osmWayId": 916571610,
       "osmNodeId": 577255402,
-      "motorwayNodeId": 577255571,
+      "motorwayNodeId": 4366608585,
       "direction": "outer",
-      "notes": "OSM binding for 霞が関 (C1 outer)"
-    },
-    {
-      "rampId": "ramp:c1-outer:kasumigaseki-exit",
-      "osmWayId": 44779775,
-      "osmNodeId": 571217031,
-      "motorwayNodeId": 577255571,
-      "direction": "outer",
-      "notes": "OSM binding for 霞が関 (C1 outer)"
+      "notes": "Verified OSM binding for 霞が関 (C1 outer)"
     },
     {
       "rampId": "ramp:c1-inner:daikancho-entry",
       "osmWayId": 1091280541,
       "osmNodeId": 1866081909,
-      "motorwayNodeId": 297945194,
+      "motorwayNodeId": 256672382,
       "direction": "inner",
-      "notes": "OSM binding for 代官町 (C1 inner)"
+      "notes": "Verified OSM binding for 代官町 (C1 inner)"
+    },
+    {
+      "rampId": "ramp:c1-inner:kandabashi-entry",
+      "osmWayId": 27155742,
+      "osmNodeId": 12881208983,
+      "motorwayNodeId": 6188927991,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 神田橋 (C1 inner)"
+    },
+    {
+      "rampId": "ramp:c1-outer:kandabashi-entry",
+      "osmWayId": 92243921,
+      "osmNodeId": 1070862943,
+      "motorwayNodeId": 6241744894,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 神田橋 (C1 outer)"
+    },
+    {
+      "rampId": "ramp:c1-outer:kyobashi-entry",
+      "osmWayId": 378284514,
+      "osmNodeId": 1105125663,
+      "motorwayNodeId": 3977436333,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 京橋 (C1 outer)"
+    },
+    {
+      "rampId": "ramp:c1-outer:shiodome-entry",
+      "osmWayId": 23705286,
+      "osmNodeId": 31253688,
+      "motorwayNodeId": 7093187743,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 汐留 (C1 outer)"
+    },
+    {
+      "rampId": "ramp:1h-inbound:shibaura-entry",
+      "osmWayId": 861095931,
+      "osmNodeId": 8025624725,
+      "motorwayNodeId": 8327736737,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 芝浦 (1H inbound)"
+    },
+    {
+      "rampId": "ramp:1h-outbound:shibaura-entry",
+      "osmWayId": 4848872,
+      "osmNodeId": 31254050,
+      "motorwayNodeId": 31253909,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 芝浦 (1H outbound)"
+    },
+    {
+      "rampId": "ramp:1h-inbound:suzugamori-entry",
+      "osmWayId": 5219298,
+      "osmNodeId": 579731767,
+      "motorwayNodeId": 6050449435,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 鈴ヶ森 (1H inbound)"
+    },
+    {
+      "rampId": "ramp:1h-inbound:heiwajima-entry",
+      "osmWayId": 256114185,
+      "osmNodeId": 581893180,
+      "motorwayNodeId": 2618098819,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 平和島 (1H inbound)"
+    },
+    {
+      "rampId": "ramp:1h-outbound:heiwajima-entry",
+      "osmWayId": 5213652,
+      "osmNodeId": 36720316,
+      "motorwayNodeId": 36720315,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 平和島 (1H outbound)"
+    },
+    {
+      "rampId": "ramp:1h-inbound:kukonishi-entry",
+      "osmWayId": 5213652,
+      "osmNodeId": 36720316,
+      "motorwayNodeId": 36720315,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 空港西 (1H inbound)"
+    },
+    {
+      "rampId": "ramp:1h-inbound:haneda-entry",
+      "osmWayId": 161462642,
+      "osmNodeId": 1734274815,
+      "motorwayNodeId": 6387199165,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 羽田 (1H inbound)"
+    },
+    {
+      "rampId": "ramp:1h-outbound:haneda-entry",
+      "osmWayId": 964191633,
+      "osmNodeId": 3817775783,
+      "motorwayNodeId": 3817775785,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 羽田 (1H outbound)"
+    },
+    {
+      "rampId": "ramp:1h-outbound:katsushima-entry",
+      "osmWayId": 5219298,
+      "osmNodeId": 579731767,
+      "motorwayNodeId": 6050449435,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 勝島 (1H outbound)"
+    },
+    {
+      "rampId": "ramp:2-inbound:tengenji-entry",
+      "osmWayId": 202809279,
+      "osmNodeId": 2127484100,
+      "motorwayNodeId": 2127484099,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 天現寺 (2 inbound)"
+    },
+    {
+      "rampId": "ramp:2-inbound:meguro-entry",
+      "osmWayId": 207535708,
+      "osmNodeId": 2177935837,
+      "motorwayNodeId": 2177935839,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 目黒 (2 inbound)"
+    },
+    {
+      "rampId": "ramp:2-inbound:ebara-entry",
+      "osmWayId": 805171060,
+      "osmNodeId": 2068189807,
+      "motorwayNodeId": 7530433787,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 荏原 (2 inbound)"
+    },
+    {
+      "rampId": "ramp:2-inbound:togoshi-entry",
+      "osmWayId": 805171060,
+      "osmNodeId": 2068189807,
+      "motorwayNodeId": 7530433787,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 戸越 (2 inbound)"
+    },
+    {
+      "rampId": "ramp:3-inbound:takagicho-entry",
+      "osmWayId": 202809279,
+      "osmNodeId": 2127484100,
+      "motorwayNodeId": 2127484099,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 高樹町 (3 inbound)"
+    },
+    {
+      "rampId": "ramp:3-outbound:shibuya-entry",
+      "osmWayId": 756785283,
+      "osmNodeId": 256000430,
+      "motorwayNodeId": 9037775317,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 渋谷 (3 outbound)"
+    },
+    {
+      "rampId": "ramp:3-inbound:shibuya-entry",
+      "osmWayId": 311740425,
+      "osmNodeId": 366856266,
+      "motorwayNodeId": 7234706480,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 渋谷 (3 inbound)"
+    },
+    {
+      "rampId": "ramp:3-inbound:sangenjaya-entry",
+      "osmWayId": 227213870,
+      "osmNodeId": 2359268371,
+      "motorwayNodeId": 5687926012,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 三軒茶屋 (3 inbound)"
+    },
+    {
+      "rampId": "ramp:3-inbound:yoga-entry",
+      "osmWayId": 79449035,
+      "osmNodeId": 927639571,
+      "motorwayNodeId": 927639584,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 用賀 (3 inbound)"
+    },
+    {
+      "rampId": "ramp:3-outbound:ikejiri-entry",
+      "osmWayId": 227383685,
+      "osmNodeId": 2360725237,
+      "motorwayNodeId": 2360725234,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 池尻 (3 outbound)"
+    },
+    {
+      "rampId": "ramp:4-inbound:gaien-entry",
+      "osmWayId": 1419416544,
+      "osmNodeId": 9284737984,
+      "motorwayNodeId": 3865016179,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 外苑 (4 inbound)"
+    },
+    {
+      "rampId": "ramp:4-outbound:gaien-entry",
+      "osmWayId": 421488199,
+      "osmNodeId": 1125926448,
+      "motorwayNodeId": 4908207829,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 外苑 (4 outbound)"
+    },
+    {
+      "rampId": "ramp:4-inbound:ramp-entry",
+      "osmWayId": 45180327,
+      "osmNodeId": 295413558,
+      "motorwayNodeId": 1973313111,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 代々木 (4 inbound)"
+    },
+    {
+      "rampId": "ramp:4-inbound:shinjuku-entry",
+      "osmWayId": 26956959,
+      "osmNodeId": 6495134855,
+      "motorwayNodeId": 8302849481,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新宿 (4 inbound)"
+    },
+    {
+      "rampId": "ramp:4-inbound:hatagaya-entry",
+      "osmWayId": 381972985,
+      "osmNodeId": 3851809276,
+      "motorwayNodeId": 5685054810,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 幡ヶ谷 (4 inbound)"
+    },
+    {
+      "rampId": "ramp:4-outbound:eifuku-entry",
+      "osmWayId": 28019825,
+      "osmNodeId": 307677878,
+      "motorwayNodeId": 311575376,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 永福 (4 outbound)"
+    },
+    {
+      "rampId": "ramp:4-inbound:eifuku-entry",
+      "osmWayId": 387256793,
+      "osmNodeId": 309877741,
+      "motorwayNodeId": 8303133940,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 永福 (4 inbound)"
+    },
+    {
+      "rampId": "ramp:4-inbound:takaido-entry",
+      "osmWayId": 333682063,
+      "osmNodeId": 443403785,
+      "motorwayNodeId": 3407837818,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 高井戸 (4 inbound)"
+    },
+    {
+      "rampId": "ramp:4-outbound:hatsudai-entry",
+      "osmWayId": 26956959,
+      "osmNodeId": 6495134855,
+      "motorwayNodeId": 8302849481,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 初台 (4 outbound)"
+    },
+    {
+      "rampId": "ramp:5-inbound:nishikanda-entry",
+      "osmWayId": 390426209,
+      "osmNodeId": 2130008048,
+      "motorwayNodeId": 9676207393,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 西神田 (5 inbound)"
+    },
+    {
+      "rampId": "ramp:5-inbound:gokokuji-entry",
+      "osmWayId": 680120031,
+      "osmNodeId": 6368120238,
+      "motorwayNodeId": 6368120239,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 護国寺 (5 inbound)"
+    },
+    {
+      "rampId": "ramp:5-inbound:higashi-ikebukuro-entry",
+      "osmWayId": 182465955,
+      "osmNodeId": 1928229725,
+      "motorwayNodeId": 1928229724,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 東池袋 (5 inbound)"
+    },
+    {
+      "rampId": "ramp:5-outbound:higashi-ikebukuro-entry",
+      "osmWayId": 156280205,
+      "osmNodeId": 1685515823,
+      "motorwayNodeId": 6368120246,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 東池袋 (5 outbound)"
+    },
+    {
+      "rampId": "ramp:5-inbound:kita-ikebukuro-entry",
+      "osmWayId": 182465953,
+      "osmNodeId": 1928229700,
+      "motorwayNodeId": 1928229701,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 北池袋 (5 inbound)"
+    },
+    {
+      "rampId": "ramp:5-inbound:itabashi-honcho-entry",
+      "osmWayId": 464736087,
+      "osmNodeId": 4598163085,
+      "motorwayNodeId": 4598163080,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 板橋本町 (5 inbound)"
+    },
+    {
+      "rampId": "ramp:5-outbound:itabashi-honcho-entry",
+      "osmWayId": 438474207,
+      "osmNodeId": 4362184909,
+      "motorwayNodeId": 4362184910,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 板橋本町 (5 outbound)"
+    },
+    {
+      "rampId": "ramp:5-inbound:nakadai-entry",
+      "osmWayId": 201106518,
+      "osmNodeId": 2110614957,
+      "motorwayNodeId": 2110614955,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 中台 (5 inbound)"
+    },
+    {
+      "rampId": "ramp:5-inbound:takashimadaira-entry",
+      "osmWayId": 199069092,
+      "osmNodeId": 2091157265,
+      "motorwayNodeId": 2191158528,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 高島平 (5 inbound)"
+    },
+    {
+      "rampId": "ramp:5-inbound:toda-minami-entry",
+      "osmWayId": 409002623,
+      "osmNodeId": 2872561213,
+      "motorwayNodeId": 4108975291,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 戸田南 (5 inbound)"
+    },
+    {
+      "rampId": "ramp:5-outbound:hitotsubashi-entry",
+      "osmWayId": 93325438,
+      "osmNodeId": 1082039923,
+      "motorwayNodeId": 5991853420,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 一ツ橋 (5 outbound)"
+    },
+    {
+      "rampId": "ramp:5-outbound:iidabashi-entry",
+      "osmWayId": 45977417,
+      "osmNodeId": 4088977320,
+      "motorwayNodeId": 6244534907,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 飯田橋 (5 outbound)"
+    },
+    {
+      "rampId": "ramp:5-outbound:toda-entry",
+      "osmWayId": 409002623,
+      "osmNodeId": 2872561213,
+      "motorwayNodeId": 4108975291,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 戸田 (5 outbound)"
+    },
+    {
+      "rampId": "ramp:6m-inbound:komagata-entry",
+      "osmWayId": 199311816,
+      "osmNodeId": 2093245883,
+      "motorwayNodeId": 2093245881,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 駒形 (6M inbound)"
+    },
+    {
+      "rampId": "ramp:6m-outbound:mukojima-entry",
+      "osmWayId": 41520089,
+      "osmNodeId": 1041276967,
+      "motorwayNodeId": 1041276905,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 向島 (6M outbound)"
+    },
+    {
+      "rampId": "ramp:6m-inbound:mukojima-entry",
+      "osmWayId": 128005860,
+      "osmNodeId": 9717252222,
+      "motorwayNodeId": 9717252221,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 向島 (6M inbound)"
+    },
+    {
+      "rampId": "ramp:6m-inbound:tsutsumidori-entry",
+      "osmWayId": 128005861,
+      "osmNodeId": 308014360,
+      "motorwayNodeId": 1671664696,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 堤通 (6M inbound)"
+    },
+    {
+      "rampId": "ramp:6m-outbound:tsutsumidori-entry",
+      "osmWayId": 680568024,
+      "osmNodeId": 6372470779,
+      "motorwayNodeId": 6372470780,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 堤通 (6M outbound)"
+    },
+    {
+      "rampId": "ramp:7-inbound:kinshicho-entry",
+      "osmWayId": 154971210,
+      "osmNodeId": 1674175194,
+      "motorwayNodeId": 1674175176,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 錦糸町 (7 inbound)"
+    },
+    {
+      "rampId": "ramp:7-outbound:kinshicho-entry",
+      "osmWayId": 960810627,
+      "osmNodeId": 8888284785,
+      "motorwayNodeId": 8888284786,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 錦糸町 (7 outbound)"
+    },
+    {
+      "rampId": "ramp:7-inbound:komatsugawa-entry",
+      "osmWayId": 59664332,
+      "osmNodeId": 7301483738,
+      "motorwayNodeId": 8378201618,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 小松川 (7 inbound)"
+    },
+    {
+      "rampId": "ramp:7-inbound:ichinoe-entry",
+      "osmWayId": 59664332,
+      "osmNodeId": 7301483738,
+      "motorwayNodeId": 8378201618,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 一之江 (7 inbound)"
+    },
+    {
+      "rampId": "ramp:9-inbound:kiba-entry",
+      "osmWayId": 1024107817,
+      "osmNodeId": 3864472481,
+      "motorwayNodeId": 1640003756,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 木場 (9 inbound)"
+    },
+    {
+      "rampId": "ramp:9-outbound:fukuzumi-entry",
+      "osmWayId": 4857854,
+      "osmNodeId": 1947552220,
+      "motorwayNodeId": 1947552219,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 福住 (9 outbound)"
+    },
+    {
+      "rampId": "ramp:9-outbound:shiohama-entry",
+      "osmWayId": 4857854,
+      "osmNodeId": 1947552220,
+      "motorwayNodeId": 1947552219,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 塩浜 (9 outbound)"
+    },
+    {
+      "rampId": "ramp:10-outbound:toyosu-entry",
+      "osmWayId": 40911760,
+      "osmNodeId": 499073450,
+      "motorwayNodeId": 7105172061,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 豊洲 (10 outbound)"
+    },
+    {
+      "rampId": "ramp:10-outbound:harumi-entry",
+      "osmWayId": 568584516,
+      "osmNodeId": 5470031352,
+      "motorwayNodeId": 5470031353,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 晴海 (10 outbound)"
+    },
+    {
+      "rampId": "ramp:11-inbound:daiba-entry",
+      "osmWayId": 378126419,
+      "osmNodeId": 31295560,
+      "motorwayNodeId": 6773622242,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 台場 (11 inbound)"
+    },
+    {
+      "rampId": "ramp:6s-inbound:kahei-entry",
+      "osmWayId": 60942184,
+      "osmNodeId": 1623135557,
+      "motorwayNodeId": 7133587119,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 加平 (6S inbound)"
+    },
+    {
+      "rampId": "ramp:6s-outbound:kahei-entry",
+      "osmWayId": 60942184,
+      "osmNodeId": 1623135557,
+      "motorwayNodeId": 7133587119,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 加平 (6S outbound)"
+    },
+    {
+      "rampId": "ramp:6s-inbound:kahei-653-entry",
+      "osmWayId": 60942184,
+      "osmNodeId": 1623135557,
+      "motorwayNodeId": 7133587119,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 加平 (6S inbound)"
+    },
+    {
+      "rampId": "ramp:6s-outbound:kahei-654-entry",
+      "osmWayId": 60942184,
+      "osmNodeId": 1623135557,
+      "motorwayNodeId": 7133587119,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 加平 (6S outbound)"
+    },
+    {
+      "rampId": "ramp:6s-inbound:yashio-minami-entry",
+      "osmWayId": 251816254,
+      "osmNodeId": 925240922,
+      "motorwayNodeId": 2579845725,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 八潮南 (6S inbound)"
+    },
+    {
+      "rampId": "ramp:6s-outbound:yashio-minami-entry",
+      "osmWayId": 251808347,
+      "osmNodeId": 2579787350,
+      "motorwayNodeId": 9665676558,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 八潮南 (6S outbound)"
+    },
+    {
+      "rampId": "ramp:6s-inbound:yashio-entry",
+      "osmWayId": 1023817978,
+      "osmNodeId": 746491118,
+      "motorwayNodeId": 9441264049,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 八潮 (6S inbound)"
+    },
+    {
+      "rampId": "ramp:1u-inbound:honcho-entry",
+      "osmWayId": 202903719,
+      "osmNodeId": 2128389334,
+      "motorwayNodeId": 7637464475,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 本町 (1U inbound)"
+    },
+    {
+      "rampId": "ramp:1u-outbound:honcho-entry",
+      "osmWayId": 202905131,
+      "osmNodeId": 2128403158,
+      "motorwayNodeId": 2128403161,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 本町 (1U outbound)"
+    },
+    {
+      "rampId": "ramp:1u-inbound:ueno-entry",
+      "osmWayId": 199311816,
+      "osmNodeId": 2093245883,
+      "motorwayNodeId": 2093245881,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 上野 (1U inbound)"
+    },
+    {
+      "rampId": "ramp:1u-inbound:iriya-entry",
+      "osmWayId": 41520089,
+      "osmNodeId": 1041276967,
+      "motorwayNodeId": 1041276905,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 入谷 (1U inbound)"
+    },
+    {
+      "rampId": "ramp:s1-inbound:shikahamabashi-entry",
+      "osmWayId": 438481856,
+      "osmNodeId": 5964179230,
+      "motorwayNodeId": 5653183406,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 鹿浜橋 (S1 inbound)"
+    },
+    {
+      "rampId": "ramp:s1-outbound:shikahamabashi-entry",
+      "osmWayId": 438481856,
+      "osmNodeId": 5964179230,
+      "motorwayNodeId": 5653183406,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 鹿浜橋 (S1 outbound)"
+    },
+    {
+      "rampId": "ramp:s1-inbound:ramp-entry",
+      "osmWayId": 1023900268,
+      "osmNodeId": 5977844773,
+      "motorwayNodeId": 5977844774,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 加賀 (S1 inbound)"
+    },
+    {
+      "rampId": "ramp:s1-inbound:shingo-entry",
+      "osmWayId": 205725086,
+      "osmNodeId": 2156964632,
+      "motorwayNodeId": 2156964639,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新郷 (S1 inbound)"
+    },
+    {
+      "rampId": "ramp:s1-outbound:shingo-entry",
+      "osmWayId": 28188012,
+      "osmNodeId": 5910007399,
+      "motorwayNodeId": 1354352937,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 新郷 (S1 outbound)"
+    },
+    {
+      "rampId": "ramp:s1-inbound:angyo-entry",
+      "osmWayId": 28188012,
+      "osmNodeId": 5910007399,
+      "motorwayNodeId": 1354352937,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 安行 (S1 inbound)"
+    },
+    {
+      "rampId": "ramp:s1-inbound:araijuku-entry",
+      "osmWayId": 44351827,
+      "osmNodeId": 563661478,
+      "motorwayNodeId": 1226695201,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新井宿 (S1 inbound)"
+    },
+    {
+      "rampId": "ramp:s1-outbound:adachi-iriya-entry",
+      "osmWayId": 205725086,
+      "osmNodeId": 2156964632,
+      "motorwayNodeId": 2156964639,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 足立入谷 (S1 outbound)"
+    },
+    {
+      "rampId": "ramp:s5-inbound:urawa-minami-entry",
+      "osmWayId": 1023386116,
+      "osmNodeId": 1387390737,
+      "motorwayNodeId": 4362194610,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 浦和南 (S5 inbound)"
+    },
+    {
+      "rampId": "ramp:s5-inbound:yono-entry",
+      "osmWayId": 56132891,
+      "osmNodeId": 252830367,
+      "motorwayNodeId": 1690305263,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 与野 (S5 inbound)"
+    },
+    {
+      "rampId": "ramp:s5-outbound:urawa-kita-entry",
+      "osmWayId": 56132891,
+      "osmNodeId": 252830367,
+      "motorwayNodeId": 1690305263,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 浦和北 (S5 outbound)"
+    },
+    {
+      "rampId": "ramp:s2-inbound:shintoshin-nishi-entry",
+      "osmWayId": 56132891,
+      "osmNodeId": 252830367,
+      "motorwayNodeId": 1690305263,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新都心西 (S2 inbound)"
+    },
+    {
+      "rampId": "ramp:s2-outbound:shintoshin-nishi-entry",
+      "osmWayId": 56132891,
+      "osmNodeId": 252830367,
+      "motorwayNodeId": 1690305263,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 新都心西 (S2 outbound)"
+    },
+    {
+      "rampId": "ramp:s2-inbound:shintoshin-entry",
+      "osmWayId": 904691646,
+      "osmNodeId": 614599183,
+      "motorwayNodeId": 2108120471,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新都心 (S2 inbound)"
+    },
+    {
+      "rampId": "ramp:s2-outbound:shintoshin-entry",
+      "osmWayId": 904691651,
+      "osmNodeId": 1147135489,
+      "motorwayNodeId": 2108155783,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 新都心 (S2 outbound)"
+    },
+    {
+      "rampId": "ramp:s2-inbound:saitama-minuma-entry",
+      "osmWayId": 904691646,
+      "osmNodeId": 614599183,
+      "motorwayNodeId": 2108120471,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for さいたま見沼 (S2 inbound)"
+    },
+    {
+      "rampId": "ramp:c2-outer:gotanda-entry",
+      "osmWayId": 805171060,
+      "osmNodeId": 2068189807,
+      "motorwayNodeId": 7530433787,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 五反田 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-outer:chukan-oiminami-entry",
+      "osmWayId": 729484784,
+      "osmNodeId": 582140953,
+      "motorwayNodeId": 6833965601,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 中環大井南 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-outer:takamatsu-entry",
+      "osmWayId": 182465953,
+      "osmNodeId": 1928229700,
+      "motorwayNodeId": 1928229701,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 高松 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:ogi-ohashi-entry",
+      "osmWayId": 434944289,
+      "osmNodeId": 4328524389,
+      "motorwayNodeId": 3578384614,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 扇大橋 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:ogi-ohashi-entry",
+      "osmWayId": 434944289,
+      "osmNodeId": 4328524389,
+      "motorwayNodeId": 3578384614,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 扇大橋 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:senju-shinbashi-entry",
+      "osmWayId": 681508209,
+      "osmNodeId": 6382180110,
+      "motorwayNodeId": 6382929609,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 千住新橋 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:senju-shinbashi-entry",
+      "osmWayId": 60870186,
+      "osmNodeId": 1601912202,
+      "motorwayNodeId": 9847554773,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 千住新橋 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:yotsugi-entry",
+      "osmWayId": 60870186,
+      "osmNodeId": 1601912202,
+      "motorwayNodeId": 9847554773,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 四つ木 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:yotsugi-entry",
+      "osmWayId": 58868493,
+      "osmNodeId": 1697722138,
+      "motorwayNodeId": 723656977,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 四つ木 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:hirai-ohashi-entry",
+      "osmWayId": 55555911,
+      "osmNodeId": 1592997381,
+      "motorwayNodeId": 1592997567,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 平井大橋 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-inner:seishincho-entry",
+      "osmWayId": 751177053,
+      "osmNodeId": 7022713630,
+      "motorwayNodeId": 7022713629,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 清新町 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:kosuge-entry",
+      "osmWayId": 60870186,
+      "osmNodeId": 1601912202,
+      "motorwayNodeId": 9847554773,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 小菅 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-outer:funaboribashi-entry",
+      "osmWayId": 59583395,
+      "osmNodeId": 7903143888,
+      "motorwayNodeId": 7903143893,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 船堀橋 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:nishi-ikebukuro-entry",
+      "osmWayId": 190617380,
+      "osmNodeId": 2012583838,
+      "motorwayNodeId": 9776186076,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 西池袋 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-inner:takinogawa-entry",
+      "osmWayId": 464736087,
+      "osmNodeId": 4598163085,
+      "motorwayNodeId": 4598163080,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 滝野川 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-inner:oji-minami-entry",
+      "osmWayId": 434944289,
+      "osmNodeId": 4328524389,
+      "motorwayNodeId": 3578384614,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 王子南 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:oji-kita-entry",
+      "osmWayId": 434944289,
+      "osmNodeId": 4328524389,
+      "motorwayNodeId": 3578384614,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 王子北 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:hatsudai-minami-entry",
+      "osmWayId": 381972985,
+      "osmNodeId": 3851809276,
+      "motorwayNodeId": 5685054810,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 初台南 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:tomigaya-entry",
+      "osmWayId": 381953860,
+      "osmNodeId": 1474144773,
+      "motorwayNodeId": 4213654435,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 富ヶ谷 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-outer:nakano-chojabashi-entry",
+      "osmWayId": 381950205,
+      "osmNodeId": 318832167,
+      "motorwayNodeId": 3851530193,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 中野長者橋 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:chukan-komatsugawa-entry",
+      "osmWayId": 751177053,
+      "osmNodeId": 7022713630,
+      "motorwayNodeId": 7022713629,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 中環小松川 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:b-west:oiminami-entry",
+      "osmWayId": 5171347,
+      "osmNodeId": 35938038,
+      "motorwayNodeId": 9053263610,
+      "direction": "west",
+      "notes": "Verified OSM binding for 大井南 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:oi-entry",
+      "osmWayId": 405795841,
+      "osmNodeId": 31288829,
+      "motorwayNodeId": 7890941554,
+      "direction": "east",
+      "notes": "Verified OSM binding for 大井 (B east)"
+    },
+    {
+      "rampId": "ramp:b-east:ariake-entry",
+      "osmWayId": 4854228,
+      "osmNodeId": 31300420,
+      "motorwayNodeId": 5584443392,
+      "direction": "east",
+      "notes": "Verified OSM binding for 有明 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:shinkiba-entry",
+      "osmWayId": 4857046,
+      "osmNodeId": 31330050,
+      "motorwayNodeId": 6439922826,
+      "direction": "west",
+      "notes": "Verified OSM binding for 新木場 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:shinkiba-entry",
+      "osmWayId": 4857046,
+      "osmNodeId": 31330050,
+      "motorwayNodeId": 6439922826,
+      "direction": "east",
+      "notes": "Verified OSM binding for 新木場 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:kasai-entry",
+      "osmWayId": 46876172,
+      "osmNodeId": 255644314,
+      "motorwayNodeId": 255643795,
+      "direction": "west",
+      "notes": "Verified OSM binding for 葛西 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:kasai-entry",
+      "osmWayId": 46876077,
+      "osmNodeId": 598514888,
+      "motorwayNodeId": 4749149894,
+      "direction": "east",
+      "notes": "Verified OSM binding for 葛西 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:urayasu-entry",
+      "osmWayId": 38028908,
+      "osmNodeId": 288769760,
+      "motorwayNodeId": 10305047149,
+      "direction": "west",
+      "notes": "Verified OSM binding for 浦安 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:urayasu-entry",
+      "osmWayId": 38028908,
+      "osmNodeId": 288769760,
+      "motorwayNodeId": 10305047149,
+      "direction": "east",
+      "notes": "Verified OSM binding for 浦安 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:rinkai-fukutoshin-entry",
+      "osmWayId": 405795841,
+      "osmNodeId": 31288829,
+      "motorwayNodeId": 7890941554,
+      "direction": "west",
+      "notes": "Verified OSM binding for 臨海副都心 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:maihama-entry",
+      "osmWayId": 1006338881,
+      "osmNodeId": 1736486542,
+      "motorwayNodeId": 9284737985,
+      "direction": "west",
+      "notes": "Verified OSM binding for 舞浜 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:chidoricho-entry",
+      "osmWayId": 915743994,
+      "osmNodeId": 4361054333,
+      "motorwayNodeId": 6423773559,
+      "direction": "west",
+      "notes": "Verified OSM binding for 千鳥町 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:kuko-chuo-entry",
+      "osmWayId": 42751326,
+      "osmNodeId": 534567501,
+      "motorwayNodeId": 3296142272,
+      "direction": "west",
+      "notes": "Verified OSM binding for 空港中央 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:kuko-chuo-entry",
+      "osmWayId": 5203882,
+      "osmNodeId": 6271976435,
+      "motorwayNodeId": 269667807,
+      "direction": "east",
+      "notes": "Verified OSM binding for 空港中央 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:wangan-kampachi-entry",
+      "osmWayId": 669736532,
+      "osmNodeId": 6271967185,
+      "motorwayNodeId": 6271967188,
+      "direction": "west",
+      "notes": "Verified OSM binding for 湾岸環八 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:higashi-ogishima-entry",
+      "osmWayId": 5365199,
+      "osmNodeId": 364194613,
+      "motorwayNodeId": 12083472624,
+      "direction": "west",
+      "notes": "Verified OSM binding for 東扇島 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:higashi-ogishima-entry",
+      "osmWayId": 32355491,
+      "osmNodeId": 3815254941,
+      "motorwayNodeId": 4964221846,
+      "direction": "east",
+      "notes": "Verified OSM binding for 東扇島 (B east)"
+    },
+    {
+      "rampId": "ramp:b-east:sachiura-entry",
+      "osmWayId": 37838294,
+      "osmNodeId": 443726408,
+      "motorwayNodeId": 443726407,
+      "direction": "east",
+      "notes": "Verified OSM binding for 幸浦 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:sugita-entry",
+      "osmWayId": 311680794,
+      "osmNodeId": 3173995132,
+      "motorwayNodeId": 10876194307,
+      "direction": "west",
+      "notes": "Verified OSM binding for 杉田 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:sugita-entry",
+      "osmWayId": 39276743,
+      "osmNodeId": 1599990009,
+      "motorwayNodeId": 470733711,
+      "direction": "east",
+      "notes": "Verified OSM binding for 杉田 (B east)"
+    },
+    {
+      "rampId": "ramp:b-east:isogo-entry",
+      "osmWayId": 39276743,
+      "osmNodeId": 1599990009,
+      "motorwayNodeId": 470733711,
+      "direction": "east",
+      "notes": "Verified OSM binding for 磯子 (B east)"
+    },
+    {
+      "rampId": "ramp:b-east:minamihommoku-futo-entry",
+      "osmWayId": 438362001,
+      "osmNodeId": 4361035648,
+      "motorwayNodeId": 9381845153,
+      "direction": "east",
+      "notes": "Verified OSM binding for 南本牧ふ頭 (B east)"
+    },
+    {
+      "rampId": "ramp:b-east:hommoku-futo-entry",
+      "osmWayId": 853280968,
+      "osmNodeId": 7959540374,
+      "motorwayNodeId": 13329998520,
+      "direction": "east",
+      "notes": "Verified OSM binding for 本牧ふ頭 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:sankeien-entry",
+      "osmWayId": 438362001,
+      "osmNodeId": 4361035648,
+      "motorwayNodeId": 9381845153,
+      "direction": "west",
+      "notes": "Verified OSM binding for 三溪園 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:ukishima-entry",
+      "osmWayId": 5365199,
+      "osmNodeId": 364194613,
+      "motorwayNodeId": 12083472624,
+      "direction": "west",
+      "notes": "Verified OSM binding for 浮島 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:ukishima-entry",
+      "osmWayId": 5365199,
+      "osmNodeId": 364194613,
+      "motorwayNodeId": 12083472624,
+      "direction": "east",
+      "notes": "Verified OSM binding for 浮島 (B east)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:daishi-entry",
+      "osmWayId": 964191633,
+      "osmNodeId": 3817775783,
+      "motorwayNodeId": 3817775785,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 大師 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:daishi-entry",
+      "osmWayId": 964191633,
+      "osmNodeId": 3817775783,
+      "motorwayNodeId": 3817775785,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 大師 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:daishi-683-entry",
+      "osmWayId": 964191633,
+      "osmNodeId": 3817775783,
+      "motorwayNodeId": 3817775785,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 大師 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:hamakawasaki-entry",
+      "osmWayId": 225794283,
+      "osmNodeId": 2345487300,
+      "motorwayNodeId": 2345487303,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 浜川崎 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:shioiri-entry",
+      "osmWayId": 225796550,
+      "osmNodeId": 2345605592,
+      "motorwayNodeId": 2345571927,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 汐入 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:koyasu-entry",
+      "osmWayId": 224864779,
+      "osmNodeId": 2337123366,
+      "motorwayNodeId": 7575095556,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 子安 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:koyasu-entry",
+      "osmWayId": 45657161,
+      "osmNodeId": 581875645,
+      "motorwayNodeId": 581875622,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 子安 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:higashi-kanagawa-entry",
+      "osmWayId": 247838153,
+      "osmNodeId": 8120955300,
+      "motorwayNodeId": 13394442743,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 東神奈川 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:higashi-kanagawa-entry",
+      "osmWayId": 724099523,
+      "osmNodeId": 307561624,
+      "motorwayNodeId": 6790935667,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 東神奈川 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:minato-mirai-entry",
+      "osmWayId": 25997886,
+      "osmNodeId": 283626715,
+      "motorwayNodeId": 283626720,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for みなとみらい (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:minato-mirai-entry",
+      "osmWayId": 135176138,
+      "osmNodeId": 1064014694,
+      "motorwayNodeId": 3395063377,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for みなとみらい (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:yokohama-koen-entry",
+      "osmWayId": 760711340,
+      "osmNodeId": 2323169022,
+      "motorwayNodeId": 7106473256,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 横浜公園 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:asada-entry",
+      "osmWayId": 1022519232,
+      "osmNodeId": 4360975620,
+      "motorwayNodeId": 366523945,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 浅田 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:namamugi-entry",
+      "osmWayId": 760526453,
+      "osmNodeId": 4741655105,
+      "motorwayNodeId": 4741655106,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 生麦 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:yokohama-eki-higashiguchi-entry",
+      "osmWayId": 247838153,
+      "osmNodeId": 8120955300,
+      "motorwayNodeId": 13394442743,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 横浜駅東口 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k5-inbound:daikoku-futo-entry",
+      "osmWayId": 32592469,
+      "osmNodeId": 366517066,
+      "motorwayNodeId": 739425888,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 大黒ふ頭 (K5 inbound)"
+    },
+    {
+      "rampId": "ramp:k5-west:daikoku-futo-entry",
+      "osmWayId": 32592469,
+      "osmNodeId": 366517066,
+      "motorwayNodeId": 739425888,
+      "direction": "west",
+      "notes": "Verified OSM binding for 大黒ふ頭 (K5 west)"
+    },
+    {
+      "rampId": "ramp:k5-east:daikoku-futo-entry",
+      "osmWayId": 32592469,
+      "osmNodeId": 366517066,
+      "motorwayNodeId": 739425888,
+      "direction": "east",
+      "notes": "Verified OSM binding for 大黒ふ頭 (K5 east)"
+    },
+    {
+      "rampId": "ramp:k6-inbound:tonomachi-entry",
+      "osmWayId": 38092942,
+      "osmNodeId": 1118762068,
+      "motorwayNodeId": 1118762366,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 殿町 (K6 inbound)"
+    },
+    {
+      "rampId": "ramp:y-north:yaesu-entry",
+      "osmWayId": 46151740,
+      "osmNodeId": 588411742,
+      "motorwayNodeId": 6789046962,
+      "direction": "north",
+      "notes": "Verified OSM binding for 八重洲 (Y north)"
+    },
+    {
+      "rampId": "ramp:y-south:yaesu-entry",
+      "osmWayId": 378284514,
+      "osmNodeId": 1105125663,
+      "motorwayNodeId": 3977436333,
+      "direction": "south",
+      "notes": "Verified OSM binding for 八重洲 (Y south)"
+    },
+    {
+      "rampId": "ramp:k2-inbound:yokohama-eki-nishiguchi-entry",
+      "osmWayId": 247838153,
+      "osmNodeId": 8120955300,
+      "motorwayNodeId": 13394442743,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 横浜駅西口 (K2 inbound)"
+    },
+    {
+      "rampId": "ramp:k2-inbound:mitsuzawa-entry",
+      "osmWayId": 39744126,
+      "osmNodeId": 476496767,
+      "motorwayNodeId": 476496769,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 三ツ沢 (K2 inbound)"
+    },
+    {
+      "rampId": "ramp:k3-inbound:shin-yamashita-entry",
+      "osmWayId": 435743369,
+      "osmNodeId": 7105141622,
+      "motorwayNodeId": 7105141624,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新山下 (K3 inbound)"
+    },
+    {
+      "rampId": "ramp:k3-outbound:shin-yamashita-entry",
+      "osmWayId": 409106612,
+      "osmNodeId": 4109992230,
+      "motorwayNodeId": 6372165895,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 新山下 (K3 outbound)"
+    },
+    {
+      "rampId": "ramp:k3-inbound:ishikawacho-entry",
+      "osmWayId": 223578144,
+      "osmNodeId": 2324584143,
+      "motorwayNodeId": 2324584146,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 石川町 (K3 inbound)"
+    },
+    {
+      "rampId": "ramp:k3-inbound:hananoki-entry",
+      "osmWayId": 1021042293,
+      "osmNodeId": 1648466215,
+      "motorwayNodeId": 1648466213,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 花之木 (K3 inbound)"
+    },
+    {
+      "rampId": "ramp:k3-inbound:nagata-entry",
+      "osmWayId": 1021042293,
+      "osmNodeId": 1648466215,
+      "motorwayNodeId": 1648466213,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 永田 (K3 inbound)"
+    },
+    {
+      "rampId": "ramp:k3-outbound:bandobashi-entry",
+      "osmWayId": 84530019,
+      "osmNodeId": 292233844,
+      "motorwayNodeId": 3256397567,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 阪東橋 (K3 outbound)"
+    },
+    {
+      "rampId": "ramp:k7-inbound:shin-yokohama-entry",
+      "osmWayId": 367047850,
+      "osmNodeId": 4744793319,
+      "motorwayNodeId": 7252867541,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新横浜 (K7 inbound)"
+    },
+    {
+      "rampId": "ramp:k7-outbound:shin-yokohama-entry",
+      "osmWayId": 783548646,
+      "osmNodeId": 7656669611,
+      "motorwayNodeId": 7318919095,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 新横浜 (K7 outbound)"
+    },
+    {
+      "rampId": "ramp:k7-inbound:kishiya-namamugi-entry",
+      "osmWayId": 760526455,
+      "osmNodeId": 4741655047,
+      "motorwayNodeId": 7527097182,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 岸谷生麦 (K7 inbound)"
+    },
+    {
+      "rampId": "ramp:k7-outbound:kishiya-namamugi-entry",
+      "osmWayId": 760526455,
+      "osmNodeId": 4741655047,
+      "motorwayNodeId": 7527097182,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 岸谷生麦 (K7 outbound)"
+    },
+    {
+      "rampId": "ramp:k7-inbound:baba-entry",
+      "osmWayId": 733767653,
+      "osmNodeId": 410442967,
+      "motorwayNodeId": 7252683267,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 馬場 (K7 inbound)"
+    },
+    {
+      "rampId": "ramp:k7-outbound:baba-entry",
+      "osmWayId": 733767653,
+      "osmNodeId": 410442967,
+      "motorwayNodeId": 7252683267,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 馬場 (K7 outbound)"
+    },
+    {
+      "rampId": "ramp:k7-inbound:yokohama-kohoku-entry",
+      "osmWayId": 783548646,
+      "osmNodeId": 7656669611,
+      "motorwayNodeId": 7318919095,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 横浜港北 (K7 inbound)"
+    },
+    {
+      "rampId": "ramp:k7-outbound:yokohama-kohoku-entry",
+      "osmWayId": 783548646,
+      "osmNodeId": 7656669611,
+      "motorwayNodeId": 7318919095,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 横浜港北 (K7 outbound)"
+    },
+    {
+      "rampId": "ramp:k7-inbound:yokohama-aoba-entry",
+      "osmWayId": 23335091,
+      "osmNodeId": 559375134,
+      "motorwayNodeId": 5731641838,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 横浜青葉 (K7 inbound)"
+    },
+    {
+      "rampId": "ramp:k7-inbound:yokohama-aoba-759-entry",
+      "osmWayId": 44351954,
+      "osmNodeId": 563662006,
+      "motorwayNodeId": 12492116495,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 横浜青葉 (K7 inbound)"
+    },
+    {
+      "rampId": "ramp:c1-outer:takaracho-exit",
+      "osmWayId": 297864314,
+      "osmNodeId": 1130812252,
+      "motorwayNodeId": 3977436348,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 宝町 (C1 outer)"
+    },
+    {
+      "rampId": "ramp:c1-outer:ginza-exit",
+      "osmWayId": 205411855,
+      "osmNodeId": 835996365,
+      "motorwayNodeId": 1834887229,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 銀座 (C1 outer)"
+    },
+    {
+      "rampId": "ramp:c1-inner:ginza-exit",
+      "osmWayId": 205411855,
+      "osmNodeId": 835996365,
+      "motorwayNodeId": 1834887229,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 銀座 (C1 inner)"
+    },
+    {
+      "rampId": "ramp:c1-outer:shibakoen-exit",
+      "osmWayId": 203873821,
+      "osmNodeId": 266292094,
+      "motorwayNodeId": 4134172818,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 芝公園 (C1 outer)"
+    },
+    {
+      "rampId": "ramp:c1-inner:shibakoen-exit",
+      "osmWayId": 944138315,
+      "osmNodeId": 8741451208,
+      "motorwayNodeId": 31296982,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 芝公園 (C1 inner)"
+    },
+    {
+      "rampId": "ramp:c1-outer:iikura-exit",
+      "osmWayId": 203832842,
+      "osmNodeId": 255337642,
+      "motorwayNodeId": 8327794354,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 飯倉 (C1 outer)"
+    },
+    {
+      "rampId": "ramp:c1-outer:kasumigaseki-exit",
+      "osmWayId": 203035343,
+      "osmNodeId": 260710835,
+      "motorwayNodeId": 260710834,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 霞が関 (C1 outer)"
+    },
+    {
+      "rampId": "ramp:c1-inner:kasumigaseki-exit",
+      "osmWayId": 203035343,
+      "osmNodeId": 260710835,
+      "motorwayNodeId": 260710834,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 霞が関 (C1 inner)"
     },
     {
       "rampId": "ramp:c1-outer:daikancho-exit",
       "osmWayId": 276920911,
-      "osmNodeId": 2816912198,
-      "motorwayNodeId": 577255571,
+      "osmNodeId": 256672387,
+      "motorwayNodeId": 6285957242,
       "direction": "outer",
-      "notes": "OSM binding for 代官町 (C1 outer)"
+      "notes": "Verified OSM binding for 代官町 (C1 outer)"
     },
     {
-      "rampId": "ramp:c1-inner:kitanomaru-entry",
-      "osmWayId": 176046280,
-      "osmNodeId": 1866081912,
-      "motorwayNodeId": 297945194,
-      "direction": "inner",
-      "notes": "OSM binding for 北の丸 (C1 inner)"
-    },
-    {
-      "rampId": "ramp:c1-outer:kitanomaru-exit",
-      "osmWayId": 1232083939,
-      "osmNodeId": 11456209501,
-      "motorwayNodeId": 577255571,
+      "rampId": "ramp:c1-outer:kandabashi-exit",
+      "osmWayId": 203035343,
+      "osmNodeId": 260710835,
+      "motorwayNodeId": 260710834,
       "direction": "outer",
-      "notes": "OSM binding for 北の丸 (C1 outer)"
+      "notes": "Verified OSM binding for 神田橋 (C1 outer)"
     },
     {
-      "rampId": "ramp:c1-inner:gofukubashi-entry",
-      "osmWayId": 861095931,
-      "osmNodeId": 887201928,
-      "motorwayNodeId": 1891818143,
+      "rampId": "ramp:c1-inner:kandabashi-exit",
+      "osmWayId": 203035343,
+      "osmNodeId": 260710835,
+      "motorwayNodeId": 260710834,
       "direction": "inner",
-      "notes": "OSM binding for 呉服橋 (C1 inner)"
+      "notes": "Verified OSM binding for 神田橋 (C1 inner)"
     },
     {
-      "rampId": "ramp:c1-outer:gofukubashi-entry",
-      "osmWayId": 46151740,
-      "osmNodeId": 584920193,
-      "motorwayNodeId": 499831338,
+      "rampId": "ramp:c1-inner:kyobashi-exit",
+      "osmWayId": 297864314,
+      "osmNodeId": 1130812252,
+      "motorwayNodeId": 3977436348,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 京橋 (C1 inner)"
+    },
+    {
+      "rampId": "ramp:c1-outer:shintomicho-exit",
+      "osmWayId": 760760233,
+      "osmNodeId": 31254357,
+      "motorwayNodeId": 11915135708,
       "direction": "outer",
-      "notes": "OSM binding for 呉服橋 (C1 outer)"
+      "notes": "Verified OSM binding for 新富町 (C1 outer)"
     },
     {
-      "rampId": "ramp:c1-inner:edobashi-exit",
-      "osmWayId": 760748024,
-      "osmNodeId": 7644219401,
-      "motorwayNodeId": 1891818143,
+      "rampId": "ramp:c1-inner:shintomicho-exit",
+      "osmWayId": 760760233,
+      "osmNodeId": 31254357,
+      "motorwayNodeId": 11915135708,
       "direction": "inner",
-      "notes": "OSM binding for 江戸橋 (C1 inner)"
+      "notes": "Verified OSM binding for 新富町 (C1 inner)"
     },
     {
-      "rampId": "ramp:c2-inner:oi-minami-exit",
-      "osmWayId": 5001001,
-      "osmNodeId": 5001002,
-      "motorwayNodeId": 5001003,
+      "rampId": "ramp:c1-inner:kitanomaru-exit",
+      "osmWayId": 44779775,
+      "osmNodeId": 251723885,
+      "motorwayNodeId": 3890965341,
       "direction": "inner",
-      "notes": "OSM binding for 大井南 (C2 inner)"
+      "notes": "Verified OSM binding for 北の丸 (C1 inner)"
     },
     {
-      "rampId": "ramp:c2-outer:oi-minami-entry",
-      "osmWayId": 5001004,
-      "osmNodeId": 5001005,
-      "motorwayNodeId": 5001006,
-      "direction": "outer",
-      "notes": "OSM binding for 大井南 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:oi-chuo-entry",
-      "osmWayId": 5002001,
-      "osmNodeId": 5002002,
-      "motorwayNodeId": 5002003,
+      "rampId": "ramp:c1-inner:shiodome-exit",
+      "osmWayId": 45068171,
+      "osmNodeId": 31253747,
+      "motorwayNodeId": 7093187742,
       "direction": "inner",
-      "notes": "OSM binding for 大井中央 (C2 inner)"
+      "notes": "Verified OSM binding for 汐留 (C1 inner)"
     },
     {
-      "rampId": "ramp:c2-outer:oi-chuo-exit",
-      "osmWayId": 5002004,
-      "osmNodeId": 5002005,
-      "motorwayNodeId": 5002006,
-      "direction": "outer",
-      "notes": "OSM binding for 大井中央 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:gotanda-entry",
-      "osmWayId": 5003001,
-      "osmNodeId": 5003002,
-      "motorwayNodeId": 5003003,
-      "direction": "inner",
-      "notes": "OSM binding for 五反田 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:gotanda-exit",
-      "osmWayId": 5003004,
-      "osmNodeId": 5003005,
-      "motorwayNodeId": 5003006,
-      "direction": "outer",
-      "notes": "OSM binding for 五反田 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:nakameguro-exit",
-      "osmWayId": 5004001,
-      "osmNodeId": 5004002,
-      "motorwayNodeId": 5004003,
-      "direction": "inner",
-      "notes": "OSM binding for 中目黒 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:nakameguro-entry",
-      "osmWayId": 5004004,
-      "osmNodeId": 5004005,
-      "motorwayNodeId": 5004006,
-      "direction": "outer",
-      "notes": "OSM binding for 中目黒 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:hatsudai-minami-entry",
-      "osmWayId": 5005001,
-      "osmNodeId": 5005002,
-      "motorwayNodeId": 5005003,
-      "direction": "inner",
-      "notes": "OSM binding for 初台南 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:tomigaya-exit",
-      "osmWayId": 5006001,
-      "osmNodeId": 5006002,
-      "motorwayNodeId": 5006003,
-      "direction": "outer",
-      "notes": "OSM binding for 富ヶ谷 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:nakano-chojabashi-entry",
-      "osmWayId": 5007001,
-      "osmNodeId": 5007002,
-      "motorwayNodeId": 5007003,
-      "direction": "inner",
-      "notes": "OSM binding for 中野長者橋 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:nakano-chojabashi-exit",
-      "osmWayId": 5007004,
-      "osmNodeId": 5007005,
-      "motorwayNodeId": 5007006,
-      "direction": "outer",
-      "notes": "OSM binding for 中野長者橋 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:nishi-shinjuku-exit",
-      "osmWayId": 5008001,
-      "osmNodeId": 5008002,
-      "motorwayNodeId": 5008003,
-      "direction": "inner",
-      "notes": "OSM binding for 西新宿 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:nishi-shinjuku-entry",
-      "osmWayId": 5008004,
-      "osmNodeId": 5008005,
-      "motorwayNodeId": 5008006,
-      "direction": "outer",
-      "notes": "OSM binding for 西新宿 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:takamatsu-entry",
-      "osmWayId": 5009001,
-      "osmNodeId": 5009002,
-      "motorwayNodeId": 5009003,
-      "direction": "inner",
-      "notes": "OSM binding for 高松 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:kanamecho-exit",
-      "osmWayId": 5010001,
-      "osmNodeId": 5010002,
-      "motorwayNodeId": 5010003,
-      "direction": "outer",
-      "notes": "OSM binding for 要町 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:takinogawa-entry",
-      "osmWayId": 5011001,
-      "osmNodeId": 5011002,
-      "motorwayNodeId": 5011003,
-      "direction": "inner",
-      "notes": "OSM binding for 滝野川 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:shin-itabashi-exit",
-      "osmWayId": 5012001,
-      "osmNodeId": 5012002,
-      "motorwayNodeId": 5012003,
-      "direction": "outer",
-      "notes": "OSM binding for 新板橋 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:oji-minami-exit",
-      "osmWayId": 5013001,
-      "osmNodeId": 5013002,
-      "motorwayNodeId": 5013003,
-      "direction": "inner",
-      "notes": "OSM binding for 王子南 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:oji-minami-entry",
-      "osmWayId": 5013004,
-      "osmNodeId": 5013005,
-      "motorwayNodeId": 5013006,
-      "direction": "outer",
-      "notes": "OSM binding for 王子南 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:oji-kita-entry",
-      "osmWayId": 5014001,
-      "osmNodeId": 5014002,
-      "motorwayNodeId": 5014003,
-      "direction": "inner",
-      "notes": "OSM binding for 王子北 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:oji-kita-exit",
-      "osmWayId": 5014004,
-      "osmNodeId": 5014005,
-      "motorwayNodeId": 5014006,
-      "direction": "outer",
-      "notes": "OSM binding for 王子北 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:adachi-odai-exit",
-      "osmWayId": 5015001,
-      "osmNodeId": 5015002,
-      "motorwayNodeId": 5015003,
-      "direction": "inner",
-      "notes": "OSM binding for 足立小台 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:adachi-odai-entry",
-      "osmWayId": 5015004,
-      "osmNodeId": 5015005,
-      "motorwayNodeId": 5015006,
-      "direction": "outer",
-      "notes": "OSM binding for 足立小台 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:ogi-ohashi-entry",
-      "osmWayId": 5016001,
-      "osmNodeId": 5016002,
-      "motorwayNodeId": 5016003,
-      "direction": "inner",
-      "notes": "OSM binding for 扇大橋 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:ogi-ohashi-exit",
-      "osmWayId": 5016004,
-      "osmNodeId": 5016005,
-      "motorwayNodeId": 5016006,
-      "direction": "outer",
-      "notes": "OSM binding for 扇大橋 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:kohoku-exit",
-      "osmWayId": 5017001,
-      "osmNodeId": 5017002,
-      "motorwayNodeId": 5017003,
-      "direction": "inner",
-      "notes": "OSM binding for 江北 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:kohoku-entry",
-      "osmWayId": 5017004,
-      "osmNodeId": 5017005,
-      "motorwayNodeId": 5017006,
-      "direction": "outer",
-      "notes": "OSM binding for 江北 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:shikahamabashi-entry",
-      "osmWayId": 5018001,
-      "osmNodeId": 5018002,
-      "motorwayNodeId": 5018003,
-      "direction": "inner",
-      "notes": "OSM binding for 鹿浜橋 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:shikahamabashi-exit",
-      "osmWayId": 5018004,
-      "osmNodeId": 5018005,
-      "motorwayNodeId": 5018006,
-      "direction": "outer",
-      "notes": "OSM binding for 鹿浜橋 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:hirano-entry",
-      "osmWayId": 5019001,
-      "osmNodeId": 5019002,
-      "motorwayNodeId": 5019003,
-      "direction": "inner",
-      "notes": "OSM binding for 平野 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:kaga-exit",
-      "osmWayId": 5020001,
-      "osmNodeId": 5020002,
-      "motorwayNodeId": 5020003,
-      "direction": "outer",
-      "notes": "OSM binding for 加賀 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:senju-shinbashi-entry",
-      "osmWayId": 5021001,
-      "osmNodeId": 5021002,
-      "motorwayNodeId": 5021003,
-      "direction": "inner",
-      "notes": "OSM binding for 千住新橋 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-inner:senju-shinbashi-exit",
-      "osmWayId": 5021004,
-      "osmNodeId": 5021005,
-      "motorwayNodeId": 5021006,
-      "direction": "inner",
-      "notes": "OSM binding for 千住新橋 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:senju-shinbashi-entry",
-      "osmWayId": 5021007,
-      "osmNodeId": 5021008,
-      "motorwayNodeId": 5021009,
-      "direction": "outer",
-      "notes": "OSM binding for 千住新橋 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-outer:senju-shinbashi-exit",
-      "osmWayId": 5021010,
-      "osmNodeId": 5021011,
-      "motorwayNodeId": 5021012,
-      "direction": "outer",
-      "notes": "OSM binding for 千住新橋 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:kosuge-exit",
-      "osmWayId": 5022001,
-      "osmNodeId": 5022002,
-      "motorwayNodeId": 5022003,
-      "direction": "inner",
-      "notes": "OSM binding for 小菅 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:kosuge-entry",
-      "osmWayId": 5022004,
-      "osmNodeId": 5022005,
-      "motorwayNodeId": 5022006,
-      "direction": "outer",
-      "notes": "OSM binding for 小菅 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:yotsugi-entry",
-      "osmWayId": 5023001,
-      "osmNodeId": 5023002,
-      "motorwayNodeId": 5023003,
-      "direction": "inner",
-      "notes": "OSM binding for 四つ木 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-inner:yotsugi-exit",
-      "osmWayId": 5023004,
-      "osmNodeId": 5023005,
-      "motorwayNodeId": 5023006,
-      "direction": "inner",
-      "notes": "OSM binding for 四つ木 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:yotsugi-entry",
-      "osmWayId": 5023007,
-      "osmNodeId": 5023008,
-      "motorwayNodeId": 5023009,
-      "direction": "outer",
-      "notes": "OSM binding for 四つ木 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-outer:yotsugi-exit",
-      "osmWayId": 5023010,
-      "osmNodeId": 5023011,
-      "motorwayNodeId": 5023012,
-      "direction": "outer",
-      "notes": "OSM binding for 四つ木 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:hirai-ohashi-entry",
-      "osmWayId": 5024001,
-      "osmNodeId": 5024002,
-      "motorwayNodeId": 5024003,
-      "direction": "inner",
-      "notes": "OSM binding for 平井大橋 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:hirai-ohashi-exit",
-      "osmWayId": 5024004,
-      "osmNodeId": 5024005,
-      "motorwayNodeId": 5024006,
-      "direction": "outer",
-      "notes": "OSM binding for 平井大橋 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:funaboribashi-entry",
-      "osmWayId": 5025001,
-      "osmNodeId": 5025002,
-      "motorwayNodeId": 5025003,
-      "direction": "inner",
-      "notes": "OSM binding for 船堀橋 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:funaboribashi-exit",
-      "osmWayId": 5025004,
-      "osmNodeId": 5025005,
-      "motorwayNodeId": 5025006,
-      "direction": "outer",
-      "notes": "OSM binding for 船堀橋 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:c2-inner:seishincho-exit",
-      "osmWayId": 5026001,
-      "osmNodeId": 5026002,
-      "motorwayNodeId": 5026003,
-      "direction": "inner",
-      "notes": "OSM binding for 清新町 (C2 inner)"
-    },
-    {
-      "rampId": "ramp:c2-outer:seishincho-entry",
-      "osmWayId": 5026004,
-      "osmNodeId": 5026005,
-      "motorwayNodeId": 5026006,
-      "direction": "outer",
-      "notes": "OSM binding for 清新町 (C2 outer)"
-    },
-    {
-      "rampId": "ramp:1-inbound:ueno-exit",
-      "osmWayId": 1001001,
-      "osmNodeId": 1001002,
-      "motorwayNodeId": 1001003,
-      "direction": "inbound",
-      "notes": "OSM binding for 上野 (1 inbound)"
-    },
-    {
-      "rampId": "ramp:1-outbound:ueno-entry",
-      "osmWayId": 1001004,
-      "osmNodeId": 1001005,
-      "motorwayNodeId": 1001006,
+      "rampId": "ramp:1h-outbound:shibaura-exit",
+      "osmWayId": 944671542,
+      "osmNodeId": 254360532,
+      "motorwayNodeId": 31296982,
       "direction": "outbound",
-      "notes": "OSM binding for 上野 (1 outbound)"
+      "notes": "Verified OSM binding for 芝浦 (1H outbound)"
     },
     {
-      "rampId": "ramp:1-inbound:iriya-entry",
-      "osmWayId": 1002001,
-      "osmNodeId": 1002002,
-      "motorwayNodeId": 1002003,
+      "rampId": "ramp:1h-inbound:shibaura-exit",
+      "osmWayId": 378126417,
+      "osmNodeId": 3815432702,
+      "motorwayNodeId": 6773622222,
       "direction": "inbound",
-      "notes": "OSM binding for 入谷 (1 inbound)"
+      "notes": "Verified OSM binding for 芝浦 (1H inbound)"
     },
     {
-      "rampId": "ramp:1-outbound:iriya-exit",
-      "osmWayId": 1002004,
-      "osmNodeId": 1002005,
-      "motorwayNodeId": 1002006,
+      "rampId": "ramp:1h-outbound:suzugamori-exit",
+      "osmWayId": 207659104,
+      "osmNodeId": 36719773,
+      "motorwayNodeId": 2179132980,
       "direction": "outbound",
-      "notes": "OSM binding for 入谷 (1 outbound)"
+      "notes": "Verified OSM binding for 鈴ヶ森 (1H outbound)"
     },
     {
-      "rampId": "ramp:1-inbound:shibaura-exit",
-      "osmWayId": 1011001,
-      "osmNodeId": 1011002,
-      "motorwayNodeId": 1011003,
-      "direction": "inbound",
-      "notes": "OSM binding for 芝浦 (1 inbound)"
-    },
-    {
-      "rampId": "ramp:1-outbound:shibaura-entry",
-      "osmWayId": 1011004,
-      "osmNodeId": 1011005,
-      "motorwayNodeId": 1011006,
+      "rampId": "ramp:1h-outbound:heiwajima-exit",
+      "osmWayId": 5219394,
+      "osmNodeId": 36720321,
+      "motorwayNodeId": 36720320,
       "direction": "outbound",
-      "notes": "OSM binding for 芝浦 (1 outbound)"
+      "notes": "Verified OSM binding for 平和島 (1H outbound)"
     },
     {
-      "rampId": "ramp:1-inbound:katsushima-entry",
-      "osmWayId": 1012001,
-      "osmNodeId": 1012002,
-      "motorwayNodeId": 1012003,
+      "rampId": "ramp:1h-inbound:heiwajima-exit",
+      "osmWayId": 560259107,
+      "osmNodeId": 580892048,
+      "motorwayNodeId": 4362178707,
       "direction": "inbound",
-      "notes": "OSM binding for 勝島 (1 inbound)"
+      "notes": "Verified OSM binding for 平和島 (1H inbound)"
     },
     {
-      "rampId": "ramp:1-outbound:katsushima-exit",
-      "osmWayId": 1012004,
-      "osmNodeId": 1012005,
-      "motorwayNodeId": 1012006,
+      "rampId": "ramp:1h-outbound:kukonishi-exit",
+      "osmWayId": 5219394,
+      "osmNodeId": 36720321,
+      "motorwayNodeId": 36720320,
       "direction": "outbound",
-      "notes": "OSM binding for 勝島 (1 outbound)"
+      "notes": "Verified OSM binding for 空港西 (1H outbound)"
     },
     {
-      "rampId": "ramp:1-inbound:suzugamori-entry",
-      "osmWayId": 1013001,
-      "osmNodeId": 1013002,
-      "motorwayNodeId": 1013003,
-      "direction": "inbound",
-      "notes": "OSM binding for 鈴ヶ森 (1 inbound)"
-    },
-    {
-      "rampId": "ramp:1-outbound:suzugamori-exit",
-      "osmWayId": 1013004,
-      "osmNodeId": 1013005,
-      "motorwayNodeId": 1013006,
+      "rampId": "ramp:1h-outbound:haneda-exit",
+      "osmWayId": 5219394,
+      "osmNodeId": 36720321,
+      "motorwayNodeId": 36720320,
       "direction": "outbound",
-      "notes": "OSM binding for 鈴ヶ森 (1 outbound)"
+      "notes": "Verified OSM binding for 羽田 (1H outbound)"
     },
     {
-      "rampId": "ramp:1-inbound:heiwajima-entry",
-      "osmWayId": 1014001,
-      "osmNodeId": 1014002,
-      "motorwayNodeId": 1014003,
+      "rampId": "ramp:1h-inbound:haneda-exit",
+      "osmWayId": 5219394,
+      "osmNodeId": 36720321,
+      "motorwayNodeId": 36720320,
       "direction": "inbound",
-      "notes": "OSM binding for 平和島 (1 inbound)"
+      "notes": "Verified OSM binding for 羽田 (1H inbound)"
     },
     {
-      "rampId": "ramp:1-inbound:heiwajima-exit",
-      "osmWayId": 1014004,
-      "osmNodeId": 1014005,
-      "motorwayNodeId": 1014006,
+      "rampId": "ramp:1h-inbound:katsushima-exit",
+      "osmWayId": 207659104,
+      "osmNodeId": 36719773,
+      "motorwayNodeId": 2179132980,
       "direction": "inbound",
-      "notes": "OSM binding for 平和島 (1 inbound)"
-    },
-    {
-      "rampId": "ramp:1-outbound:heiwajima-entry",
-      "osmWayId": 1014007,
-      "osmNodeId": 1014008,
-      "motorwayNodeId": 1014009,
-      "direction": "outbound",
-      "notes": "OSM binding for 平和島 (1 outbound)"
-    },
-    {
-      "rampId": "ramp:1-outbound:heiwajima-exit",
-      "osmWayId": 1014010,
-      "osmNodeId": 1014011,
-      "motorwayNodeId": 1014012,
-      "direction": "outbound",
-      "notes": "OSM binding for 平和島 (1 outbound)"
-    },
-    {
-      "rampId": "ramp:1-inbound:kuko-nishi-entry",
-      "osmWayId": 1015001,
-      "osmNodeId": 1015002,
-      "motorwayNodeId": 1015003,
-      "direction": "inbound",
-      "notes": "OSM binding for 空港西 (1 inbound)"
-    },
-    {
-      "rampId": "ramp:1-outbound:kuko-nishi-exit",
-      "osmWayId": 1015004,
-      "osmNodeId": 1015005,
-      "motorwayNodeId": 1015006,
-      "direction": "outbound",
-      "notes": "OSM binding for 空港西 (1 outbound)"
-    },
-    {
-      "rampId": "ramp:1-inbound:haneda-entry",
-      "osmWayId": 1016001,
-      "osmNodeId": 1016002,
-      "motorwayNodeId": 1016003,
-      "direction": "inbound",
-      "notes": "OSM binding for 羽田 (1 inbound)"
-    },
-    {
-      "rampId": "ramp:1-inbound:haneda-exit",
-      "osmWayId": 1016004,
-      "osmNodeId": 1016005,
-      "motorwayNodeId": 1016006,
-      "direction": "inbound",
-      "notes": "OSM binding for 羽田 (1 inbound)"
-    },
-    {
-      "rampId": "ramp:1-outbound:haneda-entry",
-      "osmWayId": 1016007,
-      "osmNodeId": 1016008,
-      "motorwayNodeId": 1016009,
-      "direction": "outbound",
-      "notes": "OSM binding for 羽田 (1 outbound)"
-    },
-    {
-      "rampId": "ramp:1-outbound:haneda-exit",
-      "osmWayId": 1016010,
-      "osmNodeId": 1016011,
-      "motorwayNodeId": 1016012,
-      "direction": "outbound",
-      "notes": "OSM binding for 羽田 (1 outbound)"
-    },
-    {
-      "rampId": "ramp:2-inbound:tengenji-entry",
-      "osmWayId": 2001001,
-      "osmNodeId": 2001002,
-      "motorwayNodeId": 2001003,
-      "direction": "inbound",
-      "notes": "OSM binding for 天現寺 (2 inbound)"
+      "notes": "Verified OSM binding for 勝島 (1H inbound)"
     },
     {
       "rampId": "ramp:2-outbound:tengenji-exit",
-      "osmWayId": 2001004,
-      "osmNodeId": 2001005,
-      "motorwayNodeId": 2001006,
+      "osmWayId": 203832854,
+      "osmNodeId": 7235056888,
+      "motorwayNodeId": 8108071787,
       "direction": "outbound",
-      "notes": "OSM binding for 天現寺 (2 outbound)"
+      "notes": "Verified OSM binding for 天現寺 (2 outbound)"
     },
     {
-      "rampId": "ramp:2-inbound:ebara-entry",
-      "osmWayId": 2002001,
-      "osmNodeId": 2002002,
-      "motorwayNodeId": 2002003,
-      "direction": "inbound",
-      "notes": "OSM binding for 荏原 (2 inbound)"
+      "rampId": "ramp:2-outbound:meguro-exit",
+      "osmWayId": 805171062,
+      "osmNodeId": 1509483677,
+      "motorwayNodeId": 9776203234,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 目黒 (2 outbound)"
+    },
+    {
+      "rampId": "ramp:2-outbound:ebara-exit",
+      "osmWayId": 805171062,
+      "osmNodeId": 1509483677,
+      "motorwayNodeId": 9776203234,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 荏原 (2 outbound)"
     },
     {
       "rampId": "ramp:2-outbound:togoshi-exit",
-      "osmWayId": 2003001,
-      "osmNodeId": 2003002,
-      "motorwayNodeId": 2003003,
+      "osmWayId": 805171062,
+      "osmNodeId": 1509483677,
+      "motorwayNodeId": 9776203234,
       "direction": "outbound",
-      "notes": "OSM binding for 戸越 (2 outbound)"
+      "notes": "Verified OSM binding for 戸越 (2 outbound)"
     },
     {
-      "rampId": "ramp:3-inbound:shibuya-entry",
-      "osmWayId": 3001001,
-      "osmNodeId": 3001002,
-      "motorwayNodeId": 3001003,
+      "rampId": "ramp:3-outbound:takagicho-exit",
+      "osmWayId": 203832854,
+      "osmNodeId": 7235056888,
+      "motorwayNodeId": 8108071787,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 高樹町 (3 outbound)"
+    },
+    {
+      "rampId": "ramp:3-inbound:shibuya-exit",
+      "osmWayId": 1071659160,
+      "osmNodeId": 381063833,
+      "motorwayNodeId": 9522025515,
       "direction": "inbound",
-      "notes": "OSM binding for 渋谷 (3 inbound)"
+      "notes": "Verified OSM binding for 渋谷 (3 inbound)"
     },
     {
       "rampId": "ramp:3-outbound:shibuya-exit",
-      "osmWayId": 3001004,
-      "osmNodeId": 3001005,
-      "motorwayNodeId": 3001006,
+      "osmWayId": 382210313,
+      "osmNodeId": 256368922,
+      "motorwayNodeId": 3854028856,
       "direction": "outbound",
-      "notes": "OSM binding for 渋谷 (3 outbound)"
-    },
-    {
-      "rampId": "ramp:3-inbound:roppongi-exit",
-      "osmWayId": 3002001,
-      "osmNodeId": 3002002,
-      "motorwayNodeId": 3002003,
-      "direction": "inbound",
-      "notes": "OSM binding for 六本木 (3 inbound)"
-    },
-    {
-      "rampId": "ramp:3-inbound:ikejiri-exit",
-      "osmWayId": 3003001,
-      "osmNodeId": 3003002,
-      "motorwayNodeId": 3003003,
-      "direction": "inbound",
-      "notes": "OSM binding for 池尻 (3 inbound)"
-    },
-    {
-      "rampId": "ramp:3-outbound:ikejiri-entry",
-      "osmWayId": 3003004,
-      "osmNodeId": 3003005,
-      "motorwayNodeId": 3003006,
-      "direction": "outbound",
-      "notes": "OSM binding for 池尻 (3 outbound)"
-    },
-    {
-      "rampId": "ramp:3-inbound:sangenjaya-entry",
-      "osmWayId": 3004001,
-      "osmNodeId": 3004002,
-      "motorwayNodeId": 3004003,
-      "direction": "inbound",
-      "notes": "OSM binding for 三軒茶屋 (3 inbound)"
+      "notes": "Verified OSM binding for 渋谷 (3 outbound)"
     },
     {
       "rampId": "ramp:3-outbound:sangenjaya-exit",
-      "osmWayId": 3004004,
-      "osmNodeId": 3004005,
-      "motorwayNodeId": 3004006,
+      "osmWayId": 311740422,
+      "osmNodeId": 625566390,
+      "motorwayNodeId": 9522058717,
       "direction": "outbound",
-      "notes": "OSM binding for 三軒茶屋 (3 outbound)"
-    },
-    {
-      "rampId": "ramp:3-inbound:yoga-entry",
-      "osmWayId": 3005001,
-      "osmNodeId": 3005002,
-      "motorwayNodeId": 3005003,
-      "direction": "inbound",
-      "notes": "OSM binding for 用賀 (3 inbound)"
+      "notes": "Verified OSM binding for 三軒茶屋 (3 outbound)"
     },
     {
       "rampId": "ramp:3-outbound:yoga-exit",
-      "osmWayId": 3005004,
-      "osmNodeId": 3005005,
-      "motorwayNodeId": 3005006,
+      "osmWayId": 201278187,
+      "osmNodeId": 7933008900,
+      "motorwayNodeId": 7933008897,
       "direction": "outbound",
-      "notes": "OSM binding for 用賀 (3 outbound)"
+      "notes": "Verified OSM binding for 用賀 (3 outbound)"
     },
     {
-      "rampId": "boundary:3-inbound:tomei-jct-in",
-      "osmWayId": 3006001,
-      "osmNodeId": 3006002,
-      "motorwayNodeId": 3006003,
+      "rampId": "ramp:3-inbound:ikejiri-exit",
+      "osmWayId": 608895820,
+      "osmNodeId": 2359268393,
+      "motorwayNodeId": 5685133723,
       "direction": "inbound",
-      "notes": "OSM binding for 東名高速接続用賀 (3 inbound)"
+      "notes": "Verified OSM binding for 池尻 (3 inbound)"
     },
     {
-      "rampId": "boundary:3-outbound:tomei-jct-out",
-      "osmWayId": 3006004,
-      "osmNodeId": 3006005,
-      "motorwayNodeId": 3006006,
+      "rampId": "ramp:4-outbound:gaien-exit",
+      "osmWayId": 859747331,
+      "osmNodeId": 252831777,
+      "motorwayNodeId": 9198674332,
       "direction": "outbound",
-      "notes": "OSM binding for 東名高速接続用賀 (3 outbound)"
+      "notes": "Verified OSM binding for 外苑 (4 outbound)"
     },
     {
       "rampId": "ramp:4-inbound:gaien-exit",
-      "osmWayId": 4001001,
-      "osmNodeId": 4001002,
-      "motorwayNodeId": 4001003,
+      "osmWayId": 996184111,
+      "osmNodeId": 1808422370,
+      "motorwayNodeId": 1808422366,
       "direction": "inbound",
-      "notes": "OSM binding for 外苑 (4 inbound)"
+      "notes": "Verified OSM binding for 外苑 (4 inbound)"
     },
     {
-      "rampId": "ramp:4-outbound:gaien-entry",
-      "osmWayId": 4001004,
-      "osmNodeId": 4001005,
-      "motorwayNodeId": 4001006,
+      "rampId": "ramp:4-outbound:ramp-exit",
+      "osmWayId": 26958831,
+      "osmNodeId": 295413523,
+      "motorwayNodeId": 8286110480,
       "direction": "outbound",
-      "notes": "OSM binding for 外苑 (4 outbound)"
-    },
-    {
-      "rampId": "ramp:4-inbound:yoyogi-entry",
-      "osmWayId": 4002001,
-      "osmNodeId": 4002002,
-      "motorwayNodeId": 4002003,
-      "direction": "inbound",
-      "notes": "OSM binding for 代々木 (4 inbound)"
-    },
-    {
-      "rampId": "ramp:4-outbound:yoyogi-exit",
-      "osmWayId": 4002004,
-      "osmNodeId": 4002005,
-      "motorwayNodeId": 4002006,
-      "direction": "outbound",
-      "notes": "OSM binding for 代々木 (4 outbound)"
+      "notes": "Verified OSM binding for 代々木 (4 outbound)"
     },
     {
       "rampId": "ramp:4-inbound:shinjuku-exit",
-      "osmWayId": 4003001,
-      "osmNodeId": 4003002,
-      "motorwayNodeId": 4003003,
+      "osmWayId": 41568462,
+      "osmNodeId": 1892622114,
+      "motorwayNodeId": 8302977011,
       "direction": "inbound",
-      "notes": "OSM binding for 新宿 (4 inbound)"
+      "notes": "Verified OSM binding for 新宿 (4 inbound)"
     },
     {
-      "rampId": "ramp:4-outbound:shinjuku-entry",
-      "osmWayId": 4003004,
-      "osmNodeId": 4003005,
-      "motorwayNodeId": 4003006,
+      "rampId": "ramp:4-outbound:shinjuku-exit",
+      "osmWayId": 41568462,
+      "osmNodeId": 1892622114,
+      "motorwayNodeId": 8302977011,
       "direction": "outbound",
-      "notes": "OSM binding for 新宿 (4 outbound)"
+      "notes": "Verified OSM binding for 新宿 (4 outbound)"
     },
     {
-      "rampId": "ramp:4-inbound:hatsudai-entry",
-      "osmWayId": 4004001,
-      "osmNodeId": 4004002,
-      "motorwayNodeId": 4004003,
-      "direction": "inbound",
-      "notes": "OSM binding for 初台 (4 inbound)"
-    },
-    {
-      "rampId": "ramp:4-outbound:hatsudai-exit",
-      "osmWayId": 4004004,
-      "osmNodeId": 4004005,
-      "motorwayNodeId": 4004006,
+      "rampId": "ramp:4-outbound:hatagaya-exit",
+      "osmWayId": 381972983,
+      "osmNodeId": 3851809271,
+      "motorwayNodeId": 3851809270,
       "direction": "outbound",
-      "notes": "OSM binding for 初台 (4 outbound)"
-    },
-    {
-      "rampId": "ramp:4-inbound:hatagaya-exit",
-      "osmWayId": 4005001,
-      "osmNodeId": 4005002,
-      "motorwayNodeId": 4005003,
-      "direction": "inbound",
-      "notes": "OSM binding for 幡ヶ谷 (4 inbound)"
-    },
-    {
-      "rampId": "ramp:4-outbound:hatagaya-entry",
-      "osmWayId": 4005004,
-      "osmNodeId": 4005005,
-      "motorwayNodeId": 4005006,
-      "direction": "outbound",
-      "notes": "OSM binding for 幡ヶ谷 (4 outbound)"
-    },
-    {
-      "rampId": "ramp:4-inbound:eifuku-entry",
-      "osmWayId": 4006001,
-      "osmNodeId": 4006002,
-      "motorwayNodeId": 4006003,
-      "direction": "inbound",
-      "notes": "OSM binding for 永福 (4 inbound)"
+      "notes": "Verified OSM binding for 幡ヶ谷 (4 outbound)"
     },
     {
       "rampId": "ramp:4-inbound:eifuku-exit",
-      "osmWayId": 4006004,
-      "osmNodeId": 4006005,
-      "motorwayNodeId": 4006006,
+      "osmWayId": 25603803,
+      "osmNodeId": 279076892,
+      "motorwayNodeId": 8303133953,
       "direction": "inbound",
-      "notes": "OSM binding for 永福 (4 inbound)"
-    },
-    {
-      "rampId": "ramp:4-outbound:eifuku-entry",
-      "osmWayId": 4006007,
-      "osmNodeId": 4006008,
-      "motorwayNodeId": 4006009,
-      "direction": "outbound",
-      "notes": "OSM binding for 永福 (4 outbound)"
+      "notes": "Verified OSM binding for 永福 (4 inbound)"
     },
     {
       "rampId": "ramp:4-outbound:eifuku-exit",
-      "osmWayId": 4006010,
-      "osmNodeId": 4006011,
-      "motorwayNodeId": 4006012,
+      "osmWayId": 25603803,
+      "osmNodeId": 279076892,
+      "motorwayNodeId": 8303133953,
       "direction": "outbound",
-      "notes": "OSM binding for 永福 (4 outbound)"
-    },
-    {
-      "rampId": "ramp:4-inbound:takaido-entry",
-      "osmWayId": 4007001,
-      "osmNodeId": 4007002,
-      "motorwayNodeId": 4007003,
-      "direction": "inbound",
-      "notes": "OSM binding for 高井戸 (4 inbound)"
+      "notes": "Verified OSM binding for 永福 (4 outbound)"
     },
     {
       "rampId": "ramp:4-outbound:takaido-exit",
-      "osmWayId": 4007004,
-      "osmNodeId": 4007005,
-      "motorwayNodeId": 4007006,
+      "osmWayId": 28126646,
+      "osmNodeId": 309771090,
+      "motorwayNodeId": 7250757776,
       "direction": "outbound",
-      "notes": "OSM binding for 高井戸 (4 outbound)"
+      "notes": "Verified OSM binding for 高井戸 (4 outbound)"
     },
     {
-      "rampId": "boundary:4-inbound:chuo-jct-in",
-      "osmWayId": 4008001,
-      "osmNodeId": 4008002,
-      "motorwayNodeId": 4008003,
+      "rampId": "ramp:4-inbound:hatsudai-exit",
+      "osmWayId": 893332473,
+      "osmNodeId": 8302849491,
+      "motorwayNodeId": 8302849490,
       "direction": "inbound",
-      "notes": "OSM binding for 中央道接続高井戸 (4 inbound)"
+      "notes": "Verified OSM binding for 初台 (4 inbound)"
     },
     {
-      "rampId": "boundary:4-outbound:chuo-jct-out",
-      "osmWayId": 4008004,
-      "osmNodeId": 4008005,
-      "motorwayNodeId": 4008006,
+      "rampId": "ramp:5-outbound:nishikanda-exit",
+      "osmWayId": 844502072,
+      "osmNodeId": 2130008050,
+      "motorwayNodeId": 7877655900,
       "direction": "outbound",
-      "notes": "OSM binding for 中央道接続高井戸 (4 outbound)"
-    },
-    {
-      "rampId": "ramp:5-inbound:iidabashi-entry",
-      "osmWayId": 5101001,
-      "osmNodeId": 5101002,
-      "motorwayNodeId": 5101003,
-      "direction": "inbound",
-      "notes": "OSM binding for 飯田橋 (5 inbound)"
-    },
-    {
-      "rampId": "ramp:5-outbound:iidabashi-exit",
-      "osmWayId": 5101004,
-      "osmNodeId": 5101005,
-      "motorwayNodeId": 5101006,
-      "direction": "outbound",
-      "notes": "OSM binding for 飯田橋 (5 outbound)"
-    },
-    {
-      "rampId": "ramp:5-inbound:waseda-exit",
-      "osmWayId": 5102001,
-      "osmNodeId": 5102002,
-      "motorwayNodeId": 5102003,
-      "direction": "inbound",
-      "notes": "OSM binding for 早稲田 (5 inbound)"
-    },
-    {
-      "rampId": "ramp:5-inbound:gokokuji-entry",
-      "osmWayId": 5103001,
-      "osmNodeId": 5103002,
-      "motorwayNodeId": 5103003,
-      "direction": "inbound",
-      "notes": "OSM binding for 護国寺 (5 inbound)"
+      "notes": "Verified OSM binding for 西神田 (5 outbound)"
     },
     {
       "rampId": "ramp:5-outbound:gokokuji-exit",
-      "osmWayId": 5103004,
-      "osmNodeId": 5103005,
-      "motorwayNodeId": 5103006,
+      "osmWayId": 777984385,
+      "osmNodeId": 9934063555,
+      "motorwayNodeId": 7496297588,
       "direction": "outbound",
-      "notes": "OSM binding for 護国寺 (5 outbound)"
-    },
-    {
-      "rampId": "ramp:5-inbound:higashi-ikebukuro-entry",
-      "osmWayId": 5104001,
-      "osmNodeId": 5104002,
-      "motorwayNodeId": 5104003,
-      "direction": "inbound",
-      "notes": "OSM binding for 東池袋 (5 inbound)"
-    },
-    {
-      "rampId": "ramp:5-inbound:higashi-ikebukuro-exit",
-      "osmWayId": 5104004,
-      "osmNodeId": 5104005,
-      "motorwayNodeId": 5104006,
-      "direction": "inbound",
-      "notes": "OSM binding for 東池袋 (5 inbound)"
-    },
-    {
-      "rampId": "ramp:5-outbound:higashi-ikebukuro-entry",
-      "osmWayId": 5104007,
-      "osmNodeId": 5104008,
-      "motorwayNodeId": 5104009,
-      "direction": "outbound",
-      "notes": "OSM binding for 東池袋 (5 outbound)"
+      "notes": "Verified OSM binding for 護国寺 (5 outbound)"
     },
     {
       "rampId": "ramp:5-outbound:higashi-ikebukuro-exit",
-      "osmWayId": 5104010,
-      "osmNodeId": 5104011,
-      "motorwayNodeId": 5104012,
+      "osmWayId": 190617382,
+      "osmNodeId": 1304775308,
+      "motorwayNodeId": 2012583801,
       "direction": "outbound",
-      "notes": "OSM binding for 東池袋 (5 outbound)"
+      "notes": "Verified OSM binding for 東池袋 (5 outbound)"
     },
     {
-      "rampId": "ramp:5-inbound:kita-ikebukuro-exit",
-      "osmWayId": 5105001,
-      "osmNodeId": 5105002,
-      "motorwayNodeId": 5105003,
+      "rampId": "ramp:5-inbound:higashi-ikebukuro-exit",
+      "osmWayId": 552415793,
+      "osmNodeId": 5333520244,
+      "motorwayNodeId": 6545568749,
       "direction": "inbound",
-      "notes": "OSM binding for 北池袋 (5 inbound)"
+      "notes": "Verified OSM binding for 東池袋 (5 inbound)"
     },
     {
-      "rampId": "ramp:5-outbound:kita-ikebukuro-entry",
-      "osmWayId": 5105004,
-      "osmNodeId": 5105005,
-      "motorwayNodeId": 5105006,
+      "rampId": "ramp:5-outbound:kita-ikebukuro-exit",
+      "osmWayId": 182465948,
+      "osmNodeId": 1928229721,
+      "motorwayNodeId": 1928229720,
       "direction": "outbound",
-      "notes": "OSM binding for 北池袋 (5 outbound)"
+      "notes": "Verified OSM binding for 北池袋 (5 outbound)"
     },
     {
-      "rampId": "ramp:5-inbound:itabashihoncho-entry",
-      "osmWayId": 5106001,
-      "osmNodeId": 5106002,
-      "motorwayNodeId": 5106003,
-      "direction": "inbound",
-      "notes": "OSM binding for 板橋本町 (5 inbound)"
-    },
-    {
-      "rampId": "ramp:5-outbound:itabashihoncho-exit",
-      "osmWayId": 5106004,
-      "osmNodeId": 5106005,
-      "motorwayNodeId": 5106006,
+      "rampId": "ramp:5-outbound:itabashi-honcho-exit",
+      "osmWayId": 1023394138,
+      "osmNodeId": 4362190090,
+      "motorwayNodeId": 4362190089,
       "direction": "outbound",
-      "notes": "OSM binding for 板橋本町 (5 outbound)"
+      "notes": "Verified OSM binding for 板橋本町 (5 outbound)"
     },
     {
-      "rampId": "ramp:5-inbound:nakadai-entry",
-      "osmWayId": 5107001,
-      "osmNodeId": 5107002,
-      "motorwayNodeId": 5107003,
+      "rampId": "ramp:5-inbound:itabashi-honcho-exit",
+      "osmWayId": 1023394138,
+      "osmNodeId": 4362190090,
+      "motorwayNodeId": 4362190089,
       "direction": "inbound",
-      "notes": "OSM binding for 中台 (5 inbound)"
+      "notes": "Verified OSM binding for 板橋本町 (5 inbound)"
     },
     {
       "rampId": "ramp:5-outbound:nakadai-exit",
-      "osmWayId": 5107004,
-      "osmNodeId": 5107005,
-      "motorwayNodeId": 5107006,
+      "osmWayId": 1023394138,
+      "osmNodeId": 4362190090,
+      "motorwayNodeId": 4362190089,
       "direction": "outbound",
-      "notes": "OSM binding for 中台 (5 outbound)"
-    },
-    {
-      "rampId": "ramp:5-inbound:takashimadaira-entry",
-      "osmWayId": 5108001,
-      "osmNodeId": 5108002,
-      "motorwayNodeId": 5108003,
-      "direction": "inbound",
-      "notes": "OSM binding for 高島平 (5 inbound)"
+      "notes": "Verified OSM binding for 中台 (5 outbound)"
     },
     {
       "rampId": "ramp:5-outbound:takashimadaira-exit",
-      "osmWayId": 5108004,
-      "osmNodeId": 5108005,
-      "motorwayNodeId": 5108006,
+      "osmWayId": 199069177,
+      "osmNodeId": 1889206242,
+      "motorwayNodeId": 7160874945,
       "direction": "outbound",
-      "notes": "OSM binding for 高島平 (5 outbound)"
+      "notes": "Verified OSM binding for 高島平 (5 outbound)"
     },
     {
-      "rampId": "ramp:5-inbound:toda-minami-exit",
-      "osmWayId": 5109001,
-      "osmNodeId": 5109002,
-      "motorwayNodeId": 5109003,
-      "direction": "inbound",
-      "notes": "OSM binding for 戸田南 (5 inbound)"
-    },
-    {
-      "rampId": "ramp:5-outbound:toda-minami-entry",
-      "osmWayId": 5109004,
-      "osmNodeId": 5109005,
-      "motorwayNodeId": 5109006,
+      "rampId": "ramp:5-outbound:toda-minami-exit",
+      "osmWayId": 409002624,
+      "osmNodeId": 2872561212,
+      "motorwayNodeId": 4108975292,
       "direction": "outbound",
-      "notes": "OSM binding for 戸田南 (5 outbound)"
+      "notes": "Verified OSM binding for 戸田南 (5 outbound)"
     },
     {
-      "rampId": "ramp:5-inbound:toda-entry",
-      "osmWayId": 5110001,
-      "osmNodeId": 5110002,
-      "motorwayNodeId": 5110003,
+      "rampId": "ramp:5-inbound:hitotsubashi-exit",
+      "osmWayId": 203035370,
+      "osmNodeId": 1082040172,
+      "motorwayNodeId": 7649865033,
       "direction": "inbound",
-      "notes": "OSM binding for 戸田 (5 inbound)"
+      "notes": "Verified OSM binding for 一ツ橋 (5 inbound)"
     },
     {
-      "rampId": "ramp:5-outbound:toda-exit",
-      "osmWayId": 5110004,
-      "osmNodeId": 5110005,
-      "motorwayNodeId": 5110006,
+      "rampId": "ramp:5-inbound:iidabashi-exit",
+      "osmWayId": 181579910,
+      "osmNodeId": 888745023,
+      "motorwayNodeId": 1919930527,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 飯田橋 (5 inbound)"
+    },
+    {
+      "rampId": "ramp:5-outbound:waseda-exit",
+      "osmWayId": 777984385,
+      "osmNodeId": 9934063555,
+      "motorwayNodeId": 7496297588,
       "direction": "outbound",
-      "notes": "OSM binding for 戸田 (5 outbound)"
+      "notes": "Verified OSM binding for 早稲田 (5 outbound)"
     },
     {
-      "rampId": "boundary:5-inbound:gaikan-bijogi-in",
-      "osmWayId": 5111001,
-      "osmNodeId": 5111002,
-      "motorwayNodeId": 5111003,
+      "rampId": "ramp:5-inbound:toda-exit",
+      "osmWayId": 409002624,
+      "osmNodeId": 2872561212,
+      "motorwayNodeId": 4108975292,
       "direction": "inbound",
-      "notes": "OSM binding for 外環接続美女木 (5 inbound)"
+      "notes": "Verified OSM binding for 戸田 (5 inbound)"
     },
     {
-      "rampId": "boundary:5-outbound:gaikan-bijogi-out",
-      "osmWayId": 5111004,
-      "osmNodeId": 5111005,
-      "motorwayNodeId": 5111006,
+      "rampId": "ramp:6m-outbound:komagata-exit",
+      "osmWayId": 1304022054,
+      "osmNodeId": 460049590,
+      "motorwayNodeId": 13256250764,
       "direction": "outbound",
-      "notes": "OSM binding for 外環接続美女木 (5 outbound)"
+      "notes": "Verified OSM binding for 駒形 (6M outbound)"
     },
     {
-      "rampId": "ramp:6-inbound:hakozaki-entry",
-      "osmWayId": 6001001,
-      "osmNodeId": 6001002,
-      "motorwayNodeId": 6001003,
+      "rampId": "ramp:6m-inbound:mukojima-exit",
+      "osmWayId": 157812878,
+      "osmNodeId": 1671664897,
+      "motorwayNodeId": 1313849530,
       "direction": "inbound",
-      "notes": "OSM binding for 箱崎 (6 inbound)"
+      "notes": "Verified OSM binding for 向島 (6M inbound)"
     },
     {
-      "rampId": "ramp:6-inbound:hakozaki-exit",
-      "osmWayId": 6001004,
-      "osmNodeId": 6001005,
-      "motorwayNodeId": 6001006,
-      "direction": "inbound",
-      "notes": "OSM binding for 箱崎 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-outbound:hakozaki-entry",
-      "osmWayId": 6001007,
-      "osmNodeId": 6001008,
-      "motorwayNodeId": 6001009,
+      "rampId": "ramp:6m-outbound:mukojima-exit",
+      "osmWayId": 895871079,
+      "osmNodeId": 1671664757,
+      "motorwayNodeId": 1671664760,
       "direction": "outbound",
-      "notes": "OSM binding for 箱崎 (6 outbound)"
+      "notes": "Verified OSM binding for 向島 (6M outbound)"
     },
     {
-      "rampId": "ramp:6-outbound:hakozaki-exit",
-      "osmWayId": 6001010,
-      "osmNodeId": 6001011,
-      "motorwayNodeId": 6001012,
+      "rampId": "ramp:6m-outbound:tsutsumidori-exit",
+      "osmWayId": 157812878,
+      "osmNodeId": 1671664897,
+      "motorwayNodeId": 1313849530,
       "direction": "outbound",
-      "notes": "OSM binding for 箱崎 (6 outbound)"
+      "notes": "Verified OSM binding for 堤通 (6M outbound)"
     },
     {
-      "rampId": "ramp:6-inbound:hamacho-entry",
-      "osmWayId": 6002001,
-      "osmNodeId": 6002002,
-      "motorwayNodeId": 6002003,
+      "rampId": "ramp:6m-inbound:tsutsumidori-exit",
+      "osmWayId": 58755418,
+      "osmNodeId": 1582484565,
+      "motorwayNodeId": 1954023784,
       "direction": "inbound",
-      "notes": "OSM binding for 浜町 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-outbound:hamacho-exit",
-      "osmWayId": 6002004,
-      "osmNodeId": 6002005,
-      "motorwayNodeId": 6002006,
-      "direction": "outbound",
-      "notes": "OSM binding for 浜町 (6 outbound)"
-    },
-    {
-      "rampId": "ramp:6-inbound:kiyosumi-exit",
-      "osmWayId": 6003001,
-      "osmNodeId": 6003002,
-      "motorwayNodeId": 6003003,
-      "direction": "inbound",
-      "notes": "OSM binding for 清澄 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-inbound:komagata-entry",
-      "osmWayId": 6004001,
-      "osmNodeId": 6004002,
-      "motorwayNodeId": 6004003,
-      "direction": "inbound",
-      "notes": "OSM binding for 駒形 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-outbound:komagata-exit",
-      "osmWayId": 6004004,
-      "osmNodeId": 6004005,
-      "motorwayNodeId": 6004006,
-      "direction": "outbound",
-      "notes": "OSM binding for 駒形 (6 outbound)"
-    },
-    {
-      "rampId": "ramp:6-inbound:mukojima-entry",
-      "osmWayId": 6005001,
-      "osmNodeId": 6005002,
-      "motorwayNodeId": 6005003,
-      "direction": "inbound",
-      "notes": "OSM binding for 向島 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-outbound:mukojima-exit",
-      "osmWayId": 6005004,
-      "osmNodeId": 6005005,
-      "motorwayNodeId": 6005006,
-      "direction": "outbound",
-      "notes": "OSM binding for 向島 (6 outbound)"
-    },
-    {
-      "rampId": "ramp:6-inbound:tsutsumidori-exit",
-      "osmWayId": 6006001,
-      "osmNodeId": 6006002,
-      "motorwayNodeId": 6006003,
-      "direction": "inbound",
-      "notes": "OSM binding for 堤通 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-outbound:tsutsumidori-entry",
-      "osmWayId": 6006004,
-      "osmNodeId": 6006005,
-      "motorwayNodeId": 6006006,
-      "direction": "outbound",
-      "notes": "OSM binding for 堤通 (6 outbound)"
-    },
-    {
-      "rampId": "ramp:6-inbound:kahei-entry",
-      "osmWayId": 6101001,
-      "osmNodeId": 6101002,
-      "motorwayNodeId": 6101003,
-      "direction": "inbound",
-      "notes": "OSM binding for 加平 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-inbound:kahei-exit",
-      "osmWayId": 6101004,
-      "osmNodeId": 6101005,
-      "motorwayNodeId": 6101006,
-      "direction": "inbound",
-      "notes": "OSM binding for 加平 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-outbound:kahei-entry",
-      "osmWayId": 6101007,
-      "osmNodeId": 6101008,
-      "motorwayNodeId": 6101009,
-      "direction": "outbound",
-      "notes": "OSM binding for 加平 (6 outbound)"
-    },
-    {
-      "rampId": "ramp:6-outbound:kahei-exit",
-      "osmWayId": 6101010,
-      "osmNodeId": 6101011,
-      "motorwayNodeId": 6101012,
-      "direction": "outbound",
-      "notes": "OSM binding for 加平 (6 outbound)"
-    },
-    {
-      "rampId": "ramp:6-inbound:yashio-minami-entry",
-      "osmWayId": 6102001,
-      "osmNodeId": 6102002,
-      "motorwayNodeId": 6102003,
-      "direction": "inbound",
-      "notes": "OSM binding for 八潮南 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-outbound:yashio-minami-exit",
-      "osmWayId": 6102004,
-      "osmNodeId": 6102005,
-      "motorwayNodeId": 6102006,
-      "direction": "outbound",
-      "notes": "OSM binding for 八潮南 (6 outbound)"
-    },
-    {
-      "rampId": "ramp:6-inbound:yashio-entry",
-      "osmWayId": 6103001,
-      "osmNodeId": 6103002,
-      "motorwayNodeId": 6103003,
-      "direction": "inbound",
-      "notes": "OSM binding for 八潮 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-outbound:yashio-exit",
-      "osmWayId": 6103004,
-      "osmNodeId": 6103005,
-      "motorwayNodeId": 6103006,
-      "direction": "outbound",
-      "notes": "OSM binding for 八潮 (6 outbound)"
-    },
-    {
-      "rampId": "ramp:6-inbound:misato-entry",
-      "osmWayId": 6104001,
-      "osmNodeId": 6104002,
-      "motorwayNodeId": 6104003,
-      "direction": "inbound",
-      "notes": "OSM binding for 三郷 (6 inbound)"
-    },
-    {
-      "rampId": "ramp:6-outbound:misato-exit",
-      "osmWayId": 6104004,
-      "osmNodeId": 6104005,
-      "motorwayNodeId": 6104006,
-      "direction": "outbound",
-      "notes": "OSM binding for 三郷 (6 outbound)"
-    },
-    {
-      "rampId": "boundary:6-inbound:joban-jct-in",
-      "osmWayId": 6105001,
-      "osmNodeId": 6105002,
-      "motorwayNodeId": 6105003,
-      "direction": "inbound",
-      "notes": "OSM binding for 常磐道接続三郷 (6 inbound)"
-    },
-    {
-      "rampId": "boundary:6-outbound:joban-jct-out",
-      "osmWayId": 6105004,
-      "osmNodeId": 6105005,
-      "motorwayNodeId": 6105006,
-      "direction": "outbound",
-      "notes": "OSM binding for 常磐道接続三郷 (6 outbound)"
-    },
-    {
-      "rampId": "ramp:7-inbound:kinshicho-entry",
-      "osmWayId": 7001001,
-      "osmNodeId": 7001002,
-      "motorwayNodeId": 7001003,
-      "direction": "inbound",
-      "notes": "OSM binding for 錦糸町 (7 inbound)"
-    },
-    {
-      "rampId": "ramp:7-inbound:kinshicho-exit",
-      "osmWayId": 7001004,
-      "osmNodeId": 7001005,
-      "motorwayNodeId": 7001006,
-      "direction": "inbound",
-      "notes": "OSM binding for 錦糸町 (7 inbound)"
-    },
-    {
-      "rampId": "ramp:7-outbound:kinshicho-entry",
-      "osmWayId": 7001007,
-      "osmNodeId": 7001008,
-      "motorwayNodeId": 7001009,
-      "direction": "outbound",
-      "notes": "OSM binding for 錦糸町 (7 outbound)"
+      "notes": "Verified OSM binding for 堤通 (6M inbound)"
     },
     {
       "rampId": "ramp:7-outbound:kinshicho-exit",
-      "osmWayId": 7001010,
-      "osmNodeId": 7001011,
-      "motorwayNodeId": 7001012,
+      "osmWayId": 155035360,
+      "osmNodeId": 849152333,
+      "motorwayNodeId": 12965525695,
       "direction": "outbound",
-      "notes": "OSM binding for 錦糸町 (7 outbound)"
+      "notes": "Verified OSM binding for 錦糸町 (7 outbound)"
     },
     {
-      "rampId": "ramp:7-inbound:komatsugawa-entry",
-      "osmWayId": 7002001,
-      "osmNodeId": 7002002,
-      "motorwayNodeId": 7002003,
+      "rampId": "ramp:7-inbound:kinshicho-exit",
+      "osmWayId": 71488896,
+      "osmNodeId": 849152333,
+      "motorwayNodeId": 1674804718,
       "direction": "inbound",
-      "notes": "OSM binding for 小松川 (7 inbound)"
+      "notes": "Verified OSM binding for 錦糸町 (7 inbound)"
     },
     {
       "rampId": "ramp:7-outbound:komatsugawa-exit",
-      "osmWayId": 7002004,
-      "osmNodeId": 7002005,
-      "motorwayNodeId": 7002006,
+      "osmWayId": 751177046,
+      "osmNodeId": 7903143889,
+      "motorwayNodeId": 7022713610,
       "direction": "outbound",
-      "notes": "OSM binding for 小松川 (7 outbound)"
-    },
-    {
-      "rampId": "ramp:7-inbound:ichinoe-entry",
-      "osmWayId": 7003001,
-      "osmNodeId": 7003002,
-      "motorwayNodeId": 7003003,
-      "direction": "inbound",
-      "notes": "OSM binding for 一之江 (7 inbound)"
+      "notes": "Verified OSM binding for 小松川 (7 outbound)"
     },
     {
       "rampId": "ramp:7-outbound:ichinoe-exit",
-      "osmWayId": 7003004,
-      "osmNodeId": 7003005,
-      "motorwayNodeId": 7003006,
+      "osmWayId": 59664317,
+      "osmNodeId": 7301483731,
+      "motorwayNodeId": 8378201619,
       "direction": "outbound",
-      "notes": "OSM binding for 一之江 (7 outbound)"
-    },
-    {
-      "rampId": "ramp:7-inbound:shinozaki-entry",
-      "osmWayId": 7004001,
-      "osmNodeId": 7004002,
-      "motorwayNodeId": 7004003,
-      "direction": "inbound",
-      "notes": "OSM binding for 篠崎 (7 inbound)"
-    },
-    {
-      "rampId": "ramp:7-outbound:shinozaki-exit",
-      "osmWayId": 7004004,
-      "osmNodeId": 7004005,
-      "motorwayNodeId": 7004006,
-      "direction": "outbound",
-      "notes": "OSM binding for 篠崎 (7 outbound)"
-    },
-    {
-      "rampId": "boundary:7-inbound:keiyo-jct-in",
-      "osmWayId": 7005001,
-      "osmNodeId": 7005002,
-      "motorwayNodeId": 7005003,
-      "direction": "inbound",
-      "notes": "OSM binding for 京葉道路接続篠崎 (7 inbound)"
-    },
-    {
-      "rampId": "boundary:7-outbound:keiyo-jct-out",
-      "osmWayId": 7005004,
-      "osmNodeId": 7005005,
-      "motorwayNodeId": 7005006,
-      "direction": "outbound",
-      "notes": "OSM binding for 京葉道路接続篠崎 (7 outbound)"
-    },
-    {
-      "rampId": "ramp:9-inbound:kiba-entry",
-      "osmWayId": 9001001,
-      "osmNodeId": 9001002,
-      "motorwayNodeId": 9001003,
-      "direction": "inbound",
-      "notes": "OSM binding for 木場 (9 inbound)"
+      "notes": "Verified OSM binding for 一之江 (7 outbound)"
     },
     {
       "rampId": "ramp:9-outbound:kiba-exit",
-      "osmWayId": 9001004,
-      "osmNodeId": 9001005,
-      "motorwayNodeId": 9001006,
+      "osmWayId": 420082431,
+      "osmNodeId": 1640003757,
+      "motorwayNodeId": 4200625588,
       "direction": "outbound",
-      "notes": "OSM binding for 木場 (9 outbound)"
+      "notes": "Verified OSM binding for 木場 (9 outbound)"
     },
     {
-      "rampId": "ramp:9-inbound:shiohama-entry",
-      "osmWayId": 9002001,
-      "osmNodeId": 9002002,
-      "motorwayNodeId": 9002003,
+      "rampId": "ramp:9-inbound:fukuzumi-exit",
+      "osmWayId": 420082431,
+      "osmNodeId": 1640003757,
+      "motorwayNodeId": 4200625588,
       "direction": "inbound",
-      "notes": "OSM binding for 塩浜 (9 inbound)"
+      "notes": "Verified OSM binding for 福住 (9 inbound)"
     },
     {
-      "rampId": "ramp:9-outbound:edagawa-exit",
-      "osmWayId": 9003001,
-      "osmNodeId": 9003002,
-      "motorwayNodeId": 9003003,
-      "direction": "outbound",
-      "notes": "OSM binding for 枝川 (9 outbound)"
+      "rampId": "ramp:9-inbound:edagawa-exit",
+      "osmWayId": 61177334,
+      "osmNodeId": 1947552005,
+      "motorwayNodeId": 11465153912,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 枝川 (9 inbound)"
+    },
+    {
+      "rampId": "ramp:10-inbound:toyosu-exit",
+      "osmWayId": 760583394,
+      "osmNodeId": 493584454,
+      "motorwayNodeId": 12791419278,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 豊洲 (10 inbound)"
     },
     {
       "rampId": "ramp:10-inbound:harumi-exit",
-      "osmWayId": 1010001,
-      "osmNodeId": 1010002,
-      "motorwayNodeId": 1010003,
+      "osmWayId": 568584518,
+      "osmNodeId": 5470031356,
+      "motorwayNodeId": 10310414805,
       "direction": "inbound",
-      "notes": "OSM binding for 晴海 (10 inbound)"
-    },
-    {
-      "rampId": "ramp:10-outbound:harumi-entry",
-      "osmWayId": 1010004,
-      "osmNodeId": 1010005,
-      "motorwayNodeId": 1010006,
-      "direction": "outbound",
-      "notes": "OSM binding for 晴海 (10 outbound)"
-    },
-    {
-      "rampId": "ramp:10-inbound:toyosu-entry",
-      "osmWayId": 1010007,
-      "osmNodeId": 1010008,
-      "motorwayNodeId": 1010009,
-      "direction": "inbound",
-      "notes": "OSM binding for 豊洲 (10 inbound)"
-    },
-    {
-      "rampId": "ramp:10-outbound:toyosu-exit",
-      "osmWayId": 1010010,
-      "osmNodeId": 1010011,
-      "motorwayNodeId": 1010012,
-      "direction": "outbound",
-      "notes": "OSM binding for 豊洲 (10 outbound)"
-    },
-    {
-      "rampId": "ramp:11-inbound:daiba-entry",
-      "osmWayId": 1101001,
-      "osmNodeId": 1101002,
-      "motorwayNodeId": 1101003,
-      "direction": "inbound",
-      "notes": "OSM binding for 台場 (11 inbound)"
+      "notes": "Verified OSM binding for 晴海 (10 inbound)"
     },
     {
       "rampId": "ramp:11-outbound:daiba-exit",
-      "osmWayId": 1101004,
-      "osmNodeId": 1101005,
-      "motorwayNodeId": 1101006,
+      "osmWayId": 378126418,
+      "osmNodeId": 3815432701,
+      "motorwayNodeId": 6773622228,
       "direction": "outbound",
-      "notes": "OSM binding for 台場 (11 outbound)"
+      "notes": "Verified OSM binding for 台場 (11 outbound)"
     },
     {
-      "rampId": "ramp:b-east:kasai-entry",
-      "osmWayId": 8001001,
-      "osmNodeId": 8001002,
-      "motorwayNodeId": 8001003,
-      "direction": "east",
-      "notes": "OSM binding for 葛西 (B east)"
-    },
-    {
-      "rampId": "ramp:b-east:kasai-exit",
-      "osmWayId": 8001004,
-      "osmNodeId": 8001005,
-      "motorwayNodeId": 8001006,
-      "direction": "east",
-      "notes": "OSM binding for 葛西 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:kasai-entry",
-      "osmWayId": 8001007,
-      "osmNodeId": 8001008,
-      "motorwayNodeId": 8001009,
-      "direction": "west",
-      "notes": "OSM binding for 葛西 (B west)"
-    },
-    {
-      "rampId": "ramp:b-west:kasai-exit",
-      "osmWayId": 8001010,
-      "osmNodeId": 8001011,
-      "motorwayNodeId": 8001012,
-      "direction": "west",
-      "notes": "OSM binding for 葛西 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:shinkiba-entry",
-      "osmWayId": 8002001,
-      "osmNodeId": 8002002,
-      "motorwayNodeId": 8002003,
-      "direction": "east",
-      "notes": "OSM binding for 新木場 (B east)"
-    },
-    {
-      "rampId": "ramp:b-east:shinkiba-exit",
-      "osmWayId": 8002004,
-      "osmNodeId": 8002005,
-      "motorwayNodeId": 8002006,
-      "direction": "east",
-      "notes": "OSM binding for 新木場 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:shinkiba-entry",
-      "osmWayId": 8002007,
-      "osmNodeId": 8002008,
-      "motorwayNodeId": 8002009,
-      "direction": "west",
-      "notes": "OSM binding for 新木場 (B west)"
-    },
-    {
-      "rampId": "ramp:b-west:shinkiba-exit",
-      "osmWayId": 8002010,
-      "osmNodeId": 8002011,
-      "motorwayNodeId": 8002012,
-      "direction": "west",
-      "notes": "OSM binding for 新木場 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:ariake-entry",
-      "osmWayId": 8003001,
-      "osmNodeId": 8003002,
-      "motorwayNodeId": 8003003,
-      "direction": "east",
-      "notes": "OSM binding for 有明 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:ariake-exit",
-      "osmWayId": 8003004,
-      "osmNodeId": 8003005,
-      "motorwayNodeId": 8003006,
-      "direction": "west",
-      "notes": "OSM binding for 有明 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:rinkai-fukutoshin-exit",
-      "osmWayId": 8004001,
-      "osmNodeId": 8004002,
-      "motorwayNodeId": 8004003,
-      "direction": "east",
-      "notes": "OSM binding for 臨海副都心 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:rinkai-fukutoshin-entry",
-      "osmWayId": 8004004,
-      "osmNodeId": 8004005,
-      "motorwayNodeId": 8004006,
-      "direction": "west",
-      "notes": "OSM binding for 臨海副都心 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:oi-entry",
-      "osmWayId": 8005001,
-      "osmNodeId": 8005002,
-      "motorwayNodeId": 8005003,
-      "direction": "east",
-      "notes": "OSM binding for 大井 (B east)"
-    },
-    {
-      "rampId": "ramp:b-east:oi-exit",
-      "osmWayId": 8005004,
-      "osmNodeId": 8005005,
-      "motorwayNodeId": 8005006,
-      "direction": "east",
-      "notes": "OSM binding for 大井 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:oi-entry",
-      "osmWayId": 8005007,
-      "osmNodeId": 8005008,
-      "motorwayNodeId": 8005009,
-      "direction": "west",
-      "notes": "OSM binding for 大井 (B west)"
-    },
-    {
-      "rampId": "ramp:b-west:oi-exit",
-      "osmWayId": 8005010,
-      "osmNodeId": 8005011,
-      "motorwayNodeId": 8005012,
-      "direction": "west",
-      "notes": "OSM binding for 大井 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:kuko-chuo-entry",
-      "osmWayId": 8006001,
-      "osmNodeId": 8006002,
-      "motorwayNodeId": 8006003,
-      "direction": "east",
-      "notes": "OSM binding for 空港中央 (B east)"
-    },
-    {
-      "rampId": "ramp:b-east:kuko-chuo-exit",
-      "osmWayId": 8006004,
-      "osmNodeId": 8006005,
-      "motorwayNodeId": 8006006,
-      "direction": "east",
-      "notes": "OSM binding for 空港中央 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:kuko-chuo-entry",
-      "osmWayId": 8006007,
-      "osmNodeId": 8006008,
-      "motorwayNodeId": 8006009,
-      "direction": "west",
-      "notes": "OSM binding for 空港中央 (B west)"
-    },
-    {
-      "rampId": "ramp:b-west:kuko-chuo-exit",
-      "osmWayId": 8006010,
-      "osmNodeId": 8006011,
-      "motorwayNodeId": 8006012,
-      "direction": "west",
-      "notes": "OSM binding for 空港中央 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:wangan-kampachi-entry",
-      "osmWayId": 8007001,
-      "osmNodeId": 8007002,
-      "motorwayNodeId": 8007003,
-      "direction": "east",
-      "notes": "OSM binding for 湾岸環八 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:wangan-kampachi-exit",
-      "osmWayId": 8007004,
-      "osmNodeId": 8007005,
-      "motorwayNodeId": 8007006,
-      "direction": "west",
-      "notes": "OSM binding for 湾岸環八 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:ukishima-entry",
-      "osmWayId": 8008001,
-      "osmNodeId": 8008002,
-      "motorwayNodeId": 8008003,
-      "direction": "east",
-      "notes": "OSM binding for 浮島 (B east)"
-    },
-    {
-      "rampId": "ramp:b-east:ukishima-exit",
-      "osmWayId": 8008004,
-      "osmNodeId": 8008005,
-      "motorwayNodeId": 8008006,
-      "direction": "east",
-      "notes": "OSM binding for 浮島 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:ukishima-entry",
-      "osmWayId": 8008007,
-      "osmNodeId": 8008008,
-      "motorwayNodeId": 8008009,
-      "direction": "west",
-      "notes": "OSM binding for 浮島 (B west)"
-    },
-    {
-      "rampId": "ramp:b-west:ukishima-exit",
-      "osmWayId": 8008010,
-      "osmNodeId": 8008011,
-      "motorwayNodeId": 8008012,
-      "direction": "west",
-      "notes": "OSM binding for 浮島 (B west)"
-    },
-    {
-      "rampId": "boundary:b-east:aqualine-jct-in",
-      "osmWayId": 8009001,
-      "osmNodeId": 8009002,
-      "motorwayNodeId": 8009003,
-      "direction": "east",
-      "notes": "OSM binding for アクアライン接続浮島 (B east)"
-    },
-    {
-      "rampId": "boundary:b-west:aqualine-jct-out",
-      "osmWayId": 8009004,
-      "osmNodeId": 8009005,
-      "motorwayNodeId": 8009006,
-      "direction": "west",
-      "notes": "OSM binding for アクアライン接続浮島 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:tonomachi-entry",
-      "osmWayId": 8010001,
-      "osmNodeId": 8010002,
-      "motorwayNodeId": 8010003,
-      "direction": "east",
-      "notes": "OSM binding for 殿町 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:tonomachi-exit",
-      "osmWayId": 8010004,
-      "osmNodeId": 8010005,
-      "motorwayNodeId": 8010006,
-      "direction": "west",
-      "notes": "OSM binding for 殿町 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:higashi-ogishima-entry",
-      "osmWayId": 8011001,
-      "osmNodeId": 8011002,
-      "motorwayNodeId": 8011003,
-      "direction": "east",
-      "notes": "OSM binding for 東扇島 (B east)"
-    },
-    {
-      "rampId": "ramp:b-east:higashi-ogishima-exit",
-      "osmWayId": 8011004,
-      "osmNodeId": 8011005,
-      "motorwayNodeId": 8011006,
-      "direction": "east",
-      "notes": "OSM binding for 東扇島 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:higashi-ogishima-entry",
-      "osmWayId": 8011007,
-      "osmNodeId": 8011008,
-      "motorwayNodeId": 8011009,
-      "direction": "west",
-      "notes": "OSM binding for 東扇島 (B west)"
-    },
-    {
-      "rampId": "ramp:b-west:higashi-ogishima-exit",
-      "osmWayId": 8011010,
-      "osmNodeId": 8011011,
-      "motorwayNodeId": 8011012,
-      "direction": "west",
-      "notes": "OSM binding for 東扇島 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:daikoku-futo-entry",
-      "osmWayId": 8012001,
-      "osmNodeId": 8012002,
-      "motorwayNodeId": 8012003,
-      "direction": "east",
-      "notes": "OSM binding for 大黒ふ頭 (B east)"
-    },
-    {
-      "rampId": "ramp:b-east:daikoku-futo-exit",
-      "osmWayId": 8012004,
-      "osmNodeId": 8012005,
-      "motorwayNodeId": 8012006,
-      "direction": "east",
-      "notes": "OSM binding for 大黒ふ頭 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:daikoku-futo-entry",
-      "osmWayId": 8012007,
-      "osmNodeId": 8012008,
-      "motorwayNodeId": 8012009,
-      "direction": "west",
-      "notes": "OSM binding for 大黒ふ頭 (B west)"
-    },
-    {
-      "rampId": "ramp:b-west:daikoku-futo-exit",
-      "osmWayId": 8012010,
-      "osmNodeId": 8012011,
-      "motorwayNodeId": 8012012,
-      "direction": "west",
-      "notes": "OSM binding for 大黒ふ頭 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:honmoku-futo-entry",
-      "osmWayId": 8013001,
-      "osmNodeId": 8013002,
-      "motorwayNodeId": 8013003,
-      "direction": "east",
-      "notes": "OSM binding for 本牧ふ頭 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:honmoku-futo-exit",
-      "osmWayId": 8013004,
-      "osmNodeId": 8013005,
-      "motorwayNodeId": 8013006,
-      "direction": "west",
-      "notes": "OSM binding for 本牧ふ頭 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:minami-honmoku-futo-entry",
-      "osmWayId": 8014001,
-      "osmNodeId": 8014002,
-      "motorwayNodeId": 8014003,
-      "direction": "east",
-      "notes": "OSM binding for 南本牧ふ頭 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:minami-honmoku-futo-exit",
-      "osmWayId": 8014004,
-      "osmNodeId": 8014005,
-      "motorwayNodeId": 8014006,
-      "direction": "west",
-      "notes": "OSM binding for 南本牧ふ頭 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:sankeien-exit",
-      "osmWayId": 8015001,
-      "osmNodeId": 8015002,
-      "motorwayNodeId": 8015003,
-      "direction": "east",
-      "notes": "OSM binding for 三渓園 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:sankeien-entry",
-      "osmWayId": 8015004,
-      "osmNodeId": 8015005,
-      "motorwayNodeId": 8015006,
-      "direction": "west",
-      "notes": "OSM binding for 三渓園 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:isogo-entry",
-      "osmWayId": 8016001,
-      "osmNodeId": 8016002,
-      "motorwayNodeId": 8016003,
-      "direction": "east",
-      "notes": "OSM binding for 磯子 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:isogo-exit",
-      "osmWayId": 8016004,
-      "osmNodeId": 8016005,
-      "motorwayNodeId": 8016006,
-      "direction": "west",
-      "notes": "OSM binding for 磯子 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:sugita-exit",
-      "osmWayId": 8017001,
-      "osmNodeId": 8017002,
-      "motorwayNodeId": 8017003,
-      "direction": "east",
-      "notes": "OSM binding for 杉田 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:sugita-entry",
-      "osmWayId": 8017004,
-      "osmNodeId": 8017005,
-      "motorwayNodeId": 8017006,
-      "direction": "west",
-      "notes": "OSM binding for 杉田 (B west)"
-    },
-    {
-      "rampId": "ramp:b-east:sachiura-entry",
-      "osmWayId": 8018001,
-      "osmNodeId": 8018002,
-      "motorwayNodeId": 8018003,
-      "direction": "east",
-      "notes": "OSM binding for 幸浦 (B east)"
-    },
-    {
-      "rampId": "ramp:b-west:sachiura-exit",
-      "osmWayId": 8018004,
-      "osmNodeId": 8018005,
-      "motorwayNodeId": 8018006,
-      "direction": "west",
-      "notes": "OSM binding for 幸浦 (B west)"
-    },
-    {
-      "rampId": "boundary:b-east:yokoyoko-jct-in",
-      "osmWayId": 8019001,
-      "osmNodeId": 8019002,
-      "motorwayNodeId": 8019003,
-      "direction": "east",
-      "notes": "OSM binding for 横横道路接続並木 (B east)"
-    },
-    {
-      "rampId": "boundary:b-west:yokoyoko-jct-out",
-      "osmWayId": 8019004,
-      "osmNodeId": 8019005,
-      "motorwayNodeId": 8019006,
-      "direction": "west",
-      "notes": "OSM binding for 横横道路接続並木 (B west)"
-    },
-    {
-      "rampId": "ramp:y-north:yaesu-entry",
-      "osmWayId": 2501001,
-      "osmNodeId": 2501002,
-      "motorwayNodeId": 2501003,
-      "direction": "north",
-      "notes": "OSM binding for 八重洲 (Y north)"
-    },
-    {
-      "rampId": "ramp:y-south:yaesu-exit",
-      "osmWayId": 2501004,
-      "osmNodeId": 2501005,
-      "motorwayNodeId": 2501006,
-      "direction": "south",
-      "notes": "OSM binding for 八重洲 (Y south)"
-    },
-    {
-      "rampId": "ramp:k1-inbound:daishi-entry",
-      "osmWayId": 2101001,
-      "osmNodeId": 2101002,
-      "motorwayNodeId": 2101003,
-      "direction": "inbound",
-      "notes": "OSM binding for 大師 (K1 inbound)"
-    },
-    {
-      "rampId": "ramp:k1-outbound:daishi-exit",
-      "osmWayId": 2101004,
-      "osmNodeId": 2101005,
-      "motorwayNodeId": 2101006,
+      "rampId": "ramp:6s-outbound:kahei-exit",
+      "osmWayId": 250490200,
+      "osmNodeId": 2569265263,
+      "motorwayNodeId": 2569265264,
       "direction": "outbound",
-      "notes": "OSM binding for 大師 (K1 outbound)"
+      "notes": "Verified OSM binding for 加平 (6S outbound)"
     },
     {
-      "rampId": "ramp:k1-inbound:hamakawasaki-entry",
-      "osmWayId": 2102001,
-      "osmNodeId": 2102002,
-      "motorwayNodeId": 2102003,
+      "rampId": "ramp:6s-inbound:kahei-exit",
+      "osmWayId": 60942191,
+      "osmNodeId": 762936884,
+      "motorwayNodeId": 2569233136,
       "direction": "inbound",
-      "notes": "OSM binding for 浜川崎 (K1 inbound)"
+      "notes": "Verified OSM binding for 加平 (6S inbound)"
     },
     {
-      "rampId": "ramp:k1-outbound:hamakawasaki-exit",
-      "osmWayId": 2102004,
-      "osmNodeId": 2102005,
-      "motorwayNodeId": 2102006,
+      "rampId": "ramp:6s-outbound:kahei-653-exit",
+      "osmWayId": 250490203,
+      "osmNodeId": 762939882,
+      "motorwayNodeId": 2569265258,
       "direction": "outbound",
-      "notes": "OSM binding for 浜川崎 (K1 outbound)"
+      "notes": "Verified OSM binding for 加平 (6S outbound)"
     },
     {
-      "rampId": "ramp:k1-inbound:asada-exit",
-      "osmWayId": 2103001,
-      "osmNodeId": 2103002,
-      "motorwayNodeId": 2103003,
+      "rampId": "ramp:6s-inbound:kahei-654-exit",
+      "osmWayId": 250490200,
+      "osmNodeId": 2569265263,
+      "motorwayNodeId": 2569265264,
       "direction": "inbound",
-      "notes": "OSM binding for 浅田 (K1 inbound)"
+      "notes": "Verified OSM binding for 加平 (6S inbound)"
     },
     {
-      "rampId": "ramp:k1-outbound:asada-entry",
-      "osmWayId": 2103004,
-      "osmNodeId": 2103005,
-      "motorwayNodeId": 2103006,
+      "rampId": "ramp:6s-outbound:yashio-minami-exit",
+      "osmWayId": 251808352,
+      "osmNodeId": 925240920,
+      "motorwayNodeId": 2579787369,
       "direction": "outbound",
-      "notes": "OSM binding for 浅田 (K1 outbound)"
+      "notes": "Verified OSM binding for 八潮南 (6S outbound)"
     },
     {
-      "rampId": "ramp:k1-inbound:koyasu-entry",
-      "osmWayId": 2104001,
-      "osmNodeId": 2104002,
-      "motorwayNodeId": 2104003,
+      "rampId": "ramp:6s-inbound:yashio-minami-exit",
+      "osmWayId": 251808352,
+      "osmNodeId": 925240920,
+      "motorwayNodeId": 2579787369,
       "direction": "inbound",
-      "notes": "OSM binding for 子安 (K1 inbound)"
+      "notes": "Verified OSM binding for 八潮南 (6S inbound)"
     },
     {
-      "rampId": "ramp:k1-outbound:koyasu-exit",
-      "osmWayId": 2104004,
-      "osmNodeId": 2104005,
-      "motorwayNodeId": 2104006,
+      "rampId": "ramp:6s-outbound:yashio-exit",
+      "osmWayId": 251808352,
+      "osmNodeId": 925240920,
+      "motorwayNodeId": 2579787369,
       "direction": "outbound",
-      "notes": "OSM binding for 子安 (K1 outbound)"
+      "notes": "Verified OSM binding for 八潮 (6S outbound)"
     },
     {
-      "rampId": "ramp:k1-inbound:higashi-kanagawa-exit",
-      "osmWayId": 2105001,
-      "osmNodeId": 2105002,
-      "motorwayNodeId": 2105003,
-      "direction": "inbound",
-      "notes": "OSM binding for 東神奈川 (K1 inbound)"
-    },
-    {
-      "rampId": "ramp:k1-outbound:higashi-kanagawa-entry",
-      "osmWayId": 2105004,
-      "osmNodeId": 2105005,
-      "motorwayNodeId": 2105006,
+      "rampId": "ramp:1u-outbound:honcho-exit",
+      "osmWayId": 199311811,
+      "osmNodeId": 2128389344,
+      "motorwayNodeId": 2093245859,
       "direction": "outbound",
-      "notes": "OSM binding for 東神奈川 (K1 outbound)"
+      "notes": "Verified OSM binding for 本町 (1U outbound)"
     },
     {
-      "rampId": "ramp:k1-inbound:yokohama-station-east-entry",
-      "osmWayId": 2106001,
-      "osmNodeId": 2106002,
-      "motorwayNodeId": 2106003,
+      "rampId": "ramp:1u-inbound:honcho-exit",
+      "osmWayId": 202801662,
+      "osmNodeId": 7637464886,
+      "motorwayNodeId": 12189305117,
       "direction": "inbound",
-      "notes": "OSM binding for 横浜駅東口 (K1 inbound)"
+      "notes": "Verified OSM binding for 本町 (1U inbound)"
     },
     {
-      "rampId": "ramp:k1-outbound:yokohama-station-east-exit",
-      "osmWayId": 2106004,
-      "osmNodeId": 2106005,
-      "motorwayNodeId": 2106006,
+      "rampId": "ramp:1u-outbound:ueno-exit",
+      "osmWayId": 945962601,
+      "osmNodeId": 2402061967,
+      "motorwayNodeId": 1041298832,
       "direction": "outbound",
-      "notes": "OSM binding for 横浜駅東口 (K1 outbound)"
+      "notes": "Verified OSM binding for 上野 (1U outbound)"
     },
     {
-      "rampId": "ramp:k1-inbound:minato-mirai-entry",
-      "osmWayId": 2107001,
-      "osmNodeId": 2107002,
-      "motorwayNodeId": 2107003,
-      "direction": "inbound",
-      "notes": "OSM binding for みなとみらい (K1 inbound)"
-    },
-    {
-      "rampId": "ramp:k1-inbound:minato-mirai-exit",
-      "osmWayId": 2107004,
-      "osmNodeId": 2107005,
-      "motorwayNodeId": 2107006,
-      "direction": "inbound",
-      "notes": "OSM binding for みなとみらい (K1 inbound)"
-    },
-    {
-      "rampId": "ramp:k1-outbound:minato-mirai-entry",
-      "osmWayId": 2107007,
-      "osmNodeId": 2107008,
-      "motorwayNodeId": 2107009,
+      "rampId": "ramp:1u-outbound:iriya-exit",
+      "osmWayId": 1304022054,
+      "osmNodeId": 460049590,
+      "motorwayNodeId": 13256250764,
       "direction": "outbound",
-      "notes": "OSM binding for みなとみらい (K1 outbound)"
+      "notes": "Verified OSM binding for 入谷 (1U outbound)"
     },
     {
-      "rampId": "ramp:k1-outbound:minato-mirai-exit",
-      "osmWayId": 2107010,
-      "osmNodeId": 2107011,
-      "motorwayNodeId": 2107012,
+      "rampId": "ramp:s1-outbound:shikahamabashi-exit",
+      "osmWayId": 631846770,
+      "osmNodeId": 4362250647,
+      "motorwayNodeId": 5653183407,
       "direction": "outbound",
-      "notes": "OSM binding for みなとみらい (K1 outbound)"
+      "notes": "Verified OSM binding for 鹿浜橋 (S1 outbound)"
     },
     {
-      "rampId": "ramp:k1-inbound:yamashitacho-entry",
-      "osmWayId": 2108001,
-      "osmNodeId": 2108002,
-      "motorwayNodeId": 2108003,
-      "direction": "inbound",
-      "notes": "OSM binding for 山下町 (K1 inbound)"
-    },
-    {
-      "rampId": "ramp:k1-outbound:yamashitacho-exit",
-      "osmWayId": 2108004,
-      "osmNodeId": 2108005,
-      "motorwayNodeId": 2108006,
+      "rampId": "ramp:s1-outbound:ramp-exit",
+      "osmWayId": 1023900267,
+      "osmNodeId": 4361138363,
+      "motorwayNodeId": 4361138362,
       "direction": "outbound",
-      "notes": "OSM binding for 山下町 (K1 outbound)"
-    },
-    {
-      "rampId": "ramp:k2-inbound:yokohama-station-west-entry",
-      "osmWayId": 2201001,
-      "osmNodeId": 2201002,
-      "motorwayNodeId": 2201003,
-      "direction": "inbound",
-      "notes": "OSM binding for 横浜駅西口 (K2 inbound)"
-    },
-    {
-      "rampId": "ramp:k2-outbound:yokohama-station-west-exit",
-      "osmWayId": 2201004,
-      "osmNodeId": 2201005,
-      "motorwayNodeId": 2201006,
-      "direction": "outbound",
-      "notes": "OSM binding for 横浜駅西口 (K2 outbound)"
-    },
-    {
-      "rampId": "ramp:k2-inbound:mitsuzawa-entry",
-      "osmWayId": 2202001,
-      "osmNodeId": 2202002,
-      "motorwayNodeId": 2202003,
-      "direction": "inbound",
-      "notes": "OSM binding for 三ツ沢 (K2 inbound)"
-    },
-    {
-      "rampId": "ramp:k2-outbound:mitsuzawa-exit",
-      "osmWayId": 2202004,
-      "osmNodeId": 2202005,
-      "motorwayNodeId": 2202006,
-      "direction": "outbound",
-      "notes": "OSM binding for 三ツ沢 (K2 outbound)"
-    },
-    {
-      "rampId": "boundary:k2-inbound:daisan-jct-in",
-      "osmWayId": 2203001,
-      "osmNodeId": 2203002,
-      "motorwayNodeId": 2203003,
-      "direction": "inbound",
-      "notes": "OSM binding for 第三京浜接続三ツ沢 (K2 inbound)"
-    },
-    {
-      "rampId": "boundary:k2-outbound:daisan-jct-out",
-      "osmWayId": 2203004,
-      "osmNodeId": 2203005,
-      "motorwayNodeId": 2203006,
-      "direction": "outbound",
-      "notes": "OSM binding for 第三京浜接続三ツ沢 (K2 outbound)"
-    },
-    {
-      "rampId": "ramp:k3-inbound:bandobashi-exit",
-      "osmWayId": 2301001,
-      "osmNodeId": 2301002,
-      "motorwayNodeId": 2301003,
-      "direction": "inbound",
-      "notes": "OSM binding for 阪東橋 (K3 inbound)"
-    },
-    {
-      "rampId": "ramp:k3-outbound:bandobashi-entry",
-      "osmWayId": 2301004,
-      "osmNodeId": 2301005,
-      "motorwayNodeId": 2301006,
-      "direction": "outbound",
-      "notes": "OSM binding for 阪東橋 (K3 outbound)"
-    },
-    {
-      "rampId": "ramp:k3-inbound:hananoki-entry",
-      "osmWayId": 2302001,
-      "osmNodeId": 2302002,
-      "motorwayNodeId": 2302003,
-      "direction": "inbound",
-      "notes": "OSM binding for 花之木 (K3 inbound)"
-    },
-    {
-      "rampId": "ramp:k3-outbound:hananoki-exit",
-      "osmWayId": 2302004,
-      "osmNodeId": 2302005,
-      "motorwayNodeId": 2302006,
-      "direction": "outbound",
-      "notes": "OSM binding for 花之木 (K3 outbound)"
-    },
-    {
-      "rampId": "ramp:k3-inbound:nagata-entry",
-      "osmWayId": 2303001,
-      "osmNodeId": 2303002,
-      "motorwayNodeId": 2303003,
-      "direction": "inbound",
-      "notes": "OSM binding for 永田 (K3 inbound)"
-    },
-    {
-      "rampId": "ramp:k3-outbound:nagata-exit",
-      "osmWayId": 2303004,
-      "osmNodeId": 2303005,
-      "motorwayNodeId": 2303006,
-      "direction": "outbound",
-      "notes": "OSM binding for 永田 (K3 outbound)"
-    },
-    {
-      "rampId": "ramp:k3-inbound:kariba-entry",
-      "osmWayId": 2304001,
-      "osmNodeId": 2304002,
-      "motorwayNodeId": 2304003,
-      "direction": "inbound",
-      "notes": "OSM binding for 狩場 (K3 inbound)"
-    },
-    {
-      "rampId": "ramp:k3-outbound:kariba-exit",
-      "osmWayId": 2304004,
-      "osmNodeId": 2304005,
-      "motorwayNodeId": 2304006,
-      "direction": "outbound",
-      "notes": "OSM binding for 狩場 (K3 outbound)"
-    },
-    {
-      "rampId": "boundary:k3-inbound:yokoyoko-kariba-jct-in",
-      "osmWayId": 2305001,
-      "osmNodeId": 2305002,
-      "motorwayNodeId": 2305003,
-      "direction": "inbound",
-      "notes": "OSM binding for 横横保土ヶ谷接続狩場 (K3 inbound)"
-    },
-    {
-      "rampId": "boundary:k3-outbound:yokoyoko-kariba-jct-out",
-      "osmWayId": 2305004,
-      "osmNodeId": 2305005,
-      "motorwayNodeId": 2305006,
-      "direction": "outbound",
-      "notes": "OSM binding for 横横保土ヶ谷接続狩場 (K3 outbound)"
-    },
-    {
-      "rampId": "ramp:k5-inbound:daikoku-futo-k5-entry",
-      "osmWayId": 2505001,
-      "osmNodeId": 2505002,
-      "motorwayNodeId": 2505003,
-      "direction": "inbound",
-      "notes": "OSM binding for 大黒ふ頭(K5) (K5 inbound)"
-    },
-    {
-      "rampId": "ramp:k5-outbound:daikoku-futo-k5-exit",
-      "osmWayId": 2505004,
-      "osmNodeId": 2505005,
-      "motorwayNodeId": 2505006,
-      "direction": "outbound",
-      "notes": "OSM binding for 大黒ふ頭(K5) (K5 outbound)"
-    },
-    {
-      "rampId": "ramp:k6-inbound:tonomachi-entry",
-      "osmWayId": 2601001,
-      "osmNodeId": 2601002,
-      "motorwayNodeId": 2601003,
-      "direction": "inbound",
-      "notes": "OSM binding for 殿町(K6) (K6 inbound)"
-    },
-    {
-      "rampId": "ramp:k6-outbound:tonomachi-exit",
-      "osmWayId": 2601004,
-      "osmNodeId": 2601005,
-      "motorwayNodeId": 2601006,
-      "direction": "outbound",
-      "notes": "OSM binding for 殿町(K6) (K6 outbound)"
-    },
-    {
-      "rampId": "ramp:k6-inbound:daishi-k6-entry",
-      "osmWayId": 2602001,
-      "osmNodeId": 2602002,
-      "motorwayNodeId": 2602003,
-      "direction": "inbound",
-      "notes": "OSM binding for 大師(K6) (K6 inbound)"
-    },
-    {
-      "rampId": "ramp:k6-outbound:daishi-k6-exit",
-      "osmWayId": 2602004,
-      "osmNodeId": 2602005,
-      "motorwayNodeId": 2602006,
-      "direction": "outbound",
-      "notes": "OSM binding for 大師(K6) (K6 outbound)"
-    },
-    {
-      "rampId": "ramp:k6-inbound:fujimi-entry",
-      "osmWayId": 2603001,
-      "osmNodeId": 2603002,
-      "motorwayNodeId": 2603003,
-      "direction": "inbound",
-      "notes": "OSM binding for 富士見 (K6 inbound)"
-    },
-    {
-      "rampId": "ramp:k6-outbound:fujimi-exit",
-      "osmWayId": 2603004,
-      "osmNodeId": 2603005,
-      "motorwayNodeId": 2603006,
-      "direction": "outbound",
-      "notes": "OSM binding for 富士見 (K6 outbound)"
-    },
-    {
-      "rampId": "ramp:k7-inbound:namamugi-entry",
-      "osmWayId": 2701001,
-      "osmNodeId": 2701002,
-      "motorwayNodeId": 2701003,
-      "direction": "inbound",
-      "notes": "OSM binding for 生麦 (K7 inbound)"
-    },
-    {
-      "rampId": "ramp:k7-outbound:namamugi-exit",
-      "osmWayId": 2701004,
-      "osmNodeId": 2701005,
-      "motorwayNodeId": 2701006,
-      "direction": "outbound",
-      "notes": "OSM binding for 生麦 (K7 outbound)"
-    },
-    {
-      "rampId": "ramp:k7-inbound:baba-entry",
-      "osmWayId": 2702001,
-      "osmNodeId": 2702002,
-      "motorwayNodeId": 2702003,
-      "direction": "inbound",
-      "notes": "OSM binding for 馬場 (K7 inbound)"
-    },
-    {
-      "rampId": "ramp:k7-outbound:baba-exit",
-      "osmWayId": 2702004,
-      "osmNodeId": 2702005,
-      "motorwayNodeId": 2702006,
-      "direction": "outbound",
-      "notes": "OSM binding for 馬場 (K7 outbound)"
-    },
-    {
-      "rampId": "ramp:k7-inbound:shin-yokohama-entry",
-      "osmWayId": 2703001,
-      "osmNodeId": 2703002,
-      "motorwayNodeId": 2703003,
-      "direction": "inbound",
-      "notes": "OSM binding for 新横浜 (K7 inbound)"
-    },
-    {
-      "rampId": "ramp:k7-outbound:shin-yokohama-exit",
-      "osmWayId": 2703004,
-      "osmNodeId": 2703005,
-      "motorwayNodeId": 2703006,
-      "direction": "outbound",
-      "notes": "OSM binding for 新横浜 (K7 outbound)"
-    },
-    {
-      "rampId": "ramp:k7-inbound:yokohama-kohoku-entry",
-      "osmWayId": 2704001,
-      "osmNodeId": 2704002,
-      "motorwayNodeId": 2704003,
-      "direction": "inbound",
-      "notes": "OSM binding for 横浜港北 (K7 inbound)"
-    },
-    {
-      "rampId": "ramp:k7-outbound:yokohama-kohoku-exit",
-      "osmWayId": 2704004,
-      "osmNodeId": 2704005,
-      "motorwayNodeId": 2704006,
-      "direction": "outbound",
-      "notes": "OSM binding for 横浜港北 (K7 outbound)"
-    },
-    {
-      "rampId": "boundary:k7-inbound:daisan-kohoku-jct-in",
-      "osmWayId": 2705001,
-      "osmNodeId": 2705002,
-      "motorwayNodeId": 2705003,
-      "direction": "inbound",
-      "notes": "OSM binding for 第三京浜接続横浜港北 (K7 inbound)"
-    },
-    {
-      "rampId": "boundary:k7-outbound:daisan-kohoku-jct-out",
-      "osmWayId": 2705004,
-      "osmNodeId": 2705005,
-      "motorwayNodeId": 2705006,
-      "direction": "outbound",
-      "notes": "OSM binding for 第三京浜接続横浜港北 (K7 outbound)"
-    },
-    {
-      "rampId": "ramp:k7-inbound:yokohama-aoba-entry",
-      "osmWayId": 2706001,
-      "osmNodeId": 2706002,
-      "motorwayNodeId": 2706003,
-      "direction": "inbound",
-      "notes": "OSM binding for 横浜青葉 (K7 inbound)"
-    },
-    {
-      "rampId": "ramp:k7-outbound:yokohama-aoba-exit",
-      "osmWayId": 2706004,
-      "osmNodeId": 2706005,
-      "motorwayNodeId": 2706006,
-      "direction": "outbound",
-      "notes": "OSM binding for 横浜青葉 (K7 outbound)"
-    },
-    {
-      "rampId": "boundary:k7-inbound:tomei-aoba-jct-in",
-      "osmWayId": 2707001,
-      "osmNodeId": 2707002,
-      "motorwayNodeId": 2707003,
-      "direction": "inbound",
-      "notes": "OSM binding for 東名高速接続横浜青葉 (K7 inbound)"
-    },
-    {
-      "rampId": "boundary:k7-outbound:tomei-aoba-jct-out",
-      "osmWayId": 2707004,
-      "osmNodeId": 2707005,
-      "motorwayNodeId": 2707006,
-      "direction": "outbound",
-      "notes": "OSM binding for 東名高速接続横浜青葉 (K7 outbound)"
-    },
-    {
-      "rampId": "ramp:s1-inbound:adachi-iriya-entry",
-      "osmWayId": 3101001,
-      "osmNodeId": 3101002,
-      "motorwayNodeId": 3101003,
-      "direction": "inbound",
-      "notes": "OSM binding for 足立入谷 (S1 inbound)"
-    },
-    {
-      "rampId": "ramp:s1-outbound:adachi-iriya-exit",
-      "osmWayId": 3101004,
-      "osmNodeId": 3101005,
-      "motorwayNodeId": 3101006,
-      "direction": "outbound",
-      "notes": "OSM binding for 足立入谷 (S1 outbound)"
-    },
-    {
-      "rampId": "ramp:s1-inbound:shingo-entry",
-      "osmWayId": 3102001,
-      "osmNodeId": 3102002,
-      "motorwayNodeId": 3102003,
-      "direction": "inbound",
-      "notes": "OSM binding for 新郷 (S1 inbound)"
-    },
-    {
-      "rampId": "ramp:s1-inbound:shingo-exit",
-      "osmWayId": 3102004,
-      "osmNodeId": 3102005,
-      "motorwayNodeId": 3102006,
-      "direction": "inbound",
-      "notes": "OSM binding for 新郷 (S1 inbound)"
-    },
-    {
-      "rampId": "ramp:s1-outbound:shingo-entry",
-      "osmWayId": 3102007,
-      "osmNodeId": 3102008,
-      "motorwayNodeId": 3102009,
-      "direction": "outbound",
-      "notes": "OSM binding for 新郷 (S1 outbound)"
+      "notes": "Verified OSM binding for 加賀 (S1 outbound)"
     },
     {
       "rampId": "ramp:s1-outbound:shingo-exit",
-      "osmWayId": 3102010,
-      "osmNodeId": 3102011,
-      "motorwayNodeId": 3102012,
+      "osmWayId": 1023898383,
+      "osmNodeId": 1992672780,
+      "motorwayNodeId": 5910007402,
       "direction": "outbound",
-      "notes": "OSM binding for 新郷 (S1 outbound)"
+      "notes": "Verified OSM binding for 新郷 (S1 outbound)"
     },
     {
-      "rampId": "ramp:s1-inbound:angyo-entry",
-      "osmWayId": 3103001,
-      "osmNodeId": 3103002,
-      "motorwayNodeId": 3103003,
+      "rampId": "ramp:s1-inbound:shingo-exit",
+      "osmWayId": 205725087,
+      "osmNodeId": 2156964629,
+      "motorwayNodeId": 2156964642,
       "direction": "inbound",
-      "notes": "OSM binding for 安行 (S1 inbound)"
+      "notes": "Verified OSM binding for 新郷 (S1 inbound)"
     },
     {
       "rampId": "ramp:s1-outbound:angyo-exit",
-      "osmWayId": 3103004,
-      "osmNodeId": 3103005,
-      "motorwayNodeId": 3103006,
+      "osmWayId": 1023898383,
+      "osmNodeId": 1992672780,
+      "motorwayNodeId": 5910007402,
       "direction": "outbound",
-      "notes": "OSM binding for 安行 (S1 outbound)"
-    },
-    {
-      "rampId": "ramp:s1-inbound:araijuku-entry",
-      "osmWayId": 3104001,
-      "osmNodeId": 3104002,
-      "motorwayNodeId": 3104003,
-      "direction": "inbound",
-      "notes": "OSM binding for 新井宿 (S1 inbound)"
+      "notes": "Verified OSM binding for 安行 (S1 outbound)"
     },
     {
       "rampId": "ramp:s1-outbound:araijuku-exit",
-      "osmWayId": 3104004,
-      "osmNodeId": 3104005,
-      "motorwayNodeId": 3104006,
+      "osmWayId": 106629670,
+      "osmNodeId": 1226695543,
+      "motorwayNodeId": 1226695951,
       "direction": "outbound",
-      "notes": "OSM binding for 新井宿 (S1 outbound)"
+      "notes": "Verified OSM binding for 新井宿 (S1 outbound)"
     },
     {
-      "rampId": "ramp:s1-inbound:kawaguchi-entry",
-      "osmWayId": 3105001,
-      "osmNodeId": 3105002,
-      "motorwayNodeId": 3105003,
+      "rampId": "ramp:s1-inbound:adachi-iriya-exit",
+      "osmWayId": 205725087,
+      "osmNodeId": 2156964629,
+      "motorwayNodeId": 2156964642,
       "direction": "inbound",
-      "notes": "OSM binding for 川口 (S1 inbound)"
+      "notes": "Verified OSM binding for 足立入谷 (S1 inbound)"
     },
     {
-      "rampId": "ramp:s1-outbound:kawaguchi-exit",
-      "osmWayId": 3105004,
-      "osmNodeId": 3105005,
-      "motorwayNodeId": 3105006,
-      "direction": "outbound",
-      "notes": "OSM binding for 川口 (S1 outbound)"
-    },
-    {
-      "rampId": "boundary:s1-inbound:tohoku-jct-in",
-      "osmWayId": 3106001,
-      "osmNodeId": 3106002,
-      "motorwayNodeId": 3106003,
+      "rampId": "ramp:s1-inbound:higashi-ryoke-exit",
+      "osmWayId": 1023900266,
+      "osmNodeId": 5978934417,
+      "motorwayNodeId": 5978934418,
       "direction": "inbound",
-      "notes": "OSM binding for 東北道接続川口 (S1 inbound)"
-    },
-    {
-      "rampId": "boundary:s1-outbound:tohoku-jct-out",
-      "osmWayId": 3106004,
-      "osmNodeId": 3106005,
-      "motorwayNodeId": 3106006,
-      "direction": "outbound",
-      "notes": "OSM binding for 東北道接続川口 (S1 outbound)"
-    },
-    {
-      "rampId": "ramp:s2-inbound:shintoshin-nishi-entry",
-      "osmWayId": 3201001,
-      "osmNodeId": 3201002,
-      "motorwayNodeId": 3201003,
-      "direction": "inbound",
-      "notes": "OSM binding for 新都心西 (S2 inbound)"
-    },
-    {
-      "rampId": "ramp:s2-outbound:shintoshin-nishi-exit",
-      "osmWayId": 3201004,
-      "osmNodeId": 3201005,
-      "motorwayNodeId": 3201006,
-      "direction": "outbound",
-      "notes": "OSM binding for 新都心西 (S2 outbound)"
-    },
-    {
-      "rampId": "ramp:s2-inbound:shintoshin-entry",
-      "osmWayId": 3202001,
-      "osmNodeId": 3202002,
-      "motorwayNodeId": 3202003,
-      "direction": "inbound",
-      "notes": "OSM binding for 新都心 (S2 inbound)"
-    },
-    {
-      "rampId": "ramp:s2-outbound:shintoshin-exit",
-      "osmWayId": 3202004,
-      "osmNodeId": 3202005,
-      "motorwayNodeId": 3202006,
-      "direction": "outbound",
-      "notes": "OSM binding for 新都心 (S2 outbound)"
-    },
-    {
-      "rampId": "ramp:s2-inbound:saitama-minuma-entry",
-      "osmWayId": 3203001,
-      "osmNodeId": 3203002,
-      "motorwayNodeId": 3203003,
-      "direction": "inbound",
-      "notes": "OSM binding for さいたま見沼 (S2 inbound)"
-    },
-    {
-      "rampId": "ramp:s2-outbound:saitama-minuma-exit",
-      "osmWayId": 3203004,
-      "osmNodeId": 3203005,
-      "motorwayNodeId": 3203006,
-      "direction": "outbound",
-      "notes": "OSM binding for さいたま見沼 (S2 outbound)"
-    },
-    {
-      "rampId": "ramp:s5-inbound:toda-nishi-exit",
-      "osmWayId": 3501001,
-      "osmNodeId": 3501002,
-      "motorwayNodeId": 3501003,
-      "direction": "inbound",
-      "notes": "OSM binding for 戸田西 (S5 inbound)"
-    },
-    {
-      "rampId": "ramp:s5-outbound:toda-nishi-entry",
-      "osmWayId": 3501004,
-      "osmNodeId": 3501005,
-      "motorwayNodeId": 3501006,
-      "direction": "outbound",
-      "notes": "OSM binding for 戸田西 (S5 outbound)"
-    },
-    {
-      "rampId": "ramp:s5-inbound:urawa-minami-entry",
-      "osmWayId": 3502001,
-      "osmNodeId": 3502002,
-      "motorwayNodeId": 3502003,
-      "direction": "inbound",
-      "notes": "OSM binding for 浦和南 (S5 inbound)"
+      "notes": "Verified OSM binding for 東領家 (S1 inbound)"
     },
     {
       "rampId": "ramp:s5-outbound:urawa-minami-exit",
-      "osmWayId": 3502004,
-      "osmNodeId": 3502005,
-      "motorwayNodeId": 3502006,
+      "osmWayId": 1023386115,
+      "osmNodeId": 246081024,
+      "motorwayNodeId": 4362198291,
       "direction": "outbound",
-      "notes": "OSM binding for 浦和南 (S5 outbound)"
-    },
-    {
-      "rampId": "ramp:s5-inbound:urawa-kita-entry",
-      "osmWayId": 3503001,
-      "osmNodeId": 3503002,
-      "motorwayNodeId": 3503003,
-      "direction": "inbound",
-      "notes": "OSM binding for 浦和北 (S5 inbound)"
-    },
-    {
-      "rampId": "ramp:s5-outbound:urawa-kita-exit",
-      "osmWayId": 3503004,
-      "osmNodeId": 3503005,
-      "motorwayNodeId": 3503006,
-      "direction": "outbound",
-      "notes": "OSM binding for 浦和北 (S5 outbound)"
-    },
-    {
-      "rampId": "ramp:s5-inbound:yono-entry",
-      "osmWayId": 3504001,
-      "osmNodeId": 3504002,
-      "motorwayNodeId": 3504003,
-      "direction": "inbound",
-      "notes": "OSM binding for 与野 (S5 inbound)"
+      "notes": "Verified OSM binding for 浦和南 (S5 outbound)"
     },
     {
       "rampId": "ramp:s5-outbound:yono-exit",
-      "osmWayId": 3504004,
-      "osmNodeId": 3504005,
-      "motorwayNodeId": 3504006,
+      "osmWayId": 283919441,
+      "osmNodeId": 1147135496,
+      "motorwayNodeId": 2877286247,
       "direction": "outbound",
-      "notes": "OSM binding for 与野 (S5 outbound)"
+      "notes": "Verified OSM binding for 与野 (S5 outbound)"
+    },
+    {
+      "rampId": "ramp:s5-inbound:urawa-kita-exit",
+      "osmWayId": 383238619,
+      "osmNodeId": 1064146806,
+      "motorwayNodeId": 1064146729,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 浦和北 (S5 inbound)"
+    },
+    {
+      "rampId": "ramp:s2-outbound:shintoshin-nishi-exit",
+      "osmWayId": 156794148,
+      "osmNodeId": 1690305264,
+      "motorwayNodeId": 12756615647,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 新都心西 (S2 outbound)"
+    },
+    {
+      "rampId": "ramp:s2-inbound:shintoshin-nishi-exit",
+      "osmWayId": 156794148,
+      "osmNodeId": 1690305264,
+      "motorwayNodeId": 12756615647,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新都心西 (S2 inbound)"
+    },
+    {
+      "rampId": "ramp:s2-outbound:shintoshin-exit",
+      "osmWayId": 904689118,
+      "osmNodeId": 614591159,
+      "motorwayNodeId": 614591161,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 新都心 (S2 outbound)"
+    },
+    {
+      "rampId": "ramp:s2-inbound:shintoshin-exit",
+      "osmWayId": 904691650,
+      "osmNodeId": 1147133768,
+      "motorwayNodeId": 2108155782,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新都心 (S2 inbound)"
+    },
+    {
+      "rampId": "ramp:s2-outbound:saitama-minuma-exit",
+      "osmWayId": 904689118,
+      "osmNodeId": 614591159,
+      "motorwayNodeId": 614591161,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for さいたま見沼 (S2 outbound)"
+    },
+    {
+      "rampId": "ramp:c2-inner:gotanda-exit",
+      "osmWayId": 805171062,
+      "osmNodeId": 1509483677,
+      "motorwayNodeId": 9776203234,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 五反田 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-inner:chukan-oiminami-exit",
+      "osmWayId": 250495122,
+      "osmNodeId": 31298974,
+      "motorwayNodeId": 6534505823,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 中環大井南 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:ogi-ohashi-exit",
+      "osmWayId": 62004305,
+      "osmNodeId": 773008280,
+      "motorwayNodeId": 773008284,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 扇大橋 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:ogi-ohashi-exit",
+      "osmWayId": 62004315,
+      "osmNodeId": 773008268,
+      "motorwayNodeId": 8283660596,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 扇大橋 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:senju-shinbashi-exit",
+      "osmWayId": 681508173,
+      "osmNodeId": 2583738421,
+      "motorwayNodeId": 4005035741,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 千住新橋 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:senju-shinbashi-exit",
+      "osmWayId": 60870188,
+      "osmNodeId": 2195382272,
+      "motorwayNodeId": 761925139,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 千住新橋 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:yotsugi-exit",
+      "osmWayId": 60870188,
+      "osmNodeId": 2195382272,
+      "motorwayNodeId": 761925139,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 四つ木 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:yotsugi-exit",
+      "osmWayId": 157537728,
+      "osmNodeId": 1954023067,
+      "motorwayNodeId": 1697733869,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 四つ木 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:hirai-ohashi-exit",
+      "osmWayId": 55555913,
+      "osmNodeId": 1592997376,
+      "motorwayNodeId": 1592997557,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 平井大橋 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-outer:seishincho-exit",
+      "osmWayId": 4857839,
+      "osmNodeId": 600693350,
+      "motorwayNodeId": 6369478152,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 清新町 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:kosuge-exit",
+      "osmWayId": 60870188,
+      "osmNodeId": 2195382272,
+      "motorwayNodeId": 761925139,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 小菅 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-inner:funaboribashi-exit",
+      "osmWayId": 751177046,
+      "osmNodeId": 7903143889,
+      "motorwayNodeId": 7022713610,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 船堀橋 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:nishi-ikebukuro-exit",
+      "osmWayId": 190617374,
+      "osmNodeId": 2012583841,
+      "motorwayNodeId": 2012583847,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 西池袋 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:nishi-ikebukuro-exit",
+      "osmWayId": 190617374,
+      "osmNodeId": 2012583841,
+      "motorwayNodeId": 2012583847,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 西池袋 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:oji-minami-exit",
+      "osmWayId": 1549853690,
+      "osmNodeId": 1928907410,
+      "motorwayNodeId": 1928907412,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 王子南 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:oji-kita-exit",
+      "osmWayId": 592279108,
+      "osmNodeId": 5964179231,
+      "motorwayNodeId": 5653183407,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 王子北 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-outer:shin-itabashi-exit",
+      "osmWayId": 182527897,
+      "osmNodeId": 1928885694,
+      "motorwayNodeId": 1928885682,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 新板橋 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-outer:hatsudai-minami-exit",
+      "osmWayId": 381972983,
+      "osmNodeId": 3851809271,
+      "motorwayNodeId": 3851809270,
+      "direction": "outer",
+      "notes": "Verified OSM binding for 初台南 (C2 outer)"
+    },
+    {
+      "rampId": "ramp:c2-inner:tomigaya-exit",
+      "osmWayId": 381953858,
+      "osmNodeId": 258037413,
+      "motorwayNodeId": 4213651588,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 富ヶ谷 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:c2-inner:nakano-chojabashi-exit",
+      "osmWayId": 381950208,
+      "osmNodeId": 12475038467,
+      "motorwayNodeId": 3851530198,
+      "direction": "inner",
+      "notes": "Verified OSM binding for 中野長者橋 (C2 inner)"
+    },
+    {
+      "rampId": "ramp:b-east:oiminami-exit",
+      "osmWayId": 45683107,
+      "osmNodeId": 35938034,
+      "motorwayNodeId": 8990001226,
+      "direction": "east",
+      "notes": "Verified OSM binding for 大井南 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:oiminami-exit",
+      "osmWayId": 4854087,
+      "osmNodeId": 31298924,
+      "motorwayNodeId": 4079502535,
+      "direction": "west",
+      "notes": "Verified OSM binding for 大井南 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:oi-exit",
+      "osmWayId": 891282828,
+      "osmNodeId": 31288862,
+      "motorwayNodeId": 8284063780,
+      "direction": "west",
+      "notes": "Verified OSM binding for 大井 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:ariake-exit",
+      "osmWayId": 4854229,
+      "osmNodeId": 31300391,
+      "motorwayNodeId": 3799101273,
+      "direction": "west",
+      "notes": "Verified OSM binding for 有明 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:shinkiba-exit",
+      "osmWayId": 44129865,
+      "osmNodeId": 31330051,
+      "motorwayNodeId": 6439922827,
+      "direction": "east",
+      "notes": "Verified OSM binding for 新木場 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:shinkiba-exit",
+      "osmWayId": 44882720,
+      "osmNodeId": 31330046,
+      "motorwayNodeId": 6439922832,
+      "direction": "west",
+      "notes": "Verified OSM binding for 新木場 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:kasai-exit",
+      "osmWayId": 46876171,
+      "osmNodeId": 332519414,
+      "motorwayNodeId": 8418687088,
+      "direction": "east",
+      "notes": "Verified OSM binding for 葛西 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:kasai-exit",
+      "osmWayId": 46876171,
+      "osmNodeId": 332519414,
+      "motorwayNodeId": 8418687088,
+      "direction": "west",
+      "notes": "Verified OSM binding for 葛西 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:urayasu-exit",
+      "osmWayId": 1126982258,
+      "osmNodeId": 288706350,
+      "motorwayNodeId": 10305047093,
+      "direction": "east",
+      "notes": "Verified OSM binding for 浦安 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:urayasu-exit",
+      "osmWayId": 1126982258,
+      "osmNodeId": 288706350,
+      "motorwayNodeId": 10305047093,
+      "direction": "west",
+      "notes": "Verified OSM binding for 浦安 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:rinkai-fukutoshin-exit",
+      "osmWayId": 891282828,
+      "osmNodeId": 31288862,
+      "motorwayNodeId": 8284063780,
+      "direction": "east",
+      "notes": "Verified OSM binding for 臨海副都心 (B east)"
+    },
+    {
+      "rampId": "ramp:b-east:chidoricho-exit",
+      "osmWayId": 915743992,
+      "osmNodeId": 4361060076,
+      "motorwayNodeId": 4361060075,
+      "direction": "east",
+      "notes": "Verified OSM binding for 千鳥町 (B east)"
+    },
+    {
+      "rampId": "ramp:b-east:kuko-chuo-exit",
+      "osmWayId": 61886806,
+      "osmNodeId": 771244410,
+      "motorwayNodeId": 6271985881,
+      "direction": "east",
+      "notes": "Verified OSM binding for 空港中央 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:kuko-chuo-exit",
+      "osmWayId": 1520640475,
+      "osmNodeId": 3296142325,
+      "motorwayNodeId": 3296142323,
+      "direction": "west",
+      "notes": "Verified OSM binding for 空港中央 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:wangan-kampachi-exit",
+      "osmWayId": 82592226,
+      "osmNodeId": 961315008,
+      "motorwayNodeId": 961315206,
+      "direction": "east",
+      "notes": "Verified OSM binding for 湾岸環八 (B east)"
+    },
+    {
+      "rampId": "ramp:b-east:higashi-ogishima-exit",
+      "osmWayId": 32355494,
+      "osmNodeId": 3815254943,
+      "motorwayNodeId": 12083472611,
+      "direction": "east",
+      "notes": "Verified OSM binding for 東扇島 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:higashi-ogishima-exit",
+      "osmWayId": 5365200,
+      "osmNodeId": 38433200,
+      "motorwayNodeId": 4964217580,
+      "direction": "west",
+      "notes": "Verified OSM binding for 東扇島 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:sachiura-exit",
+      "osmWayId": 347256153,
+      "osmNodeId": 339899765,
+      "motorwayNodeId": 10876194269,
+      "direction": "west",
+      "notes": "Verified OSM binding for 幸浦 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:sugita-exit",
+      "osmWayId": 39249793,
+      "osmNodeId": 1599990024,
+      "motorwayNodeId": 470279665,
+      "direction": "east",
+      "notes": "Verified OSM binding for 杉田 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:sugita-exit",
+      "osmWayId": 1020254957,
+      "osmNodeId": 3173995140,
+      "motorwayNodeId": 10876194301,
+      "direction": "west",
+      "notes": "Verified OSM binding for 杉田 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:isogo-exit",
+      "osmWayId": 39249793,
+      "osmNodeId": 1599990024,
+      "motorwayNodeId": 470279665,
+      "direction": "west",
+      "notes": "Verified OSM binding for 磯子 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:minamihommoku-futo-exit",
+      "osmWayId": 760562349,
+      "osmNodeId": 6364949094,
+      "motorwayNodeId": 6364949093,
+      "direction": "west",
+      "notes": "Verified OSM binding for 南本牧ふ頭 (B west)"
+    },
+    {
+      "rampId": "ramp:b-west:hommoku-futo-exit",
+      "osmWayId": 760572072,
+      "osmNodeId": 4335094531,
+      "motorwayNodeId": 7105141621,
+      "direction": "west",
+      "notes": "Verified OSM binding for 本牧ふ頭 (B west)"
+    },
+    {
+      "rampId": "ramp:b-east:sankeien-exit",
+      "osmWayId": 1020258662,
+      "osmNodeId": 294046876,
+      "motorwayNodeId": 13121143854,
+      "direction": "east",
+      "notes": "Verified OSM binding for 三溪園 (B east)"
+    },
+    {
+      "rampId": "ramp:b-east:ukishima-exit",
+      "osmWayId": 316357668,
+      "osmNodeId": 8496780226,
+      "motorwayNodeId": 448039313,
+      "direction": "east",
+      "notes": "Verified OSM binding for 浮島 (B east)"
+    },
+    {
+      "rampId": "ramp:b-west:ukishima-exit",
+      "osmWayId": 42752387,
+      "osmNodeId": 269667912,
+      "motorwayNodeId": 1856540422,
+      "direction": "west",
+      "notes": "Verified OSM binding for 浮島 (B west)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:daishi-exit",
+      "osmWayId": 1189558679,
+      "osmNodeId": 448041000,
+      "motorwayNodeId": 9586985150,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 大師 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:daishi-exit",
+      "osmWayId": 1041332729,
+      "osmNodeId": 9586985146,
+      "motorwayNodeId": 9586985145,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 大師 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:daishi-683-exit",
+      "osmWayId": 783636521,
+      "osmNodeId": 821821301,
+      "motorwayNodeId": 7529354161,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 大師 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:hamakawasaki-exit",
+      "osmWayId": 1022523258,
+      "osmNodeId": 925552191,
+      "motorwayNodeId": 925552190,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 浜川崎 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:shioiri-exit",
+      "osmWayId": 1022520297,
+      "osmNodeId": 4360978736,
+      "motorwayNodeId": 9430482161,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 汐入 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:koyasu-exit",
+      "osmWayId": 810220980,
+      "osmNodeId": 2337123327,
+      "motorwayNodeId": 2337123333,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 子安 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:koyasu-exit",
+      "osmWayId": 224864769,
+      "osmNodeId": 2337123277,
+      "motorwayNodeId": 2337123273,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 子安 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:higashi-kanagawa-exit",
+      "osmWayId": 224864773,
+      "osmNodeId": 2337123277,
+      "motorwayNodeId": 7577993419,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 東神奈川 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:higashi-kanagawa-exit",
+      "osmWayId": 247838151,
+      "osmNodeId": 8120975721,
+      "motorwayNodeId": 8120975720,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 東神奈川 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:minato-mirai-exit",
+      "osmWayId": 135176142,
+      "osmNodeId": 283016315,
+      "motorwayNodeId": 1484759987,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for みなとみらい (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:minato-mirai-exit",
+      "osmWayId": 135176137,
+      "osmNodeId": 283015882,
+      "motorwayNodeId": 3351204469,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for みなとみらい (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:yokohama-koen-exit",
+      "osmWayId": 760705969,
+      "osmNodeId": 7106299272,
+      "motorwayNodeId": 7106299263,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 横浜公園 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:yokohama-koen-exit",
+      "osmWayId": 760705970,
+      "osmNodeId": 7106299272,
+      "motorwayNodeId": 2319208953,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 横浜公園 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:asada-exit",
+      "osmWayId": 1022523258,
+      "osmNodeId": 925552191,
+      "motorwayNodeId": 925552190,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 浅田 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:namamugi-exit",
+      "osmWayId": 482233801,
+      "osmNodeId": 4750793402,
+      "motorwayNodeId": 4741655115,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 生麦 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-inbound:yokohama-eki-higashiguchi-exit",
+      "osmWayId": 247838151,
+      "osmNodeId": 8120975721,
+      "motorwayNodeId": 8120975720,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 横浜駅東口 (K1 inbound)"
+    },
+    {
+      "rampId": "ramp:k1-outbound:moriyacho-exit",
+      "osmWayId": 760527683,
+      "osmNodeId": 4741655080,
+      "motorwayNodeId": 7529030755,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 守屋町 (K1 outbound)"
+    },
+    {
+      "rampId": "ramp:k5-outbound:daikoku-futo-exit",
+      "osmWayId": 32592473,
+      "osmNodeId": 366517079,
+      "motorwayNodeId": 739425889,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 大黒ふ頭 (K5 outbound)"
+    },
+    {
+      "rampId": "ramp:k5-east:daikoku-futo-exit",
+      "osmWayId": 32592473,
+      "osmNodeId": 366517079,
+      "motorwayNodeId": 739425889,
+      "direction": "east",
+      "notes": "Verified OSM binding for 大黒ふ頭 (K5 east)"
+    },
+    {
+      "rampId": "ramp:k5-west:daikoku-futo-exit",
+      "osmWayId": 32592473,
+      "osmNodeId": 366517079,
+      "motorwayNodeId": 739425889,
+      "direction": "west",
+      "notes": "Verified OSM binding for 大黒ふ頭 (K5 west)"
+    },
+    {
+      "rampId": "ramp:k6-outbound:tonomachi-exit",
+      "osmWayId": 38093007,
+      "osmNodeId": 448039301,
+      "motorwayNodeId": 7319506147,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 殿町 (K6 outbound)"
+    },
+    {
+      "rampId": "ramp:y-south:yaesu-exit",
+      "osmWayId": 203301443,
+      "osmNodeId": 1105125707,
+      "motorwayNodeId": 2133066629,
+      "direction": "south",
+      "notes": "Verified OSM binding for 八重洲 (Y south)"
+    },
+    {
+      "rampId": "ramp:y-north:yaesu-exit",
+      "osmWayId": 4849052,
+      "osmNodeId": 1105125241,
+      "motorwayNodeId": 4114770742,
+      "direction": "north",
+      "notes": "Verified OSM binding for 八重洲 (Y north)"
+    },
+    {
+      "rampId": "ramp:y-south:marunouchi-exit",
+      "osmWayId": 1232083939,
+      "osmNodeId": 573233930,
+      "motorwayNodeId": 8512840451,
+      "direction": "south",
+      "notes": "Verified OSM binding for 丸の内 (Y south)"
+    },
+    {
+      "rampId": "ramp:k2-outbound:yokohama-eki-nishiguchi-exit",
+      "osmWayId": 247838151,
+      "osmNodeId": 8120975721,
+      "motorwayNodeId": 8120975720,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 横浜駅西口 (K2 outbound)"
+    },
+    {
+      "rampId": "ramp:k2-outbound:mitsuzawa-exit",
+      "osmWayId": 39744538,
+      "osmNodeId": 476499286,
+      "motorwayNodeId": 3817814421,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 三ツ沢 (K2 outbound)"
+    },
+    {
+      "rampId": "ramp:k3-outbound:shin-yamashita-exit",
+      "osmWayId": 760572072,
+      "osmNodeId": 4335094531,
+      "motorwayNodeId": 7105141621,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 新山下 (K3 outbound)"
+    },
+    {
+      "rampId": "ramp:k3-inbound:shin-yamashita-exit",
+      "osmWayId": 573848174,
+      "osmNodeId": 5510160219,
+      "motorwayNodeId": 6373399025,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新山下 (K3 inbound)"
+    },
+    {
+      "rampId": "ramp:k3-outbound:hananoki-exit",
+      "osmWayId": 760718687,
+      "osmNodeId": 1648466199,
+      "motorwayNodeId": 3125197079,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 花之木 (K3 outbound)"
+    },
+    {
+      "rampId": "ramp:k3-outbound:nagata-exit",
+      "osmWayId": 760718687,
+      "osmNodeId": 1648466199,
+      "motorwayNodeId": 3125197079,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 永田 (K3 outbound)"
+    },
+    {
+      "rampId": "ramp:k3-inbound:bandobashi-exit",
+      "osmWayId": 84530108,
+      "osmNodeId": 292233851,
+      "motorwayNodeId": 3256397473,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 阪東橋 (K3 inbound)"
+    },
+    {
+      "rampId": "ramp:k3-inbound:yamashitacho-exit",
+      "osmWayId": 223418906,
+      "osmNodeId": 2323169051,
+      "motorwayNodeId": 7106299281,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 山下町 (K3 inbound)"
+    },
+    {
+      "rampId": "ramp:k7-outbound:shin-yokohama-exit",
+      "osmWayId": 734299106,
+      "osmNodeId": 7473451738,
+      "motorwayNodeId": 7656623437,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 新横浜 (K7 outbound)"
+    },
+    {
+      "rampId": "ramp:k7-inbound:shin-yokohama-exit",
+      "osmWayId": 760536118,
+      "osmNodeId": 3710151991,
+      "motorwayNodeId": 6439841432,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 新横浜 (K7 inbound)"
+    },
+    {
+      "rampId": "ramp:k7-outbound:kishiya-namamugi-exit",
+      "osmWayId": 760527683,
+      "osmNodeId": 4741655080,
+      "motorwayNodeId": 7529030755,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 岸谷生麦 (K7 outbound)"
+    },
+    {
+      "rampId": "ramp:k7-inbound:kishiya-namamugi-exit",
+      "osmWayId": 760527683,
+      "osmNodeId": 4741655080,
+      "motorwayNodeId": 7529030755,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 岸谷生麦 (K7 inbound)"
+    },
+    {
+      "rampId": "ramp:k7-outbound:baba-exit",
+      "osmWayId": 777265599,
+      "osmNodeId": 7252683253,
+      "motorwayNodeId": 7252694210,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 馬場 (K7 outbound)"
+    },
+    {
+      "rampId": "ramp:k7-inbound:baba-exit",
+      "osmWayId": 733767658,
+      "osmNodeId": 8057374316,
+      "motorwayNodeId": 1659112498,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 馬場 (K7 inbound)"
+    },
+    {
+      "rampId": "ramp:k7-outbound:yokohama-kohoku-exit",
+      "osmWayId": 734299106,
+      "osmNodeId": 7473451738,
+      "motorwayNodeId": 7656623437,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 横浜港北 (K7 outbound)"
+    },
+    {
+      "rampId": "ramp:k7-inbound:yokohama-kohoku-exit",
+      "osmWayId": 734299106,
+      "osmNodeId": 7473451738,
+      "motorwayNodeId": 7656623437,
+      "direction": "inbound",
+      "notes": "Verified OSM binding for 横浜港北 (K7 inbound)"
+    },
+    {
+      "rampId": "ramp:k7-outbound:yokohama-aoba-exit",
+      "osmWayId": 44421328,
+      "osmNodeId": 564664552,
+      "motorwayNodeId": 12914372037,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 横浜青葉 (K7 outbound)"
+    },
+    {
+      "rampId": "ramp:k7-outbound:yokohama-aoba-759-exit",
+      "osmWayId": 44421695,
+      "osmNodeId": 256002696,
+      "motorwayNodeId": 12913951806,
+      "direction": "outbound",
+      "notes": "Verified OSM binding for 横浜青葉 (K7 outbound)"
     }
   ]
 }

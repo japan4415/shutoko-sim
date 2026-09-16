@@ -13,9 +13,9 @@ pub mod validate;
 
 pub use inventory::{
     apply_od_tariffs_to_graph, bind_ramps_to_graph, ramps_artifact_to_deterministic_json,
-    validate_od_tariffs, validate_osm_ramp_bindings, validate_ramp_inventory,
-    CanonicalRampInventoryItem, OdTariffsFile, OsmRampBinding, OsmRampBindingsFile,
-    RampArtifactEntry, RampInventoryFile, RampsArtifact, TariffRules,
+    validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
+    validate_ramp_inventory, CanonicalRampInventoryItem, OdTariffsFile, OsmRampBinding,
+    OsmRampBindingsFile, RampArtifactEntry, RampInventoryFile, RampsArtifact, TariffRules,
 };
 
 pub use billing::{

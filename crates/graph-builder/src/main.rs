@@ -7,10 +7,10 @@ use shutoko_graph_builder::{
     apply_od_tariffs_to_graph, bind_ramps_to_graph, build_manifest, build_topology_with_report,
     generate_and_validate_billing_pairs, manifest_to_deterministic_json,
     ramps_artifact_to_deterministic_json, snap_index_to_deterministic_json, to_deterministic_json,
-    validate_od_tariffs, validate_osm_ramp_bindings, validate_ramp_inventory,
-    BillingPairProvenance, BillingPairsSeedFile, EdgeKind, ManifestConfig, OdTariffsFile,
-    OsmRampBindingsFile, OverpassResponse, RampInventoryFile, RampsArtifact, TopologyConfig,
-    VerificationStatus,
+    validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
+    validate_ramp_inventory, BillingPairProvenance, BillingPairsSeedFile, EdgeKind, ManifestConfig,
+    OdTariffsFile, OsmRampBindingsFile, OverpassResponse, RampInventoryFile, RampKind,
+    RampsArtifact, TopologyConfig, VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -360,6 +360,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     errs.join("\n  ")
                 )
             })?;
+            validate_osm_ramp_bindings_against_osm(&b, &overpass_resp).map_err(|errs| {
+                format!(
+                    "bindings OSM fixture existence validation failed for {}:\n  {}",
+                    bin_path.display(),
+                    errs.join("\n  ")
+                )
+            })?;
             b
         } else {
             OsmRampBindingsFile {
@@ -374,6 +381,50 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         graph.ramps = bound_ramps;
         for note in unbound_notes {
             unverified_from_seeds.push(note);
+        }
+
+        // Hard assertion: ALL active general entries and exits MUST be bound (100% bound requirement)
+        let unbound_active_general: Vec<&str> = inv
+            .ramps
+            .iter()
+            .filter(|r| {
+                r.status == "active"
+                    && matches!(r.kind, RampKind::GeneralEntry | RampKind::GeneralExit)
+                    && !graph.ramps.iter().any(|gr| gr.id == r.ramp_id)
+            })
+            .map(|r| r.ramp_id.as_str())
+            .collect();
+
+        if !unbound_active_general.is_empty() {
+            return Err(format!(
+                "hard assertion failed: {} active general ramp(s) are unbound (100% bound required):\n  {}",
+                unbound_active_general.len(),
+                unbound_active_general.join("\n  ")
+            )
+            .into());
+        }
+
+        // Boundary/JCT connectors and non-active historical/planned ramps are
+        // inventory-only records. They must never enter graph.ramps, because
+        // routing-core treats graph.ramps as the user-selectable ramp set.
+        let selectable_non_general: Vec<&str> = graph
+            .ramps
+            .iter()
+            .filter(|gr| {
+                inv.ramps.iter().any(|r| {
+                    r.ramp_id == gr.id
+                        && (r.status != "active"
+                            || !matches!(r.kind, RampKind::GeneralEntry | RampKind::GeneralExit))
+                })
+            })
+            .map(|gr| gr.id.as_str())
+            .collect();
+        if !selectable_non_general.is_empty() {
+            return Err(format!(
+                "hard assertion failed: non-general/non-active ramps leaked into graph.ramps:\n  {}",
+                selectable_non_general.join("\n  ")
+            )
+            .into());
         }
 
         if let Some(tar_path) = &args.tariffs_path {

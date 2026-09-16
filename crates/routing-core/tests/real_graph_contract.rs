@@ -807,16 +807,19 @@ fn osaka_station_returns_no_connection_due_to_distance_cap() {
     );
 }
 
-/// 東京駅 (35.6812, 139.7671) から検索すると、unlimited entries（デフォルト）で
-/// 候補が返る。最寄り入口（宝町）まで約 746 m。
-/// 旧デフォルト 5 件だと候補 0 だったが、unlimited で候補 ≥ 1 が確認できる。
+/// 東京駅 (35.6812, 139.7671) の精度優先の実測契約。
+///
+/// 誤帰属 binding と曖昧な課金ペアを除外した結果、座標検索に使える verified pair は
+/// 2 件へ縮退した。現在の 15〜60 分検索は神田橋入口→宝町出口の 1 件だけを返し、
+/// 最短計画は 1,743 秒である。従来成立した 30〜60 分検索は TIME_WINDOW となる。
+/// これは候補消失を隠さず固定する、正確性優先の意図的 deviation である。
 #[test]
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn tokyo_station_returns_candidates_with_unlimited_entries() {
     let g = real_graph();
     let limits = SearchLimits::default(); // max_access_entries=0 (unlimited), 30 km cap
-    let request = SearchRequest {
-        request_id: "req-tokyo-station".into(),
+    let request = |request_id: &str, min_minutes: u64, max_minutes: u64| SearchRequest {
+        request_id: request_id.into(),
         release_id: "all-real-v1".into(),
         origin_node_id: None,
         origin: Some(LatLng {
@@ -825,12 +828,13 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
         }),
         entry_ramp_id: None,
         exit_ramp_id: None,
-        min_minutes: 15,
-        max_minutes: 60,
+        min_minutes,
+        max_minutes,
         vehicle_profile: "passenger-car-etc".into(),
         pricing_at: "2026-09-10T00:00:00Z".into(),
     };
-    let result = search(&g, &request, &limits).expect("search must not error");
+    let result = search(&g, &request("req-tokyo-station", 15, 60), &limits)
+        .expect("15-60 minute search must not error");
     eprintln!(
         "Tokyo station (unlimited): status={}, reason={:?}, candidates={}",
         result.status,
@@ -842,10 +846,54 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
         "東京駅 unlimited entries: 候補が得られること。reason={:?}",
         result.reason
     );
-    assert!(
-        !result.candidates.is_empty(),
-        "東京駅 unlimited entries: 少なくとも 1 件の候補が必要"
+    assert_eq!(
+        result.candidates.len(),
+        1,
+        "東京駅 15-60 分は精度優先で残った 1 候補だけを返す"
     );
+    let candidate = &result.candidates[0];
+    assert_eq!(
+        candidate.toll.billing_pair_id,
+        "bp:c1-outer:kandabashi-takaracho"
+    );
+    assert_eq!(
+        candidate.entry.ramp_id.as_deref(),
+        Some("ramp:c1-outer:kandabashi-entry")
+    );
+    assert_eq!(
+        candidate.exit.ramp_id.as_deref(),
+        Some("ramp:c1-outer:takaracho-exit")
+    );
+    assert_eq!(candidate.duration.plan_seconds, 1_743);
+    assert_eq!(result.min_plan_seconds, Some(1_743));
+
+    // minPlanSeconds=1,743 秒（29.05 分）の境界を固定する。29 分上限では
+    // TIME_WINDOW、30 分上限では同じ候補が成立し、分への丸めで境界を隠さない。
+    let below_plan_boundary = search(&g, &request("req-tokyo-max-29", 15, 29), &limits)
+        .expect("15-29 minute search must not error");
+    assert_eq!(below_plan_boundary.status, "no_candidates");
+    assert_eq!(below_plan_boundary.reason.as_deref(), Some("TIME_WINDOW"));
+    assert_eq!(below_plan_boundary.min_plan_seconds, Some(1_743));
+
+    let at_plan_boundary = search(&g, &request("req-tokyo-max-30", 15, 30), &limits)
+        .expect("15-30 minute search must not error");
+    assert_eq!(at_plan_boundary.status, "ok");
+    assert_eq!(at_plan_boundary.min_plan_seconds, Some(1_743));
+
+    // base の 30〜60 分契約では候補が消失した事実を回帰として明示する。
+    // max を製品上限 240 分へ広げても、verified pair が2件しかない現在の
+    // データでは別の長い候補は生まれない。
+    for (request_id, max_minutes) in [
+        ("req-tokyo-former-window", 60),
+        ("req-tokyo-former-window-wide", 240),
+    ] {
+        let former_window = search(&g, &request(request_id, 30, max_minutes), &limits)
+            .expect("30 minute minimum search must not error");
+        assert_eq!(former_window.status, "no_candidates");
+        assert_eq!(former_window.reason.as_deref(), Some("TIME_WINDOW"));
+        assert!(former_window.candidates.is_empty());
+        assert_eq!(former_window.min_plan_seconds, Some(1_743));
+    }
     // 最寄り入口は宝町入口（~746 m）。アクセス距離が 2 km 未満であることを確認する。
     let nearest_access_dist = result
         .candidates

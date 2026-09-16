@@ -3362,10 +3362,10 @@ fn test_issue6_item4_invalid_dates_and_engine_version() {
 }
 
 #[test]
-fn test_all_billing_pairs_seed_prices_verified_and_output_to_graph() {
+fn test_billing_pair_seed_status_and_output_match_full_network() {
     use shutoko_graph_builder::{BillingPairsSeedFile, Graph, VerificationStatus};
 
-    // 1. Verify that the declarative seed parses and contains all 8 expected billing pairs
+    // 1. Verify that the declarative seed keeps all 8 audited billing pairs.
     let seed_str = include_str!("../../../data/billing-pairs-seed.json");
     let seed_file: BillingPairsSeedFile =
         serde_json::from_str(seed_str).expect("data/billing-pairs-seed.json must deserialize");
@@ -3375,18 +3375,20 @@ fn test_all_billing_pairs_seed_prices_verified_and_output_to_graph() {
         "seed must have exactly 8 billing pairs"
     );
 
-    let expected_pair_ids = [
+    let verified_pair_ids = [
         "bp:c1-outer:kandabashi-takaracho",
         "bp:c1-outer:kasumigaseki-daikancho",
         "bp:c1-outer:ginza-shibakoen",
         "bp:c1-outer:shibakoen-iikura",
-        "bp:c1-inner:kasumigaseki-shibakoen",
         "bp:c1-inner:daikancho-kasumigaseki",
         "bp:c1-inner:shibakoen-shiodome",
+    ];
+    let unverified_pair_ids = [
+        "bp:c1-inner:kasumigaseki-shibakoen",
         "bp:c1-inner:takaracho-kandabashi",
     ];
 
-    for expected_id in &expected_pair_ids {
+    for expected_id in &verified_pair_ids {
         let seed_pair = seed_file
             .billing_pairs
             .iter()
@@ -3411,18 +3413,29 @@ fn test_all_billing_pairs_seed_prices_verified_and_output_to_graph() {
         assert_eq!(seed_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
         assert_eq!(seed_pair.prices[1].effective_to, None);
     }
+    for unverified_id in &unverified_pair_ids {
+        let seed_pair = seed_file
+            .billing_pairs
+            .iter()
+            .find(|p| p.id == *unverified_id)
+            .unwrap_or_else(|| panic!("seed pair {} not found in seed file", unverified_id));
+        assert_eq!(seed_pair.status, VerificationStatus::Unverified);
+        assert!(!seed_pair.one_section_ahead_verified);
+    }
 
-    // 2. Verify that the generated graph.json fixture retains all 8 billing pairs with prices
+    // 2. The full-network graph retains all audited pairs, but the two
+    // FIRST_EXIT_MISMATCH pairs must remain explicitly unverified so
+    // routing-core will not make them searchable.
     let graph_str = include_str!("../../../fixtures/generated/graph.json");
     let graph: Graph =
         serde_json::from_str(graph_str).expect("fixtures/generated/graph.json must deserialize");
     assert_eq!(
         graph.billing_pairs.len(),
         8,
-        "graph.json must contain exactly 8 billing pairs"
+        "graph.json must retain all 8 audited billing pairs"
     );
 
-    for expected_id in &expected_pair_ids {
+    for expected_id in &verified_pair_ids {
         let graph_pair = graph
             .billing_pairs
             .iter()
@@ -3445,6 +3458,14 @@ fn test_all_billing_pairs_seed_prices_verified_and_output_to_graph() {
         assert_eq!(graph_pair.prices[1].amount_yen, 300);
         assert_eq!(graph_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
         assert_eq!(graph_pair.prices[1].effective_to, None);
+    }
+    for unverified_id in &unverified_pair_ids {
+        let graph_pair = graph
+            .billing_pairs
+            .iter()
+            .find(|p| p.id == *unverified_id)
+            .unwrap_or_else(|| panic!("unverified graph pair {} must be retained", unverified_id));
+        assert_eq!(graph_pair.status, VerificationStatus::Unverified);
     }
 }
 
@@ -3842,12 +3863,113 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
     .unwrap();
 
     let bin_path = env!("CARGO_BIN_EXE_shutoko-graph-builder");
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let inv_path = manifest_dir.join("../../data/ramp-inventory.json");
-    let bin_data_path = manifest_dir.join("../../data/osm-ramp-bindings.json");
-    let tar_path = manifest_dir.join("../../data/od-tariffs.json");
 
-    // Run with real inventory, bindings, and tariffs files
+    // Create minimal matching inventory, bindings, and tariffs
+    let inv_json = json!({
+        "version": 1,
+        "source": "https://search.shutoko.jp/",
+        "sourceDate": "2026-09-16",
+        "coordinateSource": "https://www.openstreetmap.org/",
+        "description": "Test minimal inventory",
+        "ramps": [
+            {
+                "rampId": "ramp:c1-inner:kandabashi-entry",
+                "facilityId": "fac:c1:kandabashi",
+                "facilityName": "神田橋",
+                "route": "C1",
+                "direction": "inner",
+                "kind": "general_entry",
+                "lat": 35.6882,
+                "lon": 139.7651,
+                "restrictions": ["etc_only"],
+                "restrictionStatus": "verified",
+                "status": "active",
+                "source": "https://search.shutoko.jp/",
+                "sourceDate": "2026-09-16",
+                "coordinateSource": "https://www.openstreetmap.org/",
+                "coordinateStatus": "derived"
+            },
+            {
+                "rampId": "ramp:c1-outer:kandabashi-exit",
+                "facilityId": "fac:c1:kandabashi",
+                "facilityName": "神田橋",
+                "route": "C1",
+                "direction": "outer",
+                "kind": "general_exit",
+                "lat": 35.6890,
+                "lon": 139.7680,
+                "restrictions": [],
+                "restrictionStatus": "unverified",
+                "status": "active",
+                "source": "https://search.shutoko.jp/",
+                "sourceDate": "2026-09-16",
+                "coordinateSource": "https://www.openstreetmap.org/",
+                "coordinateStatus": "derived"
+            }
+        ]
+    });
+    let inv_path = tmp_dir.join("inventory.json");
+    std::fs::write(&inv_path, serde_json::to_string_pretty(&inv_json).unwrap()).unwrap();
+
+    let bin_json = json!({
+        "version": 1,
+        "source": "manual",
+        "sourceDate": "2026-09-16",
+        "description": "Test bindings",
+        "bindings": [
+            {
+                "rampId": "ramp:c1-inner:kandabashi-entry",
+                "osmWayId": 27155742,
+                "osmNodeId": 2,
+                "motorwayNodeId": 3,
+                "direction": "inner",
+                "notes": "Test entry binding"
+            },
+            {
+                "rampId": "ramp:c1-outer:kandabashi-exit",
+                "osmWayId": 390441534,
+                "osmNodeId": 6,
+                "motorwayNodeId": 4,
+                "direction": "outer",
+                "notes": "Test exit binding"
+            }
+        ]
+    });
+    let bin_data_path = tmp_dir.join("bindings.json");
+    std::fs::write(
+        &bin_data_path,
+        serde_json::to_string_pretty(&bin_json).unwrap(),
+    )
+    .unwrap();
+
+    let tar_json = json!({
+        "version": 1,
+        "source": "https://www.shutoko.jp/fee/fee-info/basic-fee/",
+        "sourceDate": "2026-09-16",
+        "rules": {
+            "vehicleProfile": "passenger_car",
+            "fixedFeeYen": 150,
+            "taxRate": 1.10,
+            "minTollYen": 300,
+            "maxTollYen": 1950,
+            "minDistanceMeters": 4300,
+            "baseRatePerKmYen": 29.52,
+            "roundingYen": 10
+        },
+        "verifiedOdPairs": [
+            {
+                "entryRampId": "ramp:c1-inner:kandabashi-entry",
+                "exitRampId": "ramp:c1-outer:kandabashi-exit",
+                "billingDistanceMeters": 5000,
+                "amountYen": 300,
+                "effectiveFrom": "2026-01-01"
+            }
+        ]
+    });
+    let tar_path = tmp_dir.join("tariffs.json");
+    std::fs::write(&tar_path, serde_json::to_string_pretty(&tar_json).unwrap()).unwrap();
+
+    // Run with minimal inventory, bindings, and tariffs files
     let status1 = std::process::Command::new(bin_path)
         .args([
             "--osm",
@@ -3916,8 +4038,8 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
     let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
     assert_eq!(ramps_json["schemaVersion"], 1);
     assert_eq!(ramps_json["releaseId"], "cli-inv-test-rel");
-    assert_eq!(ramps_json["totalRamps"], 339);
-    assert!(ramps_json["boundRamps"].as_u64().unwrap() >= 1);
+    assert_eq!(ramps_json["totalRamps"], 2);
+    assert_eq!(ramps_json["boundRamps"], 2);
 
     // Verify graph.json has ramps and odTariffs
     let graph_raw = std::fs::read_to_string(out_dir_1.join("graph.json")).unwrap();
@@ -3932,5 +4054,73 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
     assert!(artifacts.iter().any(|a| a["path"] == "ramps.json"));
 
     // Clean up
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_cli_with_full_fixtures() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let osm_path = manifest_dir.join("../../fixtures/osm/shutoko-all.json");
+    if !osm_path.exists() {
+        return;
+    }
+    let seed_path = manifest_dir.join("../../data/billing-pairs-seed.json");
+    let inv_path = manifest_dir.join("../../data/ramp-inventory.json");
+    let bin_data_path = manifest_dir.join("../../data/osm-ramp-bindings.json");
+    let tar_path = manifest_dir.join("../../data/od-tariffs.json");
+
+    let tmp_dir =
+        std::env::temp_dir().join(format!("shutoko-test-full-cli-{}", std::process::id()));
+    let out_dir = tmp_dir.join("out");
+    let _ = std::fs::create_dir_all(&out_dir);
+
+    let bin_path = env!("CARGO_BIN_EXE_shutoko-graph-builder");
+    let status = std::process::Command::new(bin_path)
+        .args([
+            "--osm",
+            osm_path.to_str().unwrap(),
+            "--seed",
+            seed_path.to_str().unwrap(),
+            "--inventory",
+            inv_path.to_str().unwrap(),
+            "--bindings",
+            bin_data_path.to_str().unwrap(),
+            "--tariffs",
+            tar_path.to_str().unwrap(),
+            "--out-dir",
+            out_dir.to_str().unwrap(),
+            "--release-id",
+            "all-real-test",
+            "--coverage-area",
+            "Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)",
+            "--built-at",
+            "2026-09-16T00:00:00Z",
+            "--source-date",
+            "2026-09-16",
+        ])
+        .status()
+        .expect("failed to execute binary with full fixtures");
+    assert!(status.success(), "CLI run with full fixtures failed");
+
+    let ramps_raw = std::fs::read_to_string(out_dir.join("ramps.json")).unwrap();
+    let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
+    assert_eq!(ramps_json["totalRamps"], 399);
+    assert_eq!(ramps_json["boundRamps"], 371);
+
+    let ramps = ramps_json["ramps"].as_array().expect("ramps array");
+    let active_general = ramps
+        .iter()
+        .filter(|r| {
+            r["status"] == "active"
+                && matches!(r["kind"].as_str(), Some("general_entry" | "general_exit"))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(active_general.len(), 371);
+    assert!(active_general.iter().all(|r| r["bound"] == true));
+    assert!(ramps.iter().filter(|r| r["bound"] == true).all(|r| {
+        r["status"] == "active"
+            && matches!(r["kind"].as_str(), Some("general_entry" | "general_exit"))
+    }));
+
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }

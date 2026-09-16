@@ -150,12 +150,12 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 
 ### `snap-index.json` の意味と `schemaVersion: 2`
 
-`snap-index.json` は一般道ノード一覧から**入口アクセス地点（Entry エッジの from ノード）一覧**に変わった。`schemaVersion` が 1 → 2 に更新されている。現行データには 15 件の入口アクセス地点が登録されており、ファイルサイズは約 1.5 KB である。WASM はこのインデックスを使って出発座標から近い順に最大 `max_access_entries` 件の入口アクセス地点を選択する。
+`snap-index.json` は一般道ノード一覧から**入口アクセス地点（Entry エッジの from ノード）一覧**に変わった。`schemaVersion` が 1 → 2 に更新されている。現行データには 168 件の入口アクセス地点が登録されており、ファイルサイズは約 15 KB である。WASM はこのインデックスを使って出発座標から近い順に最大 `max_access_entries` 件の入口アクセス地点を選択する。
 
 ### 再現性・決定論的検証
 同一入力から 2 回実行し、`diff -r` によりバイト完全一致（SHA-256 一致）が確認されている。
 - `graph.json`: 禁止遷移（`only_*` および `via=way` を含む）やソート順を決定論的に出力（`schemaVersion: 2`）
-- `snap-index.json`: 入口アクセス地点（Entry エッジの from ノード）の空間インデックス（`schemaVersion: 2`、15 ノード、約 1.5 KB）
+- `snap-index.json`: 入口アクセス地点（Entry エッジの from ノード）の空間インデックス（`schemaVersion: 2`、168 ノード、約 15 KB）
 - `manifest.json`: 全成果物の SHA-256、未検証区間一覧、検証済みペア出典情報（`provenance`）を記録
 
 ## 5. 未検証区間（Unverified Sections）
@@ -163,7 +163,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって `manifest.json` の `unverifiedSections` 配列に自動列挙される。
 - **自動列挙対象**: グラフ内に存在するすべての入口・出口エッジのうち、検証済み課金ペアに採用されていないエッジ。OSM ウェイに `name` タグが存在する場合は「エッジID（ウェイ名）」の形式で可読性を担保。
 - **除外路線・通行規制スキップの注記**: C1 外の分岐路線（八重洲線、1号上野線、6号向島線等）や、静的道路グラフで適用外となった通行規制（conditional / no via / outside graph / disconnected / unrecognized 等のスキップカテゴリ）に関する注記も件数付きで同リストに収録。
-- **現状**: 現行リリース `c1-real-v2` では 3 節の表に記載した 8 ペア（外回り 4・内回り 4・既存の神田橋〜宝町 1 を含む）すべてが人手検証済み（`verified`）で、`unverifiedSections` に `rejected:` は存在しない。将来追加予定のランプ区間については、公式料金区間表または本線隣接導出の根拠とともに順次シードへ追加する。
+- **現状**: 現行リリース `all-real-v1` は課金ペア 8 件を保持するが、全線 topology で最初の出口にならない 2 件は `unverified` であり、検索対象となる `verified` は 6 件である。`unverifiedSections` は 371 件で、施設単位の OSM binding と非 C1 の課金ペア検証は継続課題である。
 
 ## 6. 全24路線・正規ランプ台帳（Canonical Ramp Inventory）
 
@@ -175,7 +175,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
   - 放射線: 1号上野線、1号羽田線、2号目黒線、3号渋谷線、4号新宿線、5号池袋線、6号向島線、6号三郷線、7号小松川線、9号深川線、10号晴海線、11号台場線、B（湾岸線）
   - 神奈川エリア: K1（横羽線）、K2（三ツ沢線）、K3（狩場線）、K5（大黒線）、K6（川崎線）、K7（横浜北線・横浜北西線）、B（湾岸線神奈川区間）
   - 埼玉エリア: S1（川口線）、S2（埼玉新都心線）、S5（埼玉大宮線）
-- **総ランプ数**: 339 ランプ（一般入口 156、一般出口 159、境界流入 JCT 12、境界流出 JCT 12）
+- **総ランプ数**: 399 ランプ（一般入口 182、一般出口 189、境界流入 JCT 12、境界流出 JCT 12、閉鎖 4）
 - **ランプ種別（`RampKind`）**:
   - `general_entry`: 一般道から首都高速へ流入する一般入口
   - `general_exit`: 首都高速から一般道へ流出する一般出口
@@ -185,13 +185,19 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
   - 各ランプには路線（`route`）、方向（`direction`: `inner`, `outer`, `inbound`, `outbound`, `east`, `west`, `north`, `south`）を付与。
   - 入口専用・出口専用のハーフ IC、ETC 専用ランプなどの制約を構造化。
 - **事実と推定・導出値の厳格な分離（Provenance & Verification）**:
-  - **公式確認事実（Verified Facts）**: 施設名（`facilityName`）、路線（`route`）、方向（`direction`）、ランプ種別（`kind`）、供用状態（`status`）は、首都高速道路公式ウェブサイト（`https://www.shutoko.jp/use/network/`）および各路線案内から確認された正本事実である。
-  - **位置座標の導出（Derived Coordinates）**: 公式サイトには緯度経度の数値データは掲載されていない。各ランプの `lat`, `lon` は `data/osm-ramp-bindings.json` で紐付けられた OpenStreetMap の実ノード・ウェイから導出・照合された値であり、`coordinateSource: "osm"`, `coordinateStatus: "derived"` として明確に出処を区別する。
+  - **公式確認事実（Verified Facts）**: 施設名（`facilityName`）、路線（`route`）、方向（`direction`）、ランプ種別（`kind`）、供用状態（`status`）は、首都高速道路公式検索データ（`https://search.shutoko.jp/`）と現行の路線・出入口案内（`https://www.shutoko.jp/driving/route/`）を 2026-09-16 に照合した正本事実である。
+  - **位置座標の導出（Derived Coordinates）**: 公式サイトには緯度経度の数値データは掲載されていない。active 一般ランプの `lat`, `lon` は `data/osm-ramp-bindings.json` の OpenStreetMap 候補から導出した値であり、`coordinateSource: "osm"`, `coordinateStatus: "derived"` として公式事実と区別する。境界 JCT と閉鎖済みランプは公開選択対象外で、OSM binding を持たない。
   - **利用制約の検証状況（Restriction Verification）**: 首都高では ETC 専用料金所の順次導入（35箇所以上）が進行中であるが、全ランプに対する制約調査は完了していない。そのため、未全数調査のランプは `restrictionStatus: "unverified"` として明示的にモデル化し、公式確認済みのランプ（神田橋、馬場等）のみ `restrictionStatus: "verified"` とする。制約が空配列 `[]` であることをもって「現金利用可能であることが公式確認された」と誤認させない。
+
+### 6.2 公開成果物とグラフへのバインド（`ramps.json`）
+
+`crates/graph-builder` は探索用グラフ `graph.json` に加え、正規ランプ台帳をグラフの各エッジ・ノードに紐付けた公開成果物 `fixtures/generated/ramps.json` を同時に生成する。
+
+- `ramps.json`: 正規ランプ台帳全 399 ランプの属性・座標・グラフバインド状態を格納した公開成果物。公開選択対象として bound にするのは active な一般入口・出口 371 件だけであり、境界 JCT 24 件と閉鎖済み 4 件は台帳上で種別を保持しつつ unbound とする。
 
 ## 7. OSM ランプバインディング（`data/osm-ramp-bindings.json`）
 
-正規ランプ台帳の各ランプと OpenStreetMap 実データの要素（way / node）を決定論的に紐付ける。
+正規ランプ台帳の active 一般ランプと OpenStreetMap 実データの要素（way / node）を決定論的に紐付ける。境界 JCT と閉鎖済みランプは台帳にのみ保持し、このファイルには含めない。
 
 - **バインディングファイル**: `data/osm-ramp-bindings.json`
 - **各要素の定義**:
@@ -202,7 +208,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 - **Overpass クエリ戦略**:
   - 首都高速道路のリレーション（全 24 路線）および `network="首都高速道路"` タグを起点とし、関連する `motorway_link` を多ホップ展開（1〜4 ホップ）して抽出。
   - 一般道との接続判定は、地表コンテキストウェイ（車両通行可能な `highway` ウェイ）のノード集合との積集合により機械的・決定論的に特定。
-  - 境界 JCT は一般道ウェイと接続しないため、路線外接続リンク（他社高速リレーション接続ノード）を境界ノードとしてバインド。
+  - 境界 JCT は一般道ウェイと接続せず公開入口・出口でもないため、一般ランプ用 binding へ流用せず unbound とする。
 
 ## 8. 境界 JCT と一般出入口の分離モデリング
 
@@ -236,7 +242,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 グラフビルダーは、ビルド時に以下のアーティファクトを生成・出力する:
 - `graph.json`: 道路ネットワークグラフ（ノード、エッジ、バインド済みランプ、OD 料金）
 - `snap-index.json`: 地表スナップ用入口アクセス地点インデックス
-- `ramps.json`: 正規ランプ台帳全 339 ランプの属性・座標・グラフバインド状態を格納した公開成果物
+- `ramps.json`: 正規ランプ台帳全 399 ランプの属性・座標・グラフバインド状態を格納した公開成果物（active 一般ランプ 371 件のみ bound）
 - `manifest.json`: 全成果物の SHA-256、未検証区間、検証済みペア出典情報
 
 ## 11. 保守・更新ワークフロー（ランプ・路線・料金の追加手順）

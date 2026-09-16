@@ -15,22 +15,21 @@ set -euo pipefail
 #   ./scripts/fetch-osm.sh [OUTPUT_PATH] [ENDPOINT]
 #
 # Defaults:
-#   OUTPUT_PATH: fixtures/osm/shutoko-c1.json
+#   OUTPUT_PATH: fixtures/osm/shutoko-all.json
 #   ENDPOINT:    https://overpass-api.de/api/interpreter
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-OUTPUT_PATH="${1:-"${REPO_ROOT}/fixtures/osm/shutoko-c1.json"}"
+OUTPUT_PATH="${1:-"${REPO_ROOT}/fixtures/osm/shutoko-all.json"}"
 ENDPOINT="${2:-"https://overpass-api.de/api/interpreter"}"
 
 mkdir -p "$(dirname "${OUTPUT_PATH}")"
 
 # Overpass query rationale:
-# 1. Target expressway relations are listed in the relation(id:...) filter.
-#    To add a new route (e.g. C2, Wangan), append its relation ID to that list.
-#    Current targets:
-#      4256008 — C1 Inner Circular Route (都心環状線)
+# 1. Target all relations tagged network=首都高速道路, with explicit relation
+#    IDs retained for known tagging gaps. ROUTES_FILTER=c1 remains available for
+#    focused diagnostics only; it is not the release default.
 # 2. Motorway link expansion: entry/exit ramps consist of 3–5 successive
 #    motorway_link ways. Four hops of expansion capture all ramp geometry.
 # 3. Turn restrictions for the expressway ways and ramps are included so the
@@ -63,18 +62,20 @@ else
   EXPRESSWAYS_QUERY='(
     relation["network"="首都高速道路"];
     relation(id:4256008); // C1
-    relation(id:3959826,4256011); // C2
+    relation(id:3959826,4256011,4256077); // C2
+    relation(id:10355798,10732984); // K7 Yokohama North / Northwest lines
   ) -> .expressways;'
 fi
 
-OVERPASS_QUERY="[out:json][timeout:180];
+OVERPASS_QUERY="$(cat <<EOF
+[out:json][timeout:300];
 ${EXPRESSWAYS_QUERY}
 (
   .expressways;
   way(r.expressways);
   node(w);
 ) -> .ew_all;
-node.ew_all -> .ew_nodes;"
+node.ew_all -> .ew_nodes;
 
 way(bn.ew_nodes)["highway"="motorway_link"] -> .links;
 
@@ -121,10 +122,13 @@ out body;
 // output — the builder performs node-ID containment checks, not geometry
 // operations, so omitting node(w.ctx_ways) saves the bulk of the extra data.
 ( .ctx_ways; );
-out body;'
+out body;
+EOF
+)"
 
 echo "Fetching OSM data from ${ENDPOINT}..."
 curl -sS -f -X POST \
+  -H "User-Agent: ShutokoSim-DataPipeline/1.0 (https://github.com/japan4415/shutoko-sim)" \
   --data-urlencode "data=${OVERPASS_QUERY}" \
   "${ENDPOINT}" \
   -o "${OUTPUT_PATH}"

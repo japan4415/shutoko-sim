@@ -1,0 +1,5492 @@
+{
+  "version": 1,
+  "source": "https://search.shutoko.jp/",
+  "sourceDate": "2026-09-16",
+  "description": "Official population of Tokyo Metropolitan Expressway ramps captured from search.shutoko.jp official database.",
+  "summary": {
+    "totalFacilities": 162,
+    "generalFacilities": 148,
+    "connectionFacilities": 14,
+    "totalGeneralEntries": 182,
+    "totalGeneralExits": 189,
+    "totalGeneralRamps": 371
+  },
+  "facilities": [
+    {
+      "facilityKey": "1001106",
+      "name": "宝町",
+      "kana": "たからちょう",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/takaracho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1001110",
+      "name": "銀座",
+      "kana": "ぎんざ",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/ginza/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1001116",
+      "name": "芝公園",
+      "kana": "しばこうえん",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shibakouen/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1001120",
+      "name": "飯倉",
+      "kana": "いいくら",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/iikura/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1001123",
+      "name": "霞が関",
+      "kana": "かすみがせき",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kasumigaseki/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1001127",
+      "name": "代官町",
+      "kana": "だいかんちょう",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/daikancho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1001131",
+      "name": "神田橋",
+      "kana": "かんだばし",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kandabashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1001207",
+      "name": "京橋",
+      "kana": "きょうばし",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kyoubashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1002109",
+      "name": "新富町",
+      "kana": "しんとみちょう",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shintomicho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1002129",
+      "name": "北の丸",
+      "kana": "きたのまる",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kitanomaru/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1801207",
+      "name": "汐留",
+      "kana": "しおどめ",
+      "route": "C1",
+      "roadCode": "S00",
+      "roadName": "高速都心環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shiodome/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1011105",
+      "name": "芝浦",
+      "kana": "しばうら",
+      "route": "1H",
+      "roadCode": "S01",
+      "roadName": "高速1号羽田線",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/shibaura/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1011113",
+      "name": "鈴ヶ森",
+      "kana": "すずがもり",
+      "route": "1H",
+      "roadCode": "S01",
+      "roadName": "高速1号羽田線",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/suzugamori/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1011115",
+      "name": "平和島",
+      "kana": "へいわじま",
+      "route": "1H",
+      "roadCode": "S01",
+      "roadName": "高速1号羽田線",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/heiwajima/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1011119",
+      "name": "空港西",
+      "kana": "くうこうにし",
+      "route": "1H",
+      "roadCode": "S01",
+      "roadName": "高速1号羽田線",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/kukounishi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1011120",
+      "name": "羽田",
+      "kana": "はねだ",
+      "route": "1H",
+      "roadCode": "S01",
+      "roadName": "高速1号羽田線",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/haneda/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1011212",
+      "name": "勝島",
+      "kana": "かつしま",
+      "route": "1H",
+      "roadCode": "S01",
+      "roadName": "高速1号羽田線",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/katsushima/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1021105",
+      "name": "天現寺",
+      "kana": "てんげんじ",
+      "route": "2",
+      "roadCode": "S02",
+      "roadName": "高速2号目黒線",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/tengenji/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1021107",
+      "name": "目黒",
+      "kana": "めぐろ",
+      "route": "2",
+      "roadCode": "S02",
+      "roadName": "高速2号目黒線",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/meguro/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1021110",
+      "name": "荏原",
+      "kana": "えばら",
+      "route": "2",
+      "roadCode": "S02",
+      "roadName": "高速2号目黒線",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/ebara/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1021111",
+      "name": "戸越",
+      "kana": "とごし",
+      "route": "2",
+      "roadCode": "S02",
+      "roadName": "高速2号目黒線",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/togoshi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1031105",
+      "name": "高樹町",
+      "kana": "たかぎちょう",
+      "route": "3",
+      "roadCode": "S03",
+      "roadName": "高速3号渋谷線",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/takagicho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1031108",
+      "name": "渋谷",
+      "kana": "しぶや",
+      "route": "3",
+      "roadCode": "S03",
+      "roadName": "高速3号渋谷線",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/shibuya/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1031111",
+      "name": "三軒茶屋",
+      "kana": "さんげんぢゃや",
+      "route": "3",
+      "roadCode": "S03",
+      "roadName": "高速3号渋谷線",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/sangenjaya/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1031117",
+      "name": "用賀",
+      "kana": "ようが",
+      "route": "3",
+      "roadCode": "S03",
+      "roadName": "高速3号渋谷線",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/youga/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1031210",
+      "name": "池尻",
+      "kana": "いけじり",
+      "route": "3",
+      "roadCode": "S03",
+      "roadName": "高速3号渋谷線",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/ikejiri/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1134117",
+      "name": "東名高速との接続部(3号渋谷線)",
+      "kana": "とうめいこうそくとのせつぞくぶ(3ごうしぶやせん)",
+      "route": "3",
+      "roadCode": "S03",
+      "roadName": "高速3号渋谷線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1041107",
+      "name": "外苑",
+      "kana": "がいえん",
+      "route": "4",
+      "roadCode": "S04",
+      "roadName": "高速4号新宿線",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/gaien/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1041110",
+      "name": "代々木",
+      "kana": "よよぎ",
+      "route": "4",
+      "roadCode": "S04",
+      "roadName": "高速4号新宿線",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/yoyogi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1041111",
+      "name": "新宿",
+      "kana": "しんじゅく",
+      "route": "4",
+      "roadCode": "S04",
+      "roadName": "高速4号新宿線",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/shinjuku/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1041115",
+      "name": "幡ヶ谷",
+      "kana": "はたがや",
+      "route": "4",
+      "roadCode": "S04",
+      "roadName": "高速4号新宿線",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/hatagaya/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1041119",
+      "name": "永福",
+      "kana": "えいふく",
+      "route": "4",
+      "roadCode": "S04",
+      "roadName": "高速4号新宿線",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/eifuku/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1041124",
+      "name": "高井戸",
+      "kana": "たかいど",
+      "route": "4",
+      "roadCode": "S04",
+      "roadName": "高速4号新宿線",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/takaido/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1041212",
+      "name": "初台",
+      "kana": "はつだい",
+      "route": "4",
+      "roadCode": "S04",
+      "roadName": "高速4号新宿線",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/hatsudai/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1894501",
+      "name": "中央道との接続部",
+      "kana": "ちゅうおうどうとのせつぞくぶ",
+      "route": "4",
+      "roadCode": "S04",
+      "roadName": "高速4号新宿線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1051105",
+      "name": "西神田",
+      "kana": "にしかんだ",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/nishikanda/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1051109",
+      "name": "護国寺",
+      "kana": "ごこくじ",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/gokokuji/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1051112",
+      "name": "東池袋",
+      "kana": "ひがしいけぶくろ",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/higashiikebukuro/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1051115",
+      "name": "北池袋",
+      "kana": "きたいけぶくろ",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/kitaikebukuro/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1051119",
+      "name": "板橋本町",
+      "kana": "いたばしほんちょう",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/itabashihoncho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1051124",
+      "name": "中台",
+      "kana": "なかだい",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/nakadai/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1051128",
+      "name": "高島平",
+      "kana": "たかしまだいら",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/takashimadaira/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1051133",
+      "name": "戸田南",
+      "kana": "とだみなみ",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/todaminami/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1051203",
+      "name": "一ツ橋",
+      "kana": "ひとつばし",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/hitotsubashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1051207",
+      "name": "飯田橋",
+      "kana": "いいだばし",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/iidabashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1052208",
+      "name": "早稲田",
+      "kana": "わせだ",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/waseda/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1251202",
+      "name": "戸田",
+      "kana": "とだ",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/toda/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1894546",
+      "name": "外環道との接続部",
+      "kana": "がいかんどうとのせつぞくぶ",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1061105",
+      "name": "箱崎",
+      "kana": "はこざき",
+      "route": "6M",
+      "roadCode": "S06",
+      "roadName": "高速6号向島線",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/hakozaki/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1061106",
+      "name": "浜町",
+      "kana": "はまちょう",
+      "route": "6M",
+      "roadCode": "S06",
+      "roadName": "高速6号向島線",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/hamacho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1061107",
+      "name": "清洲橋",
+      "kana": "きよすばし",
+      "route": "6M",
+      "roadCode": "S06",
+      "roadName": "高速6号向島線",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/kiyosubashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1061111",
+      "name": "駒形",
+      "kana": "こまがた",
+      "route": "6M",
+      "roadCode": "S06",
+      "roadName": "高速6号向島線",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/komagata/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1061114",
+      "name": "向島",
+      "kana": "むこうじま",
+      "route": "6M",
+      "roadCode": "S06",
+      "roadName": "高速6号向島線",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/mukoujima/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1061116",
+      "name": "堤通",
+      "kana": "つつみどおり",
+      "route": "6M",
+      "roadCode": "S06",
+      "roadName": "高速6号向島線",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/tsutsumidori/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1071104",
+      "name": "錦糸町",
+      "kana": "きんしちょう",
+      "route": "7",
+      "roadCode": "S07",
+      "roadName": "高速7号小松川線",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/kinshicho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1071111",
+      "name": "小松川",
+      "kana": "こまつがわ",
+      "route": "7",
+      "roadCode": "S07",
+      "roadName": "高速7号小松川線",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/komatsugawa/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1071113",
+      "name": "一之江",
+      "kana": "いちのえ",
+      "route": "7",
+      "roadCode": "S07",
+      "roadName": "高速7号小松川線",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/ichinoe/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1894494",
+      "name": "京葉道路との接続部",
+      "kana": "けいようどうろとのせつぞくぶ",
+      "route": "7",
+      "roadCode": "S07",
+      "roadName": "高速7号小松川線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1091106",
+      "name": "木場",
+      "kana": "きば",
+      "route": "9",
+      "roadCode": "S09",
+      "roadName": "高速9号深川線",
+      "url": "https://www.shutoko.jp/use/network/map/route-9/kiba/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1091205",
+      "name": "福住",
+      "kana": "ふくずみ",
+      "route": "9",
+      "roadCode": "S09",
+      "roadName": "高速9号深川線",
+      "url": "https://www.shutoko.jp/use/network/map/route-9/fukuzumi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1091208",
+      "name": "塩浜",
+      "kana": "しおはま",
+      "route": "9",
+      "roadCode": "S09",
+      "roadName": "高速9号深川線",
+      "url": "https://www.shutoko.jp/use/network/map/route-9/shiohama/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1092108",
+      "name": "枝川",
+      "kana": "えだがわ",
+      "route": "9",
+      "roadCode": "S09",
+      "roadName": "高速9号深川線",
+      "url": "https://www.shutoko.jp/use/network/map/route-9/edagawa/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1101203",
+      "name": "豊洲",
+      "kana": "とよす",
+      "route": "10",
+      "roadCode": "S10",
+      "roadName": "高速10号晴海線",
+      "url": "https://www.shutoko.jp/use/network/map/route-10/toyosu/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1101205",
+      "name": "晴海",
+      "kana": "はるみ",
+      "route": "10",
+      "roadCode": "S10",
+      "roadName": "高速10号晴海線",
+      "url": "https://www.shutoko.jp/use/network/map/route-10/harumi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1111104",
+      "name": "台場",
+      "kana": "だいば",
+      "route": "11",
+      "roadCode": "S11",
+      "roadName": "高速11号台場線",
+      "url": "https://www.shutoko.jp/use/network/map/route-11/daiba/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1161106",
+      "name": "加平",
+      "kana": "かへい",
+      "route": "6S",
+      "roadCode": "S16",
+      "roadName": "高速6号三郷線",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/kahei/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1161110",
+      "name": "八潮南",
+      "kana": "やしおみなみ",
+      "route": "6S",
+      "roadCode": "S16",
+      "roadName": "高速6号三郷線",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/yashiominami/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1161113",
+      "name": "八潮",
+      "kana": "やしお",
+      "route": "6S",
+      "roadCode": "S16",
+      "roadName": "高速6号三郷線",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/yashio/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1161116",
+      "name": "三郷",
+      "kana": "みさと",
+      "route": "6S",
+      "roadCode": "S16",
+      "roadName": "高速6号三郷線",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/misato/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1164117",
+      "name": "常磐道・外環道との接続部",
+      "kana": "じょうばんどう・がいかんどうとのせつぞくぶ",
+      "route": "6S",
+      "roadCode": "S16",
+      "roadName": "高速6号三郷線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1181103",
+      "name": "本町",
+      "kana": "ほんちょう",
+      "route": "1U",
+      "roadCode": "S18",
+      "roadName": "高速1号上野線",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/honcho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1181106",
+      "name": "上野",
+      "kana": "うえの",
+      "route": "1U",
+      "roadCode": "S18",
+      "roadName": "高速1号上野線",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/ueno/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1181108",
+      "name": "入谷",
+      "kana": "いりや",
+      "route": "1U",
+      "roadCode": "S18",
+      "roadName": "高速1号上野線",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/iriya/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1211105",
+      "name": "鹿浜橋",
+      "kana": "しかはまばし",
+      "route": "S1",
+      "roadCode": "S21",
+      "roadName": "高速川口線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/shikahamabashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1211109",
+      "name": "加賀",
+      "kana": "かが",
+      "route": "S1",
+      "roadCode": "S21",
+      "roadName": "高速川口線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/kaga/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1211113",
+      "name": "新郷",
+      "kana": "しんごう",
+      "route": "S1",
+      "roadCode": "S21",
+      "roadName": "高速川口線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/shingou/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1211116",
+      "name": "安行",
+      "kana": "あんぎょう",
+      "route": "S1",
+      "roadCode": "S21",
+      "roadName": "高速川口線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/angyou/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1211120",
+      "name": "新井宿",
+      "kana": "あらいじゅく",
+      "route": "S1",
+      "roadCode": "S21",
+      "roadName": "高速川口線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/araijuku/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1211212",
+      "name": "足立入谷",
+      "kana": "あだちいりや",
+      "route": "S1",
+      "roadCode": "S21",
+      "roadName": "高速川口線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/adachiiriya/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1212108",
+      "name": "東領家",
+      "kana": "ひがしりょうけ",
+      "route": "S1",
+      "roadCode": "S21",
+      "roadName": "高速川口線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/higashiryouke/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1214122",
+      "name": "東北道・外環道との接続部",
+      "kana": "とうほくどう・がいかんどうとのせつぞくぶ",
+      "route": "S1",
+      "roadCode": "S21",
+      "roadName": "高速川口線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1251103",
+      "name": "浦和南",
+      "kana": "うらわみなみ",
+      "route": "S5",
+      "roadCode": "S25",
+      "roadName": "高速埼玉大宮線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s5/urawaminami/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1251112",
+      "name": "与野",
+      "kana": "よの",
+      "route": "S5",
+      "roadCode": "S25",
+      "roadName": "高速埼玉大宮線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s5/yono/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1251210",
+      "name": "浦和北",
+      "kana": "うらわきた",
+      "route": "S5",
+      "roadCode": "S25",
+      "roadName": "高速埼玉大宮線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s5/urawakita/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1261102",
+      "name": "新都心西",
+      "kana": "しんとしんにし",
+      "route": "S2",
+      "roadCode": "S26",
+      "roadName": "高速埼玉新都心線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/shintoshinnishi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1261104",
+      "name": "新都心",
+      "kana": "しんとしん",
+      "route": "S2",
+      "roadCode": "S26",
+      "roadName": "高速埼玉新都心線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/shintoshin/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1261109",
+      "name": "さいたま見沼",
+      "kana": "さいたまみぬま",
+      "route": "S2",
+      "roadCode": "S26",
+      "roadName": "高速埼玉新都心線",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/saitamaminuma/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1331212",
+      "name": "五反田",
+      "kana": "ごたんだ",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/gotanda/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1332103",
+      "name": "中環大井南",
+      "kana": "ちゅうかんおおいみなみ",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/chukanooiminami/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1051216",
+      "name": "高松",
+      "kana": "たかまつ",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/takamatsu/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1201103",
+      "name": "扇大橋",
+      "kana": "おうぎおおはし",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/ogiohashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1201108",
+      "name": "千住新橋",
+      "kana": "せんじゅしんばし",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/senjushinbashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1201117",
+      "name": "四つ木",
+      "kana": "よつぎ",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/yotsugi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1201121",
+      "name": "平井大橋",
+      "kana": "ひらいおおはし",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/hiraioohashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1201130",
+      "name": "清新町",
+      "kana": "せいしんちょう",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/seishincho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1201211",
+      "name": "小菅",
+      "kana": "こすげ",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/kosuge/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1201224",
+      "name": "船堀橋",
+      "kana": "ふなぼりばし",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/funaboribashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1231121",
+      "name": "西池袋",
+      "kana": "にしいけぶくろ",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/nishiikebukuro/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1311103",
+      "name": "滝野川",
+      "kana": "たきのがわ",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/takinogawa/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1311108",
+      "name": "王子南",
+      "kana": "おうじみなみ",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/oujiminami/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1311209",
+      "name": "王子北",
+      "kana": "おうじきた",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/oujikita/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1312203",
+      "name": "新板橋",
+      "kana": "しんいたばし",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/shinitabashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1321108",
+      "name": "初台南",
+      "kana": "はつだいみなみ",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/hatsudaiminami/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1321207",
+      "name": "富ヶ谷",
+      "kana": "とみがや",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/tomigaya/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1321216",
+      "name": "中野長者橋",
+      "kana": "なかのちょうじゃばし",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/nakanochoujabashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1071116",
+      "name": "中環小松川",
+      "kana": "ちゅうかんこまつがわ",
+      "route": "C2",
+      "roadCode": "S31",
+      "roadName": "高速中央環状線",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/chukankomatsugawa/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1511104",
+      "name": "大井南",
+      "kana": "おおいみなみ",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ooiminami/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1511106",
+      "name": "大井",
+      "kana": "おおい",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ooi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1511114",
+      "name": "有明",
+      "kana": "ありあけ",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ariake/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1511119",
+      "name": "新木場",
+      "kana": "しんきば",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/shinkiba/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1511124",
+      "name": "葛西",
+      "kana": "かさい",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/kasai/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1511129",
+      "name": "浦安",
+      "kana": "うらやす",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/urayasu/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1511210",
+      "name": "臨海副都心",
+      "kana": "りんかいふくとしん",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/rinkaihukutoshin/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1511226",
+      "name": "舞浜",
+      "kana": "まいはま",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/maihama/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1511233",
+      "name": "千鳥町",
+      "kana": "ちどりちょう",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/chidoricho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1521107",
+      "name": "空港中央",
+      "kana": "くうこうちゅうおう",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/kukouchuou/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1521211",
+      "name": "湾岸環八",
+      "kana": "わんがんかんぱち",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/wangankanpachi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1531121",
+      "name": "東扇島",
+      "kana": "ひがしおおぎしま",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/higashiogishima/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1541103",
+      "name": "幸浦",
+      "kana": "さちうら",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sachiura/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1541107",
+      "name": "杉田",
+      "kana": "すぎた",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sugita/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1541109",
+      "name": "磯子",
+      "kana": "いそご",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/isogo/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1541117",
+      "name": "南本牧ふ頭",
+      "kana": "みなみほんもくふとう",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/minamihonmokufutou/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1541119",
+      "name": "本牧ふ頭",
+      "kana": "ほんもくふとう",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/honmokufuto/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1541216",
+      "name": "三溪園",
+      "kana": "さんけいえん",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sankeien/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1851213",
+      "name": "浮島",
+      "kana": "うきしま",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ukishima/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1894537",
+      "name": "東関東道・外環道との接続部",
+      "kana": "ひがしかんとうどう・がいかんどうとのせつぞくぶ",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1894282",
+      "name": "東京湾アクアラインとの接続部",
+      "kana": "とうきょうわんあくあらいんとのせつぞくぶ",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1884575",
+      "name": "横横道(金沢支線)との接続部",
+      "kana": "よこよこどう(かなざわしせん)とのせつぞくぶ",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1811102",
+      "name": "大師",
+      "kana": "だいし",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/daishi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1811109",
+      "name": "浜川崎",
+      "kana": "はまかわさき",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/hamakawasaki/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1811114",
+      "name": "汐入",
+      "kana": "しおいり",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/shioiri/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1811123",
+      "name": "子安",
+      "kana": "こやす",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/koyasu/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1811126",
+      "name": "東神奈川",
+      "kana": "ひがしかながわ",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/higashikanagawa/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1811133",
+      "name": "みなとみらい",
+      "kana": "みなとみらい",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/minatomirai/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1811137",
+      "name": "横浜公園",
+      "kana": "よこはまこうえん",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/yokohamakouen/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1811212",
+      "name": "浅田",
+      "kana": "あさだ",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/asada/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1811221",
+      "name": "生麦",
+      "kana": "なまむぎ",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/namamugi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1811233",
+      "name": "横浜駅東口",
+      "kana": "よこはまえきひがしぐち",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/yokohamaekihigashiguchi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1812223",
+      "name": "守屋町",
+      "kana": "もりやちょう",
+      "route": "K1",
+      "roadCode": "S81",
+      "roadName": "高速神奈川1号横羽線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/moriyacho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1831105",
+      "name": "大黒ふ頭",
+      "kana": "だいこくふとう",
+      "route": "K5",
+      "roadCode": "S83",
+      "roadName": "高速神奈川5号大黒線",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1861106",
+      "name": "殿町",
+      "kana": "とのまち",
+      "route": "K6",
+      "roadCode": "S86",
+      "roadName": "高速神奈川6号川崎線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k6/tonomachi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1901104",
+      "name": "八重洲",
+      "kana": "やえす",
+      "route": "Y",
+      "roadCode": "S90",
+      "roadName": "高速八重洲線",
+      "url": "https://www.shutoko.jp/use/network/map/route-y/yaesu/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1902204",
+      "name": "丸の内",
+      "kana": "まるのうち",
+      "route": "Y",
+      "roadCode": "S90",
+      "roadName": "高速八重洲線",
+      "url": "https://www.shutoko.jp/use/network/map/route-y/marunouchi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1911104",
+      "name": "横浜駅西口",
+      "kana": "よこはまえきにしぐち",
+      "route": "K2",
+      "roadCode": "S91",
+      "roadName": "高速神奈川2号三ツ沢線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k2/yokohamaekinishiguchi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1911107",
+      "name": "三ツ沢",
+      "kana": "みつざわ",
+      "route": "K2",
+      "roadCode": "S91",
+      "roadName": "高速神奈川2号三ツ沢線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k2/mitsuzawa/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1894539",
+      "name": "第三京浜・横浜新道との接続部",
+      "kana": "だいさんけいひん・よこはましんどうとのせつぞくぶ",
+      "route": "K2",
+      "roadCode": "S91",
+      "roadName": "高速神奈川2号三ツ沢線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1921102",
+      "name": "新山下",
+      "kana": "しんやました",
+      "route": "K3",
+      "roadCode": "S92",
+      "roadName": "高速神奈川3号狩場線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/shinyamashita/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1921107",
+      "name": "石川町",
+      "kana": "いしかわちょう",
+      "route": "K3",
+      "roadCode": "S92",
+      "roadName": "高速神奈川3号狩場線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/ishikawacho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1921114",
+      "name": "花之木",
+      "kana": "はなのき",
+      "route": "K3",
+      "roadCode": "S92",
+      "roadName": "高速神奈川3号狩場線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/hananoki/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1921118",
+      "name": "永田",
+      "kana": "ながた",
+      "route": "K3",
+      "roadCode": "S92",
+      "roadName": "高速神奈川3号狩場線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/nagata/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1921211",
+      "name": "阪東橋",
+      "kana": "ばんどうばし",
+      "route": "K3",
+      "roadCode": "S92",
+      "roadName": "高速神奈川3号狩場線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/bandoubashi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1922105",
+      "name": "山下町",
+      "kana": "やましたちょう",
+      "route": "K3",
+      "roadCode": "S92",
+      "roadName": "高速神奈川3号狩場線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/yamashitacho/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1974241",
+      "name": "横横道との接続部",
+      "kana": "よこよこどうとのせつぞくぶ",
+      "route": "K3",
+      "roadCode": "S92",
+      "roadName": "高速神奈川3号狩場線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1974132",
+      "name": "保土ヶ谷バイパスとの接続部",
+      "kana": "ほどがやばいぱすとのせつぞくぶ",
+      "route": "K3",
+      "roadCode": "S92",
+      "roadName": "高速神奈川3号狩場線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1934113",
+      "name": "第三京浜との接続部",
+      "kana": "だいさんけいひんとのせつぞくぶ",
+      "route": "K7",
+      "roadCode": "S93",
+      "roadName": "高速神奈川7号横浜北線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1931117",
+      "name": "新横浜",
+      "kana": "しんよこはま",
+      "route": "K7",
+      "roadCode": "S93",
+      "roadName": "高速神奈川7号横浜北線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/shinyokohama/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1932204",
+      "name": "岸谷生麦",
+      "kana": "きしやなまむぎ",
+      "route": "K7",
+      "roadCode": "S93",
+      "roadName": "高速神奈川7号横浜北線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/kishiyanamamugi/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1931110",
+      "name": "馬場",
+      "kana": "ばば",
+      "route": "K7",
+      "roadCode": "S93",
+      "roadName": "高速神奈川7号横浜北線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/baba/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1961105",
+      "name": "横浜港北",
+      "kana": "よこはまこうほく",
+      "route": "K7",
+      "roadCode": "S94",
+      "roadName": "高速神奈川7号横浜北西線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamakohoku/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1951114",
+      "name": "横浜青葉",
+      "kana": "よこはまあおば",
+      "route": "K7",
+      "roadCode": "S94",
+      "roadName": "高速神奈川7号横浜北西線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamaaoba/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1951113",
+      "name": "横浜青葉",
+      "kana": "よこはまあおば",
+      "route": "K7",
+      "roadCode": "S94",
+      "roadName": "高速神奈川7号横浜北西線",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamaaoba/",
+      "isConnection": false
+    },
+    {
+      "facilityKey": "1954110",
+      "name": "東名高速との接続部(神奈川7号横浜北西線)",
+      "kana": "とうめいこうそくとのせつぞくぶ(かながわ7ごうよこはまほくせいせん)",
+      "route": "K7",
+      "roadCode": "S94",
+      "roadName": "高速神奈川7号横浜北西線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    }
+  ],
+  "generalEntries": [
+    {
+      "facilityKey": "1001106",
+      "facilityName": "宝町",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "11",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/takaracho/"
+    },
+    {
+      "facilityKey": "1001110",
+      "facilityName": "銀座",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "15",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/ginza/"
+    },
+    {
+      "facilityKey": "1001110",
+      "facilityName": "銀座",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "16",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/ginza/"
+    },
+    {
+      "facilityKey": "1001116",
+      "facilityName": "芝公園",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "19",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shibakouen/"
+    },
+    {
+      "facilityKey": "1001116",
+      "facilityName": "芝公園",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "20",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shibakouen/"
+    },
+    {
+      "facilityKey": "1001120",
+      "facilityName": "飯倉",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "21",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/iikura/"
+    },
+    {
+      "facilityKey": "1001123",
+      "facilityName": "霞が関",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "23",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kasumigaseki/"
+    },
+    {
+      "facilityKey": "1001123",
+      "facilityName": "霞が関",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "24",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kasumigaseki/"
+    },
+    {
+      "facilityKey": "1001127",
+      "facilityName": "代官町",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "25",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/daikancho/"
+    },
+    {
+      "facilityKey": "1001131",
+      "facilityName": "神田橋",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "29",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kandabashi/"
+    },
+    {
+      "facilityKey": "1001131",
+      "facilityName": "神田橋",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "28",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kandabashi/"
+    },
+    {
+      "facilityKey": "1001207",
+      "facilityName": "京橋",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "12",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kyoubashi/"
+    },
+    {
+      "facilityKey": "1801207",
+      "facilityName": "汐留",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "18",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shiodome/"
+    },
+    {
+      "facilityKey": "1011105",
+      "facilityName": "芝浦",
+      "route": "1H",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "101",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/shibaura/"
+    },
+    {
+      "facilityKey": "1011105",
+      "facilityName": "芝浦",
+      "route": "1H",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "102",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/shibaura/"
+    },
+    {
+      "facilityKey": "1011113",
+      "facilityName": "鈴ヶ森",
+      "route": "1H",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "103",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/suzugamori/"
+    },
+    {
+      "facilityKey": "1011115",
+      "facilityName": "平和島",
+      "route": "1H",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "105",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/heiwajima/"
+    },
+    {
+      "facilityKey": "1011115",
+      "facilityName": "平和島",
+      "route": "1H",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "106",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/heiwajima/"
+    },
+    {
+      "facilityKey": "1011119",
+      "facilityName": "空港西",
+      "route": "1H",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "107",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/kukounishi/"
+    },
+    {
+      "facilityKey": "1011120",
+      "facilityName": "羽田",
+      "route": "1H",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "109",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/haneda/"
+    },
+    {
+      "facilityKey": "1011120",
+      "facilityName": "羽田",
+      "route": "1H",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "150",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/haneda/"
+    },
+    {
+      "facilityKey": "1011212",
+      "facilityName": "勝島",
+      "route": "1H",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "104",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/katsushima/"
+    },
+    {
+      "facilityKey": "1021105",
+      "facilityName": "天現寺",
+      "route": "2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "201",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/tengenji/"
+    },
+    {
+      "facilityKey": "1021107",
+      "facilityName": "目黒",
+      "route": "2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "203",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/meguro/"
+    },
+    {
+      "facilityKey": "1021110",
+      "facilityName": "荏原",
+      "route": "2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "207",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/ebara/"
+    },
+    {
+      "facilityKey": "1021111",
+      "facilityName": "戸越",
+      "route": "2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "205",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/togoshi/"
+    },
+    {
+      "facilityKey": "1031105",
+      "facilityName": "高樹町",
+      "route": "3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "301",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/takagicho/"
+    },
+    {
+      "facilityKey": "1031108",
+      "facilityName": "渋谷",
+      "route": "3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "302",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/shibuya/"
+    },
+    {
+      "facilityKey": "1031108",
+      "facilityName": "渋谷",
+      "route": "3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "303",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/shibuya/"
+    },
+    {
+      "facilityKey": "1031111",
+      "facilityName": "三軒茶屋",
+      "route": "3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "305",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/sangenjaya/"
+    },
+    {
+      "facilityKey": "1031117",
+      "facilityName": "用賀",
+      "route": "3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "307",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/youga/"
+    },
+    {
+      "facilityKey": "1031210",
+      "facilityName": "池尻",
+      "route": "3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "304",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/ikejiri/"
+    },
+    {
+      "facilityKey": "1041107",
+      "facilityName": "外苑",
+      "route": "4",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "401",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/gaien/"
+    },
+    {
+      "facilityKey": "1041107",
+      "facilityName": "外苑",
+      "route": "4",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "402",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/gaien/"
+    },
+    {
+      "facilityKey": "1041110",
+      "facilityName": "代々木",
+      "route": "4",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "403",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/yoyogi/"
+    },
+    {
+      "facilityKey": "1041111",
+      "facilityName": "新宿",
+      "route": "4",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "405",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/shinjuku/"
+    },
+    {
+      "facilityKey": "1041115",
+      "facilityName": "幡ヶ谷",
+      "route": "4",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "407",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/hatagaya/"
+    },
+    {
+      "facilityKey": "1041119",
+      "facilityName": "永福",
+      "route": "4",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "408",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/eifuku/"
+    },
+    {
+      "facilityKey": "1041119",
+      "facilityName": "永福",
+      "route": "4",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "409",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/eifuku/"
+    },
+    {
+      "facilityKey": "1041124",
+      "facilityName": "高井戸",
+      "route": "4",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "411",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/takaido/"
+    },
+    {
+      "facilityKey": "1041212",
+      "facilityName": "初台",
+      "route": "4",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "406",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/hatsudai/"
+    },
+    {
+      "facilityKey": "1051105",
+      "facilityName": "西神田",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "501",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/nishikanda/"
+    },
+    {
+      "facilityKey": "1051109",
+      "facilityName": "護国寺",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "505",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/gokokuji/"
+    },
+    {
+      "facilityKey": "1051112",
+      "facilityName": "東池袋",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "507",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/higashiikebukuro/"
+    },
+    {
+      "facilityKey": "1051112",
+      "facilityName": "東池袋",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "508",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/higashiikebukuro/"
+    },
+    {
+      "facilityKey": "1051115",
+      "facilityName": "北池袋",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "509",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/kitaikebukuro/"
+    },
+    {
+      "facilityKey": "1051119",
+      "facilityName": "板橋本町",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "511",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/itabashihoncho/"
+    },
+    {
+      "facilityKey": "1051119",
+      "facilityName": "板橋本町",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "512",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/itabashihoncho/"
+    },
+    {
+      "facilityKey": "1051124",
+      "facilityName": "中台",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "513",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/nakadai/"
+    },
+    {
+      "facilityKey": "1051128",
+      "facilityName": "高島平",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "515",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/takashimadaira/"
+    },
+    {
+      "facilityKey": "1051133",
+      "facilityName": "戸田南",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "517",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/todaminami/"
+    },
+    {
+      "facilityKey": "1051203",
+      "facilityName": "一ツ橋",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "27",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/hitotsubashi/"
+    },
+    {
+      "facilityKey": "1051207",
+      "facilityName": "飯田橋",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "502",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/iidabashi/"
+    },
+    {
+      "facilityKey": "1251202",
+      "facilityName": "戸田",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "518",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/toda/"
+    },
+    {
+      "facilityKey": "1061111",
+      "facilityName": "駒形",
+      "route": "6M",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "605",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/komagata/"
+    },
+    {
+      "facilityKey": "1061114",
+      "facilityName": "向島",
+      "route": "6M",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "606",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/mukoujima/"
+    },
+    {
+      "facilityKey": "1061114",
+      "facilityName": "向島",
+      "route": "6M",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "607",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/mukoujima/"
+    },
+    {
+      "facilityKey": "1061116",
+      "facilityName": "堤通",
+      "route": "6M",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "609",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/tsutsumidori/"
+    },
+    {
+      "facilityKey": "1061116",
+      "facilityName": "堤通",
+      "route": "6M",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "610",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/tsutsumidori/"
+    },
+    {
+      "facilityKey": "1071104",
+      "facilityName": "錦糸町",
+      "route": "7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "701",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/kinshicho/"
+    },
+    {
+      "facilityKey": "1071104",
+      "facilityName": "錦糸町",
+      "route": "7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "702",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/kinshicho/"
+    },
+    {
+      "facilityKey": "1071111",
+      "facilityName": "小松川",
+      "route": "7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "703",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/komatsugawa/"
+    },
+    {
+      "facilityKey": "1071113",
+      "facilityName": "一之江",
+      "route": "7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "705",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/ichinoe/"
+    },
+    {
+      "facilityKey": "1091106",
+      "facilityName": "木場",
+      "route": "9",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "903",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-9/kiba/"
+    },
+    {
+      "facilityKey": "1091205",
+      "facilityName": "福住",
+      "route": "9",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "902",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-9/fukuzumi/"
+    },
+    {
+      "facilityKey": "1091208",
+      "facilityName": "塩浜",
+      "route": "9",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "904",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-9/shiohama/"
+    },
+    {
+      "facilityKey": "1101203",
+      "facilityName": "豊洲",
+      "route": "10",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "1004",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-10/toyosu/"
+    },
+    {
+      "facilityKey": "1101205",
+      "facilityName": "晴海",
+      "route": "10",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "1002",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-10/harumi/"
+    },
+    {
+      "facilityKey": "1111104",
+      "facilityName": "台場",
+      "route": "11",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "1101",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-11/daiba/"
+    },
+    {
+      "facilityKey": "1161106",
+      "facilityName": "加平",
+      "route": "6S",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "651",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/kahei/"
+    },
+    {
+      "facilityKey": "1161106",
+      "facilityName": "加平",
+      "route": "6S",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "652",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/kahei/"
+    },
+    {
+      "facilityKey": "1161106",
+      "facilityName": "加平",
+      "route": "6S",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "653",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/kahei/"
+    },
+    {
+      "facilityKey": "1161106",
+      "facilityName": "加平",
+      "route": "6S",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "654",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/kahei/"
+    },
+    {
+      "facilityKey": "1161110",
+      "facilityName": "八潮南",
+      "route": "6S",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "655",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/yashiominami/"
+    },
+    {
+      "facilityKey": "1161110",
+      "facilityName": "八潮南",
+      "route": "6S",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "656",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/yashiominami/"
+    },
+    {
+      "facilityKey": "1161113",
+      "facilityName": "八潮",
+      "route": "6S",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "657",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/yashio/"
+    },
+    {
+      "facilityKey": "1181103",
+      "facilityName": "本町",
+      "route": "1U",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "181",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/honcho/"
+    },
+    {
+      "facilityKey": "1181103",
+      "facilityName": "本町",
+      "route": "1U",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "182",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/honcho/"
+    },
+    {
+      "facilityKey": "1181106",
+      "facilityName": "上野",
+      "route": "1U",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "183",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/ueno/"
+    },
+    {
+      "facilityKey": "1181108",
+      "facilityName": "入谷",
+      "route": "1U",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "185",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/iriya/"
+    },
+    {
+      "facilityKey": "1211105",
+      "facilityName": "鹿浜橋",
+      "route": "S1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S01",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/shikahamabashi/"
+    },
+    {
+      "facilityKey": "1211105",
+      "facilityName": "鹿浜橋",
+      "route": "S1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S02",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/shikahamabashi/"
+    },
+    {
+      "facilityKey": "1211109",
+      "facilityName": "加賀",
+      "route": "S1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S05",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/kaga/"
+    },
+    {
+      "facilityKey": "1211113",
+      "facilityName": "新郷",
+      "route": "S1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S07",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/shingou/"
+    },
+    {
+      "facilityKey": "1211113",
+      "facilityName": "新郷",
+      "route": "S1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S08",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/shingou/"
+    },
+    {
+      "facilityKey": "1211116",
+      "facilityName": "安行",
+      "route": "S1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S09",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/angyou/"
+    },
+    {
+      "facilityKey": "1211120",
+      "facilityName": "新井宿",
+      "route": "S1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S11",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/araijuku/"
+    },
+    {
+      "facilityKey": "1211212",
+      "facilityName": "足立入谷",
+      "route": "S1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S06",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/adachiiriya/"
+    },
+    {
+      "facilityKey": "1251103",
+      "facilityName": "浦和南",
+      "route": "S5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S551",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s5/urawaminami/"
+    },
+    {
+      "facilityKey": "1251112",
+      "facilityName": "与野",
+      "route": "S5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S555",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s5/yono/"
+    },
+    {
+      "facilityKey": "1251210",
+      "facilityName": "浦和北",
+      "route": "S5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S554",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s5/urawakita/"
+    },
+    {
+      "facilityKey": "1261102",
+      "facilityName": "新都心西",
+      "route": "S2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S201",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/shintoshinnishi/"
+    },
+    {
+      "facilityKey": "1261102",
+      "facilityName": "新都心西",
+      "route": "S2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S202",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/shintoshinnishi/"
+    },
+    {
+      "facilityKey": "1261104",
+      "facilityName": "新都心",
+      "route": "S2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S203",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/shintoshin/"
+    },
+    {
+      "facilityKey": "1261104",
+      "facilityName": "新都心",
+      "route": "S2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S204",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/shintoshin/"
+    },
+    {
+      "facilityKey": "1261109",
+      "facilityName": "さいたま見沼",
+      "route": "S2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S205",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/saitamaminuma/"
+    },
+    {
+      "facilityKey": "1331212",
+      "facilityName": "五反田",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C20",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/gotanda/"
+    },
+    {
+      "facilityKey": "1332103",
+      "facilityName": "中環大井南",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C18",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/chukanooiminami/"
+    },
+    {
+      "facilityKey": "1051216",
+      "facilityName": "高松",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C28",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/takamatsu/"
+    },
+    {
+      "facilityKey": "1201103",
+      "facilityName": "扇大橋",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C35",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/ogiohashi/"
+    },
+    {
+      "facilityKey": "1201103",
+      "facilityName": "扇大橋",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C36",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/ogiohashi/"
+    },
+    {
+      "facilityKey": "1201108",
+      "facilityName": "千住新橋",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C37",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/senjushinbashi/"
+    },
+    {
+      "facilityKey": "1201108",
+      "facilityName": "千住新橋",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C38",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/senjushinbashi/"
+    },
+    {
+      "facilityKey": "1201117",
+      "facilityName": "四つ木",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C41",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/yotsugi/"
+    },
+    {
+      "facilityKey": "1201117",
+      "facilityName": "四つ木",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C42",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/yotsugi/"
+    },
+    {
+      "facilityKey": "1201121",
+      "facilityName": "平井大橋",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C43",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/hiraioohashi/"
+    },
+    {
+      "facilityKey": "1201130",
+      "facilityName": "清新町",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C47",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/seishincho/"
+    },
+    {
+      "facilityKey": "1201211",
+      "facilityName": "小菅",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C40",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/kosuge/"
+    },
+    {
+      "facilityKey": "1201224",
+      "facilityName": "船堀橋",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C46",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/funaboribashi/"
+    },
+    {
+      "facilityKey": "1231121",
+      "facilityName": "西池袋",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C25",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/nishiikebukuro/"
+    },
+    {
+      "facilityKey": "1311103",
+      "facilityName": "滝野川",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C31",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/takinogawa/"
+    },
+    {
+      "facilityKey": "1311108",
+      "facilityName": "王子南",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C33",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/oujiminami/"
+    },
+    {
+      "facilityKey": "1311209",
+      "facilityName": "王子北",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C34",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/oujikita/"
+    },
+    {
+      "facilityKey": "1321108",
+      "facilityName": "初台南",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C23",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/hatsudaiminami/"
+    },
+    {
+      "facilityKey": "1321207",
+      "facilityName": "富ヶ谷",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C22",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/tomigaya/"
+    },
+    {
+      "facilityKey": "1321216",
+      "facilityName": "中野長者橋",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C24",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/nakanochoujabashi/"
+    },
+    {
+      "facilityKey": "1071116",
+      "facilityName": "中環小松川",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C45",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/chukankomatsugawa/"
+    },
+    {
+      "facilityKey": "1511104",
+      "facilityName": "大井南",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B18",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ooiminami/"
+    },
+    {
+      "facilityKey": "1511106",
+      "facilityName": "大井",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B21",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ooi/"
+    },
+    {
+      "facilityKey": "1511114",
+      "facilityName": "有明",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B23",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ariake/"
+    },
+    {
+      "facilityKey": "1511119",
+      "facilityName": "新木場",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B24",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/shinkiba/"
+    },
+    {
+      "facilityKey": "1511119",
+      "facilityName": "新木場",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B25",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/shinkiba/"
+    },
+    {
+      "facilityKey": "1511124",
+      "facilityName": "葛西",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B26",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/kasai/"
+    },
+    {
+      "facilityKey": "1511124",
+      "facilityName": "葛西",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B27",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/kasai/"
+    },
+    {
+      "facilityKey": "1511129",
+      "facilityName": "浦安",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B30",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/urayasu/"
+    },
+    {
+      "facilityKey": "1511129",
+      "facilityName": "浦安",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B31",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/urayasu/"
+    },
+    {
+      "facilityKey": "1511210",
+      "facilityName": "臨海副都心",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B22",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/rinkaihukutoshin/"
+    },
+    {
+      "facilityKey": "1511226",
+      "facilityName": "舞浜",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B28",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/maihama/"
+    },
+    {
+      "facilityKey": "1511233",
+      "facilityName": "千鳥町",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B32",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/chidoricho/"
+    },
+    {
+      "facilityKey": "1521107",
+      "facilityName": "空港中央",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B16",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/kukouchuou/"
+    },
+    {
+      "facilityKey": "1521107",
+      "facilityName": "空港中央",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B17",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/kukouchuou/"
+    },
+    {
+      "facilityKey": "1521211",
+      "facilityName": "湾岸環八",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B14",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/wangankanpachi/"
+    },
+    {
+      "facilityKey": "1531121",
+      "facilityName": "東扇島",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B10",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/higashiogishima/"
+    },
+    {
+      "facilityKey": "1531121",
+      "facilityName": "東扇島",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B11",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/higashiogishima/"
+    },
+    {
+      "facilityKey": "1541103",
+      "facilityName": "幸浦",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B01",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sachiura/"
+    },
+    {
+      "facilityKey": "1541107",
+      "facilityName": "杉田",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B02",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sugita/"
+    },
+    {
+      "facilityKey": "1541107",
+      "facilityName": "杉田",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B03",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sugita/"
+    },
+    {
+      "facilityKey": "1541109",
+      "facilityName": "磯子",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B05",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/isogo/"
+    },
+    {
+      "facilityKey": "1541117",
+      "facilityName": "南本牧ふ頭",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B07A",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/minamihonmokufutou/"
+    },
+    {
+      "facilityKey": "1541119",
+      "facilityName": "本牧ふ頭",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B07B",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/honmokufuto/"
+    },
+    {
+      "facilityKey": "1541216",
+      "facilityName": "三溪園",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B06",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sankeien/"
+    },
+    {
+      "facilityKey": "1851213",
+      "facilityName": "浮島",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B12",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ukishima/"
+    },
+    {
+      "facilityKey": "1851213",
+      "facilityName": "浮島",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B13",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ukishima/"
+    },
+    {
+      "facilityKey": "1811102",
+      "facilityName": "大師",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "151",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/daishi/"
+    },
+    {
+      "facilityKey": "1811102",
+      "facilityName": "大師",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "152A",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/daishi/"
+    },
+    {
+      "facilityKey": "1811102",
+      "facilityName": "大師",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "683",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/daishi/"
+    },
+    {
+      "facilityKey": "1811109",
+      "facilityName": "浜川崎",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "153",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/hamakawasaki/"
+    },
+    {
+      "facilityKey": "1811114",
+      "facilityName": "汐入",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "155",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/shioiri/"
+    },
+    {
+      "facilityKey": "1811123",
+      "facilityName": "子安",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "159",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/koyasu/"
+    },
+    {
+      "facilityKey": "1811123",
+      "facilityName": "子安",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "160",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/koyasu/"
+    },
+    {
+      "facilityKey": "1811126",
+      "facilityName": "東神奈川",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "161",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/higashikanagawa/"
+    },
+    {
+      "facilityKey": "1811126",
+      "facilityName": "東神奈川",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "162",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/higashikanagawa/"
+    },
+    {
+      "facilityKey": "1811133",
+      "facilityName": "みなとみらい",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "165",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/minatomirai/"
+    },
+    {
+      "facilityKey": "1811133",
+      "facilityName": "みなとみらい",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "166",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/minatomirai/"
+    },
+    {
+      "facilityKey": "1811137",
+      "facilityName": "横浜公園",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "167",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/yokohamakouen/"
+    },
+    {
+      "facilityKey": "1811212",
+      "facilityName": "浅田",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "152",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/asada/"
+    },
+    {
+      "facilityKey": "1811221",
+      "facilityName": "生麦",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "154",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/namamugi/"
+    },
+    {
+      "facilityKey": "1811233",
+      "facilityName": "横浜駅東口",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "164",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/yokohamaekihigashiguchi/"
+    },
+    {
+      "facilityKey": "1831105",
+      "facilityName": "大黒ふ頭",
+      "route": "K5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "551",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/"
+    },
+    {
+      "facilityKey": "1831105",
+      "facilityName": "大黒ふ頭",
+      "route": "K5",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B08",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/"
+    },
+    {
+      "facilityKey": "1831105",
+      "facilityName": "大黒ふ頭",
+      "route": "K5",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B09",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/"
+    },
+    {
+      "facilityKey": "1861106",
+      "facilityName": "殿町",
+      "route": "K6",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "681",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k6/tonomachi/"
+    },
+    {
+      "facilityKey": "1901104",
+      "facilityName": "八重洲",
+      "route": "Y",
+      "direction": "north",
+      "directionJa": "北行き",
+      "inoutNumber": "42P",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-y/yaesu/"
+    },
+    {
+      "facilityKey": "1901104",
+      "facilityName": "八重洲",
+      "route": "Y",
+      "direction": "south",
+      "directionJa": "南行き",
+      "inoutNumber": "43P",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-y/yaesu/"
+    },
+    {
+      "facilityKey": "1911104",
+      "facilityName": "横浜駅西口",
+      "route": "K2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "251",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k2/yokohamaekinishiguchi/"
+    },
+    {
+      "facilityKey": "1911107",
+      "facilityName": "三ツ沢",
+      "route": "K2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "253",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k2/mitsuzawa/"
+    },
+    {
+      "facilityKey": "1921102",
+      "facilityName": "新山下",
+      "route": "K3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "351",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/shinyamashita/"
+    },
+    {
+      "facilityKey": "1921102",
+      "facilityName": "新山下",
+      "route": "K3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "352",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/shinyamashita/"
+    },
+    {
+      "facilityKey": "1921107",
+      "facilityName": "石川町",
+      "route": "K3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "353",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/ishikawacho/"
+    },
+    {
+      "facilityKey": "1921114",
+      "facilityName": "花之木",
+      "route": "K3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "357",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/hananoki/"
+    },
+    {
+      "facilityKey": "1921118",
+      "facilityName": "永田",
+      "route": "K3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "359",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/nagata/"
+    },
+    {
+      "facilityKey": "1921211",
+      "facilityName": "阪東橋",
+      "route": "K3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "356",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/bandoubashi/"
+    },
+    {
+      "facilityKey": "1931117",
+      "facilityName": "新横浜",
+      "route": "K7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "755",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/shinyokohama/"
+    },
+    {
+      "facilityKey": "1931117",
+      "facilityName": "新横浜",
+      "route": "K7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "756",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/shinyokohama/"
+    },
+    {
+      "facilityKey": "1932204",
+      "facilityName": "岸谷生麦",
+      "route": "K7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "751",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/kishiyanamamugi/"
+    },
+    {
+      "facilityKey": "1932204",
+      "facilityName": "岸谷生麦",
+      "route": "K7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "752",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/kishiyanamamugi/"
+    },
+    {
+      "facilityKey": "1931110",
+      "facilityName": "馬場",
+      "route": "K7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "753",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/baba/"
+    },
+    {
+      "facilityKey": "1931110",
+      "facilityName": "馬場",
+      "route": "K7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "754",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/baba/"
+    },
+    {
+      "facilityKey": "1961105",
+      "facilityName": "横浜港北",
+      "route": "K7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "757",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamakohoku/"
+    },
+    {
+      "facilityKey": "1961105",
+      "facilityName": "横浜港北",
+      "route": "K7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "758",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamakohoku/"
+    },
+    {
+      "facilityKey": "1951114",
+      "facilityName": "横浜青葉",
+      "route": "K7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "759",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamaaoba/"
+    },
+    {
+      "facilityKey": "1951113",
+      "facilityName": "横浜青葉",
+      "route": "K7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "759",
+      "kind": "general_entry",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamaaoba/"
+    }
+  ],
+  "generalExits": [
+    {
+      "facilityKey": "1001106",
+      "facilityName": "宝町",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "11",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/takaracho/"
+    },
+    {
+      "facilityKey": "1001110",
+      "facilityName": "銀座",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "15",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/ginza/"
+    },
+    {
+      "facilityKey": "1001110",
+      "facilityName": "銀座",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "16",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/ginza/"
+    },
+    {
+      "facilityKey": "1001116",
+      "facilityName": "芝公園",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "19",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shibakouen/"
+    },
+    {
+      "facilityKey": "1001116",
+      "facilityName": "芝公園",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "20",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shibakouen/"
+    },
+    {
+      "facilityKey": "1001120",
+      "facilityName": "飯倉",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "21",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/iikura/"
+    },
+    {
+      "facilityKey": "1001123",
+      "facilityName": "霞が関",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "23",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kasumigaseki/"
+    },
+    {
+      "facilityKey": "1001123",
+      "facilityName": "霞が関",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "24",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kasumigaseki/"
+    },
+    {
+      "facilityKey": "1001127",
+      "facilityName": "代官町",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "25",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/daikancho/"
+    },
+    {
+      "facilityKey": "1001131",
+      "facilityName": "神田橋",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "29",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kandabashi/"
+    },
+    {
+      "facilityKey": "1001131",
+      "facilityName": "神田橋",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "28",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kandabashi/"
+    },
+    {
+      "facilityKey": "1001207",
+      "facilityName": "京橋",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "12",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kyoubashi/"
+    },
+    {
+      "facilityKey": "1002109",
+      "facilityName": "新富町",
+      "route": "C1",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "13",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shintomicho/"
+    },
+    {
+      "facilityKey": "1002109",
+      "facilityName": "新富町",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "14",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shintomicho/"
+    },
+    {
+      "facilityKey": "1002129",
+      "facilityName": "北の丸",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "26",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/kitanomaru/"
+    },
+    {
+      "facilityKey": "1801207",
+      "facilityName": "汐留",
+      "route": "C1",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "18",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c1/shiodome/"
+    },
+    {
+      "facilityKey": "1011105",
+      "facilityName": "芝浦",
+      "route": "1H",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "101",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/shibaura/"
+    },
+    {
+      "facilityKey": "1011105",
+      "facilityName": "芝浦",
+      "route": "1H",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "102",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/shibaura/"
+    },
+    {
+      "facilityKey": "1011113",
+      "facilityName": "鈴ヶ森",
+      "route": "1H",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "103",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/suzugamori/"
+    },
+    {
+      "facilityKey": "1011115",
+      "facilityName": "平和島",
+      "route": "1H",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "105",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/heiwajima/"
+    },
+    {
+      "facilityKey": "1011115",
+      "facilityName": "平和島",
+      "route": "1H",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "106",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/heiwajima/"
+    },
+    {
+      "facilityKey": "1011119",
+      "facilityName": "空港西",
+      "route": "1H",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "107",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/kukounishi/"
+    },
+    {
+      "facilityKey": "1011120",
+      "facilityName": "羽田",
+      "route": "1H",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "109",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/haneda/"
+    },
+    {
+      "facilityKey": "1011120",
+      "facilityName": "羽田",
+      "route": "1H",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "150",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/haneda/"
+    },
+    {
+      "facilityKey": "1011212",
+      "facilityName": "勝島",
+      "route": "1H",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "104",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1h/katsushima/"
+    },
+    {
+      "facilityKey": "1021105",
+      "facilityName": "天現寺",
+      "route": "2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "201",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/tengenji/"
+    },
+    {
+      "facilityKey": "1021107",
+      "facilityName": "目黒",
+      "route": "2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "203",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/meguro/"
+    },
+    {
+      "facilityKey": "1021110",
+      "facilityName": "荏原",
+      "route": "2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "207",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/ebara/"
+    },
+    {
+      "facilityKey": "1021111",
+      "facilityName": "戸越",
+      "route": "2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "205",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-2/togoshi/"
+    },
+    {
+      "facilityKey": "1031105",
+      "facilityName": "高樹町",
+      "route": "3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "301",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/takagicho/"
+    },
+    {
+      "facilityKey": "1031108",
+      "facilityName": "渋谷",
+      "route": "3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "302",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/shibuya/"
+    },
+    {
+      "facilityKey": "1031108",
+      "facilityName": "渋谷",
+      "route": "3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "303",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/shibuya/"
+    },
+    {
+      "facilityKey": "1031111",
+      "facilityName": "三軒茶屋",
+      "route": "3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "305",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/sangenjaya/"
+    },
+    {
+      "facilityKey": "1031117",
+      "facilityName": "用賀",
+      "route": "3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "307",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/youga/"
+    },
+    {
+      "facilityKey": "1031210",
+      "facilityName": "池尻",
+      "route": "3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "304",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-3/ikejiri/"
+    },
+    {
+      "facilityKey": "1041107",
+      "facilityName": "外苑",
+      "route": "4",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "401",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/gaien/"
+    },
+    {
+      "facilityKey": "1041107",
+      "facilityName": "外苑",
+      "route": "4",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "402",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/gaien/"
+    },
+    {
+      "facilityKey": "1041110",
+      "facilityName": "代々木",
+      "route": "4",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "403",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/yoyogi/"
+    },
+    {
+      "facilityKey": "1041111",
+      "facilityName": "新宿",
+      "route": "4",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "404",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/shinjuku/"
+    },
+    {
+      "facilityKey": "1041111",
+      "facilityName": "新宿",
+      "route": "4",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "405",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/shinjuku/"
+    },
+    {
+      "facilityKey": "1041115",
+      "facilityName": "幡ヶ谷",
+      "route": "4",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "407",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/hatagaya/"
+    },
+    {
+      "facilityKey": "1041119",
+      "facilityName": "永福",
+      "route": "4",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "408",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/eifuku/"
+    },
+    {
+      "facilityKey": "1041119",
+      "facilityName": "永福",
+      "route": "4",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "409",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/eifuku/"
+    },
+    {
+      "facilityKey": "1041124",
+      "facilityName": "高井戸",
+      "route": "4",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "411",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/takaido/"
+    },
+    {
+      "facilityKey": "1041212",
+      "facilityName": "初台",
+      "route": "4",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "406",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-4/hatsudai/"
+    },
+    {
+      "facilityKey": "1051105",
+      "facilityName": "西神田",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "501",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/nishikanda/"
+    },
+    {
+      "facilityKey": "1051109",
+      "facilityName": "護国寺",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "505",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/gokokuji/"
+    },
+    {
+      "facilityKey": "1051112",
+      "facilityName": "東池袋",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "507",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/higashiikebukuro/"
+    },
+    {
+      "facilityKey": "1051112",
+      "facilityName": "東池袋",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "508",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/higashiikebukuro/"
+    },
+    {
+      "facilityKey": "1051115",
+      "facilityName": "北池袋",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "509",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/kitaikebukuro/"
+    },
+    {
+      "facilityKey": "1051119",
+      "facilityName": "板橋本町",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "511",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/itabashihoncho/"
+    },
+    {
+      "facilityKey": "1051119",
+      "facilityName": "板橋本町",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "512",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/itabashihoncho/"
+    },
+    {
+      "facilityKey": "1051124",
+      "facilityName": "中台",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "513",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/nakadai/"
+    },
+    {
+      "facilityKey": "1051128",
+      "facilityName": "高島平",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "515",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/takashimadaira/"
+    },
+    {
+      "facilityKey": "1051133",
+      "facilityName": "戸田南",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "517",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/todaminami/"
+    },
+    {
+      "facilityKey": "1051203",
+      "facilityName": "一ツ橋",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "27",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/hitotsubashi/"
+    },
+    {
+      "facilityKey": "1051207",
+      "facilityName": "飯田橋",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "502",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/iidabashi/"
+    },
+    {
+      "facilityKey": "1052208",
+      "facilityName": "早稲田",
+      "route": "5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "503",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/waseda/"
+    },
+    {
+      "facilityKey": "1251202",
+      "facilityName": "戸田",
+      "route": "5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "518",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-5/toda/"
+    },
+    {
+      "facilityKey": "1061111",
+      "facilityName": "駒形",
+      "route": "6M",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "605",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/komagata/"
+    },
+    {
+      "facilityKey": "1061114",
+      "facilityName": "向島",
+      "route": "6M",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "606",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/mukoujima/"
+    },
+    {
+      "facilityKey": "1061114",
+      "facilityName": "向島",
+      "route": "6M",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "607",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/mukoujima/"
+    },
+    {
+      "facilityKey": "1061116",
+      "facilityName": "堤通",
+      "route": "6M",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "609",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/tsutsumidori/"
+    },
+    {
+      "facilityKey": "1061116",
+      "facilityName": "堤通",
+      "route": "6M",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "610",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mu/tsutsumidori/"
+    },
+    {
+      "facilityKey": "1071104",
+      "facilityName": "錦糸町",
+      "route": "7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "701",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/kinshicho/"
+    },
+    {
+      "facilityKey": "1071104",
+      "facilityName": "錦糸町",
+      "route": "7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "702",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/kinshicho/"
+    },
+    {
+      "facilityKey": "1071111",
+      "facilityName": "小松川",
+      "route": "7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "703",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/komatsugawa/"
+    },
+    {
+      "facilityKey": "1071113",
+      "facilityName": "一之江",
+      "route": "7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "705",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-7/ichinoe/"
+    },
+    {
+      "facilityKey": "1091106",
+      "facilityName": "木場",
+      "route": "9",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "903",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-9/kiba/"
+    },
+    {
+      "facilityKey": "1091205",
+      "facilityName": "福住",
+      "route": "9",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "902",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-9/fukuzumi/"
+    },
+    {
+      "facilityKey": "1092108",
+      "facilityName": "枝川",
+      "route": "9",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "906",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-9/edagawa/"
+    },
+    {
+      "facilityKey": "1101203",
+      "facilityName": "豊洲",
+      "route": "10",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "1004",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-10/toyosu/"
+    },
+    {
+      "facilityKey": "1101205",
+      "facilityName": "晴海",
+      "route": "10",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "1002",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-10/harumi/"
+    },
+    {
+      "facilityKey": "1111104",
+      "facilityName": "台場",
+      "route": "11",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "1101",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-11/daiba/"
+    },
+    {
+      "facilityKey": "1161106",
+      "facilityName": "加平",
+      "route": "6S",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "651",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/kahei/"
+    },
+    {
+      "facilityKey": "1161106",
+      "facilityName": "加平",
+      "route": "6S",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "652",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/kahei/"
+    },
+    {
+      "facilityKey": "1161106",
+      "facilityName": "加平",
+      "route": "6S",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "653",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/kahei/"
+    },
+    {
+      "facilityKey": "1161106",
+      "facilityName": "加平",
+      "route": "6S",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "654",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/kahei/"
+    },
+    {
+      "facilityKey": "1161110",
+      "facilityName": "八潮南",
+      "route": "6S",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "655",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/yashiominami/"
+    },
+    {
+      "facilityKey": "1161110",
+      "facilityName": "八潮南",
+      "route": "6S",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "656",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/yashiominami/"
+    },
+    {
+      "facilityKey": "1161113",
+      "facilityName": "八潮",
+      "route": "6S",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "657",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-6mi/yashio/"
+    },
+    {
+      "facilityKey": "1181103",
+      "facilityName": "本町",
+      "route": "1U",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "181",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/honcho/"
+    },
+    {
+      "facilityKey": "1181103",
+      "facilityName": "本町",
+      "route": "1U",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "182",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/honcho/"
+    },
+    {
+      "facilityKey": "1181106",
+      "facilityName": "上野",
+      "route": "1U",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "183",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/ueno/"
+    },
+    {
+      "facilityKey": "1181108",
+      "facilityName": "入谷",
+      "route": "1U",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "185",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-1u/iriya/"
+    },
+    {
+      "facilityKey": "1211105",
+      "facilityName": "鹿浜橋",
+      "route": "S1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S01",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/shikahamabashi/"
+    },
+    {
+      "facilityKey": "1211109",
+      "facilityName": "加賀",
+      "route": "S1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S05",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/kaga/"
+    },
+    {
+      "facilityKey": "1211113",
+      "facilityName": "新郷",
+      "route": "S1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S07",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/shingou/"
+    },
+    {
+      "facilityKey": "1211113",
+      "facilityName": "新郷",
+      "route": "S1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S08",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/shingou/"
+    },
+    {
+      "facilityKey": "1211116",
+      "facilityName": "安行",
+      "route": "S1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S09",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/angyou/"
+    },
+    {
+      "facilityKey": "1211120",
+      "facilityName": "新井宿",
+      "route": "S1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S11",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/araijuku/"
+    },
+    {
+      "facilityKey": "1211212",
+      "facilityName": "足立入谷",
+      "route": "S1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S06",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/adachiiriya/"
+    },
+    {
+      "facilityKey": "1212108",
+      "facilityName": "東領家",
+      "route": "S1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S04",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s1/higashiryouke/"
+    },
+    {
+      "facilityKey": "1251103",
+      "facilityName": "浦和南",
+      "route": "S5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S551",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s5/urawaminami/"
+    },
+    {
+      "facilityKey": "1251112",
+      "facilityName": "与野",
+      "route": "S5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S555",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s5/yono/"
+    },
+    {
+      "facilityKey": "1251210",
+      "facilityName": "浦和北",
+      "route": "S5",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S554",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s5/urawakita/"
+    },
+    {
+      "facilityKey": "1261102",
+      "facilityName": "新都心西",
+      "route": "S2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S201",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/shintoshinnishi/"
+    },
+    {
+      "facilityKey": "1261102",
+      "facilityName": "新都心西",
+      "route": "S2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S202",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/shintoshinnishi/"
+    },
+    {
+      "facilityKey": "1261104",
+      "facilityName": "新都心",
+      "route": "S2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S203",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/shintoshin/"
+    },
+    {
+      "facilityKey": "1261104",
+      "facilityName": "新都心",
+      "route": "S2",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "S204",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/shintoshin/"
+    },
+    {
+      "facilityKey": "1261109",
+      "facilityName": "さいたま見沼",
+      "route": "S2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "S205",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-s2/saitamaminuma/"
+    },
+    {
+      "facilityKey": "1331212",
+      "facilityName": "五反田",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C20",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/gotanda/"
+    },
+    {
+      "facilityKey": "1332103",
+      "facilityName": "中環大井南",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C18",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/chukanooiminami/"
+    },
+    {
+      "facilityKey": "1201103",
+      "facilityName": "扇大橋",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C35",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/ogiohashi/"
+    },
+    {
+      "facilityKey": "1201103",
+      "facilityName": "扇大橋",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C36",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/ogiohashi/"
+    },
+    {
+      "facilityKey": "1201108",
+      "facilityName": "千住新橋",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C37",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/senjushinbashi/"
+    },
+    {
+      "facilityKey": "1201108",
+      "facilityName": "千住新橋",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C38",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/senjushinbashi/"
+    },
+    {
+      "facilityKey": "1201117",
+      "facilityName": "四つ木",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C41",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/yotsugi/"
+    },
+    {
+      "facilityKey": "1201117",
+      "facilityName": "四つ木",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C42",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/yotsugi/"
+    },
+    {
+      "facilityKey": "1201121",
+      "facilityName": "平井大橋",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C43",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/hiraioohashi/"
+    },
+    {
+      "facilityKey": "1201130",
+      "facilityName": "清新町",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C47",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/seishincho/"
+    },
+    {
+      "facilityKey": "1201211",
+      "facilityName": "小菅",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C40",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/kosuge/"
+    },
+    {
+      "facilityKey": "1201224",
+      "facilityName": "船堀橋",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C46",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/funaboribashi/"
+    },
+    {
+      "facilityKey": "1231121",
+      "facilityName": "西池袋",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C25",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/nishiikebukuro/"
+    },
+    {
+      "facilityKey": "1231121",
+      "facilityName": "西池袋",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C26",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/nishiikebukuro/"
+    },
+    {
+      "facilityKey": "1311108",
+      "facilityName": "王子南",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C33",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/oujiminami/"
+    },
+    {
+      "facilityKey": "1311209",
+      "facilityName": "王子北",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C34",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/oujikita/"
+    },
+    {
+      "facilityKey": "1312203",
+      "facilityName": "新板橋",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C29",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/shinitabashi/"
+    },
+    {
+      "facilityKey": "1321108",
+      "facilityName": "初台南",
+      "route": "C2",
+      "direction": "outer",
+      "directionJa": "外回り",
+      "inoutNumber": "C23",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/hatsudaiminami/"
+    },
+    {
+      "facilityKey": "1321207",
+      "facilityName": "富ヶ谷",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C22",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/tomigaya/"
+    },
+    {
+      "facilityKey": "1321216",
+      "facilityName": "中野長者橋",
+      "route": "C2",
+      "direction": "inner",
+      "directionJa": "内回り",
+      "inoutNumber": "C24",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-c2/nakanochoujabashi/"
+    },
+    {
+      "facilityKey": "1511104",
+      "facilityName": "大井南",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B18",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ooiminami/"
+    },
+    {
+      "facilityKey": "1511104",
+      "facilityName": "大井南",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B19",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ooiminami/"
+    },
+    {
+      "facilityKey": "1511106",
+      "facilityName": "大井",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B21",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ooi/"
+    },
+    {
+      "facilityKey": "1511114",
+      "facilityName": "有明",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B23",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ariake/"
+    },
+    {
+      "facilityKey": "1511119",
+      "facilityName": "新木場",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B24",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/shinkiba/"
+    },
+    {
+      "facilityKey": "1511119",
+      "facilityName": "新木場",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B25",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/shinkiba/"
+    },
+    {
+      "facilityKey": "1511124",
+      "facilityName": "葛西",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B26",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/kasai/"
+    },
+    {
+      "facilityKey": "1511124",
+      "facilityName": "葛西",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B27",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/kasai/"
+    },
+    {
+      "facilityKey": "1511129",
+      "facilityName": "浦安",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B30",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/urayasu/"
+    },
+    {
+      "facilityKey": "1511129",
+      "facilityName": "浦安",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B31",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/urayasu/"
+    },
+    {
+      "facilityKey": "1511210",
+      "facilityName": "臨海副都心",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B22",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/rinkaihukutoshin/"
+    },
+    {
+      "facilityKey": "1511233",
+      "facilityName": "千鳥町",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B32",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/chidoricho/"
+    },
+    {
+      "facilityKey": "1521107",
+      "facilityName": "空港中央",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B16",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/kukouchuou/"
+    },
+    {
+      "facilityKey": "1521107",
+      "facilityName": "空港中央",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B17",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/kukouchuou/"
+    },
+    {
+      "facilityKey": "1521211",
+      "facilityName": "湾岸環八",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B14",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/wangankanpachi/"
+    },
+    {
+      "facilityKey": "1531121",
+      "facilityName": "東扇島",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B10",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/higashiogishima/"
+    },
+    {
+      "facilityKey": "1531121",
+      "facilityName": "東扇島",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B11",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/higashiogishima/"
+    },
+    {
+      "facilityKey": "1541103",
+      "facilityName": "幸浦",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B01",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sachiura/"
+    },
+    {
+      "facilityKey": "1541107",
+      "facilityName": "杉田",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B02",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sugita/"
+    },
+    {
+      "facilityKey": "1541107",
+      "facilityName": "杉田",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B03",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sugita/"
+    },
+    {
+      "facilityKey": "1541109",
+      "facilityName": "磯子",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B05",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/isogo/"
+    },
+    {
+      "facilityKey": "1541117",
+      "facilityName": "南本牧ふ頭",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B07A",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/minamihonmokufutou/"
+    },
+    {
+      "facilityKey": "1541119",
+      "facilityName": "本牧ふ頭",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B07B",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/honmokufuto/"
+    },
+    {
+      "facilityKey": "1541216",
+      "facilityName": "三溪園",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B06",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/sankeien/"
+    },
+    {
+      "facilityKey": "1851213",
+      "facilityName": "浮島",
+      "route": "B",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B12",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ukishima/"
+    },
+    {
+      "facilityKey": "1851213",
+      "facilityName": "浮島",
+      "route": "B",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B13",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/ukishima/"
+    },
+    {
+      "facilityKey": "1811102",
+      "facilityName": "大師",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "151",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/daishi/"
+    },
+    {
+      "facilityKey": "1811102",
+      "facilityName": "大師",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "152A",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/daishi/"
+    },
+    {
+      "facilityKey": "1811102",
+      "facilityName": "大師",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "683",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/daishi/"
+    },
+    {
+      "facilityKey": "1811109",
+      "facilityName": "浜川崎",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "153",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/hamakawasaki/"
+    },
+    {
+      "facilityKey": "1811114",
+      "facilityName": "汐入",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "155",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/shioiri/"
+    },
+    {
+      "facilityKey": "1811123",
+      "facilityName": "子安",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "159",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/koyasu/"
+    },
+    {
+      "facilityKey": "1811123",
+      "facilityName": "子安",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "160",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/koyasu/"
+    },
+    {
+      "facilityKey": "1811126",
+      "facilityName": "東神奈川",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "161",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/higashikanagawa/"
+    },
+    {
+      "facilityKey": "1811126",
+      "facilityName": "東神奈川",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "162",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/higashikanagawa/"
+    },
+    {
+      "facilityKey": "1811133",
+      "facilityName": "みなとみらい",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "165",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/minatomirai/"
+    },
+    {
+      "facilityKey": "1811133",
+      "facilityName": "みなとみらい",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "166",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/minatomirai/"
+    },
+    {
+      "facilityKey": "1811137",
+      "facilityName": "横浜公園",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "167",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/yokohamakouen/"
+    },
+    {
+      "facilityKey": "1811137",
+      "facilityName": "横浜公園",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "168",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/yokohamakouen/"
+    },
+    {
+      "facilityKey": "1811212",
+      "facilityName": "浅田",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "152",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/asada/"
+    },
+    {
+      "facilityKey": "1811221",
+      "facilityName": "生麦",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "154",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/namamugi/"
+    },
+    {
+      "facilityKey": "1811233",
+      "facilityName": "横浜駅東口",
+      "route": "K1",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "164",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/yokohamaekihigashiguchi/"
+    },
+    {
+      "facilityKey": "1812223",
+      "facilityName": "守屋町",
+      "route": "K1",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "157",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k1/moriyacho/"
+    },
+    {
+      "facilityKey": "1831105",
+      "facilityName": "大黒ふ頭",
+      "route": "K5",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "551",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/"
+    },
+    {
+      "facilityKey": "1831105",
+      "facilityName": "大黒ふ頭",
+      "route": "K5",
+      "direction": "east",
+      "directionJa": "東行き",
+      "inoutNumber": "B08",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/"
+    },
+    {
+      "facilityKey": "1831105",
+      "facilityName": "大黒ふ頭",
+      "route": "K5",
+      "direction": "west",
+      "directionJa": "西行き",
+      "inoutNumber": "B09",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/"
+    },
+    {
+      "facilityKey": "1861106",
+      "facilityName": "殿町",
+      "route": "K6",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "681",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k6/tonomachi/"
+    },
+    {
+      "facilityKey": "1901104",
+      "facilityName": "八重洲",
+      "route": "Y",
+      "direction": "south",
+      "directionJa": "南行き",
+      "inoutNumber": "42P",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-y/yaesu/"
+    },
+    {
+      "facilityKey": "1901104",
+      "facilityName": "八重洲",
+      "route": "Y",
+      "direction": "north",
+      "directionJa": "北行き",
+      "inoutNumber": "43P",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-y/yaesu/"
+    },
+    {
+      "facilityKey": "1902204",
+      "facilityName": "丸の内",
+      "route": "Y",
+      "direction": "south",
+      "directionJa": "南行き",
+      "inoutNumber": "44",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-y/marunouchi/"
+    },
+    {
+      "facilityKey": "1911104",
+      "facilityName": "横浜駅西口",
+      "route": "K2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "251",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k2/yokohamaekinishiguchi/"
+    },
+    {
+      "facilityKey": "1911107",
+      "facilityName": "三ツ沢",
+      "route": "K2",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "253",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k2/mitsuzawa/"
+    },
+    {
+      "facilityKey": "1921102",
+      "facilityName": "新山下",
+      "route": "K3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "351",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/shinyamashita/"
+    },
+    {
+      "facilityKey": "1921102",
+      "facilityName": "新山下",
+      "route": "K3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "352",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/shinyamashita/"
+    },
+    {
+      "facilityKey": "1921114",
+      "facilityName": "花之木",
+      "route": "K3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "357",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/hananoki/"
+    },
+    {
+      "facilityKey": "1921118",
+      "facilityName": "永田",
+      "route": "K3",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "359",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/nagata/"
+    },
+    {
+      "facilityKey": "1921211",
+      "facilityName": "阪東橋",
+      "route": "K3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "356",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/bandoubashi/"
+    },
+    {
+      "facilityKey": "1922105",
+      "facilityName": "山下町",
+      "route": "K3",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "354",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k3/yamashitacho/"
+    },
+    {
+      "facilityKey": "1931117",
+      "facilityName": "新横浜",
+      "route": "K7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "755",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/shinyokohama/"
+    },
+    {
+      "facilityKey": "1931117",
+      "facilityName": "新横浜",
+      "route": "K7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "756",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/shinyokohama/"
+    },
+    {
+      "facilityKey": "1932204",
+      "facilityName": "岸谷生麦",
+      "route": "K7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "751",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/kishiyanamamugi/"
+    },
+    {
+      "facilityKey": "1932204",
+      "facilityName": "岸谷生麦",
+      "route": "K7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "752",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/kishiyanamamugi/"
+    },
+    {
+      "facilityKey": "1931110",
+      "facilityName": "馬場",
+      "route": "K7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "753",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/baba/"
+    },
+    {
+      "facilityKey": "1931110",
+      "facilityName": "馬場",
+      "route": "K7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "754",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7/baba/"
+    },
+    {
+      "facilityKey": "1961105",
+      "facilityName": "横浜港北",
+      "route": "K7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "757",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamakohoku/"
+    },
+    {
+      "facilityKey": "1961105",
+      "facilityName": "横浜港北",
+      "route": "K7",
+      "direction": "inbound",
+      "directionJa": "上り",
+      "inoutNumber": "758",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamakohoku/"
+    },
+    {
+      "facilityKey": "1951114",
+      "facilityName": "横浜青葉",
+      "route": "K7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "759",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamaaoba/"
+    },
+    {
+      "facilityKey": "1951113",
+      "facilityName": "横浜青葉",
+      "route": "K7",
+      "direction": "outbound",
+      "directionJa": "下り",
+      "inoutNumber": "759",
+      "kind": "general_exit",
+      "url": "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamaaoba/"
+    }
+  ],
+  "connectionPoints": [
+    {
+      "facilityKey": "1134117",
+      "name": "東名高速との接続部(3号渋谷線)",
+      "kana": "とうめいこうそくとのせつぞくぶ(3ごうしぶやせん)",
+      "route": "3",
+      "roadCode": "S03",
+      "roadName": "高速3号渋谷線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1894501",
+      "name": "中央道との接続部",
+      "kana": "ちゅうおうどうとのせつぞくぶ",
+      "route": "4",
+      "roadCode": "S04",
+      "roadName": "高速4号新宿線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1894546",
+      "name": "外環道との接続部",
+      "kana": "がいかんどうとのせつぞくぶ",
+      "route": "5",
+      "roadCode": "S05",
+      "roadName": "高速5号池袋線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1894494",
+      "name": "京葉道路との接続部",
+      "kana": "けいようどうろとのせつぞくぶ",
+      "route": "7",
+      "roadCode": "S07",
+      "roadName": "高速7号小松川線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1164117",
+      "name": "常磐道・外環道との接続部",
+      "kana": "じょうばんどう・がいかんどうとのせつぞくぶ",
+      "route": "6S",
+      "roadCode": "S16",
+      "roadName": "高速6号三郷線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1214122",
+      "name": "東北道・外環道との接続部",
+      "kana": "とうほくどう・がいかんどうとのせつぞくぶ",
+      "route": "S1",
+      "roadCode": "S21",
+      "roadName": "高速川口線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1894537",
+      "name": "東関東道・外環道との接続部",
+      "kana": "ひがしかんとうどう・がいかんどうとのせつぞくぶ",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1894282",
+      "name": "東京湾アクアラインとの接続部",
+      "kana": "とうきょうわんあくあらいんとのせつぞくぶ",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1884575",
+      "name": "横横道(金沢支線)との接続部",
+      "kana": "よこよこどう(かなざわしせん)とのせつぞくぶ",
+      "route": "B",
+      "roadCode": "S51",
+      "roadName": "高速湾岸線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1894539",
+      "name": "第三京浜・横浜新道との接続部",
+      "kana": "だいさんけいひん・よこはましんどうとのせつぞくぶ",
+      "route": "K2",
+      "roadCode": "S91",
+      "roadName": "高速神奈川2号三ツ沢線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1974241",
+      "name": "横横道との接続部",
+      "kana": "よこよこどうとのせつぞくぶ",
+      "route": "K3",
+      "roadCode": "S92",
+      "roadName": "高速神奈川3号狩場線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1974132",
+      "name": "保土ヶ谷バイパスとの接続部",
+      "kana": "ほどがやばいぱすとのせつぞくぶ",
+      "route": "K3",
+      "roadCode": "S92",
+      "roadName": "高速神奈川3号狩場線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1934113",
+      "name": "第三京浜との接続部",
+      "kana": "だいさんけいひんとのせつぞくぶ",
+      "route": "K7",
+      "roadCode": "S93",
+      "roadName": "高速神奈川7号横浜北線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    },
+    {
+      "facilityKey": "1954110",
+      "name": "東名高速との接続部(神奈川7号横浜北西線)",
+      "kana": "とうめいこうそくとのせつぞくぶ(かながわ7ごうよこはまほくせいせん)",
+      "route": "K7",
+      "roadCode": "S94",
+      "roadName": "高速神奈川7号横浜北西線",
+      "url": "https://search.shutoko.jp/",
+      "isConnection": true
+    }
+  ]
+}

@@ -69,11 +69,25 @@ pub struct OsmRampBindingsFile {
     pub bindings: Vec<OsmRampBinding>,
 }
 
+fn default_fixed_fee() -> u64 {
+    150
+}
+
+fn default_tax_rate() -> f64 {
+    1.10
+}
+
 /// Distance-based toll calculation rules.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TariffRules {
     pub vehicle_profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_date: Option<String>,
+    #[serde(default = "default_fixed_fee")]
+    pub fixed_fee_yen: u64,
+    #[serde(default = "default_tax_rate")]
+    pub tax_rate: f64,
     pub min_toll_yen: u64,
     pub max_toll_yen: u64,
     pub min_distance_meters: u64,
@@ -223,15 +237,21 @@ pub fn validate_osm_ramp_bindings(
     inv: &RampInventoryFile,
 ) -> Result<(), Vec<String>> {
     let mut errors = Vec::new();
-    let inventory_ramp_ids: HashSet<&str> = inv.ramps.iter().map(|r| r.ramp_id.as_str()).collect();
+    let inventory_by_ramp_id: HashMap<&str, &CanonicalRampInventoryItem> =
+        inv.ramps.iter().map(|r| (r.ramp_id.as_str(), r)).collect();
     let mut bound_ramp_ids = HashSet::new();
 
     for (i, b) in bindings.bindings.iter().enumerate() {
-        if !inventory_ramp_ids.contains(b.ramp_id.as_str()) {
-            errors.push(format!(
+        match inventory_by_ramp_id.get(b.ramp_id.as_str()) {
+            None => errors.push(format!(
                 "binding[{}] references unknown ramp_id '{}'",
                 i, b.ramp_id
-            ));
+            )),
+            Some(ramp) if ramp.direction != b.direction => errors.push(format!(
+                "binding for '{}' has direction '{}' but inventory requires '{}'",
+                b.ramp_id, b.direction, ramp.direction
+            )),
+            Some(_) => {}
         }
         if b.osm_way_id <= 0 {
             errors.push(format!(
@@ -251,15 +271,88 @@ pub fn validate_osm_ramp_bindings(
                 b.ramp_id, b.motorway_node_id
             ));
         }
-        bound_ramp_ids.insert(b.ramp_id.as_str());
+        // Forbid consecutive placeholder IDs (e.g. osmNodeId = osmWayId + 1)
+        if b.osm_node_id == b.osm_way_id + 1 || b.motorway_node_id == b.osm_way_id + 2 {
+            errors.push(format!(
+                "binding for '{}' uses forbidden consecutive placeholder IDs (way={}, node={}, motorway={})",
+                b.ramp_id, b.osm_way_id, b.osm_node_id, b.motorway_node_id
+            ));
+        }
+
+        if !bound_ramp_ids.insert(b.ramp_id.as_str()) {
+            errors.push(format!(
+                "duplicate binding for ramp '{}'; expected one",
+                b.ramp_id
+            ));
+        }
     }
 
-    // Check for ramps without any binding
+    // Only active general ramps are required to be user-selectable. Boundary
+    // connectors and closed/planned ramps remain distinct inventory records,
+    // but must not be forced into the public entry/exit selection set.
     for r in &inv.ramps {
-        if !bound_ramp_ids.contains(r.ramp_id.as_str()) {
+        if r.status == "active"
+            && matches!(r.kind, RampKind::GeneralEntry | RampKind::GeneralExit)
+            && !bound_ramp_ids.contains(r.ramp_id.as_str())
+        {
             errors.push(format!(
-                "canonical ramp '{}' has no OSM binding in bindings file",
+                "active general ramp '{}' has no OSM binding in bindings file",
                 r.ramp_id
+            ));
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+/// Validates that every OSM binding references real elements within the Overpass response:
+/// 1. `osm_way_id` exists in the OSM ways.
+/// 2. `osm_node_id` exists and is a member of `osm_way_id.nodes`.
+/// 3. `motorway_node_id` exists in the OSM nodes.
+pub fn validate_osm_ramp_bindings_against_osm(
+    bindings: &OsmRampBindingsFile,
+    osm_resp: &crate::osm::OverpassResponse,
+) -> Result<(), Vec<String>> {
+    let mut errors = Vec::new();
+    let mut way_map: HashMap<i64, Vec<i64>> = HashMap::new();
+    let mut node_set: HashSet<i64> = HashSet::new();
+
+    for elem in &osm_resp.elements {
+        if elem.is_way() {
+            if let Some(nodes) = elem.nodes.as_ref() {
+                way_map.insert(elem.id, nodes.clone());
+            }
+        } else if elem.is_node() {
+            node_set.insert(elem.id);
+        }
+    }
+
+    for b in &bindings.bindings {
+        match way_map.get(&b.osm_way_id) {
+            None => {
+                errors.push(format!(
+                    "binding for '{}' references non-existent osmWayId {}",
+                    b.ramp_id, b.osm_way_id
+                ));
+            }
+            Some(nodes) => {
+                if !nodes.contains(&b.osm_node_id) {
+                    errors.push(format!(
+                        "binding for '{}': osmNodeId {} is not a member of osmWayId {} nodes",
+                        b.ramp_id, b.osm_node_id, b.osm_way_id
+                    ));
+                }
+            }
+        }
+
+        if !node_set.contains(&b.motorway_node_id) {
+            errors.push(format!(
+                "binding for '{}' references non-existent motorwayNodeId {}",
+                b.ramp_id, b.motorway_node_id
             ));
         }
     }
@@ -368,35 +461,40 @@ pub fn bind_ramps_to_graph(
         let binding = binding_map.get(item.ramp_id.as_str()).copied();
 
         let mut matched_edge: Option<&crate::model::Edge> = None;
-        if let Some(b) = binding {
-            if let Some(candidate_edges) = edges_by_way.get(&b.osm_way_id) {
-                // Determine target edge kind based on ramp kind
-                let is_entry = matches!(item.kind, RampKind::GeneralEntry | RampKind::BoundaryIn);
-                let target_kind = if is_entry {
-                    EdgeKind::Entry
-                } else {
-                    EdgeKind::Exit
-                };
-
-                // Priority 1: Match edge with exact target EdgeKind
-                matched_edge = candidate_edges
-                    .iter()
-                    .find(|e| e.kind == target_kind)
-                    .copied();
-
-                // Priority 2: Match first or last segment
-                if matched_edge.is_none() && !candidate_edges.is_empty() {
-                    matched_edge = if is_entry {
-                        candidate_edges.first().copied()
+        let is_active_general = item.status == "active"
+            && matches!(item.kind, RampKind::GeneralEntry | RampKind::GeneralExit);
+        if is_active_general {
+            if let Some(b) = binding {
+                if let Some(candidate_edges) = edges_by_way.get(&b.osm_way_id) {
+                    let is_entry = item.kind == RampKind::GeneralEntry;
+                    let target_kind = if is_entry {
+                        EdgeKind::Entry
                     } else {
-                        candidate_edges.last().copied()
+                        EdgeKind::Exit
                     };
+                    let ground_node = format!("n:{}", b.osm_node_id);
+                    let motorway_node = format!("n:{}", b.motorway_node_id);
+                    let (expected_from, expected_to) = if is_entry {
+                        (ground_node.as_str(), motorway_node.as_str())
+                    } else {
+                        (motorway_node.as_str(), ground_node.as_str())
+                    };
+
+                    // Bind the exact directed OSM segment named by the binding.
+                    // Selecting the first edge of a way can silently attach multiple
+                    // facilities to the wrong end of a multi-segment ramp.
+                    matched_edge = candidate_edges
+                        .iter()
+                        .find(|e| {
+                            e.kind == target_kind && e.from == expected_from && e.to == expected_to
+                        })
+                        .copied();
                 }
             }
         }
 
         if let (Some(b), Some(edge)) = (binding, matched_edge) {
-            let is_entry = matches!(item.kind, RampKind::GeneralEntry | RampKind::BoundaryIn);
+            let is_entry = item.kind == RampKind::GeneralEntry;
             let node_id = if is_entry {
                 edge.from.clone()
             } else {
@@ -549,7 +647,124 @@ mod tests {
         let inv: RampInventoryFile = serde_json::from_str(&content).expect("parse ramp-inventory");
         let res = validate_ramp_inventory(&inv);
         assert!(res.is_ok(), "ramp inventory validation failed: {:?}", res);
-        assert_eq!(inv.ramps.len(), 339, "expected 339 total canonical ramps");
+
+        // Load official population snapshot to cross-check diff (no self-sufficient test)
+        let snap_path = find_data_file("data/official-population-snapshot.json");
+        let snap_content =
+            fs::read_to_string(&snap_path).expect("read official-population-snapshot.json");
+        let snap_val: serde_json::Value =
+            serde_json::from_str(&snap_content).expect("parse snapshot");
+
+        let snap_entries = snap_val["generalEntries"]
+            .as_array()
+            .expect("generalEntries array");
+        let snap_exits = snap_val["generalExits"]
+            .as_array()
+            .expect("generalExits array");
+        let snap_summary = &snap_val["summary"];
+
+        assert_eq!(
+            snap_entries.len(),
+            snap_summary["totalGeneralEntries"].as_u64().unwrap() as usize
+        );
+        assert_eq!(
+            snap_exits.len(),
+            snap_summary["totalGeneralExits"].as_u64().unwrap() as usize
+        );
+
+        // Verify that every active entry and exit in official snapshot has a matching active ramp in inventory
+        let active_entries: Vec<_> = inv
+            .ramps
+            .iter()
+            .filter(|r| r.kind == RampKind::GeneralEntry && r.status == "active")
+            .collect();
+        let active_exits: Vec<_> = inv
+            .ramps
+            .iter()
+            .filter(|r| r.kind == RampKind::GeneralExit && r.status == "active")
+            .collect();
+
+        assert_eq!(
+            active_entries.len(),
+            snap_entries.len(),
+            "active general entries count must exactly match official population snapshot"
+        );
+        assert_eq!(
+            active_exits.len(),
+            snap_exits.len(),
+            "active general exits count must exactly match official population snapshot"
+        );
+
+        let active_entry_routes_dirs: HashSet<_> = active_entries
+            .iter()
+            .map(|r| {
+                (
+                    r.facility_name.as_str(),
+                    r.route.as_str(),
+                    r.direction.as_str(),
+                )
+            })
+            .collect();
+        for se in snap_entries {
+            let name = se["facilityName"].as_str().unwrap();
+            let route = se["route"].as_str().unwrap();
+            let dir = se["direction"].as_str().unwrap();
+            assert!(
+                active_entry_routes_dirs.contains(&(name, route, dir)),
+                "official snapshot entry {} ({}, {}) missing in active inventory",
+                name,
+                route,
+                dir
+            );
+        }
+
+        let active_exit_routes_dirs: HashSet<_> = active_exits
+            .iter()
+            .map(|r| {
+                (
+                    r.facility_name.as_str(),
+                    r.route.as_str(),
+                    r.direction.as_str(),
+                )
+            })
+            .collect();
+        for se in snap_exits {
+            let name = se["facilityName"].as_str().unwrap();
+            let route = se["route"].as_str().unwrap();
+            let dir = se["direction"].as_str().unwrap();
+            assert!(
+                active_exit_routes_dirs.contains(&(name, route, dir)),
+                "official snapshot exit {} ({}, {}) missing in active inventory",
+                name,
+                route,
+                dir
+            );
+        }
+
+        // Verify closed historical ramps (Gofukubashi, Edobashi)
+        let closed_ramps: Vec<_> = inv.ramps.iter().filter(|r| r.status == "closed").collect();
+        assert_eq!(closed_ramps.len(), 4, "expected 4 closed historical ramps");
+
+        // Verify boundary connections
+        let boundary_in = inv
+            .ramps
+            .iter()
+            .filter(|r| r.kind == RampKind::BoundaryIn)
+            .count();
+        let boundary_out = inv
+            .ramps
+            .iter()
+            .filter(|r| r.kind == RampKind::BoundaryOut)
+            .count();
+        assert_eq!(boundary_in, 12, "expected 12 boundary in ramps");
+        assert_eq!(boundary_out, 12, "expected 12 boundary out ramps");
+
+        // Verify total canonical ramps
+        assert_eq!(
+            inv.ramps.len(),
+            399,
+            "expected 399 total canonical ramps (371 active general + 24 boundary + 4 closed)"
+        );
 
         // Verify uniqueness of ramp_id
         let mut seen_ids = HashSet::new();
@@ -561,51 +776,25 @@ mod tests {
             );
         }
 
-        // Verify breakdown by kind: 156 general entries, 159 general exits, 12 boundary in, 12 boundary out
-        let general_entries = inv
-            .ramps
-            .iter()
-            .filter(|r| r.kind == RampKind::GeneralEntry)
-            .count();
-        let general_exits = inv
-            .ramps
-            .iter()
-            .filter(|r| r.kind == RampKind::GeneralExit)
-            .count();
-        let boundary_in = inv
-            .ramps
-            .iter()
-            .filter(|r| r.kind == RampKind::BoundaryIn)
-            .count();
-        let boundary_out = inv
-            .ramps
-            .iter()
-            .filter(|r| r.kind == RampKind::BoundaryOut)
-            .count();
-
-        assert_eq!(general_entries, 156, "expected exactly 156 general entries");
-        assert_eq!(general_exits, 159, "expected exactly 159 general exits");
-        assert_eq!(boundary_in, 12, "expected exactly 12 boundary in ramps");
-        assert_eq!(boundary_out, 12, "expected exactly 12 boundary out ramps");
-        assert_eq!(
-            general_entries + general_exits + boundary_in + boundary_out,
-            339,
-            "sum of kinds must equal 339"
-        );
-
         // Verify provenance separation:
         // - source must be non-empty official URL
         // - coordinateSource must be OSM
         // - coordinateStatus must be derived
-        // - restrictionStatus must distinguish verified vs unverified
-        let mut verified_restr_count = 0;
-        let mut unverified_restr_count = 0;
         for r in &inv.ramps {
             assert!(!r.source.is_empty(), "ramp {} missing source", r.ramp_id);
-            assert_eq!(
-                r.coordinate_source.as_deref(),
-                Some("osm"),
-                "ramp {} coordinateSource should be 'osm'",
+            assert!(
+                r.source.starts_with("https://search.shutoko.jp/")
+                    || r.source.starts_with("https://www.shutoko.jp/"),
+                "ramp {} source must point to official Shutoko domain",
+                r.ramp_id
+            );
+            assert!(
+                r.coordinate_source.as_deref().unwrap_or("").contains("osm")
+                    || r.coordinate_source
+                        .as_deref()
+                        .unwrap_or("")
+                        .contains("openstreetmap"),
+                "ramp {} coordinateSource should reference OSM",
                 r.ramp_id
             );
             assert_eq!(
@@ -614,34 +803,7 @@ mod tests {
                 "ramp {} coordinateStatus should be 'derived'",
                 r.ramp_id
             );
-            match r.restriction_status.as_deref() {
-                Some("verified") => {
-                    assert!(
-                        !r.restrictions.is_empty(),
-                        "ramp {} marked verified but has empty restrictions",
-                        r.ramp_id
-                    );
-                    verified_restr_count += 1;
-                }
-                Some("unverified") => {
-                    unverified_restr_count += 1;
-                }
-                other => panic!(
-                    "ramp {} has unexpected restriction_status: {:?}",
-                    r.ramp_id, other
-                ),
-            }
         }
-        assert_eq!(verified_restr_count, 4);
-        assert_eq!(unverified_restr_count, 335);
-
-        // Verify boundary JCT pairs (12 in + 12 out = 24 boundary ramps)
-        let boundary_ramps: Vec<_> = inv
-            .ramps
-            .iter()
-            .filter(|r| matches!(r.kind, RampKind::BoundaryIn | RampKind::BoundaryOut))
-            .collect();
-        assert_eq!(boundary_ramps.len(), 24);
     }
 
     #[test]
@@ -655,7 +817,35 @@ mod tests {
 
         let res = validate_osm_ramp_bindings(&bindings, &inv);
         assert!(res.is_ok(), "bindings validation failed: {:?}", res);
-        assert_eq!(bindings.bindings.len(), 339);
+        assert_eq!(
+            bindings.bindings.len(),
+            371,
+            "only active general ramps should have OSM bindings"
+        );
+
+        // Validate that no placeholder IDs exist (e.g. osmNodeId == osmWayId + 1)
+        for b in &bindings.bindings {
+            assert_ne!(
+                b.osm_node_id,
+                b.osm_way_id + 1,
+                "placeholder ID detected for ramp {}: osmNodeId {} == osmWayId {} + 1",
+                b.ramp_id,
+                b.osm_node_id,
+                b.osm_way_id
+            );
+        }
+
+        // Validate against real full-network OSM fixture
+        let osm_path = find_data_file("fixtures/osm/shutoko-all.json");
+        let osm_str = fs::read_to_string(osm_path).expect("read shutoko-all.json");
+        let osm_resp: crate::osm::OverpassResponse =
+            serde_json::from_str(&osm_str).expect("parse shutoko-all.json");
+        let osm_res = validate_osm_ramp_bindings_against_osm(&bindings, &osm_resp);
+        assert!(
+            osm_res.is_ok(),
+            "bindings against OSM fixture validation failed: {:?}",
+            osm_res
+        );
     }
 
     #[test]

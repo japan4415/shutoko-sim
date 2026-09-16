@@ -1,9 +1,12 @@
 {
-  "version": 1,
-  "source": "https://www.shutoko.jp/tolls/about/price/",
+  "version": 2,
+  "source": "https://www.shutoko.jp/fee/fee-info/pay_etc/",
   "sourceDate": "2026-09-16",
   "rules": {
     "vehicleProfile": "passenger-car-etc",
+    "effectiveDate": "2022-04-01",
+    "fixedFeeYen": 150,
+    "taxRate": 1.10,
     "minTollYen": 300,
     "maxTollYen": 1950,
     "minDistanceMeters": 4300,
@@ -37,7 +40,7 @@
     },
     {
       "entryRampId": "ramp:c1-inner:shibakoen-entry",
-      "exitRampId": "ramp:c1-inner:iikura-exit",
+      "exitRampId": "ramp:c1-outer:iikura-exit",
       "billingDistanceMeters": 1600,
       "amountYen": 300,
       "effectiveFrom": "2022-03-31T15:00:00Z",
@@ -61,7 +64,7 @@
     },
     {
       "entryRampId": "ramp:c1-outer:shibakoen-entry",
-      "exitRampId": "ramp:c1-outer:shiodome-exit",
+      "exitRampId": "ramp:c1-inner:shiodome-exit",
       "billingDistanceMeters": 2400,
       "amountYen": 300,
       "effectiveFrom": "2022-03-31T15:00:00Z",

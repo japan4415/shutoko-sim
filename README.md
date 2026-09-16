@@ -55,18 +55,33 @@
 
 ### 本番デプロイ手順
 
+Cloudflare Workers Builds では、Git リポジトリを接続して次の値を設定する。ビルドが失敗した場合、deploy command は実行されない。
+
+| 設定 | 値 |
+| --- | --- |
+| Root directory | `/` |
+| Build command | `bash scripts/cloudflare-build.sh` |
+| Deploy command | `cd workers && npx wrangler deploy` |
+| Preview deploy command | `cd workers && npx wrangler versions upload` |
+| Node version | `NODE_VERSION=22` |
+| Automatic dependency install | `SKIP_DEPENDENCY_INSTALL=1` |
+| Non-production branch builds | OFF |
+
+`SKIP_DEPENDENCY_INSTALL=1` でプラットフォーム側の自動インストールを止め、`scripts/cloudflare-build.sh` が `workers` と `web` の lockfile 固定依存を `npm ci` で導入して `web/dist` を生成する。これにより deploy command が使う pinned Wrangler も `workers/node_modules` に用意される。
+
+Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 release を上書きしない。R2 成果物を更新する場合は、別の versioned release ID で WASM・graph・manifest・engine を先にすべて投入して検証し、その後に Worker と Web の参照先を新しい release へ切り替える。公開済み release ID へ再投入すると、複数オブジェクトの非原子的な上書きによって新旧ファイルが一時的に混在するため、自動 CI/CD では実行しない。
+
 1. **R2 バケットの作成**（初回のみ。既存なら再利用）:
    ```bash
    npx wrangler r2 bucket create shutoko-artifacts
    npx wrangler r2 bucket create shutoko-artifacts-preview
    ```
-2. **成果物のビルドと本番 R2 への投入**（`sha256`・`byteLength` を `manifest.json` と照合してからアップロード）:
+2. **新しい versioned release のビルドと本番 R2 への投入**（`sha256`・`byteLength` を `manifest.json` と照合してからアップロード）:
    ```bash
    bash scripts/build-wasm.sh                # dist/wasm/ を生成
    cd workers && node scripts/seed-local-r2.mjs --remote
    ```
-   このスクリプトは `manifest.json` / `graph.json` / `snap-index.json` / WASM ビルド成果物に加えて、`dist/wasm/` の実ファイルから計算した wasm / JS glue の `sha256`・`byteLength` を `releases/<releaseId>/engine.json` として同時に投入します。Web Worker はこの `engine.json` を取得して wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になります**。
-   > **既存リリースへの追加入手**: `engine.json` は 2026-09-11 の CI 失敗修正（PR #24）で追加した成果物です。それ以前にデプロイ済みの版（`c1-real-v1` を含む）へ反映するには、`bash scripts/build-wasm.sh` の後に `cd workers && node scripts/seed-local-r2.mjs --remote` を再実行して `engine.json` を投入し直してください。`wrangler deploy` だけでは投入されません。
+   先に manifest とクライアント側 allowlist を未使用の release ID へ更新する。このスクリプトは release ID と成果物を検証し、既存の本番 release ID があれば上書きを拒否する。payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。
 3. **デプロイ**:
    ```bash
    cd workers && npx wrangler deploy

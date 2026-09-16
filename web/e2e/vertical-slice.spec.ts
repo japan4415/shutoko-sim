@@ -5,7 +5,7 @@
 // (d) graph.json 11 秒遅延で TIMEOUT の文言
 import { expect, test } from "@playwright/test";
 
-const GRAPH_URL = "**/releases/c1-real-v1/graph.json";
+const GRAPH_URL = "**/releases/c1-real-v2/graph.json";
 
 /**
  * (d) の 11 秒遅延をテスト終了時に解除するためのコントローラ。

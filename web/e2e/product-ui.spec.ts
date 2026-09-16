@@ -289,7 +289,7 @@ test("(8) 各カードに 1 始まりの候補番号バッジがある", async (
 
 // --- issue #15 追加の must-have テスト（レビュー指摘の未カバー経路） ---
 
-const PRODUCT_GRAPH_URL = "**/releases/c1-real-v1/graph.json";
+const PRODUCT_GRAPH_URL = "**/releases/c1-real-v2/graph.json";
 
 /** abort 可能な待機。abort されたら即座に resolve する（vertical-slice と同じ規約）。 */
 function delayUnlessAbortedProduct(ms: number, signal: AbortSignal): Promise<void> {

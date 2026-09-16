@@ -16,7 +16,7 @@ cargo run --manifest-path "${REPO_ROOT}/Cargo.toml" --bin shutoko-graph-builder 
   --osm "${OSM_PATH}" \
   --seed "${SEED_PATH}" \
   --out-dir "${OUT_DIR}" \
-  --release-id "c1-real-v1" \
+  --release-id "c1-real-v2" \
   --built-at "2026-09-10T00:00:00Z" \
   --source-date "2026-09-10" \
   --vehicle-profile "passenger-car-etc" \

@@ -92,7 +92,7 @@ Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `sear
 - 照合は 2 段階。`graph.json` は manifest の `artifacts`（sha256・byteLength）と照合し、`wasm` / glue は配信側 `engine.json` の `artifacts`（sha256・byteLength）と照合する。不一致は `ARTIFACT_MISMATCH`、取得失敗は `FETCH_FAILED` で停止し、以降の取得は行わない。
   - **期待値をソースに固定値で持たない理由**: wasm のビルドは環境をまたいでバイト一致しない（ローカル macOS と CI の ubuntu で sha256 が変わる）。固定定数だと CI だけが落ちるため、`engine.json` は `workers/scripts/seed-local-r2.mjs` が投入時に実ファイルから計算する。
   - `engine.json` の形式不正（JSON デコード失敗、`schemaVersion` が 1 以外、`releaseId` 不一致、`artifacts` に `shutoko_routing_bg.wasm` / `shutoko_routing.js` の有効なエントリが無い）も `ARTIFACT_MISMATCH` として停止する。
-  - `web/src/worker/artifact-hashes.ts` は wasm/glue のハッシュを持たず、`KNOWN_RELEASES = ["c1-real-v1"]` の releaseId allowlist だけを持つ。
+  - `web/src/worker/artifact-hashes.ts` は wasm/glue のハッシュを持たず、`KNOWN_RELEASES = ["c1-real-v1", "c1-real-v2"]` の releaseId allowlist だけを持つ。新規探索は `c1-real-v2` を使い、v1 はキャッシュ済み旧クライアント向けに保持する。
 - glue はテキスト取得・照合後に同一 URL を `import()` し、`init({ module_or_path: wasmBytes })` で初期化する。`graph.json` は文字列のまま Worker のモジュール変数に保持し、検索ごとに `search(graphJson, requestJson, "{}")` へ渡す。
 - メッセージ契約は [インターフェース設計](interfaces.md) の「ブラウザの探索境界」のとおり。初期化完了で `ready`、検索応答は `requestId` 付きの `result` / `error` を返す。
 - 10 秒タイムアウトと `terminate()` は UI 側の実装。押下時に `setTimeout(10000)` を開始し、超過で Worker を terminate して `TIMEOUT` 文言を表示、次回検索時に Worker を再生成して `ready` を待ってから送信する。古い `requestId` の応答は無視する。

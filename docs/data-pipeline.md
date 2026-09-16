@@ -132,7 +132,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
   --osm fixtures/osm/shutoko-c1.json \
   --seed data/billing-pairs-seed.json \
   --out-dir fixtures/generated \
-  --release-id "c1-real-v1" \
+  --release-id "c1-real-v2" \
   --built-at "2026-09-10T00:00:00Z" \
   --source-date "2026-09-10" \
   --vehicle-profile "passenger-car-etc" \
@@ -163,7 +163,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって `manifest.json` の `unverifiedSections` 配列に自動列挙される。
 - **自動列挙対象**: グラフ内に存在するすべての入口・出口エッジのうち、検証済み課金ペアに採用されていないエッジ。OSM ウェイに `name` タグが存在する場合は「エッジID（ウェイ名）」の形式で可読性を担保。
 - **除外路線・通行規制スキップの注記**: C1 外の分岐路線（八重洲線、1号上野線、6号向島線等）や、静的道路グラフで適用外となった通行規制（conditional / no via / outside graph / disconnected / unrecognized 等のスキップカテゴリ）に関する注記も件数付きで同リストに収録。
-- **現状**: 今回のリリース `c1-real-v1` では 3 節の表に記載した 8 ペア（外回り 4・内回り 4・既存の神田橋〜宝町 1 を含む）すべてが人手検証済み（`verified`）で、`unverifiedSections` に `rejected:` は存在しない。将来追加予定のランプ区間については、公式料金区間表または本線隣接導出の根拠とともに順次シードへ追加する。
+- **現状**: 現行リリース `c1-real-v2` では 3 節の表に記載した 8 ペア（外回り 4・内回り 4・既存の神田橋〜宝町 1 を含む）すべてが人手検証済み（`verified`）で、`unverifiedSections` に `rejected:` は存在しない。将来追加予定のランプ区間については、公式料金区間表または本線隣接導出の根拠とともに順次シードへ追加する。
 
 ## 6. CI における自動再生成検証
 
@@ -171,4 +171,3 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 - コミット済みの `fixtures/osm/shutoko-c1.json` を入力とし、外部 Overpass API にはアクセスしない（外部ネットワーク非依存）。
 - `scripts/generate-fixtures.sh` を実行後、`git diff --exit-code` および `git status --porcelain` でコミット済みの `fixtures/generated/` との差分が一切生じないことを検証する。
 - グラフビルダーのロジックや課金シードの更新時は、再生成された `fixtures/generated/` を同一 PR でコミットする必要があり、意図しない出力の乖離やリグレッションを防ぐ。
-

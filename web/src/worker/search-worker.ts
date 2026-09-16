@@ -22,7 +22,7 @@ import {
   type WorkerResponse,
 } from "./types";
 
-export const DEFAULT_RELEASE_ID = "c1-real-v1";
+export const DEFAULT_RELEASE_ID = "c1-real-v2";
 
 /** 計測中の試行の状態。bench Worker では 1 メッセージ = 1 試行。 */
 interface BenchState {

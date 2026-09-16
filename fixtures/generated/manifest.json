@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "releaseId": "c1-real-v1",
+  "releaseId": "c1-real-v2",
   "engineVersion": "0.1.0",
   "graphVersion": "1.0.0",
   "builtAt": "2026-09-10T00:00:00Z",
@@ -107,12 +107,12 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "f69b4356526701069636a4ee9f3bd0348e05eedabfa8ca2d40687e0ee19eb651",
+      "sha256": "ab82167a0697638451e181ac99c9a72c580a3660a3ead5f079f018c4764c77e2",
       "byteLength": 563387
     },
     {
       "path": "snap-index.json",
-      "sha256": "f36abd9041e77934e60d7b42efeaec40868d021ff4f23778aab2c89301edb221",
+      "sha256": "ff8389c3eee32504f542ffd7663cace088119ef8af6d3fbe69e3717eda23bd6f",
       "byteLength": 1420
     }
   ]

@@ -70,15 +70,15 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
     });
 
     const files: Record<string, { bytes: Uint8Array; kind: "text" | "binary" }> = {
-      "/releases/c1-real-v1/manifest.json": {
+      "/releases/c1-real-v2/manifest.json": {
         bytes: toBytes(await readFile(new URL("fixtures/generated/manifest.json", root), "utf8")),
         kind: "text",
       },
-      "/releases/c1-real-v1/engine.json": {
+      "/releases/c1-real-v2/engine.json": {
         bytes: toBytes(
           JSON.stringify({
             schemaVersion: 1,
-            releaseId: "c1-real-v1",
+            releaseId: "c1-real-v2",
             artifacts: [
               { path: "shutoko_routing_bg.wasm", ...(await expectationOf(wasmBytes)) },
               { path: "shutoko_routing.js", ...(await expectationOf(glueBytes)) },
@@ -87,15 +87,15 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         ),
         kind: "text",
       },
-      "/releases/c1-real-v1/graph.json": {
+      "/releases/c1-real-v2/graph.json": {
         bytes: toBytes(await readFile(new URL("fixtures/generated/graph.json", root), "utf8")),
         kind: "text",
       },
-      "/releases/c1-real-v1/shutoko_routing_bg.wasm": {
+      "/releases/c1-real-v2/shutoko_routing_bg.wasm": {
         bytes: wasmBytes,
         kind: "binary",
       },
-      "/releases/c1-real-v1/shutoko_routing.js": {
+      "/releases/c1-real-v2/shutoko_routing.js": {
         bytes: glueBytes,
         kind: "text",
       },
@@ -121,20 +121,20 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
     };
 
     const glue = await import("../../dist/wasm/shutoko_routing.js");
-    const state = await loadRelease(fetchImpl, "c1-real-v1", async () => glue);
+    const state = await loadRelease(fetchImpl, "c1-real-v2", async () => glue);
 
     expect(calls).toEqual([
-      "/releases/c1-real-v1/manifest.json",
-      "/releases/c1-real-v1/engine.json",
-      "/releases/c1-real-v1/graph.json",
-      "/releases/c1-real-v1/shutoko_routing_bg.wasm",
-      "/releases/c1-real-v1/shutoko_routing.js",
+      "/releases/c1-real-v2/manifest.json",
+      "/releases/c1-real-v2/engine.json",
+      "/releases/c1-real-v2/graph.json",
+      "/releases/c1-real-v2/shutoko_routing_bg.wasm",
+      "/releases/c1-real-v2/shutoko_routing.js",
     ]);
 
     const msg: UiSearchMessage = {
       type: "search",
       requestId: "integration-1",
-      releaseId: "c1-real-v1",
+      releaseId: "c1-real-v2",
       pricingAt: "2026-09-10T00:00:00Z",
       origin: { lat: 35.6896727, lon: 139.7644248 },
       minMinutes: 15,
@@ -169,7 +169,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
             pg,
             JSON.stringify({
               requestId: "integration-2",
-              releaseId: "c1-real-v1",
+              releaseId: "c1-real-v2",
               origin: { lat: 35.6896727, lon: 139.7644248 },
               minMinutes: 15,
               maxMinutes: 0,
@@ -199,7 +199,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       const msg: UiSearchMessage = {
         type: "search",
         requestId: "integration-access-contract",
-        releaseId: "c1-real-v1",
+        releaseId: "c1-real-v2",
         pricingAt: "2026-09-10T00:00:00Z",
         // 立川駅: 最寄り入口まで約 29.6 km で、アクセス時間が 0 でない候補が返る。
         origin: { lat: 35.6979, lon: 139.4139 },
@@ -233,7 +233,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       const msg: UiSearchMessage = {
         type: "search",
         requestId: "integration-narrow-minplan",
-        releaseId: "c1-real-v1",
+        releaseId: "c1-real-v2",
         pricingAt: "2026-09-10T00:00:00Z",
         origin: { lat: 35.6979, lon: 139.4139 },
         minMinutes: 15,

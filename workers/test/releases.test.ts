@@ -55,6 +55,26 @@ describe("Releases delivery", () => {
       "releases/c1-real-v1/index.d.ts",
       "export * from './shutoko_routing';"
     );
+
+    await env.ARTIFACTS_BUCKET.put(
+      "releases/all-real-v1/manifest.json",
+      JSON.stringify({ schemaVersion: 1, releaseId: "all-real-v1" })
+    );
+    await env.ARTIFACTS_BUCKET.put(
+      "releases/all-real-v1/ramps.json",
+      JSON.stringify({ schemaVersion: 1, releaseId: "all-real-v1", ramps: [] })
+    );
+  });
+
+  it("all-real-v1 の ramps.json を allowlist 経由で配信する", async () => {
+    const ctx = createExecutionContext();
+    const req = new Request("http://localhost/releases/all-real-v1/ramps.json");
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+    expect(await res.json()).toMatchObject({ releaseId: "all-real-v1" });
   });
 
   it("gets allowed manifest.json with 200, Content-Type, Cache-Control, and ETag", async () => {

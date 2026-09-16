@@ -45,6 +45,76 @@ async function stubGeocode(
   });
 }
 
+/** 候補カード配線を実DOMで検証するため、探索Workerだけを決定論的な2候補fixtureへ差し替える。 */
+async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const makeCandidate = (index: number) => {
+      const id = `fixture-candidate-${String(index)}`;
+      const latOffset = index * 0.01;
+      const entryId = `fixture-entry-${String(index)}`;
+      const exitId = `fixture-exit-${String(index)}`;
+      return {
+        id,
+        releaseId: "all-real-v1",
+        origin: { lat: 35.6896727, lon: 139.7644248 },
+        originNodeId: "fixture-origin",
+        snappedOrigin: { nodeId: "fixture-origin", lat: 35.6896727, lon: 139.7644248, distanceMeters: 500 + index },
+        entry: { edgeId: entryId, name: `入口${String(index)}`, rampId: entryId, route: "C1", direction: "inner" },
+        exit: { edgeId: exitId, name: `出口${String(index)}`, rampId: exitId, route: "C1", direction: "outer" },
+        entryId,
+        exitId,
+        roadNames: ["C1 都心環状線"],
+        edgeIds: [entryId, exitId],
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [139.76 + latOffset, 35.68 + latOffset],
+            [139.77 + latOffset, 35.69 + latOffset],
+            [139.78 + latOffset, 35.68 + latOffset],
+          ],
+        },
+        duration: { accessSeconds: 60, shutokoSeconds: 1200 + index * 60, returnSeconds: 60, baseSeconds: 1320 + index * 60, bufferSeconds: 300, planSeconds: 1620 + index * 60 },
+        distanceMeters: 12000 + index * 1000,
+        shutokoDistanceMeters: 10000 + index * 1000,
+        toll: { billingPairId: id, chargedSectionCount: 1, amountYen: 300 + index * 20, pricingAt: "2026-09-16T00:00:00Z", effectiveFrom: null, effectiveTo: null },
+        loop: { anchorNodeId: "fixture-origin", edgeIds: [entryId, exitId], durationSeconds: 1200, distanceMeters: 10000, validated: true },
+        reasons: [],
+        warnings: [],
+        handoff: {
+          origin: { lat: 35.6896727, lon: 139.7644248 },
+          destination: { lat: 35.6896727, lon: 139.7644248 },
+          waypoints: [],
+          mapsUrl: `https://www.google.com/maps/dir/?api=1&candidate=${id}`,
+          verificationSetVersion: "fixture",
+        },
+      };
+    };
+    const result = {
+      requestId: "",
+      releaseId: "all-real-v1",
+      status: "ok",
+      reason: null,
+      rankingMode: "time_per_yen",
+      expandedStates: 2,
+      candidates: [makeCandidate(1), makeCandidate(2)],
+      nearestAccess: null,
+      minPlanSeconds: 1620,
+    };
+    class FixtureWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      constructor() {
+        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v1" } } as MessageEvent), 0);
+      }
+      postMessage(message: { requestId: string }): void {
+        const response = { type: "result", requestId: message.requestId, result: { ...result, requestId: message.requestId } };
+        setTimeout(() => this.onmessage?.({ data: response } as MessageEvent), 0);
+      }
+      terminate(): void {}
+    }
+    Object.defineProperty(window, "Worker", { configurable: true, value: FixtureWorker });
+  });
+}
+
 /** getCurrentPosition を決定論的にスタブする。呼び出し回数は __geoCallCount で数える。 */
 async function stubGeolocationSuccess(
   page: Page,
@@ -900,12 +970,20 @@ test("(32) 成果物不一致の再読み込み案内は条件変更では消え
 // --- 全首都高ランプ選択 UI（R2）の E2E 検証 ---
 
 test("(33) 明示指定モード切替、全399件確認、197件選択可能（入口99/出口98）、探索ボタン制御", async ({ page }) => {
+  let rampRequests = 0;
+  await page.route("**/releases/*/ramps.json*", async (route) => {
+    rampRequests += 1;
+    await route.continue();
+  });
   await openApp(page);
 
   // デフォルトは「現在地・住所から」モード、明示指定セクションは非表示
   const explicitSection = page.locator("#explicit-od-section");
   await expect(explicitSection).toBeHidden();
   await expect(page.locator('input[name="search-mode"][value="coord"]')).toBeChecked();
+  expect(rampRequests, "座標モード起動時は ramps.json を取得しない").toBe(0);
+  await expect(page.locator("#entry-ramp-list .ramp-item")).toHaveCount(0);
+  await expect(page.locator("#ramp-pickers-container")).toBeHidden();
 
   // 明示指定モードに切り替え
   await page.click('input[name="search-mode"][value="explicit"]');
@@ -915,11 +993,13 @@ test("(33) 明示指定モード切替、全399件確認、197件選択可能（
   const loadingStatus = page.locator("#ramps-loading-status");
   await expect(loadingStatus).toBeVisible();
   await expect(loadingStatus).toContainText("正規ランプ台帳 399 件を検証完了");
+  expect(rampRequests, "明示モード初回だけ ramps.json を取得する").toBe(1);
 
   // 入口・出口それぞれの件数と選択可能件数の整合性
   // 入口: 全399件表示、99件が選択可能
   const entryItems = page.locator("#entry-ramp-list .ramp-item");
   await expect(entryItems).toHaveCount(399);
+  expect(await page.locator("#entry-ramp-list").getAttribute("tabindex")).toBeNull();
   const entrySelectable = page.locator('#entry-ramp-list input[type="radio"]:not([disabled])');
   await expect(entrySelectable).toHaveCount(99);
   const entryDisabled = page.locator('#entry-ramp-list input[type="radio"][disabled]');
@@ -929,6 +1009,7 @@ test("(33) 明示指定モード切替、全399件確認、197件選択可能（
   // 出口: 全399件表示、98件が選択可能
   const exitItems = page.locator("#exit-ramp-list .ramp-item");
   await expect(exitItems).toHaveCount(399);
+  expect(await page.locator("#exit-ramp-list").getAttribute("tabindex")).toBeNull();
   const exitSelectable = page.locator('#exit-ramp-list input[type="radio"]:not([disabled])');
   await expect(exitSelectable).toHaveCount(98);
   const exitDisabled = page.locator('#exit-ramp-list input[type="radio"][disabled]');
@@ -1129,4 +1210,135 @@ test("(38) ランプ台帳の読み込み失敗時にエラーパネルと再試
   await expect(errorPanel).toBeHidden();
   await expect(page.locator("#ramps-loading-status")).toContainText("399 件を検証完了");
   await expect(page.locator("#entry-ramp-list .ramp-item")).toHaveCount(399);
+});
+
+test("(39) 375x667 / 1280x800 でradio・本文・状態・理由が視認でき横overflowしない", async ({ page }) => {
+  for (const viewport of [
+    { width: 375, height: 667 },
+    { width: 1280, height: 800 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await openApp(page);
+
+    const coordMode = page.locator('.mode-radio-label:has(input[value="coord"])');
+    const modeRadioBox = await coordMode.locator('input[type="radio"]').boundingBox();
+    expect(modeRadioBox).not.toBeNull();
+    expect(modeRadioBox!.width).toBeLessThanOrEqual(24);
+    await expect(coordMode.locator(".mode-radio-title")).toBeVisible();
+    await expect(coordMode.locator(".mode-radio-desc")).toBeVisible();
+    await expect(coordMode.locator(".mode-radio-check")).toHaveText("選択中");
+
+    await page.click('input[name="search-mode"][value="explicit"]');
+    await expect(page.locator("#ramps-loading-status")).toContainText("399 件を検証完了");
+    await page.locator("#entry-ramp-search").fill("ramp:c1-inner:shibakoen-entry");
+    await expect(page.locator("#entry-ramp-list .ramp-item")).toHaveCount(1);
+    const item = page.locator("#entry-ramp-list .ramp-item").first();
+    await expect(item).toBeVisible();
+    const radioBox = await item.locator('input[type="radio"]').boundingBox();
+    const contentBox = await item.locator(".ramp-item-content").boundingBox();
+    expect(radioBox).not.toBeNull();
+    expect(contentBox).not.toBeNull();
+    expect(radioBox!.width).toBeGreaterThanOrEqual(16);
+    expect(radioBox!.width).toBeLessThanOrEqual(24);
+    expect(contentBox!.width).toBeGreaterThan(150);
+    await expect(item.locator(".ramp-name")).toContainText("芝公園");
+    await expect(item.locator(".ramp-route-badge")).toContainText("C1");
+    await expect(item.locator(".ramp-dir-badge")).toContainText("内回り");
+    await expect(item.locator(".ramp-status-badge")).toContainText("未対応");
+    await expect(item.locator(".ramp-disabled-reason")).toBeVisible();
+
+    const overflow = await page.evaluate(() => {
+      const root = document.scrollingElement ?? document.documentElement;
+      return root.scrollWidth <= window.innerWidth + 1;
+    });
+    expect(overflow).toBe(true);
+  }
+});
+
+test("(40) 375pxでランプ絞り込みの全再描画が明白な遅延を起こさない", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await openApp(page);
+  await page.click('input[name="search-mode"][value="explicit"]');
+  await expect(page.locator("#ramps-loading-status")).toContainText("399 件を検証完了");
+
+  const elapsedMs = await page.evaluate(async () => {
+    const input = document.getElementById("entry-ramp-search") as HTMLInputElement;
+    const start = performance.now();
+    input.value = "銀座";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    return performance.now() - start;
+  });
+  expect(elapsedMs).toBeLessThan(500);
+  await expect(page.locator("#entry-ramp-list .ramp-item")).toHaveCount(4);
+});
+
+test("(41) 明示ODのTIME_WINDOWと遠隔originのNO_CONNECTIONを理由・復帰導線付きで示す", async ({ page }) => {
+  await openApp(page);
+  await page.click('input[name="search-mode"][value="explicit"]');
+  await expect(page.locator("#ramps-loading-status")).toContainText("399 件を検証完了");
+  await expect(page.locator("#explicit-origin-current")).toContainText("神田橋");
+
+  await page.locator("#entry-ramp-search").fill("ramp:b-east:ariake-entry");
+  await expect(page.locator("#entry-ramp-list .ramp-item")).toHaveCount(1);
+  await page.locator('#entry-ramp-list input[type="radio"]:not([disabled])').check();
+  await page.locator("#exit-ramp-search").fill("ramp:b-west:oi-exit");
+  await expect(page.locator("#exit-ramp-list .ramp-item")).toHaveCount(1);
+  await page.locator('#exit-ramp-list input[type="radio"]:not([disabled])').check();
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+  await expect(page.locator("#status")).toContainText("指定時間枠");
+  await expect(page.locator("#recovery-actions")).toContainText("TIME_WINDOW");
+  await expect(page.locator("#recovery-actions")).toContainText("出発地点または時間条件");
+
+  await setCoordinateOrigin(page, "36.37", "140.47");
+  await page.locator("#entry-ramp-search").fill("ramp:c1-inner:ginza-entry");
+  await expect(page.locator("#entry-ramp-list .ramp-item")).toHaveCount(1);
+  await page.locator('#entry-ramp-list input[type="radio"]:not([disabled])').check();
+  await page.locator("#exit-ramp-search").fill("ramp:c1-outer:shibakoen-exit");
+  await expect(page.locator("#exit-ramp-list .ramp-item")).toHaveCount(1);
+  await page.locator('#exit-ramp-list input[type="radio"]:not([disabled])').check();
+  await page.click("#search-btn");
+  await expect(page.locator("#recovery-actions")).toContainText("NO_CONNECTION");
+  await expect(page.locator("#recovery-actions")).toContainText("出発地点を見直してください");
+  await expect(page.locator("#recovery-actions button", { hasText: "神田橋を出発地点にする" })).toBeVisible();
+});
+
+test("(42) 2候補fixtureでクリック・Enter選択、aria-current、地図、出発ボタンが同期する", async ({ page }) => {
+  await stubWorkerWithTwoCandidates(page);
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const cards = page.locator("#results .card");
+  await expect(cards).toHaveCount(2);
+  await expect(cards.nth(0)).toHaveAttribute("aria-current", "true");
+  await expect(cards.nth(1)).toHaveAttribute("aria-current", "false");
+  const paths = page.locator("#map .leaflet-overlay-pane path");
+  await expect(paths).toHaveCount(4);
+  const firstOpacityBefore = await paths.nth(0).getAttribute("stroke-opacity");
+  const secondOpacityBefore = await paths.nth(2).getAttribute("stroke-opacity");
+
+  await cards.nth(1).click();
+  await expect(cards.nth(0)).toHaveAttribute("aria-current", "false");
+  await expect(cards.nth(1)).toHaveAttribute("aria-current", "true");
+  expect(await paths.nth(0).getAttribute("stroke-opacity")).not.toBe(firstOpacityBefore);
+  expect(await paths.nth(2).getAttribute("stroke-opacity")).not.toBe(secondOpacityBefore);
+
+  await cards.nth(0).focus();
+  await page.keyboard.press("Enter");
+  await expect(cards.nth(0)).toHaveAttribute("aria-current", "true");
+  await expect(cards.nth(1)).toHaveAttribute("aria-current", "false");
+
+  await page.evaluate(() => {
+    const w = window as unknown as { __openCalls: string[][]; open: (...args: string[]) => unknown };
+    w.__openCalls = [];
+    w.open = (...args: string[]) => {
+      w.__openCalls.push(args);
+      return null;
+    };
+  });
+  await cards.nth(1).locator(".depart").click();
+  const calls = await page.evaluate(() => (window as unknown as { __openCalls: string[][] }).__openCalls);
+  expect(calls[0]?.[0]).toContain("candidate=fixture-candidate-2");
 });

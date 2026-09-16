@@ -56,6 +56,18 @@ label {
   color: #444;
 }
 
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 input,
 select,
 button {
@@ -555,7 +567,9 @@ button.chip {
 
 .mode-radio-label {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
   padding: 12px;
   border: 2px solid var(--line);
   border-radius: var(--radius);
@@ -563,20 +577,42 @@ button.chip {
   background: var(--surface);
   min-height: 48px;
   min-width: 0;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out, transform 100ms ease-out;
 }
 
-.mode-radio-label:hover {
-  border-color: var(--accent);
+.mode-radio-label:active {
+  transform: scale(0.99);
 }
 
 .mode-radio-label:has(input:checked) {
   border-color: var(--accent);
   background: var(--accent-soft);
+  box-shadow: inset 4px 0 0 var(--accent);
 }
 
-.mode-radio-label input {
-  margin-bottom: 6px;
+.mode-radio-label:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mode-radio-label input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0;
+  margin: 2px 0 0;
+  border: 0;
+  border-radius: 50%;
+  flex: 0 0 20px;
+  accent-color: var(--accent);
+}
+
+.mode-radio-copy {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
 }
 
 .mode-radio-title {
@@ -586,9 +622,34 @@ button.chip {
 }
 
 .mode-radio-desc {
+  display: block;
   font-size: 0.8rem;
   color: var(--muted);
   margin-top: 4px;
+}
+
+.mode-radio-check {
+  display: none;
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.mode-radio-label:has(input:checked) .mode-radio-check {
+  display: block;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mode-radio-label:hover {
+    border-color: var(--accent);
+    background: #f7fbff;
+  }
+
+  .ramp-item:hover:not(.ramp-item--disabled) {
+    background: #f0f7ff;
+    border-color: #c2e0ff;
+  }
 }
 
 /* --- ランプ明示指定 UI --- */
@@ -698,14 +759,16 @@ button.chip {
 }
 
 .ramp-item input[type="radio"] {
-  margin-top: 4px;
-  margin-right: 8px;
-  flex-shrink: 0;
-}
-
-.ramp-item:hover:not(.ramp-item--disabled) {
-  background: #f0f7ff;
-  border-color: #c2e0ff;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  margin: 4px 8px 0 0;
+  border: 0;
+  border-radius: 50%;
+  flex: 0 0 18px;
+  accent-color: var(--accent);
 }
 
 .ramp-item:has(input:checked) {
@@ -714,9 +777,14 @@ button.chip {
 }
 
 .ramp-item--disabled {
-  opacity: 0.65;
   cursor: not-allowed;
-  background: #f5f5f5;
+  background: #f3f4f6;
+  border-color: #d9dce1;
+}
+
+.ramp-item--disabled:active {
+  border-color: #7b8189;
+  background: #e9ebee;
 }
 
 .ramp-item-content {
@@ -779,8 +847,8 @@ button.chip {
 
 .ramp-status-badge--unsupported {
   background: #fef7e0;
-  color: #b06000;
-  border: 1px solid #feefc3;
+  color: #7a3e00;
+  border: 1px solid #d9a441;
 }
 
 .ramp-status-badge--structural_no_loop {
@@ -824,9 +892,30 @@ button.chip {
   color: #333;
 }
 
+.explicit-origin-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #a9c8e8;
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  background: #f3f8fd;
+  color: #29333d;
+  font-size: 0.82rem;
+}
+
+.explicit-origin-callout strong,
+#explicit-origin-current {
+  color: #173f68;
+}
+
+#explicit-origin-current {
+  font-weight: 600;
+}
+
 .duplicate-note {
   color: var(--danger);
   font-weight: 600;
   margin-top: 4px;
 }
-

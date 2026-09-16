@@ -4,10 +4,13 @@
 //! from OSM Overpass export JSON and human-verified billing pair seeds.
 
 use shutoko_graph_builder::{
-    build_manifest, build_topology_with_report, generate_and_validate_billing_pairs,
-    manifest_to_deterministic_json, snap_index_to_deterministic_json, to_deterministic_json,
-    BillingPairProvenance, BillingPairsSeedFile, EdgeKind, ManifestConfig, OverpassResponse,
-    TopologyConfig, VerificationStatus,
+    apply_od_tariffs_to_graph, bind_ramps_to_graph, build_manifest, build_topology_with_report,
+    generate_and_validate_billing_pairs, manifest_to_deterministic_json,
+    ramps_artifact_to_deterministic_json, snap_index_to_deterministic_json, to_deterministic_json,
+    validate_od_tariffs, validate_osm_ramp_bindings, validate_ramp_inventory,
+    BillingPairProvenance, BillingPairsSeedFile, EdgeKind, ManifestConfig, OdTariffsFile,
+    OsmRampBindingsFile, OverpassResponse, RampInventoryFile, RampsArtifact, TopologyConfig,
+    VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -28,6 +31,9 @@ REQUIRED ARGUMENTS:
 
 OPTIONS:
     --seed <PATH>           Path to billing-pairs-seed.json file
+    --inventory <PATH>      Path to canonical ramp-inventory.json file
+    --bindings <PATH>       Path to osm-ramp-bindings.json file
+    --tariffs <PATH>        Path to od-tariffs.json file
     --release-id <STRING>   Release ID [default: "default-release"]
     --vehicle-profile <STR> Vehicle profile [default: "passenger-car-etc"]
     --built-at <ISO8601>    External fixed build timestamp [default: $SHUTOKO_BUILT_AT or "2026-09-10T00:00:00Z"]
@@ -46,6 +52,9 @@ struct CliArgs {
     osm_path: PathBuf,
     out_dir: PathBuf,
     seed_path: Option<PathBuf>,
+    inventory_path: Option<PathBuf>,
+    bindings_path: Option<PathBuf>,
+    tariffs_path: Option<PathBuf>,
     release_id: String,
     vehicle_profile: String,
     built_at: String,
@@ -66,6 +75,9 @@ fn parse_args() -> Result<CliArgs, String> {
     let mut osm_path: Option<PathBuf> = None;
     let mut out_dir: Option<PathBuf> = None;
     let mut seed_path: Option<PathBuf> = None;
+    let mut inventory_path: Option<PathBuf> = None;
+    let mut bindings_path: Option<PathBuf> = None;
+    let mut tariffs_path: Option<PathBuf> = None;
     let mut release_id = "default-release".to_string();
     let mut vehicle_profile = "passenger-car-etc".to_string();
     let mut built_at =
@@ -108,6 +120,27 @@ fn parse_args() -> Result<CliArgs, String> {
                     return Err("--seed requires a path argument".into());
                 }
                 seed_path = Some(PathBuf::from(&raw_args[i]));
+            }
+            "--inventory" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err("--inventory requires a path argument".into());
+                }
+                inventory_path = Some(PathBuf::from(&raw_args[i]));
+            }
+            "--bindings" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err("--bindings requires a path argument".into());
+                }
+                bindings_path = Some(PathBuf::from(&raw_args[i]));
+            }
+            "--tariffs" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err("--tariffs requires a path argument".into());
+                }
+                tariffs_path = Some(PathBuf::from(&raw_args[i]));
             }
             "--release-id" => {
                 i += 1;
@@ -175,6 +208,9 @@ fn parse_args() -> Result<CliArgs, String> {
         osm_path,
         out_dir,
         seed_path,
+        inventory_path,
+        bindings_path,
+        tariffs_path,
         release_id,
         vehicle_profile,
         built_at,
@@ -281,6 +317,95 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         graph.billing_pairs = report.valid_pairs;
     }
 
+    // 3.5. Process canonical ramp inventory, OSM bindings, and OD tariffs if provided
+    let mut ramps_artifact_opt: Option<(RampsArtifact, String)> = None;
+    if let Some(inv_path) = &args.inventory_path {
+        let inv_raw = fs::read_to_string(inv_path).map_err(|e| {
+            format!(
+                "failed to read inventory file {}: {}",
+                inv_path.display(),
+                e
+            )
+        })?;
+        let inv: RampInventoryFile = serde_json::from_str(&inv_raw).map_err(|e| {
+            format!(
+                "failed to parse inventory JSON {}: {}",
+                inv_path.display(),
+                e
+            )
+        })?;
+        validate_ramp_inventory(&inv).map_err(|errs| {
+            format!(
+                "inventory validation failed for {}:\n  {}",
+                inv_path.display(),
+                errs.join("\n  ")
+            )
+        })?;
+
+        let bindings_file: OsmRampBindingsFile = if let Some(bin_path) = &args.bindings_path {
+            let bin_raw = fs::read_to_string(bin_path).map_err(|e| {
+                format!("failed to read bindings file {}: {}", bin_path.display(), e)
+            })?;
+            let b: OsmRampBindingsFile = serde_json::from_str(&bin_raw).map_err(|e| {
+                format!(
+                    "failed to parse bindings JSON {}: {}",
+                    bin_path.display(),
+                    e
+                )
+            })?;
+            validate_osm_ramp_bindings(&b, &inv).map_err(|errs| {
+                format!(
+                    "bindings validation failed for {}:\n  {}",
+                    bin_path.display(),
+                    errs.join("\n  ")
+                )
+            })?;
+            b
+        } else {
+            OsmRampBindingsFile {
+                version: 1,
+                source_date: args.source_date.clone(),
+                bindings: Vec::new(),
+            }
+        };
+
+        let (bound_ramps, ramp_artifact_entries, unbound_notes) =
+            bind_ramps_to_graph(&graph, &inv, &bindings_file);
+        graph.ramps = bound_ramps;
+        for note in unbound_notes {
+            unverified_from_seeds.push(note);
+        }
+
+        if let Some(tar_path) = &args.tariffs_path {
+            let tar_raw = fs::read_to_string(tar_path).map_err(|e| {
+                format!("failed to read tariffs file {}: {}", tar_path.display(), e)
+            })?;
+            let tariffs: OdTariffsFile = serde_json::from_str(&tar_raw).map_err(|e| {
+                format!("failed to parse tariffs JSON {}: {}", tar_path.display(), e)
+            })?;
+            validate_od_tariffs(&tariffs, &inv).map_err(|errs| {
+                format!(
+                    "tariffs validation failed for {}:\n  {}",
+                    tar_path.display(),
+                    errs.join("\n  ")
+                )
+            })?;
+            apply_od_tariffs_to_graph(&mut graph, &tariffs);
+        }
+
+        let artifact = RampsArtifact {
+            schema_version: 1,
+            release_id: args.release_id.clone(),
+            source_date: args.source_date.clone(),
+            total_ramps: ramp_artifact_entries.len(),
+            bound_ramps: graph.ramps.len(),
+            ramps: ramp_artifact_entries,
+        };
+        let ramps_json = ramps_artifact_to_deterministic_json(&artifact)
+            .map_err(|e| format!("ramps serialization failed: {}", e))?;
+        ramps_artifact_opt = Some((artifact, ramps_json));
+    }
+
     // 4. Serialize graph.json and snap-index.json deterministically
     let graph_json =
         to_deterministic_json(&graph).map_err(|e| format!("graph serialization failed: {}", e))?;
@@ -375,9 +500,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Note excluded routes and skipped/unsupported restrictions
-    all_unverified.push(
-        "excluded-route: Metropolitan Expressway lines other than C1 (e.g. B, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, K, S, Y)".to_string(),
-    );
+    if args.coverage_area.contains("C1")
+        && !args.coverage_area.contains("All")
+        && !args.coverage_area.contains("all")
+        && !args.coverage_area.contains("24")
+    {
+        all_unverified.push(
+            "excluded-route: Metropolitan Expressway lines other than C1 (e.g. B, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, K, S, Y)".to_string(),
+        );
+    }
     if top_report.skipped_conditional > 0 {
         all_unverified.push(format!(
             "unsupported-restriction: {} conditional turn restrictions (conditional) excluded from static graph",
@@ -433,14 +564,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         provenance: billing_provenances,
     };
 
+    let mut artifacts_to_bundle: Vec<(&str, &[u8])> = vec![
+        ("graph.json", graph_json.as_bytes()),
+        ("snap-index.json", snap_json.as_bytes()),
+    ];
+    if let Some((_, ref r_json)) = ramps_artifact_opt {
+        artifacts_to_bundle.push(("ramps.json", r_json.as_bytes()));
+    }
+
     let manifest = build_manifest(
         &manifest_config,
         verified_entries,
         verified_exits,
-        vec![
-            ("graph.json", graph_json.as_bytes()),
-            ("snap-index.json", snap_json.as_bytes()),
-        ],
+        artifacts_to_bundle,
     );
 
     let manifest_json = manifest_to_deterministic_json(&manifest)
@@ -466,21 +602,34 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     fs::write(&manifest_out, manifest_json.as_bytes())
         .map_err(|e| format!("failed to write {}: {}", manifest_out.display(), e))?;
 
+    if let Some((_, ref r_json)) = ramps_artifact_opt {
+        let ramps_out = args.out_dir.join("ramps.json");
+        fs::write(&ramps_out, r_json.as_bytes())
+            .map_err(|e| format!("failed to write {}: {}", ramps_out.display(), e))?;
+    }
+
     println!(
         "Successfully generated release \"{}\" in {}:",
         args.release_id,
         args.out_dir.display()
     );
     println!(
-        "  - graph.json ({} nodes, {} edges, {} billing pairs)",
+        "  - graph.json ({} nodes, {} edges, {} billing pairs, {} ramps)",
         graph.nodes.len(),
         graph.edges.len(),
-        graph.billing_pairs.len()
+        graph.billing_pairs.len(),
+        graph.ramps.len(),
     );
     println!(
         "  - snap-index.json ({} local snap nodes)",
         snap_index.nodes.len()
     );
+    if let Some((ref art, _)) = ramps_artifact_opt {
+        println!(
+            "  - ramps.json ({} canonical ramps, {} bound to graph)",
+            art.total_ramps, art.bound_ramps
+        );
+    }
     println!("  - manifest.json ({} artifacts)", manifest.artifacts.len());
 
     Ok(())

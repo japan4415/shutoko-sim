@@ -11,10 +11,16 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUT_DIR="${1:-"${REPO_ROOT}/fixtures/generated"}"
 OSM_PATH="${2:-"${REPO_ROOT}/fixtures/osm/shutoko-c1.json"}"
 SEED_PATH="${3:-"${REPO_ROOT}/data/billing-pairs-seed.json"}"
+INVENTORY_PATH="${4:-"${REPO_ROOT}/data/ramp-inventory.json"}"
+BINDINGS_PATH="${5:-"${REPO_ROOT}/data/osm-ramp-bindings.json"}"
+TARIFFS_PATH="${6:-"${REPO_ROOT}/data/od-tariffs.json"}"
 
 cargo run --manifest-path "${REPO_ROOT}/Cargo.toml" --bin shutoko-graph-builder --locked -- \
   --osm "${OSM_PATH}" \
   --seed "${SEED_PATH}" \
+  --inventory "${INVENTORY_PATH}" \
+  --bindings "${BINDINGS_PATH}" \
+  --tariffs "${TARIFFS_PATH}" \
   --out-dir "${OUT_DIR}" \
   --release-id "c1-real-v2" \
   --built-at "2026-09-10T00:00:00Z" \

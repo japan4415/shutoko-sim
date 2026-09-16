@@ -475,6 +475,9 @@ fn test_routing_core_search_integration() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     });
 
     // n:2 is the from-node of the Entry edge (way 2: 2→3).
@@ -485,6 +488,8 @@ fn test_routing_core_search_integration() {
         release_id: "integration-rel".into(),
         origin_node_id: Some("n:2".into()),
         origin: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
         min_minutes: 1,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -625,6 +630,8 @@ fn test_billing_pair_seed_and_pathfinding_success() {
         release_id: "test-rel".into(),
         origin_node_id: Some("n:2".into()),
         origin: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
         min_minutes: 1,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -666,6 +673,9 @@ fn test_reject_hidden_loop_in_billing_pair() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
 
     let res = validate_billing_pair(&graph, &invalid_pair);
@@ -734,6 +744,9 @@ fn test_reject_graph_with_no_loop_from_anchor() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
 
     let res = validate_billing_pair(&graph, &pair);
@@ -803,6 +816,9 @@ fn test_forbidden_transitions_not_adopted_and_rejected() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
 
     let val_res = validate_billing_pair(&graph, &explicit_pair);
@@ -830,6 +846,9 @@ fn test_reject_disconnected_path() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
 
     let err = validate_billing_pair(&graph, &pair).unwrap_err();
@@ -866,6 +885,9 @@ fn test_reject_invalid_edge_kinds() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
 
     let err = validate_billing_pair(&graph, &pair).unwrap_err();
@@ -892,6 +914,9 @@ fn test_reject_invalid_prices_and_overlapping_intervals() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
 
     let err = validate_billing_pair(&graph, &pair).unwrap_err();
@@ -943,6 +968,9 @@ fn test_reject_mismatched_vehicle_profile() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
 
     let err = validate_billing_pair(&graph, &pair).unwrap_err();
@@ -2151,6 +2179,8 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
         ],
         billing_pairs: Vec::new(),
         forbidden_transitions: vec![vec!["e1".into(), "exit1".into()]],
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
 
     // 1. find_first_exits_from_anchor must return the legitimate first exit (exit1 at distance 5),
@@ -2184,6 +2214,9 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
 
     let result = validate_billing_pair(&graph, &pair_later_exit);
@@ -2357,6 +2390,8 @@ fn test_refutation_counterexample_a_opus5() {
         ],
         billing_pairs: Vec::new(),
         forbidden_transitions: vec![vec!["e3".into(), "e7".into()]],
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
 
     let result = find_first_exits_from_anchor(&graph, "A");
@@ -2564,6 +2599,8 @@ fn test_refutation_counterexample_b_opus5() {
         ],
         billing_pairs: Vec::new(),
         forbidden_transitions: vec![vec!["e3".into(), "e7".into()]],
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
 
     let (min_dist, first_exits) = find_first_exits_from_anchor(&graph, "A").unwrap();
@@ -2587,6 +2624,9 @@ fn test_refutation_counterexample_b_opus5() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
     let err = validate_billing_pair(&graph, &pair_e10).unwrap_err();
     assert_eq!(err.rule, "FIRST_EXIT_MISMATCH");
@@ -2620,6 +2660,9 @@ fn test_refutation_counterexample_b_opus5() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
     let ok = validate_billing_pair(&graph, &pair_e8);
     assert!(
@@ -2826,6 +2869,8 @@ fn test_refutation_counterexample_c_codex() {
         ],
         billing_pairs: Vec::new(),
         forbidden_transitions: vec![vec!["ax".into(), "exit1".into()]],
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
 
     let (min_dist, first_exits) = find_first_exits_from_anchor(&graph, "a").unwrap();
@@ -2858,6 +2903,9 @@ fn test_refutation_counterexample_c_codex() {
         }],
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
     let err = validate_billing_pair(&graph, &pair_exit2).unwrap_err();
     assert_eq!(err.rule, "FIRST_EXIT_MISMATCH");
@@ -2935,6 +2983,8 @@ fn test_issue6_item1_walk_semantics_node_revisit() {
         ],
         billing_pairs: Vec::new(),
         forbidden_transitions: Vec::new(),
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
     assert!(
         has_non_empty_shutoko_loop(&graph, "Anchor"),
@@ -2993,6 +3043,8 @@ fn test_issue6_item1_walk_semantics_node_revisit() {
         ],
         billing_pairs: Vec::new(),
         forbidden_transitions: vec![vec!["u".into(), "z".into(), "w1".into()]],
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
     assert!(
         has_non_empty_shutoko_loop(&graph_b, "Anchor"),
@@ -3031,6 +3083,8 @@ fn test_issue6_item1_walk_semantics_node_revisit() {
         ],
         billing_pairs: Vec::new(),
         forbidden_transitions: vec![vec!["e1".into(), "e4".into()]],
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
     assert!(
         has_non_empty_shutoko_loop(&graph_c, "Anchor"),
@@ -3113,6 +3167,8 @@ fn test_issue6_item2_simple_path_first_exit() {
         ],
         billing_pairs: Vec::new(),
         forbidden_transitions: vec![vec!["e1".into(), "exit_walk".into()]],
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
 
     let (min_dist, first_exits) = find_first_exits_from_anchor(&graph, "A").unwrap();
@@ -3134,6 +3190,9 @@ fn test_issue6_item2_simple_path_first_exit() {
         prices: Vec::new(),
         entry_name: None,
         exit_name: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
     let ok = validate_billing_pair(&graph, &pair);
     assert!(
@@ -3215,6 +3274,8 @@ fn test_issue6_item2_first_exit_search_budget_exceeded() {
         ],
         billing_pairs: Vec::new(),
         forbidden_transitions: vec![vec!["e3".into(), "e7".into()]],
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
 
     // Full budget: succeeds with the simple-path answer.
@@ -3272,6 +3333,8 @@ fn test_issue6_item3_silent_cap_2001_hop_loop_detected() {
         edges,
         billing_pairs: Vec::new(),
         forbidden_transitions: Vec::new(),
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
     assert!(
         has_non_empty_shutoko_loop(&graph, "n0"),
@@ -3710,4 +3773,164 @@ fn test_unknown_highway_value_does_not_crash() {
         report.undecidable_ramp_edges, 1,
         "ramp with only unknown-highway context must still be counted as undecidable"
     );
+}
+
+#[test]
+fn test_cli_with_inventory_bindings_and_tariffs() {
+    let tmp_dir = std::env::temp_dir().join(format!("shutoko-test-inv-{}", std::process::id()));
+    let osm_path = tmp_dir.join("osm.json");
+    let seed_path = tmp_dir.join("seed.json");
+    let out_dir_1 = tmp_dir.join("out1");
+    let out_dir_2 = tmp_dir.join("out2");
+
+    let _ = std::fs::create_dir_all(&tmp_dir);
+
+    // Minimal C1 Kandabashi OSM snippet
+    let osm_json = json!({
+        "elements": [
+            {"type": "node", "id": 1, "lat": 35.6880, "lon": 139.7640},
+            {"type": "node", "id": 2, "lat": 35.6882, "lon": 139.7651},
+            {"type": "node", "id": 3, "lat": 35.6885, "lon": 139.7660},
+            {"type": "node", "id": 4, "lat": 35.6890, "lon": 139.7670},
+            {"type": "node", "id": 5, "lat": 35.6875, "lon": 139.7665},
+            {"type": "node", "id": 6, "lat": 35.6890, "lon": 139.7680},
+
+            {"type": "way", "id": 1, "nodes": [1, 2], "tags": {"highway": "primary", "oneway": "yes"}},
+            // Entry ramp way 27155742 (matching Kandabashi entry)
+            {"type": "way", "id": 27155742, "nodes": [2, 3], "tags": {"highway": "motorway_link", "name": "神田橋入口", "oneway": "yes"}},
+            {"type": "way", "id": 100, "nodes": [3, 4], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
+            {"type": "way", "id": 101, "nodes": [4, 5], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
+            {"type": "way", "id": 102, "nodes": [5, 3], "tags": {"highway": "motorway", "ref": "C1", "oneway": "yes"}},
+            // Exit ramp way 390441534 (matching Kandabashi exit)
+            {"type": "way", "id": 390441534, "nodes": [4, 6], "tags": {"highway": "motorway_link", "name": "神田橋出口", "oneway": "yes"}},
+            {"type": "way", "id": 7, "nodes": [6, 1], "tags": {"highway": "primary", "oneway": "yes"}}
+        ]
+    });
+    std::fs::write(&osm_path, serde_json::to_string_pretty(&osm_json).unwrap()).unwrap();
+
+    let seed_json = json!({
+        "schemaVersion": 1,
+        "description": "CLI test seed",
+        "billingPairs": [
+            {
+                "id": "bp-kandabashi-1",
+                "entryOsmWayId": 27155742,
+                "exitOsmWayId": 390441534,
+                "anchorOsmNodeId": 3,
+                "status": "verified",
+                "oneSectionAheadVerified": true,
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [
+                    {
+                        "amountYen": 300,
+                        "effectiveFrom": "2026-01-01T00:00:00Z",
+                        "effectiveTo": null
+                    }
+                ],
+                "provenance": {
+                    "source": "https://www.shutoko.jp/tolls/about/price/",
+                    "sourceDate": "2026-09-10",
+                    "notes": "Verified tariff"
+                }
+            }
+        ]
+    });
+    std::fs::write(
+        &seed_path,
+        serde_json::to_string_pretty(&seed_json).unwrap(),
+    )
+    .unwrap();
+
+    let bin_path = env!("CARGO_BIN_EXE_shutoko-graph-builder");
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let inv_path = manifest_dir.join("../../data/ramp-inventory.json");
+    let bin_data_path = manifest_dir.join("../../data/osm-ramp-bindings.json");
+    let tar_path = manifest_dir.join("../../data/od-tariffs.json");
+
+    // Run with real inventory, bindings, and tariffs files
+    let status1 = std::process::Command::new(bin_path)
+        .args([
+            "--osm",
+            osm_path.to_str().unwrap(),
+            "--seed",
+            seed_path.to_str().unwrap(),
+            "--inventory",
+            inv_path.to_str().unwrap(),
+            "--bindings",
+            bin_data_path.to_str().unwrap(),
+            "--tariffs",
+            tar_path.to_str().unwrap(),
+            "--out-dir",
+            out_dir_1.to_str().unwrap(),
+            "--release-id",
+            "cli-inv-test-rel",
+            "--built-at",
+            "2026-09-10T00:00:00Z",
+            "--source-date",
+            "2026-09-10",
+        ])
+        .status()
+        .expect("failed to execute binary (run 1)");
+    assert!(status1.success(), "run 1 failed");
+
+    // Run 2 for determinism check
+    let status2 = std::process::Command::new(bin_path)
+        .args([
+            "--osm",
+            osm_path.to_str().unwrap(),
+            "--seed",
+            seed_path.to_str().unwrap(),
+            "--inventory",
+            inv_path.to_str().unwrap(),
+            "--bindings",
+            bin_data_path.to_str().unwrap(),
+            "--tariffs",
+            tar_path.to_str().unwrap(),
+            "--out-dir",
+            out_dir_2.to_str().unwrap(),
+            "--release-id",
+            "cli-inv-test-rel",
+            "--built-at",
+            "2026-09-10T00:00:00Z",
+            "--source-date",
+            "2026-09-10",
+        ])
+        .status()
+        .expect("failed to execute binary (run 2)");
+    assert!(status2.success(), "run 2 failed");
+
+    // Check all artifacts exist and are byte-for-byte identical
+    for filename in &[
+        "graph.json",
+        "snap-index.json",
+        "manifest.json",
+        "ramps.json",
+    ] {
+        let b1 = std::fs::read(out_dir_1.join(filename)).expect("missing file in out1");
+        let b2 = std::fs::read(out_dir_2.join(filename)).expect("missing file in out2");
+        assert_eq!(b1, b2, "byte mismatch in {}", filename);
+    }
+
+    // Verify ramps.json content
+    let ramps_raw = std::fs::read_to_string(out_dir_1.join("ramps.json")).unwrap();
+    let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
+    assert_eq!(ramps_json["schemaVersion"], 1);
+    assert_eq!(ramps_json["releaseId"], "cli-inv-test-rel");
+    assert_eq!(ramps_json["totalRamps"], 339);
+    assert!(ramps_json["boundRamps"].as_u64().unwrap() >= 1);
+
+    // Verify graph.json has ramps and odTariffs
+    let graph_raw = std::fs::read_to_string(out_dir_1.join("graph.json")).unwrap();
+    let graph_json: serde_json::Value = serde_json::from_str(&graph_raw).unwrap();
+    assert!(!graph_json["ramps"].as_array().unwrap().is_empty());
+    assert!(!graph_json["odTariffs"].as_array().unwrap().is_empty());
+
+    // Verify manifest includes ramps.json
+    let manifest_raw = std::fs::read_to_string(out_dir_1.join("manifest.json")).unwrap();
+    let manifest_json: serde_json::Value = serde_json::from_str(&manifest_raw).unwrap();
+    let artifacts = manifest_json["artifacts"].as_array().unwrap();
+    assert!(artifacts.iter().any(|a| a["path"] == "ramps.json"));
+
+    // Clean up
+    let _ = std::fs::remove_dir_all(&tmp_dir);
 }

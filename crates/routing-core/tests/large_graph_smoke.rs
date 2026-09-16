@@ -102,6 +102,8 @@ fn large_graph_smoke_search() {
             release_id: release_id.clone(),
             origin_node_id: Some(origin_node_id.to_owned()),
             origin: None,
+            entry_ramp_id: None,
+            exit_ramp_id: None,
             min_minutes: 15,
             max_minutes: 60,
             vehicle_profile: vehicle_profile.clone(),
@@ -147,9 +149,17 @@ fn large_graph_smoke_search() {
             issue25_results.push((pair_id, res1.status.clone(), res1.candidates.len()));
         }
 
-        // Soft assertion: a search that returns Err would already have panicked above.
-        // We only hard-assert that candidates is never negative (trivially true), but
-        // we do want to know when candidates == 0 for pairs that *should* be connected.
+        // Hard assertion: every tested pair is a verified pair that must produce legal candidates
+        assert_eq!(
+            res1.status, "ok",
+            "search status must be ok for verified pair {}",
+            pair_id
+        );
+        assert!(
+            !res1.candidates.is_empty(),
+            "expected at least one candidate for verified pair {}",
+            pair_id
+        );
     }
 
     // ------------------------------------------------------------------
@@ -235,6 +245,8 @@ fn large_graph_smoke_search_extended_limits() {
             release_id: release_id.clone(),
             origin_node_id: Some(origin_node_id.to_owned()),
             origin: None,
+            entry_ramp_id: None,
+            exit_ramp_id: None,
             min_minutes: 15,
             max_minutes: 60,
             vehicle_profile: vehicle_profile.clone(),

@@ -104,6 +104,8 @@ fn real_graph_routing_core_search_returns_candidates() {
         release_id: "c1-real-v2".into(),
         origin_node_id: Some("n:1070862943".into()),
         origin: None, // Kandabashi surface street node
+        entry_ramp_id: None,
+        exit_ramp_id: None,
         min_minutes: 15,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -180,6 +182,8 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
         release_id: "c1-real-v2".into(),
         origin_node_id: Some("n:1070862943".into()),
         origin: None,
+        entry_ramp_id: None,
+        exit_ramp_id: None,
         min_minutes: 15,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -346,6 +350,8 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             release_id: g.release_id.clone(),
             origin_node_id: Some(origin_node_id.clone()),
             origin: None,
+            entry_ramp_id: None,
+            exit_ramp_id: None,
             min_minutes: 15,
             max_minutes: contract.max_minutes,
             vehicle_profile: "passenger-car-etc".into(),
@@ -456,6 +462,8 @@ fn real_graph_coordinate_input_snap_and_candidate_enrichment() {
             lat: 35.6896727,
             lon: 139.7644248,
         }),
+        entry_ramp_id: None,
+        exit_ramp_id: None,
         min_minutes: 15,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -515,8 +523,10 @@ fn real_graph_no_entry_edges_coordinate_is_no_connection() {
     let mut g = real_graph();
     // Entry エッジを除去 → snap grid が空になる。
     g.edges.retain(|e| e.kind != EdgeKind::Entry);
-    // BillingPairs は Entry エッジを参照するため合わせて除去する。
+    // BillingPairs and entry Ramps reference Entry edges; clear them to keep graph valid.
     g.billing_pairs.clear();
+    g.ramps
+        .retain(|r| g.edges.iter().any(|e| e.id == r.edge_id));
     let limits = SearchLimits::default();
     let request = SearchRequest {
         request_id: "req-no-entry".into(),
@@ -526,6 +536,8 @@ fn real_graph_no_entry_edges_coordinate_is_no_connection() {
             lat: 35.62,
             lon: 139.79,
         }),
+        entry_ramp_id: None,
+        exit_ramp_id: None,
         min_minutes: 15,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -569,6 +581,8 @@ fn test_eight_pairs_determinism_and_performance_table() {
             release_id: g.release_id.clone(),
             origin_node_id: Some(origin.clone()),
             origin: None,
+            entry_ramp_id: None,
+            exit_ramp_id: None,
             min_minutes: 15,
             max_minutes,
             vehicle_profile: "passenger-car-etc".into(),
@@ -631,6 +645,8 @@ fn osaka_station_returns_no_connection_due_to_distance_cap() {
             lat: 34.7025,
             lon: 135.4959,
         }),
+        entry_ramp_id: None,
+        exit_ramp_id: None,
         min_minutes: 30,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -668,6 +684,8 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
             lat: 35.6812,
             lon: 139.7671,
         }),
+        entry_ramp_id: None,
+        exit_ramp_id: None,
         min_minutes: 30,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
@@ -720,6 +738,8 @@ fn shinjuku_and_shibuya_stations_return_candidates() {
             release_id: "c1-real-v2".into(),
             origin_node_id: None,
             origin: Some(LatLng { lat, lon }),
+            entry_ramp_id: None,
+            exit_ramp_id: None,
             min_minutes: 30,
             max_minutes: 60,
             vehicle_profile: "passenger-car-etc".into(),
@@ -768,6 +788,8 @@ fn coordinate_request(request_id: &str, lat: f64, lon: f64, max_minutes: u64) ->
         release_id: "c1-real-v2".into(),
         origin_node_id: None,
         origin: Some(LatLng { lat, lon }),
+        entry_ramp_id: None,
+        exit_ramp_id: None,
         min_minutes: 15,
         max_minutes,
         vehicle_profile: "passenger-car-etc".into(),
@@ -962,6 +984,8 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
             release_id: "c1-real-v2".into(),
             origin_node_id: Some("n:1070862943".into()),
             origin: None,
+            entry_ramp_id: None,
+            exit_ramp_id: None,
             min_minutes: 15,
             max_minutes: 60,
             vehicle_profile: "passenger-car-etc".into(),

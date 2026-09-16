@@ -23,7 +23,9 @@
         "motorwayNodeId": 3977436333,
         "direction": "inner",
         "notes": "Verified OSM binding for 宝町 (C1 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-inner:ginza-entry",
@@ -45,7 +47,9 @@
         "motorwayNodeId": 1834887244,
         "direction": "inner",
         "notes": "Verified OSM binding for 銀座 (C1 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-outer:ginza-entry",
@@ -67,7 +71,9 @@
         "motorwayNodeId": 13042475627,
         "direction": "outer",
         "notes": "Verified OSM binding for 銀座 (C1 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-inner:shibakoen-entry",
@@ -75,21 +81,15 @@
       "lon": 139.744355,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-c1/shibakouen/",
-        "https://www.openstreetmap.org/way/4853801",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:4853801:940044988:6389606756",
+        "duplicate-members:ramp:c1-inner:shibakoen-entry, ramp:c1-outer:shibakoen-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:c1-inner:shibakoen-entry",
-        "osmWayId": 4853801,
-        "osmNodeId": 940044988,
-        "motorwayNodeId": 6389606756,
-        "direction": "inner",
-        "notes": "Verified OSM binding for 芝公園 (C1 inner)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-outer:shibakoen-entry",
@@ -97,21 +97,15 @@
       "lon": 139.744355,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-c1/shibakouen/",
-        "https://www.openstreetmap.org/way/4853801",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:4853801:940044988:6389606756",
+        "duplicate-members:ramp:c1-inner:shibakoen-entry, ramp:c1-outer:shibakoen-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:c1-outer:shibakoen-entry",
-        "osmWayId": 4853801,
-        "osmNodeId": 940044988,
-        "motorwayNodeId": 6389606756,
-        "direction": "outer",
-        "notes": "Verified OSM binding for 芝公園 (C1 outer)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-inner:iikura-entry",
@@ -133,7 +127,9 @@
         "motorwayNodeId": 2165350448,
         "direction": "inner",
         "notes": "Verified OSM binding for 飯倉 (C1 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-inner:kasumigaseki-entry",
@@ -155,7 +151,9 @@
         "motorwayNodeId": 8512840452,
         "direction": "inner",
         "notes": "Verified OSM binding for 霞が関 (C1 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-outer:kasumigaseki-entry",
@@ -177,7 +175,9 @@
         "motorwayNodeId": 4366608585,
         "direction": "outer",
         "notes": "Verified OSM binding for 霞が関 (C1 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-inner:daikancho-entry",
@@ -199,7 +199,9 @@
         "motorwayNodeId": 256672382,
         "direction": "inner",
         "notes": "Verified OSM binding for 代官町 (C1 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-inner:kandabashi-entry",
@@ -221,7 +223,9 @@
         "motorwayNodeId": 6188927991,
         "direction": "inner",
         "notes": "Verified OSM binding for 神田橋 (C1 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-outer:kandabashi-entry",
@@ -243,7 +247,9 @@
         "motorwayNodeId": 6241744894,
         "direction": "outer",
         "notes": "Verified OSM binding for 神田橋 (C1 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-outer:kyobashi-entry",
@@ -256,7 +262,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G30",
         "https://www.shutoko.jp/use/network/map/route-c1/kyoubashi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-outer:shiodome-entry",
@@ -278,7 +286,9 @@
         "motorwayNodeId": 7093187743,
         "direction": "outer",
         "notes": "Verified OSM binding for 汐留 (C1 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:1h-inbound:shibaura-entry",
@@ -286,21 +296,14 @@
       "lon": 139.749702,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "OSM way 861095931 は芝公園側に位置し、芝浦（1H）入口としての施設・路線・方向を一意に立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-1h/shibaura/",
         "https://www.openstreetmap.org/way/861095931",
-        "analyze-duplicate-bindings-001.json"
+        "verify-core-r2-opencode.json:R2OC-001"
       ],
-      "binding": {
-        "rampId": "ramp:1h-inbound:shibaura-entry",
-        "osmWayId": 861095931,
-        "osmNodeId": 8025624725,
-        "motorwayNodeId": 8327736737,
-        "direction": "inbound",
-        "notes": "Verified OSM binding for 芝浦 (1H inbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1h-outbound:shibaura-entry",
@@ -322,7 +325,9 @@
         "motorwayNodeId": 31253909,
         "direction": "outbound",
         "notes": "Verified OSM binding for 芝浦 (1H outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:1h-inbound:suzugamori-entry",
@@ -335,7 +340,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G03",
         "https://www.shutoko.jp/use/network/map/route-1h/suzugamori/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1h-inbound:heiwajima-entry",
@@ -357,7 +364,9 @@
         "motorwayNodeId": 2618098819,
         "direction": "inbound",
         "notes": "Verified OSM binding for 平和島 (1H inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:1h-outbound:heiwajima-entry",
@@ -370,7 +379,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G02",
         "https://www.shutoko.jp/use/network/map/route-1h/heiwajima/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1h-inbound:kukonishi-entry",
@@ -383,7 +394,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G02",
         "https://www.shutoko.jp/use/network/map/route-1h/kukounishi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1h-inbound:haneda-entry",
@@ -405,7 +418,9 @@
         "motorwayNodeId": 6387199165,
         "direction": "inbound",
         "notes": "Verified OSM binding for 羽田 (1H inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:1h-outbound:haneda-entry",
@@ -418,7 +433,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G53",
         "https://www.shutoko.jp/use/network/map/route-1h/haneda/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1h-outbound:katsushima-entry",
@@ -433,7 +450,9 @@
         "data/official-population-snapshot.json:1849",
         "fixtures/osm/shutoko-all.json:151566",
         "https://www.openstreetmap.org/way/5219298"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:2-inbound:tengenji-entry",
@@ -446,7 +465,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G19",
         "https://www.shutoko.jp/use/network/map/route-2/tengenji/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:2-inbound:meguro-entry",
@@ -468,7 +489,9 @@
         "motorwayNodeId": 2177935839,
         "direction": "inbound",
         "notes": "Verified OSM binding for 目黒 (2 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:2-inbound:ebara-entry",
@@ -481,7 +504,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G48",
         "https://www.shutoko.jp/use/network/map/route-2/ebara/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:2-inbound:togoshi-entry",
@@ -494,7 +519,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G48",
         "https://www.shutoko.jp/use/network/map/route-2/togoshi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:3-inbound:takagicho-entry",
@@ -516,7 +543,9 @@
         "motorwayNodeId": 2127484099,
         "direction": "inbound",
         "notes": "Verified OSM binding for 高樹町 (3 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:3-outbound:shibuya-entry",
@@ -538,7 +567,9 @@
         "motorwayNodeId": 9037775317,
         "direction": "outbound",
         "notes": "Verified OSM binding for 渋谷 (3 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:3-inbound:shibuya-entry",
@@ -560,7 +591,9 @@
         "motorwayNodeId": 7234706480,
         "direction": "inbound",
         "notes": "Verified OSM binding for 渋谷 (3 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:3-inbound:sangenjaya-entry",
@@ -582,7 +615,9 @@
         "motorwayNodeId": 5687926012,
         "direction": "inbound",
         "notes": "Verified OSM binding for 三軒茶屋 (3 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:3-inbound:yoga-entry",
@@ -604,7 +639,9 @@
         "motorwayNodeId": 927639584,
         "direction": "inbound",
         "notes": "Verified OSM binding for 用賀 (3 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:3-outbound:ikejiri-entry",
@@ -626,7 +663,9 @@
         "motorwayNodeId": 2360725234,
         "direction": "outbound",
         "notes": "Verified OSM binding for 池尻 (3 outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:4-inbound:gaien-entry",
@@ -648,7 +687,9 @@
         "motorwayNodeId": 3865016179,
         "direction": "inbound",
         "notes": "Verified OSM binding for 外苑 (4 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:4-outbound:gaien-entry",
@@ -670,7 +711,9 @@
         "motorwayNodeId": 4908207829,
         "direction": "outbound",
         "notes": "Verified OSM binding for 外苑 (4 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:4-inbound:ramp-entry",
@@ -692,7 +735,9 @@
         "motorwayNodeId": 1973313111,
         "direction": "inbound",
         "notes": "Verified OSM binding for 代々木 (4 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:4-inbound:shinjuku-entry",
@@ -705,7 +750,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G06",
         "https://www.shutoko.jp/use/network/map/route-4/shinjuku/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:4-inbound:hatagaya-entry",
@@ -718,7 +765,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G32",
         "https://www.shutoko.jp/use/network/map/route-4/hatagaya/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:4-outbound:eifuku-entry",
@@ -740,7 +789,9 @@
         "motorwayNodeId": 311575376,
         "direction": "outbound",
         "notes": "Verified OSM binding for 永福 (4 outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:4-inbound:eifuku-entry",
@@ -762,7 +813,9 @@
         "motorwayNodeId": 8303133940,
         "direction": "inbound",
         "notes": "Verified OSM binding for 永福 (4 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:4-inbound:takaido-entry",
@@ -784,7 +837,9 @@
         "motorwayNodeId": 3407837818,
         "direction": "inbound",
         "notes": "Verified OSM binding for 高井戸 (4 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:4-outbound:hatsudai-entry",
@@ -806,7 +861,9 @@
         "motorwayNodeId": 8302849481,
         "direction": "outbound",
         "notes": "Verified OSM binding for 初台 (4 outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:5-inbound:nishikanda-entry",
@@ -828,7 +885,9 @@
         "motorwayNodeId": 9676207393,
         "direction": "inbound",
         "notes": "Verified OSM binding for 西神田 (5 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-inbound:gokokuji-entry",
@@ -850,7 +909,9 @@
         "motorwayNodeId": 6368120239,
         "direction": "inbound",
         "notes": "Verified OSM binding for 護国寺 (5 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-inbound:higashi-ikebukuro-entry",
@@ -864,7 +925,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-5/higashiikebukuro/",
         "https://www.openstreetmap.org/way/182465955"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:5-outbound:higashi-ikebukuro-entry",
@@ -886,7 +949,9 @@
         "motorwayNodeId": 6368120246,
         "direction": "outbound",
         "notes": "Verified OSM binding for 東池袋 (5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-inbound:kita-ikebukuro-entry",
@@ -908,7 +973,9 @@
         "motorwayNodeId": 1928229724,
         "direction": "inbound",
         "notes": "Verified exact directed segment (G17)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-inbound:itabashi-honcho-entry",
@@ -930,7 +997,9 @@
         "motorwayNodeId": 1928885697,
         "direction": "inbound",
         "notes": "Verified exact directed segment (G39)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-outbound:itabashi-honcho-entry",
@@ -952,7 +1021,9 @@
         "motorwayNodeId": 4362184910,
         "direction": "outbound",
         "notes": "Verified OSM binding for 板橋本町 (5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-inbound:nakadai-entry",
@@ -974,7 +1045,9 @@
         "motorwayNodeId": 2110614955,
         "direction": "inbound",
         "notes": "Verified OSM binding for 中台 (5 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-inbound:takashimadaira-entry",
@@ -996,7 +1069,9 @@
         "motorwayNodeId": 2191158528,
         "direction": "inbound",
         "notes": "Verified OSM binding for 高島平 (5 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-inbound:toda-minami-entry",
@@ -1009,7 +1084,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G34",
         "https://www.shutoko.jp/use/network/map/route-5/todaminami/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:5-outbound:hitotsubashi-entry",
@@ -1031,7 +1108,9 @@
         "motorwayNodeId": 5991853420,
         "direction": "outbound",
         "notes": "Verified OSM binding for 一ツ橋 (5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-outbound:iidabashi-entry",
@@ -1053,7 +1132,9 @@
         "motorwayNodeId": 6244534907,
         "direction": "outbound",
         "notes": "Verified OSM binding for 飯田橋 (5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-outbound:toda-entry",
@@ -1068,7 +1149,9 @@
         "data/official-population-snapshot.json:2169",
         "fixtures/osm/shutoko-all.json:211964",
         "https://www.openstreetmap.org/way/762093191"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:6m-inbound:komagata-entry",
@@ -1081,7 +1164,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G18",
         "https://www.shutoko.jp/use/network/map/route-6mu/komagata/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:6m-outbound:mukojima-entry",
@@ -1094,7 +1179,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G10",
         "https://www.shutoko.jp/use/network/map/route-6mu/mukoujima/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:6m-inbound:mukojima-entry",
@@ -1116,7 +1203,9 @@
         "motorwayNodeId": 9717252221,
         "direction": "inbound",
         "notes": "Verified OSM binding for 向島 (6M inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6m-inbound:tsutsumidori-entry",
@@ -1138,7 +1227,9 @@
         "motorwayNodeId": 1671664696,
         "direction": "inbound",
         "notes": "Verified OSM binding for 堤通 (6M inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6m-outbound:tsutsumidori-entry",
@@ -1160,7 +1251,9 @@
         "motorwayNodeId": 6372470780,
         "direction": "outbound",
         "notes": "Verified OSM binding for 堤通 (6M outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:7-inbound:kinshicho-entry",
@@ -1182,7 +1275,9 @@
         "motorwayNodeId": 1674175176,
         "direction": "inbound",
         "notes": "Verified OSM binding for 錦糸町 (7 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:7-outbound:kinshicho-entry",
@@ -1204,7 +1299,9 @@
         "motorwayNodeId": 8888284786,
         "direction": "outbound",
         "notes": "Verified OSM binding for 錦糸町 (7 outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:7-inbound:komatsugawa-entry",
@@ -1226,7 +1323,9 @@
         "motorwayNodeId": 7903143893,
         "direction": "inbound",
         "notes": "Verified exact directed segment (G12)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:7-inbound:ichinoe-entry",
@@ -1248,7 +1347,9 @@
         "motorwayNodeId": 8378201618,
         "direction": "inbound",
         "notes": "Verified OSM binding for 一之江 (7 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:9-inbound:kiba-entry",
@@ -1262,7 +1363,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-9/kiba/",
         "https://www.openstreetmap.org/way/1024107817"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:9-outbound:fukuzumi-entry",
@@ -1284,7 +1387,9 @@
         "motorwayNodeId": 1640003756,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G01)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:9-outbound:shiohama-entry",
@@ -1306,7 +1411,9 @@
         "motorwayNodeId": 1947552219,
         "direction": "outbound",
         "notes": "Verified OSM binding for 塩浜 (9 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:10-outbound:toyosu-entry",
@@ -1328,7 +1435,9 @@
         "motorwayNodeId": 7105172061,
         "direction": "outbound",
         "notes": "Verified OSM binding for 豊洲 (10 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:10-outbound:harumi-entry",
@@ -1350,7 +1459,9 @@
         "motorwayNodeId": 5470031353,
         "direction": "outbound",
         "notes": "Verified OSM binding for 晴海 (10 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:11-inbound:daiba-entry",
@@ -1372,7 +1483,9 @@
         "motorwayNodeId": 6773622242,
         "direction": "inbound",
         "notes": "Verified OSM binding for 台場 (11 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:6s-inbound:kahei-entry",
@@ -1394,7 +1507,9 @@
         "motorwayNodeId": 7133587119,
         "direction": "inbound",
         "notes": "Verified OSM binding for 加平 (6S inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6s-outbound:kahei-entry",
@@ -1416,7 +1531,9 @@
         "motorwayNodeId": 7133587119,
         "direction": "outbound",
         "notes": "Verified OSM binding for 加平 (6S outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6s-inbound:kahei-653-entry",
@@ -1438,7 +1555,9 @@
         "motorwayNodeId": 7133587119,
         "direction": "inbound",
         "notes": "Verified OSM binding for 加平 (6S inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6s-outbound:kahei-654-entry",
@@ -1460,7 +1579,9 @@
         "motorwayNodeId": 7133587119,
         "direction": "outbound",
         "notes": "Verified OSM binding for 加平 (6S outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6s-inbound:yashio-minami-entry",
@@ -1482,7 +1603,9 @@
         "motorwayNodeId": 2579845725,
         "direction": "inbound",
         "notes": "Verified OSM binding for 八潮南 (6S inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6s-outbound:yashio-minami-entry",
@@ -1504,7 +1627,9 @@
         "motorwayNodeId": 9665676558,
         "direction": "outbound",
         "notes": "Verified OSM binding for 八潮南 (6S outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:6s-inbound:yashio-entry",
@@ -1526,7 +1651,9 @@
         "motorwayNodeId": 9441264049,
         "direction": "inbound",
         "notes": "Verified exact directed segment (unresolved-verified)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:1u-inbound:honcho-entry",
@@ -1548,7 +1675,9 @@
         "motorwayNodeId": 7637464475,
         "direction": "inbound",
         "notes": "Verified OSM binding for 本町 (1U inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:1u-outbound:honcho-entry",
@@ -1570,7 +1699,9 @@
         "motorwayNodeId": 2128403161,
         "direction": "outbound",
         "notes": "Verified OSM binding for 本町 (1U outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:1u-inbound:ueno-entry",
@@ -1592,7 +1723,9 @@
         "motorwayNodeId": 2093245881,
         "direction": "inbound",
         "notes": "Verified OSM binding for 上野 (1U inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:1u-inbound:iriya-entry",
@@ -1614,7 +1747,9 @@
         "motorwayNodeId": 1041276905,
         "direction": "inbound",
         "notes": "Verified OSM binding for 入谷 (1U inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s1-inbound:shikahamabashi-entry",
@@ -1622,21 +1757,15 @@
       "lon": 139.746582,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-s1/shikahamabashi/",
-        "https://www.openstreetmap.org/way/438481856",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:438481856:5964179230:5653183406",
+        "duplicate-members:ramp:s1-inbound:shikahamabashi-entry, ramp:s1-outbound:shikahamabashi-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:s1-inbound:shikahamabashi-entry",
-        "osmWayId": 438481856,
-        "osmNodeId": 5964179230,
-        "motorwayNodeId": 5653183406,
-        "direction": "inbound",
-        "notes": "Verified OSM binding for 鹿浜橋 (S1 inbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s1-outbound:shikahamabashi-entry",
@@ -1644,21 +1773,15 @@
       "lon": 139.746582,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-s1/shikahamabashi/",
-        "https://www.openstreetmap.org/way/438481856",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:438481856:5964179230:5653183406",
+        "duplicate-members:ramp:s1-inbound:shikahamabashi-entry, ramp:s1-outbound:shikahamabashi-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:s1-outbound:shikahamabashi-entry",
-        "osmWayId": 438481856,
-        "osmNodeId": 5964179230,
-        "motorwayNodeId": 5653183406,
-        "direction": "outbound",
-        "notes": "Verified OSM binding for 鹿浜橋 (S1 outbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s1-inbound:ramp-entry",
@@ -1680,7 +1803,9 @@
         "motorwayNodeId": 5977844774,
         "direction": "inbound",
         "notes": "Verified OSM binding for 加賀 (S1 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s1-inbound:shingo-entry",
@@ -1693,7 +1818,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G22",
         "https://www.shutoko.jp/use/network/map/route-s1/shingou/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s1-outbound:shingo-entry",
@@ -1706,7 +1833,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G07",
         "https://www.shutoko.jp/use/network/map/route-s1/shingou/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s1-inbound:angyo-entry",
@@ -1719,7 +1848,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G07",
         "https://www.shutoko.jp/use/network/map/route-s1/angyou/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s1-inbound:araijuku-entry",
@@ -1741,7 +1872,9 @@
         "motorwayNodeId": 1226695201,
         "direction": "inbound",
         "notes": "Verified exact directed segment (unresolved-verified)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s1-outbound:adachi-iriya-entry",
@@ -1754,7 +1887,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G22",
         "https://www.shutoko.jp/use/network/map/route-s1/adachiiriya/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s5-inbound:urawa-minami-entry",
@@ -1776,7 +1911,9 @@
         "motorwayNodeId": 4362194610,
         "direction": "inbound",
         "notes": "Verified OSM binding for 浦和南 (S5 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s5-inbound:yono-entry",
@@ -1798,7 +1935,9 @@
         "motorwayNodeId": 1690305263,
         "direction": "inbound",
         "notes": "Verified OSM binding for 与野 (S5 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s5-outbound:urawa-kita-entry",
@@ -1820,7 +1959,9 @@
         "motorwayNodeId": 3817809629,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G11)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:s2-inbound:shintoshin-nishi-entry",
@@ -1828,21 +1969,15 @@
       "lon": 139.612265,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G11",
-        "https://www.shutoko.jp/use/network/map/route-s2/shintoshinnishi/",
-        "https://www.openstreetmap.org/way/283918824"
+        "directed-segment:283918824:2877276571:2877276574",
+        "duplicate-members:ramp:s2-inbound:shintoshin-nishi-entry, ramp:s2-outbound:shintoshin-nishi-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:s2-inbound:shintoshin-nishi-entry",
-        "osmWayId": 283918824,
-        "osmNodeId": 2877276571,
-        "motorwayNodeId": 2877276574,
-        "direction": "inbound",
-        "notes": "Verified exact directed segment (G11)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s2-outbound:shintoshin-nishi-entry",
@@ -1850,21 +1985,15 @@
       "lon": 139.612265,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G11",
-        "https://www.shutoko.jp/use/network/map/route-s2/shintoshinnishi/",
-        "https://www.openstreetmap.org/way/283918824"
+        "directed-segment:283918824:2877276571:2877276574",
+        "duplicate-members:ramp:s2-inbound:shintoshin-nishi-entry, ramp:s2-outbound:shintoshin-nishi-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:s2-outbound:shintoshin-nishi-entry",
-        "osmWayId": 283918824,
-        "osmNodeId": 2877276571,
-        "motorwayNodeId": 2877276574,
-        "direction": "outbound",
-        "notes": "Verified exact directed segment (G11)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s2-inbound:shintoshin-entry",
@@ -1877,7 +2006,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G52",
         "https://www.shutoko.jp/use/network/map/route-s2/shintoshin/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s2-outbound:shintoshin-entry",
@@ -1899,7 +2030,9 @@
         "motorwayNodeId": 2108155783,
         "direction": "outbound",
         "notes": "Verified OSM binding for 新都心 (S2 outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:s2-inbound:saitama-minuma-entry",
@@ -1912,7 +2045,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G52",
         "https://www.shutoko.jp/use/network/map/route-s2/saitamaminuma/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-outer:gotanda-entry",
@@ -1934,7 +2069,9 @@
         "motorwayNodeId": 7530433787,
         "direction": "outer",
         "notes": "Verified OSM binding for 五反田 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-outer:chukan-oiminami-entry",
@@ -1956,7 +2093,9 @@
         "motorwayNodeId": 6833965601,
         "direction": "outer",
         "notes": "Verified OSM binding for 中環大井南 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-outer:takamatsu-entry",
@@ -1978,7 +2117,9 @@
         "motorwayNodeId": 1928229701,
         "direction": "outer",
         "notes": "Verified OSM binding for 高松 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:ogi-ohashi-entry",
@@ -1991,7 +2132,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G37",
         "https://www.shutoko.jp/use/network/map/route-c2/ogiohashi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-outer:ogi-ohashi-entry",
@@ -2004,7 +2147,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G37",
         "https://www.shutoko.jp/use/network/map/route-c2/ogiohashi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-inner:senju-shinbashi-entry",
@@ -2026,7 +2171,9 @@
         "motorwayNodeId": 6382929609,
         "direction": "inner",
         "notes": "Verified OSM binding for 千住新橋 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-outer:senju-shinbashi-entry",
@@ -2039,7 +2186,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G13",
         "https://www.shutoko.jp/use/network/map/route-c2/senjushinbashi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-inner:yotsugi-entry",
@@ -2047,21 +2196,15 @@
       "lon": 139.825903,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G13",
-        "https://www.shutoko.jp/use/network/map/route-c2/yotsugi/",
-        "https://www.openstreetmap.org/way/58868493"
+        "directed-segment:58868493:1697722138:723656977",
+        "duplicate-members:ramp:c2-inner:yotsugi-entry, ramp:c2-outer:yotsugi-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:c2-inner:yotsugi-entry",
-        "osmWayId": 58868493,
-        "osmNodeId": 1697722138,
-        "motorwayNodeId": 723656977,
-        "direction": "inner",
-        "notes": "Verified exact directed segment (G13)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-outer:yotsugi-entry",
@@ -2069,21 +2212,15 @@
       "lon": 139.832166,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-c2/yotsugi/",
-        "https://www.openstreetmap.org/way/58868493",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:58868493:1697722138:723656977",
+        "duplicate-members:ramp:c2-inner:yotsugi-entry, ramp:c2-outer:yotsugi-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:c2-outer:yotsugi-entry",
-        "osmWayId": 58868493,
-        "osmNodeId": 1697722138,
-        "motorwayNodeId": 723656977,
-        "direction": "outer",
-        "notes": "Verified OSM binding for 四つ木 (C2 outer)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-inner:hirai-ohashi-entry",
@@ -2105,7 +2242,9 @@
         "motorwayNodeId": 1592997567,
         "direction": "inner",
         "notes": "Verified OSM binding for 平井大橋 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:seishincho-entry",
@@ -2118,7 +2257,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G42",
         "https://www.shutoko.jp/use/network/map/route-c2/seishincho/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-outer:kosuge-entry",
@@ -2140,7 +2281,9 @@
         "motorwayNodeId": 9847554773,
         "direction": "outer",
         "notes": "Verified OSM binding for 小菅 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-outer:funaboribashi-entry",
@@ -2154,7 +2297,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-c2/funaboribashi/",
         "https://www.openstreetmap.org/way/59583395"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-inner:nishi-ikebukuro-entry",
@@ -2176,7 +2321,9 @@
         "motorwayNodeId": 9776186076,
         "direction": "inner",
         "notes": "Verified OSM binding for 西池袋 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:takinogawa-entry",
@@ -2198,7 +2345,9 @@
         "motorwayNodeId": 4598163080,
         "direction": "inner",
         "notes": "Verified OSM binding for 滝野川 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:oji-minami-entry",
@@ -2211,7 +2360,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G37",
         "https://www.shutoko.jp/use/network/map/route-c2/oujiminami/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-outer:oji-kita-entry",
@@ -2224,7 +2375,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G37",
         "https://www.shutoko.jp/use/network/map/route-c2/oujikita/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-inner:hatsudai-minami-entry",
@@ -2237,7 +2390,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G32",
         "https://www.shutoko.jp/use/network/map/route-c2/hatsudaiminami/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-outer:tomigaya-entry",
@@ -2259,7 +2414,9 @@
         "motorwayNodeId": 4213654435,
         "direction": "outer",
         "notes": "Verified OSM binding for 富ヶ谷 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-outer:nakano-chojabashi-entry",
@@ -2281,7 +2438,9 @@
         "motorwayNodeId": 3851530193,
         "direction": "outer",
         "notes": "Verified OSM binding for 中野長者橋 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:chukan-komatsugawa-entry",
@@ -2303,7 +2462,9 @@
         "motorwayNodeId": 7022713629,
         "direction": "inner",
         "notes": "Verified exact directed segment (unresolved-verified)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:oiminami-entry",
@@ -2325,7 +2486,9 @@
         "motorwayNodeId": 9053263610,
         "direction": "west",
         "notes": "Verified OSM binding for 大井南 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:oi-entry",
@@ -2338,7 +2501,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G33",
         "https://www.shutoko.jp/use/network/map/route-b/ooi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:ariake-entry",
@@ -2360,7 +2525,9 @@
         "motorwayNodeId": 5584443392,
         "direction": "east",
         "notes": "Verified OSM binding for 有明 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:shinkiba-entry",
@@ -2368,21 +2535,15 @@
       "lon": 139.830412,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/shinkiba/",
-        "https://www.openstreetmap.org/way/4857046",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:4857046:31330050:6439922826",
+        "duplicate-members:ramp:b-east:shinkiba-entry, ramp:b-west:shinkiba-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:b-west:shinkiba-entry",
-        "osmWayId": 4857046,
-        "osmNodeId": 31330050,
-        "motorwayNodeId": 6439922826,
-        "direction": "west",
-        "notes": "Verified OSM binding for 新木場 (B west)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:shinkiba-entry",
@@ -2390,21 +2551,15 @@
       "lon": 139.830412,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/shinkiba/",
-        "https://www.openstreetmap.org/way/4857046",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:4857046:31330050:6439922826",
+        "duplicate-members:ramp:b-east:shinkiba-entry, ramp:b-west:shinkiba-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:b-east:shinkiba-entry",
-        "osmWayId": 4857046,
-        "osmNodeId": 31330050,
-        "motorwayNodeId": 6439922826,
-        "direction": "east",
-        "notes": "Verified OSM binding for 新木場 (B east)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-west:kasai-entry",
@@ -2426,7 +2581,9 @@
         "motorwayNodeId": 255643795,
         "direction": "west",
         "notes": "Verified OSM binding for 葛西 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:kasai-entry",
@@ -2448,7 +2605,9 @@
         "motorwayNodeId": 4749149894,
         "direction": "east",
         "notes": "Verified OSM binding for 葛西 (B east)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:b-west:urayasu-entry",
@@ -2456,21 +2615,15 @@
       "lon": 139.890609,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/urayasu/",
-        "https://www.openstreetmap.org/way/38028908",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:38028908:288769760:10305047149",
+        "duplicate-members:ramp:b-east:urayasu-entry, ramp:b-west:urayasu-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:b-west:urayasu-entry",
-        "osmWayId": 38028908,
-        "osmNodeId": 288769760,
-        "motorwayNodeId": 10305047149,
-        "direction": "west",
-        "notes": "Verified OSM binding for 浦安 (B west)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:urayasu-entry",
@@ -2478,21 +2631,15 @@
       "lon": 139.890609,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/urayasu/",
-        "https://www.openstreetmap.org/way/38028908",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:38028908:288769760:10305047149",
+        "duplicate-members:ramp:b-east:urayasu-entry, ramp:b-west:urayasu-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:b-east:urayasu-entry",
-        "osmWayId": 38028908,
-        "osmNodeId": 288769760,
-        "motorwayNodeId": 10305047149,
-        "direction": "east",
-        "notes": "Verified OSM binding for 浦安 (B east)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-west:rinkai-fukutoshin-entry",
@@ -2514,7 +2661,9 @@
         "motorwayNodeId": 7890941554,
         "direction": "west",
         "notes": "Verified OSM binding for 臨海副都心 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:maihama-entry",
@@ -2522,21 +2671,14 @@
       "lon": 139.713597,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "OSM binding座標が公式施設座標から約16.4km離れ、destination=横浜でもあるため別施設流用として未対応。",
       "supportEvidence": [
-        "analyze-unresolved-ramps-001.json",
-        "https://www.shutoko.jp/use/network/map/route-b/maihama/",
-        "https://www.openstreetmap.org/way/788208928"
+        "https://www.openstreetmap.org/way/788208928",
+        "coordinate-distance-audit:16406m"
       ],
-      "binding": {
-        "rampId": "ramp:b-west:maihama-entry",
-        "osmWayId": 788208928,
-        "osmNodeId": 2277933647,
-        "motorwayNodeId": 600747549,
-        "direction": "west",
-        "notes": "Verified exact directed segment (unresolved-verified)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-west:chidoricho-entry",
@@ -2558,7 +2700,9 @@
         "motorwayNodeId": 6423773559,
         "direction": "west",
         "notes": "Verified OSM binding for 千鳥町 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:kuko-chuo-entry",
@@ -2580,7 +2724,9 @@
         "motorwayNodeId": 3296142272,
         "direction": "west",
         "notes": "Verified OSM binding for 空港中央 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:kuko-chuo-entry",
@@ -2602,7 +2748,9 @@
         "motorwayNodeId": 269667807,
         "direction": "east",
         "notes": "Verified OSM binding for 空港中央 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:wangan-kampachi-entry",
@@ -2624,7 +2772,9 @@
         "motorwayNodeId": 6271967188,
         "direction": "west",
         "notes": "Verified OSM binding for 湾岸環八 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:higashi-ogishima-entry",
@@ -2632,21 +2782,15 @@
       "lon": 139.762421,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G05",
-        "https://www.shutoko.jp/use/network/map/route-b/higashiogishima/",
-        "https://www.openstreetmap.org/way/32355491"
+        "directed-segment:32355491:3815254941:4964221846",
+        "duplicate-members:ramp:b-east:higashi-ogishima-entry, ramp:b-west:higashi-ogishima-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:b-west:higashi-ogishima-entry",
-        "osmWayId": 32355491,
-        "osmNodeId": 3815254941,
-        "motorwayNodeId": 4964221846,
-        "direction": "west",
-        "notes": "Verified exact directed segment (G05)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:higashi-ogishima-entry",
@@ -2654,21 +2798,15 @@
       "lon": 139.748427,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/higashiogishima/",
-        "https://www.openstreetmap.org/way/32355491",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:32355491:3815254941:4964221846",
+        "duplicate-members:ramp:b-east:higashi-ogishima-entry, ramp:b-west:higashi-ogishima-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:b-east:higashi-ogishima-entry",
-        "osmWayId": 32355491,
-        "osmNodeId": 3815254941,
-        "motorwayNodeId": 4964221846,
-        "direction": "east",
-        "notes": "Verified OSM binding for 東扇島 (B east)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:sachiura-entry",
@@ -2690,7 +2828,9 @@
         "motorwayNodeId": 443726407,
         "direction": "east",
         "notes": "Verified OSM binding for 幸浦 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:sugita-entry",
@@ -2712,7 +2852,9 @@
         "motorwayNodeId": 10876194307,
         "direction": "west",
         "notes": "Verified OSM binding for 杉田 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:sugita-entry",
@@ -2725,7 +2867,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G09",
         "https://www.shutoko.jp/use/network/map/route-b/sugita/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:isogo-entry",
@@ -2738,7 +2882,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G09",
         "https://www.shutoko.jp/use/network/map/route-b/isogo/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:minamihommoku-futo-entry",
@@ -2751,7 +2897,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G38",
         "https://www.shutoko.jp/use/network/map/route-b/minamihonmokufutou/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:hommoku-futo-entry",
@@ -2773,7 +2921,9 @@
         "motorwayNodeId": 13329998520,
         "direction": "east",
         "notes": "Verified OSM binding for 本牧ふ頭 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:sankeien-entry",
@@ -2786,7 +2936,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G38",
         "https://www.shutoko.jp/use/network/map/route-b/sankeien/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-west:ukishima-entry",
@@ -2799,7 +2951,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G05",
         "https://www.shutoko.jp/use/network/map/route-b/ukishima/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:ukishima-entry",
@@ -2812,7 +2966,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G05",
         "https://www.shutoko.jp/use/network/map/route-b/ukishima/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k1-inbound:daishi-entry",
@@ -2834,7 +2990,9 @@
         "motorwayNodeId": 3817775785,
         "direction": "inbound",
         "notes": "Verified OSM binding for 大師 (K1 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-outbound:daishi-entry",
@@ -2856,7 +3014,9 @@
         "motorwayNodeId": 3817775785,
         "direction": "outbound",
         "notes": "Verified OSM binding for 大師 (K1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:daishi-683-entry",
@@ -2878,7 +3038,9 @@
         "motorwayNodeId": 3817775785,
         "direction": "inbound",
         "notes": "Verified OSM binding for 大師 (K1 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:hamakawasaki-entry",
@@ -2900,7 +3062,9 @@
         "motorwayNodeId": 2345487303,
         "direction": "inbound",
         "notes": "Verified OSM binding for 浜川崎 (K1 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:shioiri-entry",
@@ -2922,7 +3086,9 @@
         "motorwayNodeId": 2345571927,
         "direction": "inbound",
         "notes": "Verified OSM binding for 汐入 (K1 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:koyasu-entry",
@@ -2944,7 +3110,9 @@
         "motorwayNodeId": 7575095556,
         "direction": "inbound",
         "notes": "Verified OSM binding for 子安 (K1 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-outbound:koyasu-entry",
@@ -2966,7 +3134,9 @@
         "motorwayNodeId": 581875622,
         "direction": "outbound",
         "notes": "Verified OSM binding for 子安 (K1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:higashi-kanagawa-entry",
@@ -2979,7 +3149,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G26",
         "https://www.shutoko.jp/use/network/map/route-k1/higashikanagawa/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k1-outbound:higashi-kanagawa-entry",
@@ -3001,7 +3173,9 @@
         "motorwayNodeId": 6790935667,
         "direction": "outbound",
         "notes": "Verified OSM binding for 東神奈川 (K1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:minato-mirai-entry",
@@ -3023,7 +3197,9 @@
         "motorwayNodeId": 283626720,
         "direction": "inbound",
         "notes": "Verified OSM binding for みなとみらい (K1 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-outbound:minato-mirai-entry",
@@ -3045,7 +3221,9 @@
         "motorwayNodeId": 3395063377,
         "direction": "outbound",
         "notes": "Verified OSM binding for みなとみらい (K1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:yokohama-koen-entry",
@@ -3067,7 +3245,9 @@
         "motorwayNodeId": 7106473256,
         "direction": "inbound",
         "notes": "Verified OSM binding for 横浜公園 (K1 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-outbound:asada-entry",
@@ -3089,7 +3269,9 @@
         "motorwayNodeId": 366523945,
         "direction": "outbound",
         "notes": "Verified exact directed segment (unresolved-verified)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-outbound:namamugi-entry",
@@ -3111,7 +3293,9 @@
         "motorwayNodeId": 4741655106,
         "direction": "outbound",
         "notes": "Verified exact directed segment (unresolved-verified)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:k1-outbound:yokohama-eki-higashiguchi-entry",
@@ -3124,7 +3308,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G26",
         "https://www.shutoko.jp/use/network/map/route-k1/yokohamaekihigashiguchi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k5-inbound:daikoku-futo-entry",
@@ -3132,21 +3318,15 @@
       "lon": 139.679821,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/",
-        "https://www.openstreetmap.org/way/32592469",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:32592469:366517066:739425888",
+        "duplicate-members:ramp:k5-east:daikoku-futo-entry, ramp:k5-inbound:daikoku-futo-entry, ramp:k5-west:daikoku-futo-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k5-inbound:daikoku-futo-entry",
-        "osmWayId": 32592469,
-        "osmNodeId": 366517066,
-        "motorwayNodeId": 739425888,
-        "direction": "inbound",
-        "notes": "Verified OSM binding for 大黒ふ頭 (K5 inbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k5-west:daikoku-futo-entry",
@@ -3154,21 +3334,15 @@
       "lon": 139.679821,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/",
-        "https://www.openstreetmap.org/way/32592469",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:32592469:366517066:739425888",
+        "duplicate-members:ramp:k5-east:daikoku-futo-entry, ramp:k5-inbound:daikoku-futo-entry, ramp:k5-west:daikoku-futo-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k5-west:daikoku-futo-entry",
-        "osmWayId": 32592469,
-        "osmNodeId": 366517066,
-        "motorwayNodeId": 739425888,
-        "direction": "west",
-        "notes": "Verified OSM binding for 大黒ふ頭 (K5 west)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k5-east:daikoku-futo-entry",
@@ -3176,21 +3350,15 @@
       "lon": 139.679821,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/",
-        "https://www.openstreetmap.org/way/32592469",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:32592469:366517066:739425888",
+        "duplicate-members:ramp:k5-east:daikoku-futo-entry, ramp:k5-inbound:daikoku-futo-entry, ramp:k5-west:daikoku-futo-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k5-east:daikoku-futo-entry",
-        "osmWayId": 32592469,
-        "osmNodeId": 366517066,
-        "motorwayNodeId": 739425888,
-        "direction": "east",
-        "notes": "Verified OSM binding for 大黒ふ頭 (K5 east)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k6-inbound:tonomachi-entry",
@@ -3212,7 +3380,9 @@
         "motorwayNodeId": 1118762366,
         "direction": "inbound",
         "notes": "Verified OSM binding for 殿町 (K6 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:y-north:yaesu-entry",
@@ -3228,7 +3398,9 @@
         "fixtures/osm/shutoko-all.json:93647,155108",
         "https://www.openstreetmap.org/node/6538495149",
         "https://www.openstreetmap.org/way/24402126"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:y-south:yaesu-entry",
@@ -3244,7 +3416,9 @@
         "fixtures/osm/shutoko-all.json:91125,198399",
         "https://www.openstreetmap.org/node/6397091336",
         "https://www.openstreetmap.org/way/378284514"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k2-inbound:yokohama-eki-nishiguchi-entry",
@@ -3257,7 +3431,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G26",
         "https://www.shutoko.jp/use/network/map/route-k2/yokohamaekinishiguchi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k2-inbound:mitsuzawa-entry",
@@ -3279,7 +3455,9 @@
         "motorwayNodeId": 476496769,
         "direction": "inbound",
         "notes": "Verified OSM binding for 三ツ沢 (K2 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k3-inbound:shin-yamashita-entry",
@@ -3301,7 +3479,9 @@
         "motorwayNodeId": 7105141624,
         "direction": "inbound",
         "notes": "Verified OSM binding for 新山下 (K3 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k3-outbound:shin-yamashita-entry",
@@ -3323,7 +3503,9 @@
         "motorwayNodeId": 6372165895,
         "direction": "outbound",
         "notes": "Verified OSM binding for 新山下 (K3 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k3-inbound:ishikawacho-entry",
@@ -3345,7 +3527,9 @@
         "motorwayNodeId": 2324584146,
         "direction": "inbound",
         "notes": "Verified OSM binding for 石川町 (K3 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k3-inbound:hananoki-entry",
@@ -3367,7 +3551,9 @@
         "motorwayNodeId": 1648466213,
         "direction": "inbound",
         "notes": "Verified OSM binding for 花之木 (K3 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k3-inbound:nagata-entry",
@@ -3380,7 +3566,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G54",
         "https://www.shutoko.jp/use/network/map/route-k3/nagata/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k3-outbound:bandobashi-entry",
@@ -3402,7 +3590,9 @@
         "motorwayNodeId": 3256397567,
         "direction": "outbound",
         "notes": "Verified OSM binding for 阪東橋 (K3 outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:k7-inbound:shin-yokohama-entry",
@@ -3424,7 +3614,9 @@
         "motorwayNodeId": 7252867541,
         "direction": "inbound",
         "notes": "Verified OSM binding for 新横浜 (K7 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k7-outbound:shin-yokohama-entry",
@@ -3437,7 +3629,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G47",
         "https://www.shutoko.jp/use/network/map/route-k7/shinyokohama/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-inbound:kishiya-namamugi-entry",
@@ -3445,21 +3639,15 @@
       "lon": 139.661278,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-k7/kishiyanamamugi/",
-        "https://www.openstreetmap.org/way/760526455",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:760526455:4741655047:7527097182",
+        "duplicate-members:ramp:k7-inbound:kishiya-namamugi-entry, ramp:k7-outbound:kishiya-namamugi-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k7-inbound:kishiya-namamugi-entry",
-        "osmWayId": 760526455,
-        "osmNodeId": 4741655047,
-        "motorwayNodeId": 7527097182,
-        "direction": "inbound",
-        "notes": "Verified OSM binding for 岸谷生麦 (K7 inbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-outbound:kishiya-namamugi-entry",
@@ -3467,21 +3655,15 @@
       "lon": 139.661278,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-k7/kishiyanamamugi/",
-        "https://www.openstreetmap.org/way/760526455",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:760526455:4741655047:7527097182",
+        "duplicate-members:ramp:k7-inbound:kishiya-namamugi-entry, ramp:k7-outbound:kishiya-namamugi-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k7-outbound:kishiya-namamugi-entry",
-        "osmWayId": 760526455,
-        "osmNodeId": 4741655047,
-        "motorwayNodeId": 7527097182,
-        "direction": "outbound",
-        "notes": "Verified OSM binding for 岸谷生麦 (K7 outbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-inbound:baba-entry",
@@ -3489,21 +3671,15 @@
       "lon": 139.640297,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-k7/baba/",
-        "https://www.openstreetmap.org/way/733767653",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:733767653:410442967:7252683267",
+        "duplicate-members:ramp:k7-inbound:baba-entry, ramp:k7-outbound:baba-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k7-inbound:baba-entry",
-        "osmWayId": 733767653,
-        "osmNodeId": 410442967,
-        "motorwayNodeId": 7252683267,
-        "direction": "inbound",
-        "notes": "Verified OSM binding for 馬場 (K7 inbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-outbound:baba-entry",
@@ -3511,21 +3687,15 @@
       "lon": 139.640297,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-k7/baba/",
-        "https://www.openstreetmap.org/way/733767653",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:733767653:410442967:7252683267",
+        "duplicate-members:ramp:k7-inbound:baba-entry, ramp:k7-outbound:baba-entry",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k7-outbound:baba-entry",
-        "osmWayId": 733767653,
-        "osmNodeId": 410442967,
-        "motorwayNodeId": 7252683267,
-        "direction": "outbound",
-        "notes": "Verified OSM binding for 馬場 (K7 outbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-inbound:yokohama-kohoku-entry",
@@ -3538,7 +3708,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G47",
         "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamakohoku/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-outbound:yokohama-kohoku-entry",
@@ -3551,7 +3723,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G47",
         "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamakohoku/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-inbound:yokohama-aoba-entry",
@@ -3573,7 +3747,9 @@
         "motorwayNodeId": 5731641838,
         "direction": "inbound",
         "notes": "Verified OSM binding for 横浜青葉 (K7 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k7-inbound:yokohama-aoba-759-entry",
@@ -3595,7 +3771,9 @@
         "motorwayNodeId": 12492116495,
         "direction": "inbound",
         "notes": "Verified OSM binding for 横浜青葉 (K7 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-outer:takaracho-exit",
@@ -3617,7 +3795,9 @@
         "motorwayNodeId": 3977436348,
         "direction": "outer",
         "notes": "Verified OSM binding for 宝町 (C1 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-outer:ginza-exit",
@@ -3625,21 +3805,15 @@
       "lon": 139.7694,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-c1/ginza/",
-        "https://www.openstreetmap.org/way/205411855",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:205411855:835996365:1834887229",
+        "duplicate-members:ramp:c1-inner:ginza-exit, ramp:c1-outer:ginza-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:c1-outer:ginza-exit",
-        "osmWayId": 205411855,
-        "osmNodeId": 835996365,
-        "motorwayNodeId": 1834887229,
-        "direction": "outer",
-        "notes": "Verified OSM binding for 銀座 (C1 outer)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-inner:ginza-exit",
@@ -3647,21 +3821,15 @@
       "lon": 139.7694,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-c1/ginza/",
-        "https://www.openstreetmap.org/way/205411855",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:205411855:835996365:1834887229",
+        "duplicate-members:ramp:c1-inner:ginza-exit, ramp:c1-outer:ginza-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:c1-inner:ginza-exit",
-        "osmWayId": 205411855,
-        "osmNodeId": 835996365,
-        "motorwayNodeId": 1834887229,
-        "direction": "inner",
-        "notes": "Verified OSM binding for 銀座 (C1 inner)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-outer:shibakoen-exit",
@@ -3683,7 +3851,9 @@
         "motorwayNodeId": 4134172818,
         "direction": "outer",
         "notes": "Verified OSM binding for 芝公園 (C1 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-inner:shibakoen-exit",
@@ -3705,7 +3875,9 @@
         "motorwayNodeId": 31296982,
         "direction": "inner",
         "notes": "Verified OSM binding for 芝公園 (C1 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-outer:iikura-exit",
@@ -3727,7 +3899,9 @@
         "motorwayNodeId": 8327794354,
         "direction": "outer",
         "notes": "Verified OSM binding for 飯倉 (C1 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-outer:kasumigaseki-exit",
@@ -3749,7 +3923,9 @@
         "motorwayNodeId": 8512840451,
         "direction": "outer",
         "notes": "Verified exact directed segment (G20)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-inner:kasumigaseki-exit",
@@ -3762,7 +3938,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G20",
         "https://www.shutoko.jp/use/network/map/route-c1/kasumigaseki/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-outer:daikancho-exit",
@@ -3784,7 +3962,9 @@
         "motorwayNodeId": 6285957242,
         "direction": "outer",
         "notes": "Verified OSM binding for 代官町 (C1 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-outer:kandabashi-exit",
@@ -3797,7 +3977,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G20",
         "https://www.shutoko.jp/use/network/map/route-c1/kandabashi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-inner:kandabashi-exit",
@@ -3810,7 +3992,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G20",
         "https://www.shutoko.jp/use/network/map/route-c1/kandabashi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-inner:kyobashi-exit",
@@ -3832,7 +4016,9 @@
         "motorwayNodeId": 2133066629,
         "direction": "inner",
         "notes": "Verified exact directed segment (G29)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-outer:shintomicho-exit",
@@ -3840,21 +4026,15 @@
       "lon": 139.774704,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-c1/shintomicho/",
-        "https://www.openstreetmap.org/way/760760233",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:760760233:31254357:11915135708",
+        "duplicate-members:ramp:c1-inner:shintomicho-exit, ramp:c1-outer:shintomicho-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:c1-outer:shintomicho-exit",
-        "osmWayId": 760760233,
-        "osmNodeId": 31254357,
-        "motorwayNodeId": 11915135708,
-        "direction": "outer",
-        "notes": "Verified OSM binding for 新富町 (C1 outer)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-inner:shintomicho-exit",
@@ -3862,21 +4042,15 @@
       "lon": 139.774704,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-c1/shintomicho/",
-        "https://www.openstreetmap.org/way/760760233",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:760760233:31254357:11915135708",
+        "duplicate-members:ramp:c1-inner:shintomicho-exit, ramp:c1-outer:shintomicho-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:c1-inner:shintomicho-exit",
-        "osmWayId": 760760233,
-        "osmNodeId": 31254357,
-        "motorwayNodeId": 11915135708,
-        "direction": "inner",
-        "notes": "Verified OSM binding for 新富町 (C1 inner)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-inner:kitanomaru-exit",
@@ -3898,7 +4072,9 @@
         "motorwayNodeId": 3890965341,
         "direction": "inner",
         "notes": "Verified OSM binding for 北の丸 (C1 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-inner:shiodome-exit",
@@ -3920,7 +4096,9 @@
         "motorwayNodeId": 7093187742,
         "direction": "inner",
         "notes": "Verified OSM binding for 汐留 (C1 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:1h-outbound:shibaura-exit",
@@ -3928,21 +4106,14 @@
       "lon": 139.746981,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "OSM way 944671542 は name=芝公園出口で、公式施設 芝浦（1H）と矛盾するため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-1h/shibaura/",
         "https://www.openstreetmap.org/way/944671542",
-        "analyze-duplicate-bindings-001.json"
+        "verify-core-r2-opencode.json:R2OC-001"
       ],
-      "binding": {
-        "rampId": "ramp:1h-outbound:shibaura-exit",
-        "osmWayId": 944671542,
-        "osmNodeId": 254360532,
-        "motorwayNodeId": 31296982,
-        "direction": "outbound",
-        "notes": "Verified OSM binding for 芝浦 (1H outbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1h-inbound:shibaura-exit",
@@ -3964,7 +4135,9 @@
         "motorwayNodeId": 6773622222,
         "direction": "inbound",
         "notes": "Verified OSM binding for 芝浦 (1H inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:1h-outbound:suzugamori-exit",
@@ -3986,7 +4159,9 @@
         "motorwayNodeId": 36719791,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G24)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:1h-outbound:heiwajima-exit",
@@ -3999,7 +4174,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G04",
         "https://www.shutoko.jp/use/network/map/route-1h/heiwajima/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1h-inbound:heiwajima-exit",
@@ -4021,7 +4198,9 @@
         "motorwayNodeId": 4362178707,
         "direction": "inbound",
         "notes": "Verified OSM binding for 平和島 (1H inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:1h-outbound:kukonishi-exit",
@@ -4034,7 +4213,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G04",
         "https://www.shutoko.jp/use/network/map/route-1h/kukounishi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1h-outbound:haneda-exit",
@@ -4047,7 +4228,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G04",
         "https://www.shutoko.jp/use/network/map/route-1h/haneda/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1h-inbound:haneda-exit",
@@ -4060,7 +4243,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G04",
         "https://www.shutoko.jp/use/network/map/route-1h/haneda/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1h-inbound:katsushima-exit",
@@ -4075,7 +4260,9 @@
         "data/official-population-snapshot.json:3701",
         "fixtures/osm/shutoko-all.json:189962",
         "https://www.openstreetmap.org/way/207659104"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:2-outbound:tengenji-exit",
@@ -4088,7 +4275,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G21",
         "https://www.shutoko.jp/use/network/map/route-2/tengenji/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:2-outbound:meguro-exit",
@@ -4110,7 +4299,9 @@
         "motorwayNodeId": 2177935842,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G49)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:2-outbound:ebara-exit",
@@ -4123,7 +4314,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G49",
         "https://www.shutoko.jp/use/network/map/route-2/ebara/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:2-outbound:togoshi-exit",
@@ -4136,7 +4329,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G49",
         "https://www.shutoko.jp/use/network/map/route-2/togoshi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:3-outbound:takagicho-exit",
@@ -4158,7 +4353,9 @@
         "motorwayNodeId": 8108071787,
         "direction": "outbound",
         "notes": "Verified OSM binding for 高樹町 (3 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:3-inbound:shibuya-exit",
@@ -4180,7 +4377,9 @@
         "motorwayNodeId": 9522025515,
         "direction": "inbound",
         "notes": "Verified OSM binding for 渋谷 (3 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:3-outbound:shibuya-exit",
@@ -4202,7 +4401,9 @@
         "motorwayNodeId": 3854028856,
         "direction": "outbound",
         "notes": "Verified OSM binding for 渋谷 (3 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:3-outbound:sangenjaya-exit",
@@ -4210,21 +4411,15 @@
       "lon": 139.694817,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "OSM wayの name=渋谷出口(道玄坂上) が公式施設 三軒茶屋と明白に矛盾するため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-3/sangenjaya/",
-        "https://www.openstreetmap.org/way/311740422",
-        "analyze-duplicate-bindings-001.json"
+        "osm-name-audit:渋谷出口(道玄坂上)",
+        "official-facility:三軒茶屋",
+        "verify-core-r2-remediation:name-audit"
       ],
-      "binding": {
-        "rampId": "ramp:3-outbound:sangenjaya-exit",
-        "osmWayId": 311740422,
-        "osmNodeId": 625566390,
-        "motorwayNodeId": 9522058717,
-        "direction": "outbound",
-        "notes": "Verified OSM binding for 三軒茶屋 (3 outbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:3-outbound:yoga-exit",
@@ -4246,7 +4441,9 @@
         "motorwayNodeId": 7933008897,
         "direction": "outbound",
         "notes": "Verified OSM binding for 用賀 (3 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:3-inbound:ikejiri-exit",
@@ -4268,7 +4465,9 @@
         "motorwayNodeId": 5685133723,
         "direction": "inbound",
         "notes": "Verified OSM binding for 池尻 (3 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:4-outbound:gaien-exit",
@@ -4290,7 +4489,9 @@
         "motorwayNodeId": 9198674332,
         "direction": "outbound",
         "notes": "Verified OSM binding for 外苑 (4 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:4-inbound:gaien-exit",
@@ -4312,7 +4513,9 @@
         "motorwayNodeId": 1808422366,
         "direction": "inbound",
         "notes": "Verified OSM binding for 外苑 (4 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:4-outbound:ramp-exit",
@@ -4334,7 +4537,9 @@
         "motorwayNodeId": 8286110480,
         "direction": "outbound",
         "notes": "Verified OSM binding for 代々木 (4 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:4-inbound:shinjuku-exit",
@@ -4342,21 +4547,15 @@
       "lon": 139.684112,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-4/shinjuku/",
-        "https://www.openstreetmap.org/way/41568462",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:41568462:1892622114:8302977011",
+        "duplicate-members:ramp:4-inbound:shinjuku-exit, ramp:4-outbound:shinjuku-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:4-inbound:shinjuku-exit",
-        "osmWayId": 41568462,
-        "osmNodeId": 1892622114,
-        "motorwayNodeId": 8302977011,
-        "direction": "inbound",
-        "notes": "Verified OSM binding for 新宿 (4 inbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:4-outbound:shinjuku-exit",
@@ -4364,21 +4563,15 @@
       "lon": 139.684112,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-4/shinjuku/",
-        "https://www.openstreetmap.org/way/41568462",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:41568462:1892622114:8302977011",
+        "duplicate-members:ramp:4-inbound:shinjuku-exit, ramp:4-outbound:shinjuku-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:4-outbound:shinjuku-exit",
-        "osmWayId": 41568462,
-        "osmNodeId": 1892622114,
-        "motorwayNodeId": 8302977011,
-        "direction": "outbound",
-        "notes": "Verified OSM binding for 新宿 (4 outbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:4-outbound:hatagaya-exit",
@@ -4400,7 +4593,9 @@
         "motorwayNodeId": 8302849490,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G31)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:4-inbound:eifuku-exit",
@@ -4408,21 +4603,15 @@
       "lon": 139.649268,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-4/eifuku/",
-        "https://www.openstreetmap.org/way/25603803",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:25603803:279076892:8303133953",
+        "duplicate-members:ramp:4-inbound:eifuku-exit, ramp:4-outbound:eifuku-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:4-inbound:eifuku-exit",
-        "osmWayId": 25603803,
-        "osmNodeId": 279076892,
-        "motorwayNodeId": 8303133953,
-        "direction": "inbound",
-        "notes": "Verified OSM binding for 永福 (4 inbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:4-outbound:eifuku-exit",
@@ -4430,21 +4619,15 @@
       "lon": 139.649268,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-4/eifuku/",
-        "https://www.openstreetmap.org/way/25603803",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:25603803:279076892:8303133953",
+        "duplicate-members:ramp:4-inbound:eifuku-exit, ramp:4-outbound:eifuku-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:4-outbound:eifuku-exit",
-        "osmWayId": 25603803,
-        "osmNodeId": 279076892,
-        "motorwayNodeId": 8303133953,
-        "direction": "outbound",
-        "notes": "Verified OSM binding for 永福 (4 outbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:4-outbound:takaido-exit",
@@ -4466,7 +4649,9 @@
         "motorwayNodeId": 7250757776,
         "direction": "outbound",
         "notes": "Verified OSM binding for 高井戸 (4 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:4-inbound:hatsudai-exit",
@@ -4480,7 +4665,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-4/hatsudai/",
         "https://www.openstreetmap.org/way/893332473"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:5-outbound:nishikanda-exit",
@@ -4502,7 +4689,9 @@
         "motorwayNodeId": 7877655900,
         "direction": "outbound",
         "notes": "Verified OSM binding for 西神田 (5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-outbound:gokokuji-exit",
@@ -4515,7 +4704,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G46",
         "https://www.shutoko.jp/use/network/map/route-5/gokokuji/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:5-outbound:higashi-ikebukuro-exit",
@@ -4537,7 +4728,9 @@
         "motorwayNodeId": 2012583801,
         "direction": "outbound",
         "notes": "Verified OSM binding for 東池袋 (5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-inbound:higashi-ikebukuro-exit",
@@ -4559,7 +4752,9 @@
         "motorwayNodeId": 6545568749,
         "direction": "inbound",
         "notes": "Verified OSM binding for 東池袋 (5 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-outbound:kita-ikebukuro-exit",
@@ -4581,7 +4776,9 @@
         "motorwayNodeId": 1928229720,
         "direction": "outbound",
         "notes": "Verified OSM binding for 北池袋 (5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-outbound:itabashi-honcho-exit",
@@ -4589,21 +4786,15 @@
       "lon": 139.705565,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G56",
-        "https://www.shutoko.jp/use/network/map/route-5/itabashihoncho/",
-        "https://www.openstreetmap.org/way/182527897"
+        "directed-segment:182527897:1928885694:1928885682",
+        "duplicate-members:ramp:5-inbound:itabashi-honcho-exit, ramp:5-outbound:itabashi-honcho-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:5-outbound:itabashi-honcho-exit",
-        "osmWayId": 182527897,
-        "osmNodeId": 1928885694,
-        "motorwayNodeId": 1928885682,
-        "direction": "outbound",
-        "notes": "Verified exact directed segment (G56)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:5-inbound:itabashi-honcho-exit",
@@ -4611,21 +4802,15 @@
       "lon": 139.705565,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G56",
-        "https://www.shutoko.jp/use/network/map/route-5/itabashihoncho/",
-        "https://www.openstreetmap.org/way/182527897"
+        "directed-segment:182527897:1928885694:1928885682",
+        "duplicate-members:ramp:5-inbound:itabashi-honcho-exit, ramp:5-outbound:itabashi-honcho-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:5-inbound:itabashi-honcho-exit",
-        "osmWayId": 182527897,
-        "osmNodeId": 1928885694,
-        "motorwayNodeId": 1928885682,
-        "direction": "inbound",
-        "notes": "Verified exact directed segment (G56)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:5-outbound:nakadai-exit",
@@ -4647,7 +4832,9 @@
         "motorwayNodeId": 2110614954,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G56)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-outbound:takashimadaira-exit",
@@ -4669,7 +4856,9 @@
         "motorwayNodeId": 7160874945,
         "direction": "outbound",
         "notes": "Verified OSM binding for 高島平 (5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-outbound:toda-minami-exit",
@@ -4682,7 +4871,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G35",
         "https://www.shutoko.jp/use/network/map/route-5/todaminami/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:5-inbound:hitotsubashi-exit",
@@ -4704,7 +4895,9 @@
         "motorwayNodeId": 7649865033,
         "direction": "inbound",
         "notes": "Verified OSM binding for 一ツ橋 (5 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-inbound:iidabashi-exit",
@@ -4726,7 +4919,9 @@
         "motorwayNodeId": 1919930527,
         "direction": "inbound",
         "notes": "Verified OSM binding for 飯田橋 (5 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-outbound:waseda-exit",
@@ -4748,7 +4943,9 @@
         "motorwayNodeId": 7496297588,
         "direction": "outbound",
         "notes": "Verified OSM binding for 早稲田 (5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:5-inbound:toda-exit",
@@ -4764,7 +4961,9 @@
         "fixtures/osm/shutoko-all.json:211994,212029",
         "https://www.openstreetmap.org/way/762093201",
         "https://www.openstreetmap.org/way/762093203"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:6m-outbound:komagata-exit",
@@ -4786,7 +4985,9 @@
         "motorwayNodeId": 3935796665,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G58)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6m-inbound:mukojima-exit",
@@ -4799,7 +5000,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G16",
         "https://www.shutoko.jp/use/network/map/route-6mu/mukoujima/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:6m-outbound:mukojima-exit",
@@ -4821,7 +5024,9 @@
         "motorwayNodeId": 1671664760,
         "direction": "outbound",
         "notes": "Verified OSM binding for 向島 (6M outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6m-outbound:tsutsumidori-exit",
@@ -4834,7 +5039,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G16",
         "https://www.shutoko.jp/use/network/map/route-6mu/tsutsumidori/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:6m-inbound:tsutsumidori-exit",
@@ -4856,7 +5063,9 @@
         "motorwayNodeId": 1954023784,
         "direction": "inbound",
         "notes": "Verified OSM binding for 堤通 (6M inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:7-outbound:kinshicho-exit",
@@ -4878,7 +5087,9 @@
         "motorwayNodeId": 12965525695,
         "direction": "outbound",
         "notes": "Verified OSM binding for 錦糸町 (7 outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:7-inbound:kinshicho-exit",
@@ -4900,7 +5111,9 @@
         "motorwayNodeId": 1674804718,
         "direction": "inbound",
         "notes": "Verified OSM binding for 錦糸町 (7 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:7-outbound:komatsugawa-exit",
@@ -4922,7 +5135,9 @@
         "motorwayNodeId": 7022713610,
         "direction": "outbound",
         "notes": "Verified OSM binding for 小松川 (7 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:7-outbound:ichinoe-exit",
@@ -4944,7 +5159,9 @@
         "motorwayNodeId": 8378201619,
         "direction": "outbound",
         "notes": "Verified OSM binding for 一之江 (7 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:9-outbound:kiba-exit",
@@ -4957,7 +5174,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G36",
         "https://www.shutoko.jp/use/network/map/route-9/kiba/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:9-inbound:fukuzumi-exit",
@@ -4970,7 +5189,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G36",
         "https://www.shutoko.jp/use/network/map/route-9/fukuzumi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:9-inbound:edagawa-exit",
@@ -4992,7 +5213,9 @@
         "motorwayNodeId": 11465153912,
         "direction": "inbound",
         "notes": "Verified OSM binding for 枝川 (9 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:10-inbound:toyosu-exit",
@@ -5014,7 +5237,9 @@
         "motorwayNodeId": 12791419278,
         "direction": "inbound",
         "notes": "Verified OSM binding for 豊洲 (10 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:10-inbound:harumi-exit",
@@ -5036,7 +5261,9 @@
         "motorwayNodeId": 10310414805,
         "direction": "inbound",
         "notes": "Verified OSM binding for 晴海 (10 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:11-outbound:daiba-exit",
@@ -5058,7 +5285,9 @@
         "motorwayNodeId": 6773622228,
         "direction": "outbound",
         "notes": "Verified OSM binding for 台場 (11 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6s-outbound:kahei-exit",
@@ -5080,7 +5309,9 @@
         "motorwayNodeId": 2569265264,
         "direction": "outbound",
         "notes": "Verified OSM binding for 加平 (6S outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:6s-inbound:kahei-exit",
@@ -5102,7 +5333,9 @@
         "motorwayNodeId": 2569233136,
         "direction": "inbound",
         "notes": "Verified OSM binding for 加平 (6S inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6s-outbound:kahei-653-exit",
@@ -5124,7 +5357,9 @@
         "motorwayNodeId": 2569265258,
         "direction": "outbound",
         "notes": "Verified OSM binding for 加平 (6S outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:6s-inbound:kahei-654-exit",
@@ -5146,7 +5381,9 @@
         "motorwayNodeId": 2569265264,
         "direction": "inbound",
         "notes": "Verified OSM binding for 加平 (6S inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:6s-outbound:yashio-minami-exit",
@@ -5159,7 +5396,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G28",
         "https://www.shutoko.jp/use/network/map/route-6mi/yashiominami/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:6s-inbound:yashio-minami-exit",
@@ -5172,7 +5411,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G28",
         "https://www.shutoko.jp/use/network/map/route-6mi/yashiominami/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:6s-outbound:yashio-exit",
@@ -5188,7 +5429,9 @@
         "fixtures/osm/shutoko-all.json:45185,68976,193167",
         "https://www.openstreetmap.org/way/288896620",
         "https://www.openstreetmap.org/node/2584519706"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1u-outbound:honcho-exit",
@@ -5210,7 +5453,9 @@
         "motorwayNodeId": 2093245859,
         "direction": "outbound",
         "notes": "Verified OSM binding for 本町 (1U outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:1u-inbound:honcho-exit",
@@ -5232,7 +5477,9 @@
         "motorwayNodeId": 12189305117,
         "direction": "inbound",
         "notes": "Verified OSM binding for 本町 (1U inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:1u-outbound:ueno-exit",
@@ -5246,7 +5493,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-1u/ueno/",
         "https://www.openstreetmap.org/way/945962601"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:1u-outbound:iriya-exit",
@@ -5268,7 +5517,9 @@
         "motorwayNodeId": 1041298832,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G58)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s1-outbound:shikahamabashi-exit",
@@ -5290,7 +5541,9 @@
         "motorwayNodeId": 5653183407,
         "direction": "outbound",
         "notes": "Verified OSM binding for 鹿浜橋 (S1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s1-outbound:ramp-exit",
@@ -5312,7 +5565,9 @@
         "motorwayNodeId": 4361138362,
         "direction": "outbound",
         "notes": "Verified OSM binding for 加賀 (S1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s1-outbound:shingo-exit",
@@ -5325,7 +5580,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G57",
         "https://www.shutoko.jp/use/network/map/route-s1/shingou/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s1-inbound:shingo-exit",
@@ -5338,7 +5595,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G23",
         "https://www.shutoko.jp/use/network/map/route-s1/shingou/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s1-outbound:angyo-exit",
@@ -5360,7 +5619,9 @@
         "motorwayNodeId": 5910007402,
         "direction": "outbound",
         "notes": "Verified OSM binding for 安行 (S1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s1-outbound:araijuku-exit",
@@ -5382,7 +5643,9 @@
         "motorwayNodeId": 1226695951,
         "direction": "outbound",
         "notes": "Verified exact directed segment (unresolved-verified)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s1-inbound:adachi-iriya-exit",
@@ -5404,7 +5667,9 @@
         "motorwayNodeId": 2156964642,
         "direction": "inbound",
         "notes": "Verified OSM binding for 足立入谷 (S1 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:s1-inbound:higashi-ryoke-exit",
@@ -5426,7 +5691,9 @@
         "motorwayNodeId": 5978934418,
         "direction": "inbound",
         "notes": "Verified OSM binding for 東領家 (S1 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:s5-outbound:urawa-minami-exit",
@@ -5448,7 +5715,9 @@
         "motorwayNodeId": 4362198291,
         "direction": "outbound",
         "notes": "Verified OSM binding for 浦和南 (S5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s5-outbound:yono-exit",
@@ -5470,7 +5739,9 @@
         "motorwayNodeId": 2877286247,
         "direction": "outbound",
         "notes": "Verified OSM binding for 与野 (S5 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:s5-inbound:urawa-kita-exit",
@@ -5492,7 +5763,9 @@
         "motorwayNodeId": 1064146729,
         "direction": "inbound",
         "notes": "Verified OSM binding for 浦和北 (S5 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:s2-outbound:shintoshin-nishi-exit",
@@ -5500,21 +5773,15 @@
       "lon": 139.612101,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-s2/shintoshinnishi/",
-        "https://www.openstreetmap.org/way/156794148",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:156794148:1690305264:12756615647",
+        "duplicate-members:ramp:s2-inbound:shintoshin-nishi-exit, ramp:s2-outbound:shintoshin-nishi-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:s2-outbound:shintoshin-nishi-exit",
-        "osmWayId": 156794148,
-        "osmNodeId": 1690305264,
-        "motorwayNodeId": 12756615647,
-        "direction": "outbound",
-        "notes": "Verified OSM binding for 新都心西 (S2 outbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s2-inbound:shintoshin-nishi-exit",
@@ -5522,21 +5789,15 @@
       "lon": 139.612101,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-s2/shintoshinnishi/",
-        "https://www.openstreetmap.org/way/156794148",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:156794148:1690305264:12756615647",
+        "duplicate-members:ramp:s2-inbound:shintoshin-nishi-exit, ramp:s2-outbound:shintoshin-nishi-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:s2-inbound:shintoshin-nishi-exit",
-        "osmWayId": 156794148,
-        "osmNodeId": 1690305264,
-        "motorwayNodeId": 12756615647,
-        "direction": "inbound",
-        "notes": "Verified OSM binding for 新都心西 (S2 inbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s2-outbound:shintoshin-exit",
@@ -5549,7 +5810,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G51",
         "https://www.shutoko.jp/use/network/map/route-s2/shintoshin/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:s2-inbound:shintoshin-exit",
@@ -5571,7 +5834,9 @@
         "motorwayNodeId": 2108155782,
         "direction": "inbound",
         "notes": "Verified OSM binding for 新都心 (S2 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:s2-outbound:saitama-minuma-exit",
@@ -5593,7 +5858,9 @@
         "motorwayNodeId": 614591161,
         "direction": "outbound",
         "notes": "Verified OSM binding for さいたま見沼 (S2 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:gotanda-exit",
@@ -5615,7 +5882,9 @@
         "motorwayNodeId": 9776203234,
         "direction": "inner",
         "notes": "Verified OSM binding for 五反田 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:chukan-oiminami-exit",
@@ -5637,7 +5906,9 @@
         "motorwayNodeId": 6534505823,
         "direction": "inner",
         "notes": "Verified OSM binding for 中環大井南 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-outer:ogi-ohashi-exit",
@@ -5659,7 +5930,9 @@
         "motorwayNodeId": 773008284,
         "direction": "outer",
         "notes": "Verified OSM binding for 扇大橋 (C2 outer)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:c2-inner:ogi-ohashi-exit",
@@ -5681,7 +5954,9 @@
         "motorwayNodeId": 8283660596,
         "direction": "inner",
         "notes": "Verified OSM binding for 扇大橋 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-outer:senju-shinbashi-exit",
@@ -5703,7 +5978,9 @@
         "motorwayNodeId": 4005035741,
         "direction": "outer",
         "notes": "Verified OSM binding for 千住新橋 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:senju-shinbashi-exit",
@@ -5716,7 +5993,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G14",
         "https://www.shutoko.jp/use/network/map/route-c2/senjushinbashi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-outer:yotsugi-exit",
@@ -5729,7 +6008,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G14",
         "https://www.shutoko.jp/use/network/map/route-c2/yotsugi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-inner:yotsugi-exit",
@@ -5751,7 +6032,9 @@
         "motorwayNodeId": 1697733869,
         "direction": "inner",
         "notes": "Verified OSM binding for 四つ木 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-outer:hirai-ohashi-exit",
@@ -5773,7 +6056,9 @@
         "motorwayNodeId": 1592997557,
         "direction": "outer",
         "notes": "Verified OSM binding for 平井大橋 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-outer:seishincho-exit",
@@ -5795,7 +6080,9 @@
         "motorwayNodeId": 6369478152,
         "direction": "outer",
         "notes": "Verified OSM binding for 清新町 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:kosuge-exit",
@@ -5817,7 +6104,9 @@
         "motorwayNodeId": 761925139,
         "direction": "inner",
         "notes": "Verified OSM binding for 小菅 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:funaboribashi-exit",
@@ -5830,7 +6119,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G41",
         "https://www.shutoko.jp/use/network/map/route-c2/funaboribashi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-outer:nishi-ikebukuro-exit",
@@ -5838,21 +6129,15 @@
       "lon": 139.697392,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-c2/nishiikebukuro/",
-        "https://www.openstreetmap.org/way/190617374",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:190617374:2012583841:2012583847",
+        "duplicate-members:ramp:c2-inner:nishi-ikebukuro-exit, ramp:c2-outer:nishi-ikebukuro-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:c2-outer:nishi-ikebukuro-exit",
-        "osmWayId": 190617374,
-        "osmNodeId": 2012583841,
-        "motorwayNodeId": 2012583847,
-        "direction": "outer",
-        "notes": "Verified OSM binding for 西池袋 (C2 outer)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-inner:nishi-ikebukuro-exit",
@@ -5860,21 +6145,15 @@
       "lon": 139.697392,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-c2/nishiikebukuro/",
-        "https://www.openstreetmap.org/way/190617374",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:190617374:2012583841:2012583847",
+        "duplicate-members:ramp:c2-inner:nishi-ikebukuro-exit, ramp:c2-outer:nishi-ikebukuro-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:c2-inner:nishi-ikebukuro-exit",
-        "osmWayId": 190617374,
-        "osmNodeId": 2012583841,
-        "motorwayNodeId": 2012583847,
-        "direction": "inner",
-        "notes": "Verified OSM binding for 西池袋 (C2 inner)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-outer:oji-minami-exit",
@@ -5896,7 +6175,9 @@
         "motorwayNodeId": 1928907412,
         "direction": "outer",
         "notes": "Verified OSM binding for 王子南 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:oji-kita-exit",
@@ -5918,7 +6199,9 @@
         "motorwayNodeId": 5653183407,
         "direction": "inner",
         "notes": "Verified OSM binding for 王子北 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-outer:shin-itabashi-exit",
@@ -5932,7 +6215,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-c2/shinitabashi/",
         "https://www.openstreetmap.org/way/182527897"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c2-outer:hatsudai-minami-exit",
@@ -5954,7 +6239,9 @@
         "motorwayNodeId": 3851809270,
         "direction": "outer",
         "notes": "Verified OSM binding for 初台南 (C2 outer)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:tomigaya-exit",
@@ -5976,7 +6263,9 @@
         "motorwayNodeId": 4213651588,
         "direction": "inner",
         "notes": "Verified OSM binding for 富ヶ谷 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c2-inner:nakano-chojabashi-exit",
@@ -5998,7 +6287,9 @@
         "motorwayNodeId": 3851530198,
         "direction": "inner",
         "notes": "Verified OSM binding for 中野長者橋 (C2 inner)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:oiminami-exit",
@@ -6020,7 +6311,9 @@
         "motorwayNodeId": 8990001226,
         "direction": "east",
         "notes": "Verified OSM binding for 大井南 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:oiminami-exit",
@@ -6034,7 +6327,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-b/ooiminami/",
         "https://www.openstreetmap.org/way/4854087"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-west:oi-exit",
@@ -6056,7 +6351,9 @@
         "motorwayNodeId": 4079502535,
         "direction": "west",
         "notes": "Verified exact directed segment (G50)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:ariake-exit",
@@ -6078,7 +6375,9 @@
         "motorwayNodeId": 3799101273,
         "direction": "west",
         "notes": "Verified OSM binding for 有明 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:shinkiba-exit",
@@ -6100,7 +6399,9 @@
         "motorwayNodeId": 6439922827,
         "direction": "east",
         "notes": "Verified OSM binding for 新木場 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:shinkiba-exit",
@@ -6122,7 +6423,9 @@
         "motorwayNodeId": 6439922832,
         "direction": "west",
         "notes": "Verified OSM binding for 新木場 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:kasai-exit",
@@ -6130,21 +6433,15 @@
       "lon": 139.867769,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/kasai/",
-        "https://www.openstreetmap.org/way/46876171",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:46876171:332519414:8418687088",
+        "duplicate-members:ramp:b-east:kasai-exit, ramp:b-west:kasai-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:b-east:kasai-exit",
-        "osmWayId": 46876171,
-        "osmNodeId": 332519414,
-        "motorwayNodeId": 8418687088,
-        "direction": "east",
-        "notes": "Verified OSM binding for 葛西 (B east)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-west:kasai-exit",
@@ -6152,21 +6449,15 @@
       "lon": 139.867769,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/kasai/",
-        "https://www.openstreetmap.org/way/46876171",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:46876171:332519414:8418687088",
+        "duplicate-members:ramp:b-east:kasai-exit, ramp:b-west:kasai-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:b-west:kasai-exit",
-        "osmWayId": 46876171,
-        "osmNodeId": 332519414,
-        "motorwayNodeId": 8418687088,
-        "direction": "west",
-        "notes": "Verified OSM binding for 葛西 (B west)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:urayasu-exit",
@@ -6174,21 +6465,15 @@
       "lon": 139.890292,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/urayasu/",
-        "https://www.openstreetmap.org/way/1126982258",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:1126982258:288706350:10305047093",
+        "duplicate-members:ramp:b-east:urayasu-exit, ramp:b-west:urayasu-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:b-east:urayasu-exit",
-        "osmWayId": 1126982258,
-        "osmNodeId": 288706350,
-        "motorwayNodeId": 10305047093,
-        "direction": "east",
-        "notes": "Verified OSM binding for 浦安 (B east)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-west:urayasu-exit",
@@ -6196,21 +6481,15 @@
       "lon": 139.890292,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/urayasu/",
-        "https://www.openstreetmap.org/way/1126982258",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:1126982258:288706350:10305047093",
+        "duplicate-members:ramp:b-east:urayasu-exit, ramp:b-west:urayasu-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:b-west:urayasu-exit",
-        "osmWayId": 1126982258,
-        "osmNodeId": 288706350,
-        "motorwayNodeId": 10305047093,
-        "direction": "west",
-        "notes": "Verified OSM binding for 浦安 (B west)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-east:rinkai-fukutoshin-exit",
@@ -6232,7 +6511,9 @@
         "motorwayNodeId": 8284063780,
         "direction": "east",
         "notes": "Verified OSM binding for 臨海副都心 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:chidoricho-exit",
@@ -6254,7 +6535,9 @@
         "motorwayNodeId": 4361060075,
         "direction": "east",
         "notes": "Verified OSM binding for 千鳥町 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:kuko-chuo-exit",
@@ -6276,7 +6559,9 @@
         "motorwayNodeId": 6271985881,
         "direction": "east",
         "notes": "Verified OSM binding for 空港中央 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:kuko-chuo-exit",
@@ -6298,7 +6583,9 @@
         "motorwayNodeId": 3296142323,
         "direction": "west",
         "notes": "Verified OSM binding for 空港中央 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:wangan-kampachi-exit",
@@ -6320,7 +6607,9 @@
         "motorwayNodeId": 961315206,
         "direction": "east",
         "notes": "Verified OSM binding for 湾岸環八 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:higashi-ogishima-exit",
@@ -6342,7 +6631,9 @@
         "motorwayNodeId": 12083472611,
         "direction": "east",
         "notes": "Verified OSM binding for 東扇島 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:higashi-ogishima-exit",
@@ -6364,7 +6655,9 @@
         "motorwayNodeId": 4964217580,
         "direction": "west",
         "notes": "Verified OSM binding for 東扇島 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:sachiura-exit",
@@ -6386,7 +6679,9 @@
         "motorwayNodeId": 10876194269,
         "direction": "west",
         "notes": "Verified OSM binding for 幸浦 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:sugita-exit",
@@ -6408,7 +6703,9 @@
         "motorwayNodeId": 10876136377,
         "direction": "east",
         "notes": "Verified exact directed segment (G08)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:b-west:sugita-exit",
@@ -6430,7 +6727,9 @@
         "motorwayNodeId": 10876194301,
         "direction": "west",
         "notes": "Verified OSM binding for 杉田 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:isogo-exit",
@@ -6452,7 +6751,9 @@
         "motorwayNodeId": 470279665,
         "direction": "west",
         "notes": "Verified OSM binding for 磯子 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:minamihommoku-futo-exit",
@@ -6466,7 +6767,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-b/minamihonmokufutou/",
         "https://www.openstreetmap.org/way/760562349"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:b-west:hommoku-futo-exit",
@@ -6488,7 +6791,9 @@
         "motorwayNodeId": 6364949093,
         "direction": "west",
         "notes": "Verified exact directed segment (G44)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-east:sankeien-exit",
@@ -6510,7 +6815,9 @@
         "motorwayNodeId": 13121143854,
         "direction": "east",
         "notes": "Verified OSM binding for 三溪園 (B east)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:b-east:ukishima-exit",
@@ -6532,7 +6839,9 @@
         "motorwayNodeId": 448039313,
         "direction": "east",
         "notes": "Verified OSM binding for 浮島 (B east)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:b-west:ukishima-exit",
@@ -6554,7 +6863,9 @@
         "motorwayNodeId": 1856540422,
         "direction": "west",
         "notes": "Verified OSM binding for 浮島 (B west)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-outbound:daishi-exit",
@@ -6576,7 +6887,9 @@
         "motorwayNodeId": 9586985150,
         "direction": "outbound",
         "notes": "Verified OSM binding for 大師 (K1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:daishi-exit",
@@ -6598,7 +6911,9 @@
         "motorwayNodeId": 9586985145,
         "direction": "inbound",
         "notes": "Verified OSM binding for 大師 (K1 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-outbound:daishi-683-exit",
@@ -6620,7 +6935,9 @@
         "motorwayNodeId": 7529354161,
         "direction": "outbound",
         "notes": "Verified OSM binding for 大師 (K1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-outbound:hamakawasaki-exit",
@@ -6633,7 +6950,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G55",
         "https://www.shutoko.jp/use/network/map/route-k1/hamakawasaki/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k1-outbound:shioiri-exit",
@@ -6647,7 +6966,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-k1/shioiri/",
         "https://www.openstreetmap.org/way/1022520297"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k1-outbound:koyasu-exit",
@@ -6661,7 +6982,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-k1/koyasu/",
         "https://www.openstreetmap.org/way/810220980"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k1-inbound:koyasu-exit",
@@ -6683,7 +7006,9 @@
         "motorwayNodeId": 2337123273,
         "direction": "inbound",
         "notes": "Verified OSM binding for 子安 (K1 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:k1-outbound:higashi-kanagawa-exit",
@@ -6705,7 +7030,9 @@
         "motorwayNodeId": 7577993419,
         "direction": "outbound",
         "notes": "Verified OSM binding for 東神奈川 (K1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:higashi-kanagawa-exit",
@@ -6727,7 +7054,9 @@
         "motorwayNodeId": 6790935665,
         "direction": "inbound",
         "notes": "Verified exact directed segment (G25)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:k1-outbound:minato-mirai-exit",
@@ -6749,7 +7078,9 @@
         "motorwayNodeId": 1484759987,
         "direction": "outbound",
         "notes": "Verified OSM binding for みなとみらい (K1 outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:k1-inbound:minato-mirai-exit",
@@ -6771,7 +7102,9 @@
         "motorwayNodeId": 3351204469,
         "direction": "inbound",
         "notes": "Verified OSM binding for みなとみらい (K1 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-outbound:yokohama-koen-exit",
@@ -6793,7 +7126,9 @@
         "motorwayNodeId": 7106299263,
         "direction": "outbound",
         "notes": "Verified OSM binding for 横浜公園 (K1 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:yokohama-koen-exit",
@@ -6815,7 +7150,9 @@
         "motorwayNodeId": 2319208953,
         "direction": "inbound",
         "notes": "Verified OSM binding for 横浜公園 (K1 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:k1-inbound:asada-exit",
@@ -6837,7 +7174,9 @@
         "motorwayNodeId": 9430482161,
         "direction": "inbound",
         "notes": "Verified exact directed segment (unresolved-verified)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k1-inbound:namamugi-exit",
@@ -6859,7 +7198,9 @@
         "motorwayNodeId": 4741655115,
         "direction": "inbound",
         "notes": "Verified exact directed segment (unresolved-verified)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:k1-inbound:yokohama-eki-higashiguchi-exit",
@@ -6881,7 +7222,9 @@
         "motorwayNodeId": 8120975720,
         "direction": "inbound",
         "notes": "Verified OSM binding for 横浜駅東口 (K1 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:k1-outbound:moriyacho-exit",
@@ -6903,7 +7246,9 @@
         "motorwayNodeId": 2337123333,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G43)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k5-outbound:daikoku-futo-exit",
@@ -6911,21 +7256,15 @@
       "lon": 139.679943,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/",
-        "https://www.openstreetmap.org/way/32592473",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:32592473:366517079:739425889",
+        "duplicate-members:ramp:k5-east:daikoku-futo-exit, ramp:k5-outbound:daikoku-futo-exit, ramp:k5-west:daikoku-futo-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k5-outbound:daikoku-futo-exit",
-        "osmWayId": 32592473,
-        "osmNodeId": 366517079,
-        "motorwayNodeId": 739425889,
-        "direction": "outbound",
-        "notes": "Verified OSM binding for 大黒ふ頭 (K5 outbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k5-east:daikoku-futo-exit",
@@ -6933,21 +7272,15 @@
       "lon": 139.679943,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/",
-        "https://www.openstreetmap.org/way/32592473",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:32592473:366517079:739425889",
+        "duplicate-members:ramp:k5-east:daikoku-futo-exit, ramp:k5-outbound:daikoku-futo-exit, ramp:k5-west:daikoku-futo-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k5-east:daikoku-futo-exit",
-        "osmWayId": 32592473,
-        "osmNodeId": 366517079,
-        "motorwayNodeId": 739425889,
-        "direction": "east",
-        "notes": "Verified OSM binding for 大黒ふ頭 (K5 east)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k5-west:daikoku-futo-exit",
@@ -6955,21 +7288,15 @@
       "lon": 139.679943,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-b/daikokufutou/",
-        "https://www.openstreetmap.org/way/32592473",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:32592473:366517079:739425889",
+        "duplicate-members:ramp:k5-east:daikoku-futo-exit, ramp:k5-outbound:daikoku-futo-exit, ramp:k5-west:daikoku-futo-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k5-west:daikoku-futo-exit",
-        "osmWayId": 32592473,
-        "osmNodeId": 366517079,
-        "motorwayNodeId": 739425889,
-        "direction": "west",
-        "notes": "Verified OSM binding for 大黒ふ頭 (K5 west)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k6-outbound:tonomachi-exit",
@@ -6991,7 +7318,9 @@
         "motorwayNodeId": 7319506147,
         "direction": "outbound",
         "notes": "Verified OSM binding for 殿町 (K6 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:y-south:yaesu-exit",
@@ -7007,7 +7336,9 @@
         "fixtures/osm/shutoko-all.json:93647",
         "https://www.openstreetmap.org/node/6538495149",
         "https://www.openstreetmap.org/way/203301443"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:y-north:yaesu-exit",
@@ -7023,7 +7354,9 @@
         "fixtures/osm/shutoko-all.json:91125",
         "https://www.openstreetmap.org/node/6397091336",
         "https://www.openstreetmap.org/way/4849052"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:y-south:marunouchi-exit",
@@ -7039,7 +7372,9 @@
         "fixtures/osm/shutoko-all.json:39047,226002",
         "https://www.openstreetmap.org/node/574331731",
         "https://www.openstreetmap.org/way/1232083939"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k2-outbound:yokohama-eki-nishiguchi-exit",
@@ -7061,7 +7396,9 @@
         "motorwayNodeId": 3817814421,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G25)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k2-outbound:mitsuzawa-exit",
@@ -7075,7 +7412,9 @@
         "analyze-duplicate-bindings-001.json",
         "https://www.shutoko.jp/use/network/map/route-k2/mitsuzawa/",
         "https://www.openstreetmap.org/way/39744538"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k3-outbound:shin-yamashita-exit",
@@ -7088,7 +7427,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G44",
         "https://www.shutoko.jp/use/network/map/route-k3/shinyamashita/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k3-inbound:shin-yamashita-exit",
@@ -7110,7 +7451,9 @@
         "motorwayNodeId": 6373399025,
         "direction": "inbound",
         "notes": "Verified OSM binding for 新山下 (K3 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k3-outbound:hananoki-exit",
@@ -7132,7 +7475,9 @@
         "motorwayNodeId": 3125197079,
         "direction": "outbound",
         "notes": "Verified OSM binding for 花之木 (K3 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k3-outbound:nagata-exit",
@@ -7154,7 +7499,9 @@
         "motorwayNodeId": 1851661479,
         "direction": "outbound",
         "notes": "Verified exact directed segment (G45)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k3-inbound:bandobashi-exit",
@@ -7176,7 +7523,9 @@
         "motorwayNodeId": 3256397473,
         "direction": "inbound",
         "notes": "Verified OSM binding for 阪東橋 (K3 inbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:k3-inbound:yamashitacho-exit",
@@ -7198,7 +7547,9 @@
         "motorwayNodeId": 7106299281,
         "direction": "inbound",
         "notes": "Verified OSM binding for 山下町 (K3 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k7-outbound:shin-yokohama-exit",
@@ -7206,21 +7557,15 @@
       "lon": 139.589296,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G40",
-        "https://www.shutoko.jp/use/network/map/route-k7/shinyokohama/",
-        "https://www.openstreetmap.org/way/760536118"
+        "directed-segment:760536118:3710151991:6439841432",
+        "duplicate-members:ramp:k7-inbound:shin-yokohama-exit, ramp:k7-outbound:shin-yokohama-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k7-outbound:shin-yokohama-exit",
-        "osmWayId": 760536118,
-        "osmNodeId": 3710151991,
-        "motorwayNodeId": 6439841432,
-        "direction": "outbound",
-        "notes": "Verified exact directed segment (G40)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-inbound:shin-yokohama-exit",
@@ -7228,21 +7573,15 @@
       "lon": 139.607375,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-k7/shinyokohama/",
-        "https://www.openstreetmap.org/way/760536118",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:760536118:3710151991:6439841432",
+        "duplicate-members:ramp:k7-inbound:shin-yokohama-exit, ramp:k7-outbound:shin-yokohama-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k7-inbound:shin-yokohama-exit",
-        "osmWayId": 760536118,
-        "osmNodeId": 3710151991,
-        "motorwayNodeId": 6439841432,
-        "direction": "inbound",
-        "notes": "Verified OSM binding for 新横浜 (K7 inbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-outbound:kishiya-namamugi-exit",
@@ -7255,7 +7594,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G43",
         "https://www.shutoko.jp/use/network/map/route-k7/kishiyanamamugi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-inbound:kishiya-namamugi-exit",
@@ -7268,7 +7609,9 @@
       "supportEvidence": [
         "analyze-duplicate-bindings-001.json:G43",
         "https://www.shutoko.jp/use/network/map/route-k7/kishiyanamamugi/"
-      ]
+      ],
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-outbound:baba-exit",
@@ -7290,7 +7633,9 @@
         "motorwayNodeId": 7252694210,
         "direction": "outbound",
         "notes": "Verified OSM binding for 馬場 (K7 outbound)"
-      }
+      },
+      "routingCapability": "structural_no_loop",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCへ接続できず、構造的にNO_LOOP。"
     },
     {
       "rampId": "ramp:k7-inbound:baba-exit",
@@ -7312,7 +7657,9 @@
         "motorwayNodeId": 1659112498,
         "direction": "inbound",
         "notes": "Verified OSM binding for 馬場 (K7 inbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k7-outbound:yokohama-kohoku-exit",
@@ -7320,21 +7667,15 @@
       "lon": 139.589296,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamakohoku/",
-        "https://www.openstreetmap.org/way/734299106",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:734299106:7473451738:7656623437",
+        "duplicate-members:ramp:k7-inbound:yokohama-kohoku-exit, ramp:k7-outbound:yokohama-kohoku-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k7-outbound:yokohama-kohoku-exit",
-        "osmWayId": 734299106,
-        "osmNodeId": 7473451738,
-        "motorwayNodeId": 7656623437,
-        "direction": "outbound",
-        "notes": "Verified OSM binding for 横浜港北 (K7 outbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-inbound:yokohama-kohoku-exit",
@@ -7342,21 +7683,15 @@
       "lon": 139.589296,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportState": "unsupported",
+      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
       "supportEvidence": [
-        "https://www.shutoko.jp/use/network/map/route-k7ho/yokohamakohoku/",
-        "https://www.openstreetmap.org/way/734299106",
-        "analyze-duplicate-bindings-001.json"
+        "directed-segment:734299106:7473451738:7656623437",
+        "duplicate-members:ramp:k7-inbound:yokohama-kohoku-exit, ramp:k7-outbound:yokohama-kohoku-exit",
+        "verify-core-r2-opus.json:F1"
       ],
-      "binding": {
-        "rampId": "ramp:k7-inbound:yokohama-kohoku-exit",
-        "osmWayId": 734299106,
-        "osmNodeId": 7473451738,
-        "motorwayNodeId": 7656623437,
-        "direction": "inbound",
-        "notes": "Verified OSM binding for 横浜港北 (K7 inbound)"
-      }
+      "routingCapability": "unsupported",
+      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },
     {
       "rampId": "ramp:k7-outbound:yokohama-aoba-exit",
@@ -7378,7 +7713,9 @@
         "motorwayNodeId": 12914372037,
         "direction": "outbound",
         "notes": "Verified OSM binding for 横浜青葉 (K7 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:k7-outbound:yokohama-aoba-759-exit",
@@ -7400,7 +7737,9 @@
         "motorwayNodeId": 12913951806,
         "direction": "outbound",
         "notes": "Verified OSM binding for 横浜青葉 (K7 outbound)"
-      }
+      },
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     }
   ],
   "sharedPhysicalOverrides": [

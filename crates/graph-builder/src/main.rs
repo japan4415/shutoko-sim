@@ -360,7 +360,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     errs.join("\n  ")
                 )
             })?;
-            validate_osm_ramp_bindings_against_osm(&b, &overpass_resp).map_err(|errs| {
+            validate_osm_ramp_bindings_against_osm(&b, &inv, &overpass_resp).map_err(|errs| {
                 format!(
                     "bindings OSM fixture existence validation failed for {}:\n  {}",
                     bin_path.display(),
@@ -380,6 +380,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let (bound_ramps, ramp_artifact_entries, unbound_notes) =
             bind_ramps_to_graph(&graph, &inv, &bindings_file);
         graph.ramps = bound_ramps;
+        if inv.version >= 3 {
+            shutoko_graph_builder::validate_endpoint_capability_contract(&graph, &inv).map_err(
+                |errs| {
+                    format!(
+                        "endpoint capability hard assertion failed:\n  {}",
+                        errs.join("\n  ")
+                    )
+                },
+            )?;
+        }
         for note in unbound_notes {
             unverified_from_seeds.push(note);
         }
@@ -446,6 +456,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             })?;
             apply_od_tariffs_to_graph(&mut graph, &tariffs);
         }
+
+        shutoko_graph_builder::validate_verified_billing_pair_endpoints(&graph).map_err(
+            |errs| {
+                format!(
+                    "verified billing pair endpoint validation failed:\n  {}",
+                    errs.join("\n  ")
+                )
+            },
+        )?;
 
         let artifact = RampsArtifact {
             schema_version: 1,
@@ -603,6 +622,22 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     all_unverified.sort();
     all_unverified.dedup();
 
+    let capability_ids = |kind: RampKind, capability: &str| -> Vec<String> {
+        ramps_artifact_opt
+            .as_ref()
+            .map(|(artifact, _)| {
+                artifact
+                    .ramps
+                    .iter()
+                    .filter(|ramp| {
+                        ramp.kind == kind && ramp.routing_capability.as_deref() == Some(capability)
+                    })
+                    .map(|ramp| ramp.id.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+
     // 6. Build manifest
     let manifest_config = ManifestConfig {
         release_id: args.release_id.clone(),
@@ -616,6 +651,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         billing_pairs_version: "v1".into(),
         unverified_sections: all_unverified,
         provenance: billing_provenances,
+        routable_entry_ramp_ids: capability_ids(RampKind::GeneralEntry, "routable"),
+        routable_exit_ramp_ids: capability_ids(RampKind::GeneralExit, "routable"),
+        structural_no_loop_entry_ramp_ids: capability_ids(
+            RampKind::GeneralEntry,
+            "structural_no_loop",
+        ),
+        structural_no_loop_exit_ramp_ids: capability_ids(
+            RampKind::GeneralExit,
+            "structural_no_loop",
+        ),
     };
 
     let mut artifacts_to_bundle: Vec<(&str, &[u8])> = vec![

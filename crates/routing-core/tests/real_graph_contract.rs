@@ -32,14 +32,14 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .filter(|p| p.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        6
+        2
     );
     assert_eq!(
         g.billing_pairs
             .iter()
             .filter(|p| p.status == shutoko_routing_core::VerificationStatus::Unverified)
             .count(),
-        2
+        6
     );
 
     for pair in &g.billing_pairs {
@@ -58,6 +58,13 @@ fn real_graph_deserialization_and_schema_validation() {
         assert_eq!(pair.prices[1].amount_yen, 300);
         assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
         assert_eq!(pair.prices[1].effective_to, None);
+        if pair.status == shutoko_routing_core::VerificationStatus::Verified {
+            assert!(
+                pair.entry_ramp_id.is_some() && pair.exit_ramp_id.is_some(),
+                "verified billing pair {} must have non-null ramp IDs",
+                pair.id
+            );
+        }
 
         // Verify billing pair is a simple path (no node revisited on direct entry-to-exit path)
         let mut seen_nodes = BTreeSet::new();
@@ -82,6 +89,22 @@ fn real_graph_deserialization_and_schema_validation() {
                 e.to
             );
         }
+    }
+
+    for id in [
+        "bp:c1-inner:daikancho-kasumigaseki",
+        "bp:c1-inner:shibakoen-shiodome",
+        "bp:c1-outer:ginza-shibakoen",
+    ] {
+        assert_eq!(
+            g.billing_pairs
+                .iter()
+                .find(|pair| pair.id == id)
+                .unwrap_or_else(|| panic!("missing billing pair {id}"))
+                .status,
+            shutoko_routing_core::VerificationStatus::Unverified,
+            "billing pair {id} must remain unverified until both endpoints uniquely resolve"
+        );
     }
 
     // Verify manifest unverifiedSections has no rejected elements
@@ -417,7 +440,7 @@ fn explicit_ramps_reject_non_public_kinds_and_report_unreachable_od() {
     assert_ne!(unreachable.status, "truncated");
 }
 
-/// データ契約上 verified の全 6 ペアの探索契約定数。
+/// データ契約上 verified の全 2 ペアの探索契約定数。
 /// 各ペアの C1 一周計画時間が時間窓に収まる max_minutes とその根拠を明示。
 /// 一般道排除（issue #25）により、旧来「一般道が切断されていた」3 ペアも
 /// origin_node_id = Entry エッジの from-node（アクセス時間 0）として直接探索可能になった。
@@ -427,39 +450,16 @@ struct ConnectedPairContract {
     rationale: &'static str,
 }
 
-const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 6] = [
+const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 2] = [
     ConnectedPairContract {
         pair_id: "bp:c1-outer:kandabashi-takaracho",
         max_minutes: 60,
         rationale: "神田橋〜宝町（外回り）。C1 一周の実走行計画時間は約30分（base=1503s, plan=1803s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
     },
     ConnectedPairContract {
-        pair_id: "bp:c1-inner:shibakoen-shiodome",
-        max_minutes: 30,
-        rationale: "芝公園〜汐留（内回り）。実走行計画時間は約28.8分（base=1431s, plan=1731s）。max_minutes=60 では霞が関入口（kasumigaseki-shibakoen, 首都高1205s/300円）が time_per_yen 比率（1205/300 > 1136/300）により上位にランクインし、同一の内回り C1 ループであるため 80% Jaccard 類似度除外により芝公園入口側の候補が除外される。計画時間30分枠では遠隔の霞が関（plan=2464s ≈ 41分）が時間窓外となり、自ペア候補が採択される。",
-    },
-    ConnectedPairContract {
-        pair_id: "bp:c1-outer:shibakoen-iikura",
-        max_minutes: 60,
-        rationale: "芝公園〜飯倉（外回り）。C1 一周の実走行計画時間は約26.6分（base=1298s, plan=1598s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
-    },
-    // 以下 3 ペアは issue #25 以前は一般道の OSM 取得範囲境界で孤立していたが、
-    // 一般道排除後は origin_node_id = Entry エッジ from-node（アクセス時間 0）として
-    // 直接 C1 本線に接続されるようになり、自ペア候補が採択される。
-    ConnectedPairContract {
-        pair_id: "bp:c1-outer:ginza-shibakoen",
-        max_minutes: 60,
-        rationale: "銀座〜芝公園（外回り）。一般道排除後、Entry from-node を起点とするためアクセス時間 0。C1 一周の標準窓 max_minutes=60 で自ペア候補が採択される。",
-    },
-    ConnectedPairContract {
         pair_id: "bp:c1-outer:kasumigaseki-daikancho",
         max_minutes: 60,
         rationale: "霞が関〜大官町（外回り）。一般道排除後、Entry from-node を起点とするためアクセス時間 0。C1 一周の標準窓 max_minutes=60 で自ペア候補が採択される。",
-    },
-    ConnectedPairContract {
-        pair_id: "bp:c1-inner:daikancho-kasumigaseki",
-        max_minutes: 60,
-        rationale: "大官町〜霞が関（内回り）。一般道排除後、Entry from-node を起点とするためアクセス時間 0。C1 一周の標準窓 max_minutes=60 で自ペア候補が採択される。",
     },
 ];
 
@@ -473,7 +473,7 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
 
     let start_total = std::time::Instant::now();
 
-    // 1. verified 全 6 ペアの探索契約。
+    // 1. verified 全 2 ペアの探索契約。
     for contract in CONNECTED_SEARCH_PAIRS {
         let pair = g
             .billing_pairs
@@ -554,14 +554,14 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             .iter()
             .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        6
+        2
     );
     assert_eq!(
         g.billing_pairs
             .iter()
             .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Unverified)
             .count(),
-        2
+        6
     );
     for pair in g
         .billing_pairs
@@ -585,12 +585,12 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
 
     let total_elapsed = start_total.elapsed();
     eprintln!(
-        "all 6 verified billing pairs search contract total elapsed: {:?}",
+        "all 2 verified billing pairs search contract total elapsed: {:?}",
         total_elapsed
     );
     assert!(
         total_elapsed < std::time::Duration::from_secs(60),
-        "total search time for all 6 verified pairs must be under 60 seconds, took {:?}",
+        "total search time for all 2 verified pairs must be under 60 seconds, took {:?}",
         total_elapsed
     );
 }
@@ -618,23 +618,15 @@ fn real_graph_coordinate_input_snap_and_candidate_enrichment() {
     };
     let result = search(&g, &request, &limits).expect("coordinate search must succeed");
     assert_eq!(result.status, "ok");
-    // With max_access_entries = 0 (unlimited, the new default), all Entry access
-    // points are tried.  Among C1 outer-ring pairs, `ginza-shibakoen` has the
-    // highest shutoko_seconds (longer entry/exit ramps → more highway time per yen)
-    // and therefore ranks first by time_per_yen.  `kandabashi-takaracho` shares
-    // >80% Jaccard similarity with ginza (same ring cycle edges) and is deduplicated.
+    // The Round 2 endpoint audit leaves two uniquely reverse-mapped verified
+    // pairs. At Kandabashi coordinates the Kandabashi pair must be usable.
     let candidate = result
         .candidates
         .iter()
-        .find(|c| c.toll.billing_pair_id == "bp:c1-outer:ginza-shibakoen")
-        .expect("ginza-shibakoen must be first outer-ring candidate with unlimited entries");
-    assert_eq!(candidate.entry.name.as_deref(), Some("銀座入口"));
-    assert_eq!(candidate.exit.name.as_deref(), Some("芝公園出口"));
-    // Origin is at kandabashi entry coords (~398 s away from ginza entry).
-    assert!(
-        candidate.duration.access_seconds > 0,
-        "access must be non-zero: origin is not at ginza entry"
-    );
+        .find(|c| c.toll.billing_pair_id == "bp:c1-outer:kandabashi-takaracho")
+        .expect("kandabashi-takaracho must be available from Kandabashi coordinates");
+    assert_eq!(candidate.entry.name.as_deref(), Some("神田橋入口"));
+    assert_eq!(candidate.exit.name.as_deref(), Some("宝町出口"));
     assert_eq!(candidate.entry_id, candidate.entry.edge_id);
     assert_eq!(candidate.exit_id, candidate.exit.edge_id);
     assert_eq!(
@@ -833,7 +825,7 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
         }),
         entry_ramp_id: None,
         exit_ramp_id: None,
-        min_minutes: 30,
+        min_minutes: 15,
         max_minutes: 60,
         vehicle_profile: "passenger-car-etc".into(),
         pricing_at: "2026-09-10T00:00:00Z".into(),

@@ -22,6 +22,13 @@ const root = new URL("../../", import.meta.url);
 const wasmDir = new URL("dist/wasm/", root);
 const gluePath = new URL("shutoko_routing.js", wasmDir);
 
+interface WasmBuildContract {
+  contractVersion: number;
+  engineVersion: string;
+  graphSchemaVersion: number;
+  requiredGraphFields: string[];
+}
+
 function toBytes(text: string): Uint8Array {
   return new TextEncoder().encode(text);
 }
@@ -30,21 +37,55 @@ function toBinary(bytes: Uint8Array): Uint8Array {
   return bytes;
 }
 
-/**
- * dist/wasm が現在のエンジン契約（診断フィールド minPlanSeconds）を含むか。
- * 存在するだけで再ビルドしないと、旧ビルドが残ったローカルで
- * 「欠落を undefined と誤判定する」失敗が再現しないまま素通りする（review R2-F1）。
- */
-async function wasmHasDiagnosticField(): Promise<boolean> {
-  const wasmPath = new URL("shutoko_routing_bg.wasm", wasmDir);
-  if (!existsSync(wasmPath)) {
+export function isWasmContractCompatible(
+  current: WasmBuildContract,
+  built: WasmBuildContract,
+  graph: Record<string, unknown>,
+  manifest: Record<string, unknown>,
+): boolean {
+  if (JSON.stringify(current) !== JSON.stringify(built)) {
     return false;
   }
-  return Buffer.from(await readFile(wasmPath)).includes("minPlanSeconds");
+  if (
+    graph.schemaVersion !== current.graphSchemaVersion ||
+    manifest.engineVersion !== current.engineVersion ||
+    !Array.isArray(graph.odTariffs) ||
+    !Array.isArray(graph.ramps)
+  ) {
+    return false;
+  }
+  return graph.ramps.every(
+    (ramp) =>
+      typeof ramp === "object" &&
+      ramp !== null &&
+      typeof (ramp as Record<string, unknown>).id === "string" &&
+      typeof (ramp as Record<string, unknown>).mainlineNodeId === "string",
+  );
+}
+
+/** Explicit build metadata is compared with the graph/manifest contract. */
+async function wasmBuildIsCurrent(): Promise<boolean> {
+  const wasmPath = new URL("shutoko_routing_bg.wasm", wasmDir);
+  const builtContractPath = new URL("wasm-contract.json", wasmDir);
+  if (!existsSync(wasmPath) || !existsSync(gluePath) || !existsSync(builtContractPath)) {
+    return false;
+  }
+  const [current, built, graph, manifest] = await Promise.all([
+    readFile(new URL("crates/routing-wasm/wasm-contract.json", root), "utf8"),
+    readFile(builtContractPath, "utf8"),
+    readFile(new URL("fixtures/generated/graph.json", root), "utf8"),
+    readFile(new URL("fixtures/generated/manifest.json", root), "utf8"),
+  ]);
+  return isWasmContractCompatible(
+    JSON.parse(current) as WasmBuildContract,
+    JSON.parse(built) as WasmBuildContract,
+    JSON.parse(graph) as Record<string, unknown>,
+    JSON.parse(manifest) as Record<string, unknown>,
+  );
 }
 
 beforeAll(async () => {
-  if (!existsSync(gluePath) || !(await wasmHasDiagnosticField())) {
+  if (!(await wasmBuildIsCurrent())) {
     execFileSync("bash", ["scripts/build-wasm.sh"], {
       cwd: fileURLToPathSafe(root),
       stdio: "inherit",
@@ -58,6 +99,24 @@ function fileURLToPathSafe(url: URL): string {
 }
 
 describe("実 WASM 統合（fetch モック → loadRelease → search）", () => {
+  it("旧graph契約のbuild metadataをstaleとして判定する", () => {
+    const current: WasmBuildContract = {
+      contractVersion: 1,
+      engineVersion: "0.1.0",
+      graphSchemaVersion: 2,
+      requiredGraphFields: ["odTariffs", "ramps[].id", "ramps[].mainlineNodeId"],
+    };
+    const stale = { ...current, graphSchemaVersion: 1 };
+    const graph = {
+      schemaVersion: 2,
+      odTariffs: [],
+      ramps: [{ id: "ramp:test", mainlineNodeId: "n:1" }],
+    };
+    expect(isWasmContractCompatible(current, stale, graph, { engineVersion: "0.1.0" })).toBe(
+      false,
+    );
+  });
+
   it("神田橋近傍・15〜60 分で status ok と候補（mapsUrl プレフィックス付き）が返る", async () => {
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
     const glueBytes = toBytes(await readFile(gluePath, "utf8"));
@@ -124,7 +183,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       } satisfies FetchResponseLike & { status: number };
     };
 
-    const glue = await import("../../dist/wasm/shutoko_routing.js");
+    const glue = await import(gluePath.href);
     const state = await loadRelease(fetchImpl, releaseId, async () => glue);
 
     expect(calls).toEqual([
@@ -159,7 +218,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
   }, 30_000);
 
   it("不正な入力（maxMinutes=0）は INVALID_INPUT をスローする", async () => {
-    const glue = await import("../../dist/wasm/shutoko_routing.js");
+    const glue = await import(gluePath.href);
     const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
     glue.default;
     // 前テストと同じプロセス内で初期化済みのはずだが、単独実行にも耐えるよう再度初期化する
@@ -197,7 +256,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
 
   it("実エンジンの accessSeconds は web の概算式（直線×1.3÷30km/h 切り上げ）と一致する", async () => {
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
-    const glue = await import("../../dist/wasm/shutoko_routing.js");
+    const glue = await import(gluePath.href);
     await glue.default({ module_or_path: toBinary(wasmBytes) });
     const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
     const graphObj = JSON.parse(graphJson) as { releaseId: string };
@@ -233,7 +292,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
 
   it("明示した神奈川の verified-bound OD を課金ペアseedなしで探索できる", async () => {
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
-    const glue = await import("../../dist/wasm/shutoko_routing.js");
+    const glue = await import(gluePath.href);
     await glue.default({ module_or_path: toBinary(wasmBytes) });
     const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
     const graphObj = JSON.parse(graphJson) as { releaseId: string };
@@ -269,7 +328,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
 
   it("狭い 60 分窓でも実エンジンが minPlanSeconds を返す（診断の上界 240 分）", async () => {
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
-    const glue = await import("../../dist/wasm/shutoko_routing.js");
+    const glue = await import(gluePath.href);
     await glue.default({ module_or_path: toBinary(wasmBytes) });
     const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
     const graphObj = JSON.parse(graphJson) as { releaseId: string };

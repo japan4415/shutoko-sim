@@ -12,11 +12,12 @@ pub mod topology;
 pub mod validate;
 
 pub use inventory::{
-    apply_od_tariffs_to_graph, bind_ramps_to_graph, ramps_artifact_to_deterministic_json,
+    apply_od_tariffs_to_graph, bind_ramps_to_graph, classify_endpoint_capabilities,
+    ramps_artifact_to_deterministic_json, validate_endpoint_capability_contract,
     validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
-    validate_ramp_inventory, CanonicalRampInventoryItem, OdTariffsFile, OsmRampBinding,
-    OsmRampBindingsFile, RampArtifactEntry, RampInventoryFile, RampsArtifact,
-    SharedPhysicalOverride, TariffRules,
+    validate_ramp_inventory, validate_verified_billing_pair_endpoints, CanonicalRampInventoryItem,
+    OdTariffsFile, OsmRampBinding, OsmRampBindingsFile, RampArtifactEntry, RampInventoryFile,
+    RampsArtifact, SharedPhysicalOverride, TariffRules,
 };
 
 pub use billing::{
@@ -25,7 +26,7 @@ pub use billing::{
 };
 pub use manifest::{
     build_manifest, compute_sha256, manifest_to_deterministic_json, BillingPairProvenance,
-    Manifest, ManifestArtifact, ManifestConfig, ManifestCoverage,
+    Manifest, ManifestArtifact, ManifestConfig, ManifestCoverage, ManifestEndpointCapabilities,
 };
 pub use model::{
     BillingPair, Edge, EdgeKind, Graph, Node, OdTariff, Price, Ramp, RampKind, SnapIndex, SnapNode,

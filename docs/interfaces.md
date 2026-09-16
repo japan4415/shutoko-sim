@@ -125,14 +125,14 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 - `NO_LOOP`: 周回ループが見つからない、または進入不可
 - `TIME_WINDOW`: 指定所要時間枠（minMinutes〜maxMinutes）に収まる候補がない
 - `NO_HANDOFF`: Maps URL 長が 2,048 文字を超過したため候補が除外された
-- `SEARCH_LIMIT`: 探索状態数・候補数の上限に達した（`status: "truncated"`）
+- `SEARCH_LIMIT`: 探索状態数・候補数の上限に達した（`status: "truncated"`）。列挙が完走していないため `minPlanSeconds` は `null` になり得る（真の最小を証明しない）
 
 診断情報（候補の有無にかかわらず返す）:
 
 | フィールド | 型 | 内容 |
 | --- | --- | --- |
 | `nearestAccess` | `SnappedOrigin \| null` | 座標入力（`origin`）における最近接の入口アクセス地点（`{ nodeId, lat, lon, distanceMeters }`）。距離キャップ超過の `NO_CONNECTION` でも返す。`originNodeId` 入力および Entry アクセス地点が0件のときは `null` |
-| `minPlanSeconds` | `number \| null` | ループ時間が製品上限 240 分以内にある合法（禁止遷移を満たす）周回の `planSeconds`（`baseSeconds + bufferSeconds`）の最小値。指定時間枠で棄却した周回も含む。列挙は「ループ部分の秒数 ≤ 240 分」で打ち切られるため、`minPlanSeconds > 240 * 60` は「240 分以内に収まる合法周回が無い」ことの根拠として使える一方、その値は列挙範囲内の最小値であり真の全周回最小を上回り得る（`240 * 60` 以下かどうかの判定は厳密）。合法な周回が1件も無い場合は `null`。`TIME_WINDOW` の数値根拠（最寄り入口までの距離は `nearestAccess.distanceMeters`）として使う |
+| `minPlanSeconds` | `number \| null` | ループ時間が製品上限 240 分以内にある合法（禁止遷移を満たす）周回の `planSeconds`（`baseSeconds + bufferSeconds`）の最小値。指定時間枠で棄却した周回も含む。列挙は「ループ部分の秒数 ≤ 240 分」で打ち切られるため、その値は列挙範囲内の最小値であり真の全周回最小を上回り得る。**`minPlanSeconds > 240 * 60` を「240 分以内に収まる合法周回が無い」の根拠として使えるのは、列挙が資源上限で打ち切られていない場合に限る**。`SearchLimits.beamWidth`・`maxExpandedStates`・`maxPairs`（または候補側の上限）が列挙を打ち切ったときは真の最小が証明できないため `null` を返す（この場合 UI は「最短でも N 分」「最大 4 時間でも無理」を断定してはならない）。値が non-null でも `240 * 60` を超えるときは列挙範囲内の最小にすぎず列挙外のより長い周回がより小さい `planSeconds` を持ち得るため、UI は絶対的な「最短」と断定せず出所（確認できた範囲）を明示する。`240 * 60` 以下の値は「240 分以内に収まる周回が存在する」ことの根拠として使える。合法な周回が1件も無い場合も `null`。`TIME_WINDOW` の数値根拠（最寄り入口までの距離は `nearestAccess.distanceMeters`）として使う |
 
 ### 候補の必須フィールド
 

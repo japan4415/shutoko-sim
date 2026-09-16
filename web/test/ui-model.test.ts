@@ -199,11 +199,15 @@ describe("statusMessage / errorMessage", () => {
       15,
       240,
     );
-    expect(text).toContain("最短の計画時間でも 約 248 分");
+    expect(text).toContain("確認できた範囲で最も短い計画時間は 約 248 分");
     expect(text).toContain("最寄り入口まで直線 約 36.1 km");
     expect(text).toContain("最大 4 時間では周回できません");
     // 時間枠を広げても届かないので「広げる」導線を促さない。
     expect(text).not.toContain("時間枠を広げる");
+    // 240 分超の値は「ループ部分が 240 分以内」の列挙範囲での最小であり、絶対的な
+    // 最短ではない（列挙外のより長いループがより小さい plan を持ち得る）。断定しない。
+    expect(text).not.toContain("周回できる最短");
+    expect(text).not.toContain("最短でも");
   });
 
   it("TIME_WINDOW で 240 分以内に収まるなら時間枠を広げる文言のまま", () => {
@@ -223,14 +227,41 @@ describe("statusMessage / errorMessage", () => {
     );
   });
 
+  it("打切りで minPlanSeconds が null の診断は到達不能を断定しない（correct_2 TEST-01-FINAL）", () => {
+    // beamWidth / maxExpandedStates が列挙を打ち切ると engine は真の最小を証明できず null を返す
+    // （crates/routing-core/src/lib.rs の `budget.truncated || diagnostic_budget.truncated`）。
+    // 値が無い以上「最短でも N 分」「最大 4 時間では周回できません」は出せず、
+    // 時間枠を広げる導線に留める。ビーム打切りでも 240 分以内の周回が存在し得るため。
+    const truncated = {
+      ...result("TIME_WINDOW"),
+      nearestAccess: snapped(36_134),
+      minPlanSeconds: null,
+    };
+    const text = statusMessage(truncated, 15, 60);
+    expect(text).toContain("時間枠を広げる");
+    expect(text).not.toContain("最短の計画時間でも");
+    expect(text).not.toContain("最大 4 時間");
+    expect(classifyNoCandidates(truncated)).toBe("time_window");
+
+    // 同じ理由・同じ最寄り入口でも、値が証明できていれば unreachable に倒す（境界の固定）。
+    expect(
+      classifyNoCandidates({ ...truncated, minPlanSeconds: MAX_PRODUCT_SECONDS + 1 }),
+    ).toBe("unreachable");
+    expect(
+      statusMessage({ ...truncated, minPlanSeconds: MAX_PRODUCT_SECONDS + 1 }, 15, 240),
+    ).toContain("最大 4 時間では周回できません");
+  });
+
   it("unreachableText / nearestAccessText は km と分だけを出す", () => {
     expect(nearestAccessText(snapped(31_035))).toBe(
       "最寄り入口まで直線 約 31.0 km・片道 約 81 分（概算）。",
     );
     const text = unreachableText(snapped(36_134), 14_867);
-    expect(text).toContain("周回できる最短の計画時間でも 約 248 分");
+    expect(text).toContain("確認できた範囲で最も短い計画時間は 約 248 分");
     expect(text).toContain("最寄り入口までのアクセス往復だけで 約 188 分");
     expect(text).toContain("最大 4 時間では周回できません");
+    // 列挙外のより長いループがより小さい plan を持ち得るため「最短」とは断定しない。
+    expect(text).not.toContain("最短");
   });
 
   it("classifyNoCandidates は復帰導線を分ける", () => {

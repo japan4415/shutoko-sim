@@ -305,7 +305,12 @@ pub struct SearchResult {
     /// numeric basis for a `TIME_WINDOW` rejection.
     ///
     /// `None` when no legal loop exists (e.g. `NO_CONNECTION`, `NO_LOOP`, or a
-    /// search that never reached the loop-enumeration stage).
+    /// search that never reached the loop-enumeration stage) **and also when a
+    /// resource limit cut the loop enumeration short** (beam width, expanded
+    /// state budget, or the billing-pair cap).  In that case the minimum is not
+    /// provable, so this stays `null`: the UI must not claim "even four hours
+    /// cannot work" nor "the shortest loop takes N minutes" without proof
+    /// (review TEST-01-FINAL / V1 / V2).
     #[serde(default)]
     pub min_plan_seconds: Option<u64>,
 }
@@ -1304,16 +1309,33 @@ pub fn search_prepared(
                 let plan_seconds = base + buffer;
                 min_plan_seconds =
                     Some(min_plan_seconds.map_or(plan_seconds, |m| m.min(plan_seconds)));
-                // These loops were pruned by the request bound, so their loop
-                // time (and therefore their base) exceeds the requested window:
-                // a legal loop exists, it just cannot fit.  Reflect that in the
-                // reason decision so `TIME_WINDOW` (widen the window) is
-                // reported instead of the misleading `NO_LOOP`.
                 found_loop = true;
                 legal_route = true;
-                time_rejected = true;
+                // Only a loop that the *requested* window rejects justifies
+                // `TIME_WINDOW`.  The diagnostic pass re-enumerates up to the
+                // 240-minute product cap, so it also sees loops the requested
+                // window would have accepted; marking those as rejected would
+                // turn `NO_HANDOFF` into `TIME_WINDOW` and tell the user to
+                // widen a window that is not the problem (review V1).
+                if base < r.min_minutes * 60 || base + buffer > r.max_minutes * 60 {
+                    time_rejected = true;
+                }
             }
         }
+    }
+
+    // The product-cap decision ("no window up to 240 minutes can work") is only
+    // sound when the enumeration that produced `min_plan_seconds` was complete:
+    // because `plan_seconds >= loop seconds`, every legal loop that fits the cap
+    // is enumerated, so an enumerated minimum above the cap proves that none
+    // exists.  When a resource limit (beam width, expanded-state budget, or the
+    // billing-pair cap) cut the enumeration short that proof is unavailable and
+    // the number is only the minimum over the enumerated subset (it may exceed
+    // the true minimum).  Report `null` = "not proven", so the UI asserts
+    // neither "shortest" nor "unreachable" without evidence
+    // (review TEST-01-FINAL / V1 / V2).
+    if budget.truncated || diagnostic_budget.truncated {
+        min_plan_seconds = None;
     }
     let time_ranking = candidates.iter().any(|c| c.toll.amount_yen.is_none());
     candidates.sort_by(|a, b| {

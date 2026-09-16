@@ -335,9 +335,87 @@ export async function loadRelease(
   return release;
 }
 
-/** search() の戻り値 JSON 文字列を SearchResult に展開する。 */
+/** 探索結果が実行時契約に合わないときの error.code（UI の既存エラー導線へ出す）。 */
+export const RESULT_CONTRACT_MISMATCH = "RESULT_CONTRACT_MISMATCH";
+
+function contractMismatch(message: string): PipelineError {
+  return new PipelineError(RESULT_CONTRACT_MISMATCH, message);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/** 有限かつ非負（距離・秒数は負にならない）。 */
+function assertFiniteNonNegative(value: unknown, label: string): void {
+  if (!isFiniteNumber(value) || value < 0) {
+    throw contractMismatch(`${label} が有限の非負数値ではありません（${String(value)}）`);
+  }
+}
+
+/**
+ * 必須診断フィールド（nearestAccess / minPlanSeconds）をオブジェクトとして検証する。
+ *
+ * 旧エンジンが新 SearchResult の診断フィールドを欠落させると `undefined` になり、
+ * UI の `!== null` ガードをすり抜けて「約 NaN 分」や実行時例外を招く。エンジン成果物は
+ * engine.json の sha256 で照合しているが、契約そのものの不整合は型では守れないため、
+ * ここで実行時検証して明確な契約不一致として検出する（値の型・有限性・非負を確認）。
+ */
+function assertDiagnostics(result: Record<string, unknown>): void {
+  if (!("nearestAccess" in result) || result.nearestAccess === undefined) {
+    throw contractMismatch("nearestAccess フィールドがありません（旧エンジンの探索結果）");
+  }
+  const nearest = result.nearestAccess;
+  if (nearest !== null) {
+    if (typeof nearest !== "object" || Array.isArray(nearest)) {
+      throw contractMismatch("nearestAccess がオブジェクトでも null でもありません");
+    }
+    const snapped = nearest as Record<string, unknown>;
+    if (typeof snapped.nodeId !== "string") {
+      throw contractMismatch("nearestAccess.nodeId が文字列ではありません");
+    }
+    if (!isFiniteNumber(snapped.lat) || !isFiniteNumber(snapped.lon)) {
+      throw contractMismatch("nearestAccess.lat/lon が有限の数値ではありません");
+    }
+    assertFiniteNonNegative(snapped.distanceMeters, "nearestAccess.distanceMeters");
+  }
+
+  if (!("minPlanSeconds" in result) || result.minPlanSeconds === undefined) {
+    throw contractMismatch("minPlanSeconds フィールドがありません（旧エンジンの探索結果）");
+  }
+  const minPlanSeconds = result.minPlanSeconds;
+  if (minPlanSeconds !== null) {
+    assertFiniteNonNegative(minPlanSeconds, "minPlanSeconds");
+  }
+}
+
+/**
+ * search() の戻り値 JSON 文字列を SearchResult に展開する。
+ * 必須診断フィールドを実行時検証し、欠落・型違いは RESULT_CONTRACT_MISMATCH で停止する
+ * （http レイヤの ARTIFACT_MISMATCH と同様、部分データを UI に流さない）。
+ */
 export function parseSearchResult(resultJson: string): SearchResult {
-  return JSON.parse(resultJson) as SearchResult;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(resultJson);
+  } catch {
+    throw contractMismatch("探索結果 JSON のデコードに失敗しました");
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw contractMismatch("探索結果がオブジェクトではありません");
+  }
+  const result = parsed as Record<string, unknown>;
+  if (!Array.isArray(result.candidates)) {
+    throw contractMismatch("candidates が配列ではありません");
+  }
+  if (typeof result.status !== "string") {
+    throw contractMismatch("status が文字列ではありません");
+  }
+  if (typeof result.reason !== "string" && result.reason !== null) {
+    throw contractMismatch("reason が文字列でも null でもありません");
+  }
+  assertDiagnostics(result);
+  return parsed as SearchResult;
 }
 
 /**

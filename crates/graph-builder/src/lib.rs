@@ -3,6 +3,7 @@
 //! Reuses core types from `shutoko-routing-core` to guarantee schema compliance.
 
 pub mod billing;
+pub mod inventory;
 pub mod manifest;
 pub mod model;
 pub mod osm;
@@ -10,16 +11,26 @@ pub mod seed;
 pub mod topology;
 pub mod validate;
 
+pub use inventory::{
+    apply_od_tariffs_to_graph, bind_ramps_to_graph, classify_endpoint_capabilities,
+    ramps_artifact_to_deterministic_json, validate_endpoint_capability_contract,
+    validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
+    validate_ramp_inventory, validate_verified_billing_pair_endpoints, CanonicalRampInventoryItem,
+    OdTariffsFile, OsmRampBinding, OsmRampBindingsFile, RampArtifactEntry, RampInventoryFile,
+    RampsArtifact, SharedPhysicalOverride, TariffRules,
+};
+
 pub use billing::{
     generate_and_validate_billing_pairs, generate_billing_pair, BillingError,
     BillingGenerationReport, RejectedSeedRecord,
 };
 pub use manifest::{
     build_manifest, compute_sha256, manifest_to_deterministic_json, BillingPairProvenance,
-    Manifest, ManifestArtifact, ManifestConfig, ManifestCoverage,
+    Manifest, ManifestArtifact, ManifestConfig, ManifestCoverage, ManifestEndpointCapabilities,
 };
 pub use model::{
-    BillingPair, Edge, EdgeKind, Graph, Node, Price, SnapIndex, SnapNode, VerificationStatus,
+    BillingPair, Edge, EdgeKind, Graph, Node, OdTariff, Price, Ramp, RampKind, SnapIndex, SnapNode,
+    VerificationStatus,
 };
 pub use osm::{OsmElement, OsmMember, OverpassResponse};
 pub use seed::{BillingPairSeed, BillingPairsSeedFile, SeedPrice, SeedProvenance};

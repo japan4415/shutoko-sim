@@ -4,7 +4,7 @@
 
 ## 公開成果物
 
-マニフェスト（`manifest.json`）は `schemaVersion`、`releaseId`、`engineVersion`、`graphVersion`、`builtAt`、`sourceDate`、`coverage`、`vehicleProfile`、`timeModelVersion`、`billingPairsVersion`、`attribution`（`© OpenStreetMap contributors`）、`odblLicenseUrl`、`unverifiedSections`、`provenance`、`artifacts` を持つ。`artifacts` は生成成果物（`graph.json`、`snap-index.json` 等）それぞれの相対パス、SHA-256、バイト数を持つ。`builtAt` は再現性を担保するため外部から与えられた固定値を用いる。`coverage` は対応領域（`area`）と検証済み入出口一覧（`verifiedEntries`、`verifiedExits`）。対応領域内でも経路接続の存在は別途確認する。
+マニフェスト（`manifest.json`）は `schemaVersion`、`releaseId`、`engineVersion`、`graphVersion`、`builtAt`、`sourceDate`、`coverage`、`vehicleProfile`、`timeModelVersion`、`billingPairsVersion`、`attribution`（`© OpenStreetMap contributors`）、`odblLicenseUrl`、`unverifiedSections`、`provenance`、`artifacts` を持つ。`artifacts` は生成成果物（`graph.json`、`snap-index.json` 等）それぞれの相対パス、SHA-256、バイト数を持つ。`builtAt` は再現性を担保するため外部から与えられた固定値を用いる。`coverage` は対応領域（`area`）、検証済み課金端点（`verifiedEntries`、`verifiedExits`）、および全verified-boundランプの `endpointCapabilities` を持つ。後者は `routable` と `structuralNoLoop` の入口・出口ID一覧と件数を機械可読に公開する。
 
 グラフにはノード座標、エッジ ID、始終点、距離、時間、道路種別、路線名、形状、車両制限、遷移制限、入口/出口区分、引き継ぎ検証済み経由地点を格納する。生成元 OSM スナップショット、追加の人手検証情報とその出典・日付を追跡できるようにする。
 
@@ -43,6 +43,8 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 - `engine.json`
 - `graph.json`
 - `snap-index.json`
+- `ramps.json`
+- `od-tariffs.json`
 - `shutoko_routing_bg.wasm`
 - `shutoko_routing.js`
 - `shutoko_routing.d.ts`
@@ -81,6 +83,8 @@ UI → Web Worker のリクエスト例（値は形式を示す架空例）:
   "releaseId": "sample-release",
   "pricingAt": "2026-09-10T00:00:00Z",
   "origin": { "lat": 35.68, "lon": 139.76 },
+  "entryRampId": "ramp:c1-outer:kandabashi-entry",
+  "exitRampId": "ramp:c1-outer:takaracho-exit",
   "minMinutes": 60,
   "maxMinutes": 90,
   "vehicleProfile": "passenger-car-etc"
@@ -113,11 +117,20 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 - `ready` の payload は従来どおり。bench Worker（`new Worker(url, { name: "bench" })`）は起動時の先読みを行わず `search` メッセージ駆動で取得する（先読みが先に走ると `cacheBust` 付きの取得が先読み済みリリースに相乗りして cold 計測が成立しないため）。
 
 ### 空間スナップ契約
-- スナップ対象: Entry エッジの from ノード（入口アクセス地点）のみ。一般道ノードはスナップ対象に含まない。
+- スナップ対象: Entry エッジの from ノード（入口アクセス地点）のみ。一般道ノードはスナップ対象に含まない。また境界 JCT（`boundary_in`）は地表スナップ対象から除外。
 - スナップ距離計算: 等距円筒近似（Equirectangular approximation、東京付近 `cos(lat)` 補正）。
 - 選択件数: 近い順に最大 `SearchLimits.max_access_entries` 件（デフォルト 0 = 無制限、グラフ内の全 Entry アクセス地点）。スナップ半径（200m 固定）の概念は廃止。
 - 距離キャップ: `SearchLimits.max_access_distance_meters`（デフォルト 30,000 m、0 は無制限）を超える最寄り入口は探索対象外とし、`status: "no_candidates"`, `reason: "NO_CONNECTION"` を返す。このときも最近接の入口アクセス地点を `nearestAccess` として返す。
 - 入口アクセス地点が1件も得られない場合: エラーとせず、`status: "no_candidates"`, `reason: "NO_CONNECTION"`, `candidates: []`, `nearestAccess: null` を正常返却する。
+
+### 探索制限パラメータ（`SearchLimits`）
+- `max_expanded_states`: 全体展開状態数上限（デフォルト 100,000）
+- `beam_width`: 小規模グラフの全単純閉路列挙で各深さに保持する状態数（デフォルト 200）。全線グラフはSCC/逆Dijkstra閉路カタログを使う
+- `max_loop_edges`: 本線閉路探索エッジ数上限（デフォルト 2,000、入力として受理する上限 5,000）
+- `min_loop_meters`: 最小ループ距離（デフォルト 5,000m、マイクロループ排除）
+- `max_pairs`: 従来の課金ペア探索対象上限（デフォルト 10）。入口・出口双方を指定する明示OD探索には適用しない
+- `max_access_distance_meters`: 最大アクセス距離（デフォルト 30,000m）
+- `max_access_entries`: 最大アクセス入口数（デフォルト 0 = 無制限）
 
 ### 探索結果の status と reason コード
 結果は `requestId`、`releaseId`、`status`（`ok` / `no_candidates` / `truncated`）、`reason`、`rankingMode`、`expandedStates`、`candidates`、`nearestAccess`、`minPlanSeconds` を持つ。`reason` は該当時のみ以下のコードをとる:
@@ -142,14 +155,14 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | `id`, `releaseId` | `string` | 条件と経路列から安定生成する検索内 ID と版。利用履歴として保存しない |
 | `origin` | `LatLng \| null` | 入力座標（`{ lat, lon }`）。`originNodeId` 指定時は `null` |
 | `snappedOrigin` | `SnappedOrigin` | 選択した入口アクセス地点（`{ nodeId, lat, lon, distanceMeters }`）。候補ごとに異なる入口アクセス地点を持ちうる。`originNodeId` 指定時はそのノードで `distanceMeters: 0` |
-| `entry`, `exit` | `RampInfo` | 入出口情報（`{ edgeId, name }`。`name` は課金ペア公式ランプ名、無ければ `null`） |
+| `entry`, `exit` | `RampInfo` | 入出口情報（`{ edgeId, name, rampId?, route?, direction? }`。`rampId` は正規ランプ ID、`name` はランプ名、`route` は路線記号、`direction` は方向） |
 | `entryId`, `exitId` | `string` | 入出口エッジ ID（後方互換用） |
 | `roadNames` | `string[]` | 首都高部分で通過したエッジ名の重複除去済み順序付きリスト（名前のないエッジはスキップ） |
 | `edgeIds` | `string[]` | 順序付き走行エッジ ID 列（首都高上の entry → loop → exit） |
 | `geometry` | `GeoJsonLineString` | 全経路の GeoJSON LineString（`{ type: "LineString", coordinates: [[lon, lat], ...] }`）。重複端点なし |
 | `duration` | `Duration` | `accessSeconds`, `shutokoSeconds`, `returnSeconds`, `baseSeconds`, `bufferSeconds`, `planSeconds` |
-| `distanceMeters`, `shutokoDistanceMeters` | `number` | 総距離と首都高部分の距離（メートル） |
-| `toll` | `Toll` | `billingPairId`, `chargedSectionCount: 1`, `amountYen`（未確認なら `null`）, `pricingAt`, `effectiveFrom`, `effectiveTo` |
+| `distanceMeters`, `shutokoDistanceMeters` | `number` | 総距離と首都高実走行部分の距離（メートル） |
+| `toll` | `Toll` | `billingPairId`, `chargedSectionCount: 1`, `amountYen`（未確認なら `null`）, `pricingAt`, `effectiveFrom`, `effectiveTo`, `billingDistanceMeters?`, `tollSource?`（`"table" \| "od_tariff" \| "calculated"`） |
 | `loop` | `Loop` | `anchorNodeId`, `edgeIds`, `durationSeconds`, `distanceMeters`, `validated: true` |
 | `reasons` | `string[]` | 機械可読推薦理由コード（先頭候補: 料金確定時は `BEST_TIME_PER_YEN`、時間ソート時は `BEST_SHUTOKO_TIME`。全候補共通: `ONE_SECTION_TOLL`） |
 | `warnings` | `string[]` | 警告コード（常時付与: `HANDOFF_WAYPOINTS_UNVERIFIED`（#8 実機検証未了）、`STATIC_TRAVEL_TIME`） |

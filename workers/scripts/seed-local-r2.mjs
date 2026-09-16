@@ -12,7 +12,7 @@ const defaultRepoRoot = path.resolve(scriptDir, "../..");
 export const RELEASE_ID_REGEX = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 
 const MANIFEST_ARTIFACT_NAMES = ["graph.json", "snap-index.json"];
-const MANIFEST_ARTIFACT_ALLOWLIST = new Set(MANIFEST_ARTIFACT_NAMES);
+const MANIFEST_ARTIFACT_ALLOWLIST = new Set([...MANIFEST_ARTIFACT_NAMES, "ramps.json"]);
 const ENGINE_ARTIFACT_NAMES = [
   "shutoko_routing_bg.wasm",
   "shutoko_routing.js",
@@ -107,7 +107,11 @@ function validateManifestArtifacts(manifest, fixturesDir, log) {
     log(`  ✓ Verified ${artifactPath}`);
   }
 
-  for (const required of MANIFEST_ARTIFACT_NAMES) {
+  const requiredArtifacts =
+    manifest.releaseId === "all-real-v1"
+      ? [...MANIFEST_ARTIFACT_NAMES, "ramps.json"]
+      : MANIFEST_ARTIFACT_NAMES;
+  for (const required of requiredArtifacts) {
     if (!seen.has(required)) {
       throw new Error(`manifest.artifacts is missing required artifact ${required}`);
     }

@@ -6,6 +6,7 @@ const ALLOWED_ARTIFACTS = new Set([
   "engine.json",
   "graph.json",
   "snap-index.json",
+  "ramps.json",
   "shutoko_routing_bg.wasm",
   "shutoko_routing.js",
   "shutoko_routing.d.ts",

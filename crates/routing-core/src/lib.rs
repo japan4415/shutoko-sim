@@ -58,6 +58,44 @@ pub struct Handoff {
     pub verification_set_version: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RampKind {
+    GeneralEntry,
+    GeneralExit,
+    BoundaryIn,
+    BoundaryOut,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Ramp {
+    pub id: String,
+    pub facility_id: String,
+    pub name: String,
+    pub route: String,
+    pub direction: String,
+    pub kind: RampKind,
+    pub edge_id: String,
+    pub node_id: String,
+    pub mainline_node_id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restrictions: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OdTariff {
+    pub entry_ramp_id: String,
+    pub exit_ramp_id: String,
+    pub billing_distance_meters: u64,
+    pub amount_yen: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_to: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Graph {
@@ -69,6 +107,10 @@ pub struct Graph {
     pub billing_pairs: Vec<BillingPair>,
     #[serde(default)]
     pub forbidden_transitions: Vec<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ramps: Vec<Ramp>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub od_tariffs: Vec<OdTariff>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -123,6 +165,12 @@ pub struct BillingPair {
     pub entry_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_ramp_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_ramp_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_distance_meters: Option<u64>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -146,6 +194,10 @@ pub struct SearchRequest {
     pub origin_node_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<LatLng>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_ramp_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_ramp_id: Option<String>,
     pub min_minutes: u64,
     pub max_minutes: u64,
     pub vehicle_profile: String,
@@ -185,6 +237,10 @@ pub struct SearchLimits {
     /// are rejected by `validate()`.
     /// Defaults to `30_000.0` (30 km).
     pub max_access_distance_meters: f64,
+    /// Minimum mainline loop distance (metres) required for a cycle to be valid.
+    /// Excludes small JCT connectors, ramps, and spiral loops (e.g. Ohashi JCT ~1.1km).
+    /// Defaults to 5,000m (5.0 km).
+    pub min_loop_meters: u64,
 }
 impl Default for SearchLimits {
     fn default() -> Self {
@@ -200,6 +256,7 @@ impl Default for SearchLimits {
             max_graph_edges: 3_000_000,
             // 30 km: beyond this the engine is outside its operational area.
             max_access_distance_meters: 30_000.0,
+            min_loop_meters: 5_000,
         }
     }
 }
@@ -222,6 +279,10 @@ pub struct Toll {
     pub pricing_at: String,
     pub effective_from: Option<String>,
     pub effective_to: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_distance_meters: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toll_source: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -248,6 +309,12 @@ pub struct SnappedOrigin {
 pub struct RampInfo {
     pub edge_id: String,
     pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ramp_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -362,6 +429,23 @@ pub fn distance_meters(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     dx.hypot(dy)
 }
 
+/// Compute standard ETC toll for ordinary vehicles (普通車) on Metropolitan Expressway (首都高速).
+///
+/// Implements the official distance-based tariff (effective 2022-04-01):
+/// - Lower bound: 300 JPY (distance <= 4,300m).
+/// - Formula: (150 JPY base + 29.52 JPY/km * distance_km) * 1.10 (consumption tax),
+///   rounded to the nearest 10 JPY.
+/// - Upper bound: 1,950 JPY (for ordinary passenger cars).
+pub fn calculate_etc_toll_yen(distance_meters: u64) -> u64 {
+    if distance_meters <= 4_300 {
+        return 300;
+    }
+    let km = distance_meters as f64 / 1000.0;
+    let base_with_tax = (150.0 + 29.52 * km) * 1.10;
+    let rounded = (base_with_tax / 10.0).round() as u64 * 10;
+    rounded.clamp(300, 1950)
+}
+
 // ---------------------------------------------------------------------------
 // Owned index — no lifetime parameters, stored in PreparedGraph.
 // ---------------------------------------------------------------------------
@@ -376,9 +460,32 @@ struct OwnedIndex {
     /// Maps node ID → sorted list of outgoing edge indices (sorted by edge ID
     /// for deterministic expansion order).
     outgoing: HashMap<String, Vec<usize>>,
+    /// Maps node ID → sorted list of incoming Shutoko/connector edge indices.
+    /// The lists use edge-ID order so reverse shortest-path searches are stable.
+    incoming: HashMap<String, Vec<usize>>,
     /// Spatial index over Entry edge from-nodes for fast coordinate → nearest
     /// access-point snapping.
     snap_grid: grid::OwnedSnapGrid,
+    /// Maps ramp ID → index into `graph.ramps`.
+    ramp_by_id: HashMap<String, usize>,
+    /// Maps edge ID → index into `graph.ramps`.
+    ramp_by_edge: HashMap<String, usize>,
+    /// Maps (entry_ramp_id, exit_ramp_id) → index into `graph.od_tariffs`.
+    od_tariff_map: HashMap<(String, String), usize>,
+    /// Strongly-connected component for every graph node. Components are built
+    /// over Shutoko edges only; Entry and Exit connectors never make a cycle.
+    component_by_node: Vec<usize>,
+    /// Whether each component contains a directed cycle.
+    component_has_cycle: Vec<bool>,
+    /// Deterministic topology-derived representative anchors for every cyclic
+    /// component (at most 32 per component, evenly spaced in node-ID order).
+    cycle_catalog_anchors: Vec<usize>,
+}
+
+#[derive(Clone)]
+struct CachedCycles {
+    edge_indices: Vec<Vec<usize>>,
+    expanded_states: usize,
 }
 
 /// A prepared graph: owns the graph data plus pre-built search indices.
@@ -408,6 +515,10 @@ pub struct PreparedGraph {
     /// Task C': avoids recomputing the same Shutoko-reachability BFS when
     /// the same PreparedGraph is queried repeatedly with the same time window.
     reachable_cache: RefCell<HashMap<(String, u64), BTreeSet<usize>>>,
+    /// Topology-derived deterministic cycle catalogue, keyed by anchor node.
+    /// The charged state count is cached too, keeping repeated responses byte
+    /// deterministic (including `expandedStates`).
+    cycle_cache: RefCell<HashMap<usize, CachedCycles>>,
 }
 
 impl PreparedGraph {
@@ -454,10 +565,86 @@ impl PreparedGraph {
 // Index construction and request validation
 // ---------------------------------------------------------------------------
 
+/// Deterministic iterative Kosaraju decomposition over mainline edges.
+///
+/// Node and adjacency traversal use canonical IDs, so component membership and
+/// every downstream cycle choice are independent of hash-map iteration order.
+fn shutoko_components(
+    g: &Graph,
+    node_pos: &HashMap<String, usize>,
+    outgoing: &HashMap<String, Vec<usize>>,
+    incoming: &HashMap<String, Vec<usize>>,
+) -> (Vec<usize>, Vec<bool>) {
+    let mut node_order: Vec<usize> = (0..g.nodes.len()).collect();
+    node_order.sort_by(|&a, &b| g.nodes[a].id.cmp(&g.nodes[b].id));
+
+    let mut visited = vec![false; g.nodes.len()];
+    let mut finish = Vec::with_capacity(g.nodes.len());
+    for &root in &node_order {
+        if visited[root] {
+            continue;
+        }
+        visited[root] = true;
+        let mut stack = vec![(root, 0usize)];
+        while let Some((node_idx, next_pos)) = stack.last_mut() {
+            let edges = outgoing
+                .get(g.nodes[*node_idx].id.as_str())
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            while *next_pos < edges.len() && g.edges[edges[*next_pos]].kind != EdgeKind::Shutoko {
+                *next_pos += 1;
+            }
+            if *next_pos == edges.len() {
+                finish.push(*node_idx);
+                stack.pop();
+                continue;
+            }
+            let edge_idx = edges[*next_pos];
+            *next_pos += 1;
+            let to = node_pos[g.edges[edge_idx].to.as_str()];
+            if !visited[to] {
+                visited[to] = true;
+                stack.push((to, 0));
+            }
+        }
+    }
+
+    let mut component_by_node = vec![usize::MAX; g.nodes.len()];
+    let mut component_has_cycle = Vec::new();
+    for &root in finish.iter().rev() {
+        if component_by_node[root] != usize::MAX {
+            continue;
+        }
+        let component = component_has_cycle.len();
+        let mut stack = vec![root];
+        component_by_node[root] = component;
+        let mut size = 0usize;
+        let mut self_loop = false;
+        while let Some(node_idx) = stack.pop() {
+            size += 1;
+            let node_id = g.nodes[node_idx].id.as_str();
+            for &edge_idx in incoming.get(node_id).map(Vec::as_slice).unwrap_or(&[]) {
+                let edge = &g.edges[edge_idx];
+                if edge.kind != EdgeKind::Shutoko {
+                    continue;
+                }
+                let from = node_pos[edge.from.as_str()];
+                self_loop |= from == node_idx;
+                if component_by_node[from] == usize::MAX {
+                    component_by_node[from] = component;
+                    stack.push(from);
+                }
+            }
+        }
+        component_has_cycle.push(size > 1 || self_loop);
+    }
+    (component_by_node, component_has_cycle)
+}
+
 /// Validate the graph structure and limits, then build the [`OwnedIndex`].
 /// This is the expensive O(n log n + m log m) step; it happens once in [`prepare`].
 fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingError> {
-    if g.schema_version != 2
+    if (g.schema_version != 2 && g.schema_version != 3)
         || g.release_id.is_empty()
         || g.release_id.len() > 256
         || g.vehicle_profile.is_empty()
@@ -470,13 +657,14 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
         || l.beam_width == 0
         || l.beam_width > 200
         || l.max_loop_edges == 0
-        || l.max_loop_edges > 2000
+        || l.max_loop_edges > 5000
         // max_access_entries: 0 = unlimited (all entries); positive values are capped at 50.
         || (l.max_access_entries != 0 && l.max_access_entries > 50)
         || l.max_pairs == 0
-        || l.max_pairs > 100
+        || l.max_pairs > 1000
         || l.max_candidates == 0
         || l.max_candidates > 3
+        || l.min_loop_meters > 50_000
     {
         return Err(invalid("search limits outside supported bounds"));
     }
@@ -515,6 +703,7 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
     // tie-breaking in OwnedSnapGrid.
     let mut edge_pos: HashMap<String, usize> = HashMap::with_capacity(g.edges.len());
     let mut outgoing: HashMap<String, Vec<usize>> = HashMap::with_capacity(g.nodes.len());
+    let mut incoming: HashMap<String, Vec<usize>> = HashMap::with_capacity(g.nodes.len());
     let mut entry_from_ids: BTreeSet<String> = BTreeSet::new();
 
     for (i, e) in g.edges.iter().enumerate() {
@@ -534,19 +723,39 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
             entry_from_ids.insert(e.from.clone());
         }
         outgoing.entry(e.from.clone()).or_default().push(i);
+        incoming.entry(e.to.clone()).or_default().push(i);
     }
 
     // Sort outgoing adjacency lists by edge ID for deterministic expansion order.
     for v in outgoing.values_mut() {
         v.sort_by(|&a, &b| g.edges[a].id.cmp(&g.edges[b].id));
     }
+    for v in incoming.values_mut() {
+        v.sort_by(|&a, &b| g.edges[a].id.cmp(&g.edges[b].id));
+    }
 
-    // Build snap grid from Entry from-node indices.
-    let entry_from_indices: Vec<usize> = entry_from_ids
-        .iter()
-        .map(|id| node_pos[id.as_str()])
-        .collect();
-    let snap_grid = grid::OwnedSnapGrid::build(entry_from_indices, &g.nodes);
+    let (component_by_node, component_has_cycle) =
+        shutoko_components(g, &node_pos, &outgoing, &incoming);
+    let mut canonical_nodes: Vec<usize> = (0..g.nodes.len()).collect();
+    canonical_nodes.sort_by(|&a, &b| g.nodes[a].id.cmp(&g.nodes[b].id));
+    let mut component_nodes = vec![Vec::new(); component_has_cycle.len()];
+    for &node in &canonical_nodes {
+        component_nodes[component_by_node[node]].push(node);
+    }
+    let mut cycle_catalog_anchors = Vec::new();
+    for (component, nodes) in component_nodes.iter().enumerate() {
+        if !component_has_cycle[component] {
+            continue;
+        }
+        if nodes.len() <= 32 {
+            cycle_catalog_anchors.extend(nodes.iter().copied());
+        } else {
+            for sample in 0..32usize {
+                let position = sample * (nodes.len() - 1) / 31;
+                cycle_catalog_anchors.push(nodes[position]);
+            }
+        }
+    }
 
     // Validate forbidden transitions.
     if g.forbidden_transitions.iter().map(Vec::len).sum::<usize>() > 20_000 {
@@ -636,11 +845,78 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
         }
     }
 
+    // Validate and index ramps (if present)
+    let mut ramp_by_id: HashMap<String, usize> = HashMap::with_capacity(g.ramps.len());
+    let mut ramp_by_edge: HashMap<String, usize> = HashMap::with_capacity(g.ramps.len());
+    let mut general_entry_from_ids = BTreeSet::new();
+    for (i, r) in g.ramps.iter().enumerate() {
+        if r.id.is_empty() || r.id.len() > 256 || ramp_by_id.insert(r.id.clone(), i).is_some() {
+            return Err(invalid("duplicate, oversized, or empty ramp id"));
+        }
+        let Some(&edge_idx) = edge_pos.get(r.edge_id.as_str()) else {
+            return Err(invalid("ramp references unknown edge id"));
+        };
+        let edge = &g.edges[edge_idx];
+        if !node_pos.contains_key(r.node_id.as_str())
+            || !node_pos.contains_key(r.mainline_node_id.as_str())
+        {
+            return Err(invalid("ramp references unknown node id"));
+        }
+        let valid_binding = match r.kind {
+            RampKind::GeneralEntry | RampKind::BoundaryIn => {
+                edge.kind == EdgeKind::Entry
+                    && r.node_id == edge.from
+                    && r.mainline_node_id == edge.to
+            }
+            RampKind::GeneralExit | RampKind::BoundaryOut => {
+                edge.kind == EdgeKind::Exit
+                    && r.mainline_node_id == edge.from
+                    && r.node_id == edge.to
+            }
+        };
+        if !valid_binding {
+            return Err(invalid("ramp kind or directed graph binding mismatch"));
+        }
+        if r.kind == RampKind::GeneralEntry {
+            general_entry_from_ids.insert(edge.from.clone());
+        }
+        ramp_by_edge.insert(r.edge_id.clone(), i);
+    }
+
+    // Canonical ramps are authoritative when present: only verified-bound
+    // general entries become public coordinate snap targets. Legacy/synthetic
+    // graphs without Ramp records retain Entry-edge snapping compatibility.
+    let snap_ids = if g.ramps.is_empty() {
+        &entry_from_ids
+    } else {
+        &general_entry_from_ids
+    };
+    let entry_from_indices: Vec<usize> = snap_ids.iter().map(|id| node_pos[id.as_str()]).collect();
+    let snap_grid = grid::OwnedSnapGrid::build(entry_from_indices, &g.nodes);
+
+    // Validate and index od_tariffs (if present)
+    let mut od_tariff_map: HashMap<(String, String), usize> =
+        HashMap::with_capacity(g.od_tariffs.len());
+    for (i, t) in g.od_tariffs.iter().enumerate() {
+        if t.entry_ramp_id.is_empty() || t.exit_ramp_id.is_empty() {
+            return Err(invalid("empty ramp id in od_tariff"));
+        }
+        let key = (t.entry_ramp_id.clone(), t.exit_ramp_id.clone());
+        od_tariff_map.insert(key, i);
+    }
+
     Ok(OwnedIndex {
         node_pos,
         edge_pos,
         outgoing,
+        incoming,
         snap_grid,
+        ramp_by_id,
+        ramp_by_edge,
+        od_tariff_map,
+        component_by_node,
+        component_has_cycle,
+        cycle_catalog_anchors,
     })
 }
 
@@ -649,16 +925,19 @@ fn validate_request(pg: &PreparedGraph, r: &SearchRequest) -> Result<(), Routing
     if pg.graph.release_id != r.release_id || pg.graph.vehicle_profile != r.vehicle_profile {
         return Err(invalid("incompatible release or vehicle profile"));
     }
-    match (&r.origin_node_id, &r.origin) {
-        (Some(_), Some(_)) | (None, None) => {
+    match (&r.origin_node_id, &r.origin, &r.entry_ramp_id) {
+        (Some(_), Some(_), _) => {
             return Err(invalid("either origin or originNodeId must be provided"));
         }
-        (Some(node_id), None) => {
+        (None, None, None) => {
+            return Err(invalid("either origin or originNodeId must be provided"));
+        }
+        (Some(node_id), None, _) => {
             if node_id.is_empty() || node_id.len() > 256 {
                 return Err(invalid("invalid origin node id"));
             }
         }
-        (None, Some(origin)) => {
+        (None, Some(origin), _) => {
             if !origin.lat.is_finite()
                 || !origin.lon.is_finite()
                 || !(-90.0..=90.0).contains(&origin.lat)
@@ -666,6 +945,39 @@ fn validate_request(pg: &PreparedGraph, r: &SearchRequest) -> Result<(), Routing
             {
                 return Err(invalid("coordinates out of range or non-finite"));
             }
+        }
+        (None, None, Some(entry_ramp)) => {
+            if entry_ramp.is_empty() || entry_ramp.len() > 256 {
+                return Err(invalid("invalid entry ramp id"));
+            }
+        }
+    }
+    if let Some(ref entry_ramp) = r.entry_ramp_id {
+        if entry_ramp.is_empty() || entry_ramp.len() > 256 {
+            return Err(invalid("invalid entry ramp id"));
+        }
+        let Some(&idx) = pg.index.ramp_by_id.get(entry_ramp) else {
+            return Err(invalid("unknown or unsupported entry ramp id"));
+        };
+        let ramp = &pg.graph.ramps[idx];
+        if ramp.kind != RampKind::GeneralEntry
+            || pg.edge(ramp.edge_id.as_str()).kind != EdgeKind::Entry
+        {
+            return Err(invalid("entry ramp is not a routable general entry"));
+        }
+    }
+    if let Some(ref exit_ramp) = r.exit_ramp_id {
+        if exit_ramp.is_empty() || exit_ramp.len() > 256 {
+            return Err(invalid("invalid exit ramp id"));
+        }
+        let Some(&idx) = pg.index.ramp_by_id.get(exit_ramp) else {
+            return Err(invalid("unknown or unsupported exit ramp id"));
+        };
+        let ramp = &pg.graph.ramps[idx];
+        if ramp.kind != RampKind::GeneralExit
+            || pg.edge(ramp.edge_id.as_str()).kind != EdgeKind::Exit
+        {
+            return Err(invalid("exit ramp is not a routable general exit"));
         }
     }
     if r.request_id.is_empty()
@@ -819,6 +1131,216 @@ impl Budget {
             true
         }
     }
+
+    fn charge(&mut self, amount: usize, l: &SearchLimits) -> bool {
+        if amount > l.max_expanded_states.saturating_sub(self.expanded) {
+            self.expanded = l.max_expanded_states;
+            self.truncated = true;
+            false
+        } else {
+            self.expanded += amount;
+            true
+        }
+    }
+}
+
+/// Reverse Dijkstra tree pointing every mainline node toward `target`.
+/// Equal-cost paths use the lexicographically smaller first edge.
+fn reverse_shortest_tree(
+    pg: &PreparedGraph,
+    target: usize,
+) -> (Vec<u64>, Vec<Option<usize>>, usize) {
+    use std::cmp::Reverse;
+    let mut dist = vec![u64::MAX; pg.graph.nodes.len()];
+    let mut next_edge = vec![None; pg.graph.nodes.len()];
+    let mut heap = BinaryHeap::new();
+    dist[target] = 0;
+    heap.push(Reverse((0u64, target)));
+    let mut expanded = 0usize;
+    while let Some(Reverse((cost, node_idx))) = heap.pop() {
+        if cost != dist[node_idx] {
+            continue;
+        }
+        expanded += 1;
+        let node_id = pg.graph.nodes[node_idx].id.as_str();
+        for &edge_idx in pg
+            .index
+            .incoming
+            .get(node_id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+        {
+            let edge = &pg.graph.edges[edge_idx];
+            if edge.kind != EdgeKind::Shutoko {
+                continue;
+            }
+            let from = pg.index.node_pos[edge.from.as_str()];
+            let new_cost = cost.saturating_add(edge.duration_seconds);
+            let replace = new_cost < dist[from]
+                || (new_cost == dist[from]
+                    && next_edge[from].is_none_or(|old: usize| edge.id < pg.graph.edges[old].id));
+            if replace {
+                dist[from] = new_cost;
+                next_edge[from] = Some(edge_idx);
+                heap.push(Reverse((new_cost, from)));
+            }
+        }
+    }
+    (dist, next_edge, expanded)
+}
+
+fn topology_cycles_at(pg: &PreparedGraph, anchor: usize, budget: &mut Budget) -> Vec<Vec<usize>> {
+    let cached = pg.cycle_cache.borrow().get(&anchor).cloned();
+    let cached = cached.unwrap_or_else(|| {
+        let (dist, next_edge, expanded_states) = reverse_shortest_tree(pg, anchor);
+        let anchor_id = pg.graph.nodes[anchor].id.as_str();
+        let mut cycles = Vec::new();
+        for edge in pg
+            .outgoing_edges(anchor_id)
+            .filter(|edge| edge.kind == EdgeKind::Shutoko)
+        {
+            let first_idx = pg.index.edge_pos[edge.id.as_str()];
+            let mut cycle = vec![first_idx];
+            let mut at = pg.index.node_pos[edge.to.as_str()];
+            let mut seen = BTreeSet::new();
+            seen.insert(anchor);
+            while at != anchor {
+                if !seen.insert(at) || dist[at] == u64::MAX {
+                    cycle.clear();
+                    break;
+                }
+                let Some(next) = next_edge[at] else {
+                    cycle.clear();
+                    break;
+                };
+                cycle.push(next);
+                at = pg.index.node_pos[pg.graph.edges[next].to.as_str()];
+            }
+            if !cycle.is_empty() {
+                let refs: Vec<&Edge> = cycle.iter().map(|&i| &pg.graph.edges[i]).collect();
+                if allowed_pg(pg, &refs) {
+                    cycles.push(cycle);
+                }
+            }
+        }
+        cycles.sort_by(|a, b| {
+            let a_seconds: u64 = a.iter().map(|&i| pg.graph.edges[i].duration_seconds).sum();
+            let b_seconds: u64 = b.iter().map(|&i| pg.graph.edges[i].duration_seconds).sum();
+            a_seconds.cmp(&b_seconds).then_with(|| {
+                a.iter()
+                    .map(|&i| pg.graph.edges[i].id.as_str())
+                    .cmp(b.iter().map(|&i| pg.graph.edges[i].id.as_str()))
+            })
+        });
+        let value = CachedCycles {
+            edge_indices: cycles,
+            expanded_states,
+        };
+        pg.cycle_cache.borrow_mut().insert(anchor, value.clone());
+        value
+    });
+    if !budget.charge(cached.expanded_states, &pg.limits) {
+        return Vec::new();
+    }
+    cached.edge_indices
+}
+
+fn indexed_cycle_refs<'pg>(
+    pg: &'pg PreparedGraph,
+    start: &str,
+    depth: usize,
+    max_seconds: u64,
+    budget: &mut Budget,
+) -> Vec<Vec<&'pg Edge>> {
+    let anchor = pg.index.node_pos[start];
+    let mut cycles = Vec::new();
+    for indices in topology_cycles_at(pg, anchor, budget) {
+        let refs: Vec<&Edge> = indices.iter().map(|&i| &pg.graph.edges[i]).collect();
+        if refs.len() <= depth
+            && seconds(&refs) <= max_seconds
+            && meters(&refs) >= pg.limits.min_loop_meters
+        {
+            cycles.push(refs);
+        }
+    }
+    cycles
+}
+
+/// Forward Dijkstra tree from `start`, restricted to mainline edges.
+fn forward_shortest_tree(
+    pg: &PreparedGraph,
+    start: usize,
+) -> (Vec<u64>, Vec<Option<usize>>, usize) {
+    use std::cmp::Reverse;
+    let mut dist = vec![u64::MAX; pg.graph.nodes.len()];
+    let mut previous_edge = vec![None; pg.graph.nodes.len()];
+    let mut heap = BinaryHeap::new();
+    dist[start] = 0;
+    heap.push(Reverse((0u64, start)));
+    let mut expanded = 0usize;
+    while let Some(Reverse((cost, node_idx))) = heap.pop() {
+        if cost != dist[node_idx] {
+            continue;
+        }
+        expanded += 1;
+        let node_id = pg.graph.nodes[node_idx].id.as_str();
+        for &edge_idx in pg
+            .index
+            .outgoing
+            .get(node_id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+        {
+            let edge = &pg.graph.edges[edge_idx];
+            if edge.kind != EdgeKind::Shutoko {
+                continue;
+            }
+            let to = pg.index.node_pos[edge.to.as_str()];
+            let new_cost = cost.saturating_add(edge.duration_seconds);
+            let replace = new_cost < dist[to]
+                || (new_cost == dist[to]
+                    && previous_edge[to].is_none_or(|old: usize| edge.id < pg.graph.edges[old].id));
+            if replace {
+                dist[to] = new_cost;
+                previous_edge[to] = Some(edge_idx);
+                heap.push(Reverse((new_cost, to)));
+            }
+        }
+    }
+    (dist, previous_edge, expanded)
+}
+
+fn reconstruct_forward(
+    pg: &PreparedGraph,
+    previous_edge: &[Option<usize>],
+    start: usize,
+    target: usize,
+) -> Option<Vec<usize>> {
+    let mut at = target;
+    let mut reversed = Vec::new();
+    while at != start {
+        let edge_idx = previous_edge[at]?;
+        reversed.push(edge_idx);
+        at = pg.index.node_pos[pg.graph.edges[edge_idx].from.as_str()];
+    }
+    reversed.reverse();
+    Some(reversed)
+}
+
+fn reconstruct_reverse(
+    pg: &PreparedGraph,
+    next_edge: &[Option<usize>],
+    start: usize,
+    target: usize,
+) -> Option<Vec<usize>> {
+    let mut at = start;
+    let mut path = Vec::new();
+    while at != target {
+        let edge_idx = next_edge[at]?;
+        path.push(edge_idx);
+        at = pg.index.node_pos[pg.graph.edges[edge_idx].to.as_str()];
+    }
+    Some(path)
 }
 
 // Iterative simple-path enumeration. The same global budget includes paths and combinations.
@@ -834,6 +1356,13 @@ fn paths_pg<'pg>(
     reachable: &BTreeSet<usize>,
     budget: &mut Budget,
 ) -> Vec<Vec<&'pg Edge>> {
+    // On the full 22k-node graph, enumerating every simple path inside the
+    // large SCC is exponential. A reverse shortest-path tree gives one
+    // deterministic, admissible return path for each first edge instead.
+    // Small contract fixtures retain exhaustive enumeration semantics.
+    if pg.graph.edges.len() > 5_000 && start == end && kind == EdgeKind::Shutoko {
+        return indexed_cycle_refs(pg, start, depth, max_seconds, budget);
+    }
     let mut frontier: Vec<Vec<&Edge>> = vec![vec![]];
     let mut results = Vec::new();
     let mut retained_edges = 0;
@@ -862,6 +1391,13 @@ fn paths_pg<'pg>(
                     continue;
                 }
                 if e.to == end {
+                    if start == end {
+                        let total_meters: u64 = candidate.iter().map(|e| e.distance_meters).sum();
+                        if total_meters < pg.limits.min_loop_meters {
+                            // Micro-loop / spiral connector rejected
+                            continue;
+                        }
+                    }
                     if results.len() == pg.limits.beam_width
                         || retained_edges + candidate.len() > 20_000
                     {
@@ -930,11 +1466,368 @@ fn edge_ids(edges: &[&Edge]) -> Vec<String> {
 /// call it once and reuse the result across many [`search_prepared`] calls.
 pub fn prepare(g: Graph, l: &SearchLimits) -> Result<PreparedGraph, RoutingError> {
     let index = build_owned_index(&g, l)?;
-    Ok(PreparedGraph {
+    let pg = PreparedGraph {
         graph: g,
         limits: l.clone(),
         index,
         reachable_cache: RefCell::new(HashMap::new()),
+        cycle_cache: RefCell::new(HashMap::new()),
+    };
+    // Cycle construction belongs to preparation, not to an individual query.
+    // Prime the bounded catalogue once and zero its per-search charge.
+    let anchors = pg.index.cycle_catalog_anchors.clone();
+    for anchor in anchors {
+        let mut preparation_budget = Budget::default();
+        let _ = topology_cycles_at(&pg, anchor, &mut preparation_budget);
+        if let Some(cached) = pg.cycle_cache.borrow_mut().get_mut(&anchor) {
+            cached.expanded_states = 0;
+        }
+    }
+    Ok(pg)
+}
+
+fn explicit_pair_search(
+    pg: &PreparedGraph,
+    r: &SearchRequest,
+    now: OffsetDateTime,
+    origin_ll: &LatLng,
+    nearest_access: Option<SnappedOrigin>,
+) -> Result<SearchResult, RoutingError> {
+    let entry_id = r.entry_ramp_id.as_deref().expect("validated entry ramp");
+    let exit_id = r.exit_ramp_id.as_deref().expect("validated exit ramp");
+    let entry_ramp = &pg.graph.ramps[pg.index.ramp_by_id[entry_id]];
+    let exit_ramp = &pg.graph.ramps[pg.index.ramp_by_id[exit_id]];
+    let entry_edge = pg.edge(entry_ramp.edge_id.as_str());
+    let exit_edge = pg.edge(exit_ramp.edge_id.as_str());
+    let entry_mainline = pg.index.node_pos[entry_ramp.mainline_node_id.as_str()];
+    let exit_mainline = pg.index.node_pos[exit_ramp.mainline_node_id.as_str()];
+
+    let mut budget = Budget::default();
+    let (forward_dist, previous_edge, forward_expanded) = forward_shortest_tree(pg, entry_mainline);
+    if !budget.charge(forward_expanded, &pg.limits) {
+        return Ok(SearchResult {
+            request_id: r.request_id.clone(),
+            release_id: r.release_id.clone(),
+            status: "truncated".into(),
+            reason: Some("SEARCH_LIMIT".into()),
+            ranking_mode: "shutoko_time".into(),
+            expanded_states: budget.expanded,
+            candidates: Vec::new(),
+            nearest_access,
+            min_plan_seconds: None,
+        });
+    }
+    let (reverse_dist, next_edge, reverse_expanded) = reverse_shortest_tree(pg, exit_mainline);
+    if !budget.charge(reverse_expanded, &pg.limits) {
+        return Ok(SearchResult {
+            request_id: r.request_id.clone(),
+            release_id: r.release_id.clone(),
+            status: "truncated".into(),
+            reason: Some("SEARCH_LIMIT".into()),
+            ranking_mode: "shutoko_time".into(),
+            expanded_states: budget.expanded,
+            candidates: Vec::new(),
+            nearest_access,
+            min_plan_seconds: None,
+        });
+    }
+
+    // Candidate anchors are exactly the cyclic SCC nodes that are forward
+    // reachable from the entry and reverse reachable from the exit. The
+    // admissible approach+egress lower bound orders them; node ID breaks ties.
+    let mut anchors: Vec<usize> = pg
+        .index
+        .cycle_catalog_anchors
+        .iter()
+        .copied()
+        .filter(|&node| {
+            forward_dist[node] != u64::MAX
+                && reverse_dist[node] != u64::MAX
+                && pg.index.component_has_cycle[pg.index.component_by_node[node]]
+        })
+        .collect();
+    anchors.sort_by(|&a, &b| {
+        forward_dist[a]
+            .saturating_add(reverse_dist[a])
+            .cmp(&forward_dist[b].saturating_add(reverse_dist[b]))
+            .then_with(|| pg.graph.nodes[a].id.cmp(&pg.graph.nodes[b].id))
+    });
+
+    let entry_access = pg.node(entry_ramp.node_id.as_str());
+    let exit_access = pg.node(exit_ramp.node_id.as_str());
+    let access_dist = distance_meters(
+        origin_ll.lat,
+        origin_ll.lon,
+        entry_access.lat,
+        entry_access.lon,
+    );
+    let access_secs = estimated_access_seconds(access_dist);
+    let return_dist = distance_meters(
+        exit_access.lat,
+        exit_access.lon,
+        origin_ll.lat,
+        origin_ll.lon,
+    );
+    let return_secs = estimated_access_seconds(return_dist);
+    let mut min_plan_seconds = None;
+    let mut found_cycle = false;
+    let mut candidate = None;
+
+    // Usually the first anchor succeeds. If restrictions invalidate it, keep
+    // following the complete deterministic ordering until a route is found or
+    // the explicit state budget is reached (which is reported as SEARCH_LIMIT,
+    // never as an unreachable OD).
+    for anchor in anchors {
+        let Some(approach) = reconstruct_forward(pg, &previous_edge, entry_mainline, anchor) else {
+            continue;
+        };
+        let Some(egress) = reconstruct_reverse(pg, &next_edge, anchor, exit_mainline) else {
+            continue;
+        };
+        for cycle in topology_cycles_at(pg, anchor, &mut budget) {
+            if budget.truncated {
+                break;
+            }
+            let loop_refs: Vec<&Edge> = cycle.iter().map(|&i| &pg.graph.edges[i]).collect();
+            if loop_refs.len() > pg.limits.max_loop_edges
+                || meters(&loop_refs) < pg.limits.min_loop_meters
+            {
+                continue;
+            }
+            found_cycle = true;
+            let mut route_indices =
+                Vec::with_capacity(2 + approach.len() + cycle.len() + egress.len());
+            route_indices.push(pg.index.edge_pos[entry_edge.id.as_str()]);
+            route_indices.extend(&approach);
+            route_indices.extend(&cycle);
+            route_indices.extend(&egress);
+            route_indices.push(pg.index.edge_pos[exit_edge.id.as_str()]);
+            let highway: Vec<&Edge> = route_indices.iter().map(|&i| &pg.graph.edges[i]).collect();
+            if highway.len() > 20_000 || !allowed_pg(pg, &highway) {
+                continue;
+            }
+            let base = access_secs + seconds(&highway) + return_secs;
+            let buffer = 300.max(base.div_ceil(5));
+            let plan = base + buffer;
+            min_plan_seconds = Some(min_plan_seconds.map_or(plan, |old: u64| old.min(plan)));
+            if base < r.min_minutes * 60 || plan > r.max_minutes * 60 {
+                continue;
+            }
+            if candidate.is_some() {
+                // Keep the first route in the documented deterministic anchor
+                // order, but continue to compute the catalogue-wide diagnostic
+                // minimum without allocating more candidate payloads.
+                continue;
+            }
+
+            let billing_pair = pg.graph.billing_pairs.iter().find(|pair| {
+                pair.status == VerificationStatus::Verified
+                    && (pair.entry_ramp_id.as_deref() == Some(entry_id)
+                        || pair.entry_id == entry_edge.id)
+                    && (pair.exit_ramp_id.as_deref() == Some(exit_id)
+                        || pair.exit_id == exit_edge.id)
+            });
+            let tariff = pg
+                .index
+                .od_tariff_map
+                .get(&(entry_id.to_owned(), exit_id.to_owned()))
+                .map(|&idx| &pg.graph.od_tariffs[idx])
+                .filter(|tariff| {
+                    tariff
+                        .effective_from
+                        .as_deref()
+                        .is_none_or(|from| utc(from).is_ok_and(|from| from <= now))
+                        && tariff
+                            .effective_to
+                            .as_deref()
+                            .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
+                });
+            let table_price = billing_pair.and_then(|pair| {
+                pair.prices.iter().find(|price| {
+                    utc(&price.effective_from).is_ok_and(|from| from <= now)
+                        && price
+                            .effective_to
+                            .as_deref()
+                            .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
+                })
+            });
+            let (amount, effective_from, effective_to, billing_distance, source) =
+                if let Some(price) = table_price {
+                    (
+                        Some(price.amount_yen),
+                        Some(price.effective_from.clone()),
+                        price.effective_to.clone(),
+                        tariff
+                            .map(|value| value.billing_distance_meters)
+                            .or_else(|| billing_pair.and_then(|pair| pair.billing_distance_meters)),
+                        Some("table".to_string()),
+                    )
+                } else if let Some(value) = tariff {
+                    (
+                        value.amount_yen,
+                        value.effective_from.clone(),
+                        value.effective_to.clone(),
+                        Some(value.billing_distance_meters),
+                        Some("od_tariff".to_string()),
+                    )
+                } else {
+                    (None, None, None, None, None)
+                };
+
+            let ids = edge_ids(&highway);
+            let candidate_id = std::iter::once(entry_id)
+                .chain(std::iter::once(exit_id))
+                .chain(ids.iter().map(String::as_str))
+                .map(|value| format!("{}:{}", value.len(), value))
+                .collect::<String>();
+            let mut coordinates = Vec::with_capacity(highway.len() + 1);
+            let first = pg.node(highway[0].from.as_str());
+            coordinates.push([first.lon, first.lat]);
+            for edge in &highway {
+                let node = pg.node(edge.to.as_str());
+                coordinates.push([node.lon, node.lat]);
+            }
+            let mut road_names = Vec::new();
+            for edge in &highway {
+                if let Some(name) = &edge.name {
+                    if !road_names.contains(name) {
+                        road_names.push(name.clone());
+                    }
+                }
+            }
+            let departure = r.origin.clone().unwrap_or_else(|| origin_ll.clone());
+            let waypoints =
+                handoff::select_waypoints(entry_edge.from.as_str(), &loop_refs, exit_edge, |id| {
+                    pg.index.node_pos.get(id).map(|&idx| {
+                        let node = &pg.graph.nodes[idx];
+                        LatLng {
+                            lat: node.lat,
+                            lon: node.lon,
+                        }
+                    })
+                });
+            let maps_url = handoff::format_maps_url(&departure, &waypoints)
+                .map_err(|()| invalid("explicit route handoff URL exceeds supported length"))?;
+            let ranking_reason = if amount.is_some() {
+                "BEST_TIME_PER_YEN"
+            } else {
+                "BEST_SHUTOKO_TIME"
+            };
+            candidate = Some(Candidate {
+                id: candidate_id,
+                release_id: r.release_id.clone(),
+                origin: r.origin.clone(),
+                origin_node_id: entry_edge.from.clone(),
+                snapped_origin: SnappedOrigin {
+                    node_id: entry_edge.from.clone(),
+                    lat: entry_access.lat,
+                    lon: entry_access.lon,
+                    distance_meters: access_dist,
+                },
+                entry: RampInfo {
+                    edge_id: entry_edge.id.clone(),
+                    name: Some(entry_ramp.name.clone()),
+                    ramp_id: Some(entry_ramp.id.clone()),
+                    route: Some(entry_ramp.route.clone()),
+                    direction: Some(entry_ramp.direction.clone()),
+                },
+                exit: RampInfo {
+                    edge_id: exit_edge.id.clone(),
+                    name: Some(exit_ramp.name.clone()),
+                    ramp_id: Some(exit_ramp.id.clone()),
+                    route: Some(exit_ramp.route.clone()),
+                    direction: Some(exit_ramp.direction.clone()),
+                },
+                entry_id: entry_edge.id.clone(),
+                exit_id: exit_edge.id.clone(),
+                road_names,
+                edge_ids: ids,
+                geometry: GeoJsonLineString {
+                    r#type: "LineString".into(),
+                    coordinates,
+                },
+                duration: Duration {
+                    access_seconds: access_secs,
+                    shutoko_seconds: seconds(&highway),
+                    return_seconds: return_secs,
+                    base_seconds: base,
+                    buffer_seconds: buffer,
+                    plan_seconds: plan,
+                },
+                distance_meters: meters(&highway),
+                shutoko_distance_meters: meters(&highway),
+                toll: Toll {
+                    billing_pair_id: billing_pair.map_or_else(
+                        || format!("od:{entry_id}:{exit_id}"),
+                        |pair| pair.id.clone(),
+                    ),
+                    charged_section_count: 1,
+                    amount_yen: amount,
+                    pricing_at: r.pricing_at.clone(),
+                    effective_from,
+                    effective_to,
+                    billing_distance_meters: billing_distance,
+                    toll_source: source,
+                },
+                r#loop: Loop {
+                    anchor_node_id: pg.graph.nodes[anchor].id.clone(),
+                    edge_ids: edge_ids(&loop_refs),
+                    duration_seconds: seconds(&loop_refs),
+                    distance_meters: meters(&loop_refs),
+                    validated: true,
+                },
+                reasons: vec![ranking_reason.into(), "EXPLICIT_OD".into()],
+                warnings: vec![
+                    "STATIC_TRAVEL_TIME".into(),
+                    "HANDOFF_WAYPOINTS_UNVERIFIED".into(),
+                ],
+                handoff: Handoff {
+                    origin: departure.clone(),
+                    destination: departure,
+                    waypoints,
+                    maps_url,
+                    verification_set_version: None,
+                },
+            });
+        }
+        if budget.truncated {
+            break;
+        }
+    }
+
+    let candidates: Vec<Candidate> = candidate.into_iter().collect();
+    let (status, reason) = if budget.truncated {
+        ("truncated", Some("SEARCH_LIMIT"))
+    } else if !candidates.is_empty() {
+        ("ok", None)
+    } else if found_cycle && min_plan_seconds.is_some() {
+        ("no_candidates", Some("TIME_WINDOW"))
+    } else {
+        ("no_candidates", Some("NO_LOOP"))
+    };
+    let ranking_mode = if candidates
+        .iter()
+        .all(|value| value.toll.amount_yen.is_some())
+        && !candidates.is_empty()
+    {
+        "time_per_yen"
+    } else {
+        "shutoko_time"
+    };
+    Ok(SearchResult {
+        request_id: r.request_id.clone(),
+        release_id: r.release_id.clone(),
+        status: status.into(),
+        reason: reason.map(str::to_owned),
+        ranking_mode: ranking_mode.into(),
+        expanded_states: budget.expanded,
+        candidates,
+        nearest_access,
+        min_plan_seconds: if budget.truncated {
+            None
+        } else {
+            min_plan_seconds
+        },
     })
 }
 
@@ -968,8 +1861,8 @@ pub fn search_prepared(
         LatLng,
         BTreeSet<usize>,
         Option<SnappedOrigin>,
-    ) = match (&r.origin_node_id, &r.origin) {
-        (Some(id), None) => {
+    ) = match (&r.origin_node_id, &r.origin, &r.entry_ramp_id) {
+        (Some(id), None, _) => {
             if !pg.has_node(id.as_str()) {
                 return Err(invalid("unknown origin node"));
             }
@@ -981,7 +1874,7 @@ pub fn search_prepared(
             let idx = pg.index.node_pos[id.as_str()];
             (origin_ll, std::iter::once(idx).collect(), None)
         }
-        (None, Some(ll)) => {
+        (None, Some(ll), _) => {
             // max_access_entries == 0 means "unlimited": pass usize::MAX so that
             // k_nearest returns every entry in the graph.
             let k = if pg.limits.max_access_entries == 0 {
@@ -1037,24 +1930,103 @@ pub fn search_prepared(
             let indices = results.into_iter().map(|(_, idx)| idx).collect();
             (ll.clone(), indices, nearest_access)
         }
+        (None, None, Some(entry_ramp_id)) => {
+            let ramp = if let Some(&idx) = pg.index.ramp_by_id.get(entry_ramp_id) {
+                &pg.graph.ramps[idx]
+            } else {
+                return Err(invalid("unknown entry ramp id"));
+            };
+            if !pg.has_node(ramp.node_id.as_str()) {
+                return Err(invalid("ramp node not in graph"));
+            }
+            let node = pg.node(ramp.node_id.as_str());
+            let origin_ll = LatLng {
+                lat: node.lat,
+                lon: node.lon,
+            };
+            let idx = pg.index.node_pos[ramp.node_id.as_str()];
+            (origin_ll, std::iter::once(idx).collect(), None)
+        }
         _ => return Err(invalid("origin resolution state unreachable")),
     };
+
+    if r.entry_ramp_id.is_some() && r.exit_ramp_id.is_some() {
+        return explicit_pair_search(pg, r, now, &origin_ll, nearest_access);
+    }
 
     let mut budget = Budget::default();
     let mut candidates = Vec::new();
     let mut candidate_edges = 0;
+    let any_pairs = pg
+        .graph
+        .billing_pairs
+        .iter()
+        .any(|p| p.status == VerificationStatus::Verified);
+
     let mut pairs: Vec<_> = pg
         .graph
         .billing_pairs
         .iter()
         .filter(|p| p.status == VerificationStatus::Verified)
+        .filter(|p| {
+            if let Some(ref req_entry) = r.entry_ramp_id {
+                let matches_pair = p.entry_ramp_id.as_deref() == Some(req_entry.as_str());
+                let matches_entry_edge = p.entry_id == *req_entry;
+                let matches_ramp = pg
+                    .index
+                    .ramp_by_id
+                    .get(req_entry)
+                    .is_some_and(|&idx| pg.graph.ramps[idx].edge_id == p.entry_id);
+                if !matches_pair && !matches_entry_edge && !matches_ramp {
+                    return false;
+                }
+            }
+            if let Some(ref req_exit) = r.exit_ramp_id {
+                let matches_pair = p.exit_ramp_id.as_deref() == Some(req_exit.as_str());
+                let matches_exit_edge = p.exit_id == *req_exit;
+                let matches_ramp = pg
+                    .index
+                    .ramp_by_id
+                    .get(req_exit)
+                    .is_some_and(|&idx| pg.graph.ramps[idx].edge_id == p.exit_id);
+                if !matches_pair && !matches_exit_edge && !matches_ramp {
+                    return false;
+                }
+            }
+            if let Some(&edge_idx) = pg.index.edge_pos.get(&p.entry_id) {
+                let from_node = &pg.graph.edges[edge_idx].from;
+                if let Some(&node_idx) = pg.index.node_pos.get(from_node) {
+                    if !access_node_indices.contains(&node_idx) {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+            true
+        })
         .collect();
-    pairs.sort_by(|a, b| a.id.cmp(&b.id));
+
+    pairs.sort_by(|a, b| {
+        if r.origin.is_some() {
+            let edge_a = &pg.graph.edges[pg.index.edge_pos[&a.entry_id]];
+            let edge_b = &pg.graph.edges[pg.index.edge_pos[&b.entry_id]];
+            let node_a = pg.node(&edge_a.from);
+            let node_b = pg.node(&edge_b.from);
+            let dist_a = distance_meters(origin_ll.lat, origin_ll.lon, node_a.lat, node_a.lon);
+            let dist_b = distance_meters(origin_ll.lat, origin_ll.lon, node_b.lat, node_b.lon);
+            dist_a.total_cmp(&dist_b).then_with(|| a.id.cmp(&b.id))
+        } else {
+            a.id.cmp(&b.id)
+        }
+    });
+
     if pairs.len() > pg.limits.max_pairs {
         budget.truncated = true;
         pairs.truncate(pg.limits.max_pairs);
     }
-    let any_pairs = !pairs.is_empty();
     let mut connection = false;
     let mut found_loop = false;
     let mut legal_route = false;
@@ -1219,20 +2191,119 @@ pub fn search_prepared(
                 verification_set_version: None,
             };
 
+            let entry_ramp = p
+                .entry_ramp_id
+                .as_deref()
+                .and_then(|id| pg.index.ramp_by_id.get(id).map(|&idx| &pg.graph.ramps[idx]))
+                .or_else(|| {
+                    pg.index
+                        .ramp_by_edge
+                        .get(&p.entry_id)
+                        .map(|&idx| &pg.graph.ramps[idx])
+                });
+            let exit_ramp = p
+                .exit_ramp_id
+                .as_deref()
+                .and_then(|id| pg.index.ramp_by_id.get(id).map(|&idx| &pg.graph.ramps[idx]))
+                .or_else(|| {
+                    pg.index
+                        .ramp_by_edge
+                        .get(&p.exit_id)
+                        .map(|&idx| &pg.graph.ramps[idx])
+                });
+
+            let entry_info = RampInfo {
+                edge_id: p.entry_id.clone(),
+                name: p
+                    .entry_name
+                    .clone()
+                    .or_else(|| entry_ramp.map(|r| r.name.clone())),
+                ramp_id: entry_ramp
+                    .map(|r| r.id.clone())
+                    .or_else(|| p.entry_ramp_id.clone()),
+                route: entry_ramp.map(|r| r.route.clone()),
+                direction: entry_ramp.map(|r| r.direction.clone()),
+            };
+            let exit_info = RampInfo {
+                edge_id: p.exit_id.clone(),
+                name: p
+                    .exit_name
+                    .clone()
+                    .or_else(|| exit_ramp.map(|r| r.name.clone())),
+                ramp_id: exit_ramp
+                    .map(|r| r.id.clone())
+                    .or_else(|| p.exit_ramp_id.clone()),
+                route: exit_ramp.map(|r| r.route.clone()),
+                direction: exit_ramp.map(|r| r.direction.clone()),
+            };
+
+            let od_tariff = match (entry_info.ramp_id.as_deref(), exit_info.ramp_id.as_deref()) {
+                (Some(e_id), Some(x_id)) => pg
+                    .index
+                    .od_tariff_map
+                    .get(&(e_id.to_string(), x_id.to_string()))
+                    .map(|&idx| &pg.graph.od_tariffs[idx]),
+                _ => None,
+            };
+
+            let (toll_amount, toll_from, toll_to, toll_distance, toll_source) =
+                if let Some(price) = price {
+                    (
+                        Some(price.amount_yen),
+                        Some(price.effective_from.clone()),
+                        price.effective_to.clone(),
+                        od_tariff
+                            .map(|t| t.billing_distance_meters)
+                            .or(p.billing_distance_meters),
+                        Some("table".to_string()),
+                    )
+                } else if !p.prices.is_empty() {
+                    (
+                        None,
+                        None,
+                        None,
+                        od_tariff
+                            .map(|t| t.billing_distance_meters)
+                            .or(p.billing_distance_meters),
+                        None,
+                    )
+                } else if let Some(tariff) = od_tariff.filter(|t| {
+                    t.effective_from
+                        .as_deref()
+                        .is_none_or(|from| utc(from).is_ok_and(|from| from <= now))
+                        && t.effective_to
+                            .as_deref()
+                            .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
+                }) {
+                    (
+                        tariff.amount_yen.or_else(|| {
+                            Some(calculate_etc_toll_yen(tariff.billing_distance_meters))
+                        }),
+                        tariff.effective_from.clone(),
+                        tariff.effective_to.clone(),
+                        Some(tariff.billing_distance_meters),
+                        Some("od_tariff".to_string()),
+                    )
+                } else if let Some(dist) = p.billing_distance_meters {
+                    (
+                        Some(calculate_etc_toll_yen(dist)),
+                        None,
+                        None,
+                        Some(dist),
+                        Some("calculated".to_string()),
+                    )
+                } else {
+                    (None, None, None, None, None)
+                };
+
             candidates.push(Candidate {
                 id,
                 release_id: r.release_id.clone(),
                 origin: r.origin.clone(),
                 origin_node_id: entry_edge.from.clone(),
                 snapped_origin,
-                entry: RampInfo {
-                    edge_id: p.entry_id.clone(),
-                    name: p.entry_name.clone(),
-                },
-                exit: RampInfo {
-                    edge_id: p.exit_id.clone(),
-                    name: p.exit_name.clone(),
-                },
+                entry: entry_info,
+                exit: exit_info,
                 entry_id: p.entry_id.clone(),
                 exit_id: p.exit_id.clone(),
                 road_names,
@@ -1254,10 +2325,12 @@ pub fn search_prepared(
                 toll: Toll {
                     billing_pair_id: p.id.clone(),
                     charged_section_count: 1,
-                    amount_yen: price.map(|v| v.amount_yen),
+                    amount_yen: toll_amount,
                     pricing_at: r.pricing_at.clone(),
-                    effective_from: price.map(|v| v.effective_from.clone()),
-                    effective_to: price.and_then(|v| v.effective_to.clone()),
+                    effective_from: toll_from,
+                    effective_to: toll_to,
+                    billing_distance_meters: toll_distance,
+                    toll_source,
                 },
                 r#loop: Loop {
                     anchor_node_id: p.anchor_node_id.clone(),

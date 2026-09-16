@@ -1234,6 +1234,8 @@ pub fn build_topology_with_report(
         edges: final_edges,
         billing_pairs: Vec::new(),
         forbidden_transitions,
+        ramps: Vec::new(),
+        od_tariffs: Vec::new(),
     };
 
     // 6. Build SnapIndex for Entry ramp origin nodes (schema_version 2).

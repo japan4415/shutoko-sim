@@ -150,12 +150,12 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 
 ### `snap-index.json` の意味と `schemaVersion: 2`
 
-`snap-index.json` は一般道ノード一覧から**入口アクセス地点（Entry エッジの from ノード）一覧**に変わった。`schemaVersion` が 1 → 2 に更新されている。現行データには 15 件の入口アクセス地点が登録されており、ファイルサイズは約 1.5 KB である。WASM はこのインデックスを使って出発座標から近い順に最大 `max_access_entries` 件の入口アクセス地点を選択する。
+`snap-index.json` は一般道ノード一覧から**入口アクセス地点（Entry エッジの from ノード）一覧**に変わった。`schemaVersion` が 1 → 2 に更新されている。現行データには 168 件の入口アクセス地点が登録されており、ファイルサイズは約 15 KB である。WASM はこのインデックスを使って出発座標から近い順に最大 `max_access_entries` 件の入口アクセス地点を選択する。
 
 ### 再現性・決定論的検証
 同一入力から 2 回実行し、`diff -r` によりバイト完全一致（SHA-256 一致）が確認されている。
 - `graph.json`: 禁止遷移（`only_*` および `via=way` を含む）やソート順を決定論的に出力（`schemaVersion: 2`）
-- `snap-index.json`: 入口アクセス地点（Entry エッジの from ノード）の空間インデックス（`schemaVersion: 2`、15 ノード、約 1.5 KB）
+- `snap-index.json`: 入口アクセス地点（Entry エッジの from ノード）の空間インデックス（`schemaVersion: 2`、168 ノード、約 15 KB）
 - `manifest.json`: 全成果物の SHA-256、未検証区間一覧、検証済みペア出典情報（`provenance`）を記録
 
 ## 5. 未検証区間（Unverified Sections）
@@ -163,9 +163,111 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって `manifest.json` の `unverifiedSections` 配列に自動列挙される。
 - **自動列挙対象**: グラフ内に存在するすべての入口・出口エッジのうち、検証済み課金ペアに採用されていないエッジ。OSM ウェイに `name` タグが存在する場合は「エッジID（ウェイ名）」の形式で可読性を担保。
 - **除外路線・通行規制スキップの注記**: C1 外の分岐路線（八重洲線、1号上野線、6号向島線等）や、静的道路グラフで適用外となった通行規制（conditional / no via / outside graph / disconnected / unrecognized 等のスキップカテゴリ）に関する注記も件数付きで同リストに収録。
-- **現状**: 現行リリース `c1-real-v2` では 3 節の表に記載した 8 ペア（外回り 4・内回り 4・既存の神田橋〜宝町 1 を含む）すべてが人手検証済み（`verified`）で、`unverifiedSections` に `rejected:` は存在しない。将来追加予定のランプ区間については、公式料金区間表または本線隣接導出の根拠とともに順次シードへ追加する。
+- **現状**: 現行リリース `all-real-v1` は監査用課金ペア8件を保持するが、両端点のexact edgeが一意なverified-boundランプへ逆引きでき、公式施設名とも一致する2件だけが `verified` である。残る6件は `unverified` として候補生成から除外する。公式一般ランプ371件のうち232件を exact directed segment に bindし、139件は根拠付き `unsupported` としてグラフ外に隔離している。
 
-## 6. CI における自動再生成検証
+## 6. 全24路線・正規ランプ台帳（Canonical Ramp Inventory）
+
+首都高速道路全線（東京・神奈川・埼玉の公式24路線区分）を網羅する正規ランプ台帳を導入した。台帳の `route` はデータ上の運用識別子を保持するため25種類あり、1号線を `1H`（羽田）/`1U`（上野）に分ける。したがって「全24路線」は公式路線区分の被覆を表し、JSON値の distinct 数を表さない。
+
+- **台帳ファイル**: `data/ramp-inventory.json`
+- **対象路線（全24路線）**:
+  - 都心・環状線: C1（都心環状線）、C2（中央環状線）、Y（八重洲線）
+  - 放射線: 1号上野線、1号羽田線、2号目黒線、3号渋谷線、4号新宿線、5号池袋線、6号向島線、6号三郷線、7号小松川線、9号深川線、10号晴海線、11号台場線、B（湾岸線）
+  - 神奈川エリア: K1（横羽線）、K2（三ツ沢線）、K3（狩場線）、K5（大黒線）、K6（川崎線）、K7（横浜北線・横浜北西線）、B（湾岸線神奈川区間）
+  - 埼玉エリア: S1（川口線）、S2（埼玉新都心線）、S5（埼玉大宮線）
+- **総ランプ数**: 399 ランプ（一般入口 182、一般出口 189、境界流入 JCT 12、境界流出 JCT 12、閉鎖 4）
+- **ランプ種別（`RampKind`）**:
+  - `general_entry`: 一般道から首都高速へ流入する一般入口
+  - `general_exit`: 首都高速から一般道へ流出する一般出口
+  - `boundary_in`: NEXCO（東名・中央・東北・常磐・関越・東関東・京葉・第三京浜・東京外環・東京湾アクアライン等）から首都高速へ流入する境界 JCT
+  - `boundary_out`: 首都高速から他社高速道路へ流出する境界 JCT
+- **方向・ハーフIC制限の明示**:
+  - 各ランプには路線（`route`）、方向（`direction`: `inner`, `outer`, `inbound`, `outbound`, `east`, `west`, `north`, `south`）を付与。
+  - 入口専用・出口専用のハーフ IC、ETC 専用ランプなどの制約を構造化。
+- **事実と推定・導出値の厳格な分離（Provenance & Verification）**:
+  - **公式確認事実（Verified Facts）**: 施設名（`facilityName`）、路線（`route`）、方向（`direction`）、ランプ種別（`kind`）、供用状態（`status`）は、首都高速道路公式検索データ（`https://search.shutoko.jp/`）と現行の路線・出入口案内（`https://www.shutoko.jp/driving/route/`）を 2026-09-16 に照合した正本事実である。
+  - **位置座標の導出（Derived Coordinates）**: 公式サイトには緯度経度の数値データは掲載されていない。active 一般ランプの `lat`, `lon` は `data/osm-ramp-bindings.json` の OpenStreetMap 候補から導出した値であり、`coordinateSource: "osm"`, `coordinateStatus: "derived"` として公式事実と区別する。境界 JCT と閉鎖済みランプは公開選択対象外で、OSM binding を持たない。
+  - **利用可能性（Support State）**: active 一般ランプは `supportState` が `verified_bound`（232件）または `unsupported`（139件）のどちらか一方である。後者も公式台帳から削除せず、個別の `supportReason` と `supportEvidence` を保持する。境界 JCT と閉鎖済み施設は `not_routable` とする。
+  - **端点能力（Routing Capability）**: verified-bound 232件を、有向Shutoko実グラフ上で5km以上の循環SCCへ接続する `routable` 197件と、接続できない `structural_no_loop` 35件（入口13・出口22）へ全件分類する。分類と理由は台帳・`ramps.json`・manifestへ出力し、生成時に再計算値との完全一致をassertする。
+  - **八重洲線の扱い**: 八重洲4件と丸の内1件は公式snapshotに保持する一方、現行fixtureのY線が construction/abandoned 状態でactive `motorway_link`を確認できず、公式liveページも再確認できなかったため `unsupported` とする。閉鎖を断定せず、宝町・C1・霞が関の近傍segmentを流用しない。
+  - **利用制約の検証状況（Restriction Verification）**: 首都高では ETC 専用料金所の順次導入（35箇所以上）が進行中であるが、全ランプに対する制約調査は完了していない。そのため、未全数調査のランプは `restrictionStatus: "unverified"` として明示的にモデル化し、公式確認済みのランプ（神田橋、馬場等）のみ `restrictionStatus: "verified"` とする。制約が空配列 `[]` であることをもって「現金利用可能であることが公式確認された」と誤認させない。
+
+### 6.2 公開成果物とグラフへのバインド（`ramps.json`）
+
+`crates/graph-builder` は探索用グラフ `graph.json` に加え、正規ランプ台帳をグラフの各エッジ・ノードに紐付けた公開成果物 `fixtures/generated/ramps.json` を同時に生成する。
+
+- `ramps.json`: 正規ランプ台帳全399件を保持し、`verified_bound` 232件を bound にする。そのうち `routable` 197件だけが周回候補端点であり、`structural_no_loop` 35件はdisabled/診断表示に使う。`unsupported` 139件、境界JCT 24件、閉鎖済み4件は unbound とする。
+
+## 7. OSM ランプバインディング（`data/osm-ramp-bindings.json`）
+
+正規ランプ台帳の active 一般ランプと OpenStreetMap 実データの要素（way / node）を決定論的に紐付ける。境界 JCT と閉鎖済みランプは台帳にのみ保持し、このファイルには含めない。
+
+- **バインディングファイル**: `data/osm-ramp-bindings.json`
+- **判断正本**: `data/ramp-support-decisions.json`。距離順位による fallback は使わず、未分類の公式レコードが現れた場合は生成を停止する。
+- **各要素の定義**:
+  - `rampId`: 正規ランプ ID（例: `ramp:c1-outer:kandabashi-entry`）
+  - `osmWayId`: ランプを表す OSM `motorway_link` ウェイ ID
+  - `osmNodeId`: 一般道接続端点ノード（入口の乗込ノードまたは出口の流出ノード）
+  - `motorwayNodeId`: 首都高本線（`motorway`）との分合流ノード ID
+  - `sharedPhysicalOverrides`: 公式番号が異なる共有物理segmentである G15/G27/G53 の完全なメンバー集合、directed segment triplet、理由、証拠。同一facility・別directionも例外にせず、すべてのduplicate triplet集合とoverride集合の完全一致を強制する。方向一意性を立証できない旧22組は `unsupported` としbindingを削除した。
+- **Overpass クエリ戦略**:
+  - 首都高速道路のリレーション（全 24 路線）および `network="首都高速道路"` タグを起点とし、関連する `motorway_link` を多ホップ展開（1〜4 ホップ）して抽出。
+  - 一般道との接続判定は、地表コンテキストウェイ（車両通行可能な `highway` ウェイ）のノード集合との積集合により機械的・決定論的に特定。
+  - 境界 JCT は一般道ウェイと接続せず公開入口・出口でもないため、一般ランプ用 binding へ流用せず unbound とする。
+
+### バインディング距離監査の限界
+
+5kmの座標距離監査は粗い変位ガードであり、施設帰属を独立に証明しない。active一般ランプの座標の多くは同じbindingから導出されるため比較が自己参照となり、現行232 bindingのうち211件はランプ座標とOSM端点が0.5m未満で一致する。したがって、約1.4km離れた誤帰属も5km閾値だけでは検出できず、「全件を距離で独立検証済み」とは扱わない。
+
+施設同一性の主なhard signalは、OSM wayの `name` / `ref` / `destination`、共有物理segmentの完全なdirected tripletとoverride、公式facility・route・directionとの整合である。ただし `入口` / `出口` を含むname signalがないwayではタグ比較だけでも帰属を証明できないため、graph componentの接続方向と各ランプの個別evidenceに依存する。信号が不足する候補は距離の近さで補わず `unsupported` とする。
+
+## 8. 境界 JCT と一般出入口の分離モデリング
+
+- **境界 JCT の課題**: 他社高速道路（NEXCO、東京外環等）との接続 JCT（例: 用賀・三郷・川口・大泉・東名東京・保土ヶ谷等）は、一般道との直接接続を持たない。これらを一般入口として扱うと、一般道座標スナップで高架下の地表から高速JCTへ直接ワープする誤ルーティングが生じる。
+- **分離方式**:
+  - `boundary_in` / `boundary_out` を `general_entry` / `general_exit` と明確に区別。
+  - 出発地・帰着地の一般道スナップ対象ノードインデックス（`snap-index.json`）には `general_entry` のみを含め、`boundary_in` は地表スナップ候補から除外。
+  - 境界 JCT、閉鎖、unsupported は明示的な `entryRampId` / `exitRampId` でも拒否し、公開ルーティング端点にしない。他社線乗り継ぎは現行契約の対象外。
+
+## 9. OD 料金マトリクスと普通車 ETC 計算規則（`data/od-tariffs.json`）
+
+首都高速道路の ETC 料金制度に基づく料金データおよび計算ロジック。
+
+- **料金定義ファイル**: `data/od-tariffs.json`
+- **公式普通車 ETC 料金体系**:
+  - 下限料金: 300 円（料金距離 ≤ 4.3 km）
+  - 距離制料金（> 4.3 km）: `(料金距離 km × キロ単価 + ターミナルチャージ) × 1.10`（10 円単位四捨五入）
+    - キロ単価: 29.52 円/km（2026 年時点改定後 34.50 円/km）
+    - ターミナルチャージ: 150 円
+  - 上限料金: 1,950 円（普通車 ETC 上限）
+- **料金距離と実走行距離のスキーマ分離**:
+  - `shutoko_distance_meters`: 首都高速上の実際の走行距離（エッジ長の積算値）。周回ループを含むため数十〜百キロ超になり得る。
+  - `toll.billing_distance_meters`: 入口〜出口間の公称料金距離（OD テーブルまたはベースライン最短経路長）。
+  - **OSM 幾何距離を公称料金距離として扱わない規律**: グラフ幾何から計算される実走距離（`shutoko_distance_meters`）を公称料金距離として勝手に流用しない。料金計算は `data/od-tariffs.json` の検証済み OD ペアまたは公式料金距離テーブルに明示された値のみを根拠とし、未定義区間では安易な幾何距離代用を行わず未計算（None）として誠実にモデル化する。
+  - 周回走行を行っても、料金距離は入口と出口の組み合わせによって決まるため、1区間先退出時は下限 300 円で周回が可能。
+- **検証済み OD ペア**:
+  - 頻出・代表的な OD ペア（C1 各ランプ、八重洲線接続、主要放射線連絡等）について公式料金距離および料金額を検証済みデータとして保持。
+
+## 10. 成果物公開アーティファクト（`ramps.json`）
+
+グラフビルダーは、ビルド時に以下のアーティファクトを生成・出力する:
+- `graph.json`: 道路ネットワークグラフ（ノード、エッジ、バインド済みランプ、OD 料金）
+- `snap-index.json`: 地表スナップ用入口アクセス地点インデックス
+- `ramps.json`: 正規ランプ台帳全399件の属性・座標・support state・routing capability・グラフバインド状態を格納した公開成果物（`verified_bound` 232件のみ bound）
+- `manifest.json`: 全成果物の SHA-256、未検証区間、検証済みペア出典情報
+
+## 11. 保守・更新ワークフロー（ランプ・路線・料金の追加手順）
+
+路線拡張やランプの新設・改修、料金改定時は以下の手順で安全に更新を行う:
+
+1. **公式snapshot更新**: `data/official-population-snapshot.json` を更新する。
+2. **根拠付き分類**: `data/ramp-support-decisions.json` に `verified_bound` と exact directed segment、または `unsupported` と理由・証拠を追加する。未分類のまま生成しない。
+3. **料金定義**: 必要に応じて `data/od-tariffs.json` に新 OD ペアの料金距離・料金額を追加。
+4. **自動バリデーション**: `cargo test -p shutoko-graph-builder` を実行。台帳・バインディング・料金の整合性検証（ID 参照整合性、座標範囲、料金範囲、10円丸め等）が自動的に走る。
+5. **フィクスチャ再生成**: `bash scripts/generate-fixtures.sh` を実行し、`fixtures/generated/` の成果物を更新。
+6. **回帰テスト**: `cargo test --workspace --locked` および `cargo test --release -p shutoko-routing-core --test real_graph_contract --locked -- --ignored` で回帰がないことを確認。
+
+## 12. CI における自動再生成検証
 
 パイプラインの決定論的性質と成果物の整合性を担保するため、GitHub Actions ワークフロー（`.github/workflows/ci.yml`）で再生成チェックを自動実行している。
 - コミット済みの `fixtures/osm/shutoko-c1.json` を入力とし、外部 Overpass API にはアクセスしない（外部ネットワーク非依存）。

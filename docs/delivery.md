@@ -2,7 +2,9 @@
 
 ## 現在地
 
-Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。実データパイプライン（`scripts/fetch-osm.sh`, `scripts/generate-fixtures.sh`）により、首都高速都心環状線（C1）および接続ランプの決定論的な道路グラフ（一般道除外）・入口アクセス地点インデックス・マニフェスト（`fixtures/generated/`）を生成し、`routing-core` において実データに基づく周回探索の成立性を検証済みである。Cloudflare Workers プロジェクト（`workers/`）により、R2 バケットバインディング経由のバージョン付き成果物配信（`GET /releases/{releaseId}/...`）および国土地理院住所検索 API を用いた住所検索プロキシ（`POST /api/geocode`、レート制限・5秒タイムアウト・秘密漏洩防止）を実装した。Web UI（`web/`）は、住所検索（確定時のみ）または現在地取得による出発地点指定、分単位の時間範囲入力、Leaflet + 国土地理院タイルによる地図描画（全経路の GeoJSON と課金対象1区間の区別、OSM 帰属）、最大3件の候補比較カード（時間内訳・普通車 ETC 料金・通過路線・推薦理由・time_per_yen 順位）、カードと地図の候補 ID 連動、例外系（候補なし・GPS 拒否・住所検索失敗・地図取得失敗・成果物不整合）からの復帰を実装した。性能計測ハーネス（#13）は実機で4目標を満たしている。Google マップ実機引き継ぎの一部検証は完了、残条件は継続検証中である。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。以下は全体の実装計画と受け入れ基準である。原案の内容は変更しない。
+Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v1` は22,824 nodes / 22,987 edgesで、証拠がある232件だけを exact directed segment に bind する。残るactive一般139件は理由・証拠付き `unsupported`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み232件は `routable` 197件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。課金ペア8件中、両端点を一意なverified-boundランプへ逆引きできる2件だけを `verified` とし、残る6件は `unverified` とする。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
+
+このverified pairの縮退は正確性優先の意図的 deviation である。誤帰属 binding と曖昧な課金端点を除外したため、東京駅の現行実測は15〜60分で神田橋入口→宝町出口の1候補、`minPlanSeconds=1,743`秒（約29.05分）に限られる。旧データで成立した30〜60分は `no_candidates/TIME_WINDOW` となり、上限を240分へ広げても回復しない。release real-graph testはこの能力低下と29/30分の上限境界を明示的に固定する。
 
 ## 実装順序と完了条件
 

@@ -16,7 +16,132 @@
     <main id="app">
       <h1>首都高 周回ルート探索</h1>
 
-      <section class="panel" aria-labelledby="origin-heading">
+      <!-- 検索方法の選択 -->
+      <section class="panel" aria-labelledby="search-mode-heading">
+        <h2 id="search-mode-heading">検索方法</h2>
+        <div class="search-mode-radios" role="radiogroup" aria-labelledby="search-mode-heading">
+          <label class="mode-radio-label">
+            <input type="radio" name="search-mode" value="coord" checked />
+            <span class="mode-radio-copy">
+              <span class="mode-radio-title">現在地・住所から（座標検索）</span>
+              <span class="mode-radio-desc">出発地点の周辺ランプから周回ルートを探索</span>
+              <span class="mode-radio-check" aria-hidden="true">選択中</span>
+            </span>
+          </label>
+          <label class="mode-radio-label">
+            <input type="radio" name="search-mode" value="explicit" />
+            <span class="mode-radio-copy">
+              <span class="mode-radio-title">入口・出口を指定（ランプ指定）</span>
+              <span class="mode-radio-desc">全399ランプから指定して探索（197ランプ選択可能）</span>
+              <span class="mode-radio-check" aria-hidden="true">選択中</span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <!-- ランプ明示指定モードのパネル（初期非表示） -->
+      <section id="explicit-od-section" class="panel" aria-labelledby="explicit-od-heading" hidden>
+        <h2 id="explicit-od-heading">入口・出口ランプの指定</h2>
+        <p class="field-note">
+          公式正規台帳の全399ランプから入口と出口を指定します。指定した出発地点→入口、出口→出発地点の直線距離概算を計画時間へ含めます。
+          選択可能の表示は端点単体の構造判定であり、任意の入口・出口ペアや指定時間での成立を保証しません。
+        </p>
+        <aside class="explicit-origin-callout" aria-labelledby="explicit-origin-heading">
+          <strong id="explicit-origin-heading">この探索でも出発地点を使います</strong>
+          <span id="explicit-origin-current">現在の出発地点を確認しています。</span>
+          <span>遠い地点では接続できない（NO_CONNECTION）、指定時間に収まらない場合は時間枠外（TIME_WINDOW）になります。下の「出発地点」または「所要時間の範囲」を見直してください。</span>
+        </aside>
+
+        <div id="ramps-loading-status" role="status" class="field-note">ランプ指定モードを選ぶと正規台帳を読み込みます。</div>
+        <div id="ramps-error-panel" class="recovery" role="alert" hidden>
+          <p id="ramps-error-message"></p>
+          <button type="button" id="ramps-retry-btn" class="secondary">台帳を再読み込み</button>
+        </div>
+
+        <div id="ramp-pickers-container" class="ramp-pickers-grid" hidden>
+          <!-- 入口選択 -->
+          <div class="ramp-picker" id="entry-ramp-picker">
+            <h3 id="entry-picker-title">入口ランプ</h3>
+            <label for="entry-ramp-search" class="visually-hidden">入口ランプを検索</label>
+            <div class="row">
+              <input
+                id="entry-ramp-search"
+                type="search"
+                inputmode="text"
+                autocomplete="off"
+                placeholder="施設名・路線・方向・IDで絞り込み（例: 宝町、C1、内回り）"
+                aria-describedby="entry-count-info"
+              />
+              <button type="button" id="entry-clear-search-btn" class="secondary" hidden>クリア</button>
+            </div>
+            <p id="entry-count-info" class="field-note" role="status" aria-live="polite">台帳の読み込み後に件数を表示します。</p>
+
+            <div id="entry-selected-badge" class="selected-ramp-box" hidden>
+              <div class="selected-ramp-header">
+                <span class="selected-badge-label">選択中:</span>
+                <span id="entry-selected-name" class="selected-ramp-name"></span>
+              </div>
+              <button type="button" id="entry-deselect-btn" class="secondary small-btn">選択を解除</button>
+            </div>
+
+            <div id="entry-zero-message" class="zero-results-message" hidden>
+              <p>該当するランプが見つかりませんでした。別の検索キーワードをお試しください。</p>
+              <button type="button" id="entry-reset-filter-btn" class="secondary small-btn">検索条件をクリア</button>
+            </div>
+
+            <div
+              id="entry-ramp-list"
+              class="ramp-list"
+              role="radiogroup"
+              aria-labelledby="entry-picker-title"
+            ></div>
+          </div>
+
+          <!-- 出口選択 -->
+          <div class="ramp-picker" id="exit-ramp-picker">
+            <h3 id="exit-picker-title">出口ランプ</h3>
+            <label for="exit-ramp-search" class="visually-hidden">出口ランプを検索</label>
+            <div class="row">
+              <input
+                id="exit-ramp-search"
+                type="search"
+                inputmode="text"
+                autocomplete="off"
+                placeholder="施設名・路線・方向・IDで絞り込み（例: 宝町、C1、外回り）"
+                aria-describedby="exit-count-info"
+              />
+              <button type="button" id="exit-clear-search-btn" class="secondary" hidden>クリア</button>
+            </div>
+            <p id="exit-count-info" class="field-note" role="status" aria-live="polite">台帳の読み込み後に件数を表示します。</p>
+
+            <div id="exit-selected-badge" class="selected-ramp-box" hidden>
+              <div class="selected-ramp-header">
+                <span class="selected-badge-label">選択中:</span>
+                <span id="exit-selected-name" class="selected-ramp-name"></span>
+              </div>
+              <button type="button" id="exit-deselect-btn" class="secondary small-btn">選択を解除</button>
+            </div>
+
+            <div id="exit-zero-message" class="zero-results-message" hidden>
+              <p>該当するランプが見つかりませんでした。別の検索キーワードをお試しください。</p>
+              <button type="button" id="exit-reset-filter-btn" class="secondary small-btn">検索条件をクリア</button>
+            </div>
+
+            <div
+              id="exit-ramp-list"
+              class="ramp-list"
+              role="radiogroup"
+              aria-labelledby="exit-picker-title"
+            ></div>
+          </div>
+        </div>
+
+        <div id="explicit-selection-status" class="explicit-status-callout" role="status" aria-live="polite">
+          入口と出口が未選択です。両方のランプを選択してください。
+        </div>
+      </section>
+
+      <section id="origin-section" class="panel" aria-labelledby="origin-heading">
         <h2 id="origin-heading">出発地点</h2>
 
         <!-- 住所は確定時だけ検索する（入力途中の外部検索はしない）。同名住所は候補から選ぶ。 -->
@@ -34,9 +159,9 @@
         </div>
         <p id="address-note" class="field-note">
           検索確定時に国土地理院の住所検索へ送信されます。入力途中は送信しません。
-          対応範囲は首都高速 都心環状線（C1）とその接続ランプの検証済み入出口です。
-          入口までの往復を含む計画時間が指定の範囲に収まる地点だけを候補にします
-          （アクセス・帰着は一般道探索ではなく直線距離の概算です）。
+          座標検索・ランプ指定のどちらも、指定した出発地点→入口、出口→出発地点の直線距離概算を計画時間へ含めます。
+          選択可能なランプは端点単体の構造判定で、任意の入口・出口ペアや指定時間での成立を保証しません。
+          遠い地点では NO_CONNECTION、指定時間に収まらない場合は TIME_WINDOW になるため、この出発地点または時間条件を見直してください。
         </p>
         <div id="address-feedback" role="alert"></div>
         <!-- 同名住所などの候補。選択されるまで出発地点は確定しない。 -->
@@ -126,6 +251,7 @@
       <section class="panel">
         <button id="search-btn" type="button">ルートを探す</button>
         <button id="cancel-btn" type="button" class="secondary" hidden>探索をキャンセル</button>
+        <div id="duplicate-warning" class="field-note duplicate-note" role="status" hidden></div>
         <!-- 入力エラーは支援技術へ即時通知する（role="alert"）。
              探索ボタンより下に置き、エラーが出消ししてもボタンの位置を変えない。 -->
         <div id="input-errors-alert" role="alert">

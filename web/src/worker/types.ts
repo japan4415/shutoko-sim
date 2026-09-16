@@ -65,6 +65,8 @@ export interface UiSearchMessage {
   pricingAt: string;
   origin?: LatLng;
   originNodeId?: string;
+  entryRampId?: string;
+  exitRampId?: string;
   minMinutes: number;
   maxMinutes: number;
   vehicleProfile: string;

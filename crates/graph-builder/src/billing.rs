@@ -371,6 +371,9 @@ pub fn generate_billing_pair(
         prices,
         entry_name: seed.entry_name.clone(),
         exit_name: seed.exit_name.clone(),
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        billing_distance_meters: None,
     };
 
     // 10. Run comprehensive validator

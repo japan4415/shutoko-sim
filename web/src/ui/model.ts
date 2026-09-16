@@ -2,7 +2,9 @@
 // 文言対応表は scout-002 F5（docs/interfaces.md:96-104 の status/reason コード）に従う。
 import type { Candidate, GeoJsonLineString, SearchResult, SnappedOrigin, Toll } from "../worker/types";
 
-export const RELEASE_ID = "c1-real-v2";
+import { DEFAULT_RELEASE_ID } from "../worker/artifact-hashes";
+
+export const RELEASE_ID = DEFAULT_RELEASE_ID;
 export const VEHICLE_PROFILE = "passenger-car-etc";
 
 /** 神田橋プリセット（crates/routing-core/tests/real_graph_contract.rs:520-528）。 */

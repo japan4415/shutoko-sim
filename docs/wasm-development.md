@@ -1,5 +1,9 @@
 # Rust / WASM 開発
 
+ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
+
+ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。これらを変えない純粋なエンジン内部の挙動変更はstaleとして検出できないため、探索結果やWASM境界の挙動を変える変更では、実装者が該当versionを明示的にbumpしてcontractを更新しなければならない。現状を自動hash追跡済みとは表現しない。
+
 ## 今回の実装範囲
 
 初回の探索コアは、人工グラフを使って「首都高を一周し、入口の1区間先で退出する」経路を生成するためのもの。実在の入出口・料金の検証や Google マップへの引き継ぎを済ませた公開ルート検索ではない。

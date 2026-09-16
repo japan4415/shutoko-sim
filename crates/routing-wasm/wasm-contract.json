@@ -1,0 +1,10 @@
+{
+  "contractVersion": 1,
+  "engineVersion": "0.1.0",
+  "graphSchemaVersion": 2,
+  "requiredGraphFields": [
+    "odTariffs",
+    "ramps[].id",
+    "ramps[].mainlineNodeId"
+  ]
+}

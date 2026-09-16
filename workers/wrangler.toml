@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2026-08-22"
 
 [vars]
-ALLOWED_RELEASES = "c1-real-v1,c1-real-v2"
+ALLOWED_RELEASES = "c1-real-v1,c1-real-v2,all-real-v1"
 
 [[r2_buckets]]
 binding = "ARTIFACTS_BUCKET"

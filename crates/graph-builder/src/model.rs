@@ -10,7 +10,7 @@
 //! mutating the strict `Node { id }` schema of `routing-core`.
 
 pub use shutoko_routing_core::{
-    BillingPair, Edge, EdgeKind, Graph, Node, Price, VerificationStatus,
+    BillingPair, Edge, EdgeKind, Graph, Node, OdTariff, Price, Ramp, RampKind, VerificationStatus,
 };
 
 use serde::{Deserialize, Serialize};

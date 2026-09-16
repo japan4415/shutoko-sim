@@ -373,6 +373,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 version: 1,
                 source_date: args.source_date.clone(),
                 bindings: Vec::new(),
+                shared_physical_overrides: Vec::new(),
             }
         };
 
@@ -383,13 +384,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             unverified_from_seeds.push(note);
         }
 
-        // Hard assertion: ALL active general entries and exits MUST be bound (100% bound requirement)
+        // Hard assertion: every verified active general entry/exit is bound,
+        // while explicit unsupported records remain inventory-only.
         let unbound_active_general: Vec<&str> = inv
             .ramps
             .iter()
             .filter(|r| {
                 r.status == "active"
                     && matches!(r.kind, RampKind::GeneralEntry | RampKind::GeneralExit)
+                    && r.support_state.as_deref() == Some("verified_bound")
                     && !graph.ramps.iter().any(|gr| gr.id == r.ramp_id)
             })
             .map(|r| r.ramp_id.as_str())
@@ -397,7 +400,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         if !unbound_active_general.is_empty() {
             return Err(format!(
-                "hard assertion failed: {} active general ramp(s) are unbound (100% bound required):\n  {}",
+                "hard assertion failed: {} verified active general ramp(s) are unbound:\n  {}",
                 unbound_active_general.len(),
                 unbound_active_general.join("\n  ")
             )

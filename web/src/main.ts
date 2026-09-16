@@ -34,6 +34,18 @@ import { createMapView } from "./map/map-view";
 import type { MapView } from "./map/map-view";
 import "leaflet/dist/leaflet.css";
 import type { Candidate, LatLng, SearchResult, UiSearchMessage, WorkerResponse } from "./worker/types";
+import {
+  filterRamps,
+  formatCountInfo,
+  formatDirection,
+  formatRoute,
+  loadRampsDataset,
+  validateExplicitSearch,
+  duplicateOperationMessage,
+  type ExplicitSearchCondition,
+  type RampItem,
+  type RampsDataset,
+} from "./ui/ramps";
 
 const el = {
   addressQuery: mustGet<HTMLInputElement>("address-query"),
@@ -50,6 +62,7 @@ const el = {
   maxMinutes: mustGet<HTMLInputElement>("max-minutes"),
   search: mustGet<HTMLButtonElement>("search-btn"),
   cancel: mustGet<HTMLButtonElement>("cancel-btn"),
+  duplicateWarning: mustGet<HTMLDivElement>("duplicate-warning"),
   mapPick: mustGet<HTMLButtonElement>("map-pick-btn"),
   mapPickPanel: mustGet<HTMLDivElement>("map-pick-panel"),
   mapPickStatus: mustGet<HTMLParagraphElement>("map-pick-status"),
@@ -62,6 +75,30 @@ const el = {
   mapRetry: mustGet<HTMLButtonElement>("map-retry-btn"),
   recovery: mustGet<HTMLDivElement>("recovery-actions"),
   results: mustGet<HTMLDivElement>("results"),
+  explicitOdSection: mustGet<HTMLElement>("explicit-od-section"),
+  rampsLoadingStatus: mustGet<HTMLDivElement>("ramps-loading-status"),
+  rampsErrorPanel: mustGet<HTMLDivElement>("ramps-error-panel"),
+  rampsErrorMessage: mustGet<HTMLParagraphElement>("ramps-error-message"),
+  rampsRetryBtn: mustGet<HTMLButtonElement>("ramps-retry-btn"),
+  entryRampSearch: mustGet<HTMLInputElement>("entry-ramp-search"),
+  entryClearSearchBtn: mustGet<HTMLButtonElement>("entry-clear-search-btn"),
+  entryCountInfo: mustGet<HTMLParagraphElement>("entry-count-info"),
+  entrySelectedBadge: mustGet<HTMLDivElement>("entry-selected-badge"),
+  entrySelectedName: mustGet<HTMLSpanElement>("entry-selected-name"),
+  entryDeselectBtn: mustGet<HTMLButtonElement>("entry-deselect-btn"),
+  entryZeroMessage: mustGet<HTMLDivElement>("entry-zero-message"),
+  entryResetFilterBtn: mustGet<HTMLButtonElement>("entry-reset-filter-btn"),
+  entryRampList: mustGet<HTMLDivElement>("entry-ramp-list"),
+  exitRampSearch: mustGet<HTMLInputElement>("exit-ramp-search"),
+  exitClearSearchBtn: mustGet<HTMLButtonElement>("exit-clear-search-btn"),
+  exitCountInfo: mustGet<HTMLParagraphElement>("exit-count-info"),
+  exitSelectedBadge: mustGet<HTMLDivElement>("exit-selected-badge"),
+  exitSelectedName: mustGet<HTMLSpanElement>("exit-selected-name"),
+  exitDeselectBtn: mustGet<HTMLButtonElement>("exit-deselect-btn"),
+  exitZeroMessage: mustGet<HTMLDivElement>("exit-zero-message"),
+  exitResetFilterBtn: mustGet<HTMLButtonElement>("exit-reset-filter-btn"),
+  exitRampList: mustGet<HTMLDivElement>("exit-ramp-list"),
+  explicitSelectionStatus: mustGet<HTMLDivElement>("explicit-selection-status"),
 };
 
 function mustGet<T extends Element>(id: string): T {
@@ -122,7 +159,16 @@ let pendingPick: LatLng | null = null;
 // 'error' は結果取得前の成果物不一致・通信失敗の再読み込み案内で、条件を変えても残す。
 let recoveryOrigin: "result" | "error" | null = null;
 
-// --- Worker 管理 ---
+// --- ランプ明示指定モードの状態 ---
+type SearchMode = "coord" | "explicit";
+let searchMode: SearchMode = "coord";
+let rampsDataset: RampsDataset | null = null;
+let selectedEntryRampId: string | null = null;
+let selectedExitRampId: string | null = null;
+let entryFilterQuery = "";
+let exitFilterQuery = "";
+let lastSuccessCondition: ExplicitSearchCondition | null = null;
+let isSearching = false;
 
 function createWorker(): Worker {
   const next = new Worker(new URL("./worker/search-worker.ts", import.meta.url), {
@@ -190,6 +236,15 @@ function handleWorkerMessage(msg: WorkerResponse): void {
       clearTimer();
       inflightRequestId = null;
       setSearching(false);
+      if (searchMode === "explicit" && origin !== null) {
+        lastSuccessCondition = {
+          entryRampId: selectedEntryRampId,
+          exitRampId: selectedExitRampId,
+          minMinutes: Number(el.minMinutes.value),
+          maxMinutes: Number(el.maxMinutes.value),
+          origin,
+        };
+      }
       renderResult(msg.result);
       return;
     }
@@ -788,10 +843,190 @@ function applyInputErrors(fields: import("./ui/model").InputFieldErrors): HTMLIn
   return INPUTS.find((input) => describedBy.has(input)) ?? null;
 }
 
+// --- ランプ選択 UI ロジック ---
+
+function updateSearchButtonState(): void {
+  if (isSearching) {
+    el.search.disabled = true;
+    return;
+  }
+  if (searchMode === "explicit") {
+    el.search.disabled = selectedEntryRampId === null || selectedExitRampId === null;
+  } else {
+    el.search.disabled = false;
+  }
+}
+
+function updateExplicitSelectionStatus(): void {
+  if (selectedEntryRampId === null && selectedExitRampId === null) {
+    el.explicitSelectionStatus.textContent = "入口と出口が未選択です。両方のランプを選択してください。";
+  } else if (selectedEntryRampId === null) {
+    el.explicitSelectionStatus.textContent = "入口が未選択です。有効な入口ランプを選択してください。";
+  } else if (selectedExitRampId === null) {
+    el.explicitSelectionStatus.textContent = "出口が未選択です。有効な出口ランプを選択してください。";
+  } else {
+    el.explicitSelectionStatus.textContent = "入口・出口が指定されています。「ルートを探す」を押して探索を開始できます。";
+  }
+  updateSearchButtonState();
+}
+
+function renderRampList(role: "entry" | "exit"): void {
+  if (rampsDataset === null) {
+    return;
+  }
+  const query = role === "entry" ? entryFilterQuery : exitFilterQuery;
+  const listContainer = role === "entry" ? el.entryRampList : el.exitRampList;
+  const countInfo = role === "entry" ? el.entryCountInfo : el.exitCountInfo;
+  const zeroMessage = role === "entry" ? el.entryZeroMessage : el.exitZeroMessage;
+  const clearBtn = role === "entry" ? el.entryClearSearchBtn : el.exitClearSearchBtn;
+  const selectedId = role === "entry" ? selectedEntryRampId : selectedExitRampId;
+
+  const result = filterRamps(rampsDataset.ramps, query, role);
+  countInfo.textContent = formatCountInfo(result, query.trim().length > 0);
+  clearBtn.hidden = query.trim().length === 0;
+
+  if (result.matchedCount === 0) {
+    zeroMessage.hidden = false;
+    listContainer.hidden = true;
+    listContainer.replaceChildren();
+    return;
+  }
+
+  zeroMessage.hidden = true;
+  listContainer.hidden = false;
+
+  const fragment = document.createDocumentFragment();
+  for (const { ramp, eligibility } of result.items) {
+    const itemLabel = document.createElement("label");
+    itemLabel.className = `ramp-item ${eligibility.selectable ? "ramp-item--routable" : "ramp-item--disabled"}`;
+    itemLabel.htmlFor = `${role}-${ramp.id}`;
+
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.id = `${role}-${ramp.id}`;
+    radio.name = `${role}-ramp-selection`;
+    radio.value = ramp.id;
+    radio.disabled = !eligibility.selectable;
+    if (!eligibility.selectable) {
+      radio.setAttribute("aria-disabled", "true");
+    }
+    if (ramp.id === selectedId) {
+      radio.checked = true;
+    }
+
+    radio.addEventListener("change", () => {
+      if (radio.checked) {
+        if (role === "entry") {
+          setEntryRamp(ramp);
+        } else {
+          setExitRamp(ramp);
+        }
+      }
+    });
+
+    const content = document.createElement("div");
+    content.className = "ramp-item-content";
+
+    const header = document.createElement("div");
+    header.className = "ramp-item-header";
+
+    const routeBadge = document.createElement("span");
+    routeBadge.className = "ramp-route-badge";
+    routeBadge.textContent = ramp.route;
+
+    const dirBadge = document.createElement("span");
+    dirBadge.className = "ramp-dir-badge";
+    dirBadge.textContent = formatDirection(ramp.direction);
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "ramp-name";
+    nameSpan.textContent = ramp.name;
+
+    const statusBadge = document.createElement("span");
+    statusBadge.className = `ramp-status-badge ramp-status-badge--${eligibility.category}`;
+    statusBadge.textContent = eligibility.statusLabel;
+
+    header.append(routeBadge, dirBadge, nameSpan, statusBadge);
+
+    const idDiv = document.createElement("div");
+    idDiv.className = "ramp-id";
+    idDiv.textContent = ramp.id;
+
+    content.append(header, idDiv);
+
+    if (!eligibility.selectable && eligibility.reason) {
+      const reasonP = document.createElement("p");
+      reasonP.className = "ramp-disabled-reason";
+      reasonP.textContent = eligibility.reason;
+      content.append(reasonP);
+    }
+
+    itemLabel.append(radio, content);
+    fragment.append(itemLabel);
+  }
+
+  listContainer.replaceChildren(fragment);
+}
+
+function setEntryRamp(ramp: RampItem): void {
+  selectedEntryRampId = ramp.id;
+  el.entrySelectedName.textContent = `${formatRoute(ramp.route)} ${formatDirection(ramp.direction)} ${ramp.name} (${ramp.id})`;
+  el.entrySelectedBadge.hidden = false;
+  invalidateResults();
+  updateExplicitSelectionStatus();
+}
+
+function clearEntryRamp(): void {
+  selectedEntryRampId = null;
+  el.entrySelectedBadge.hidden = true;
+  el.entrySelectedName.textContent = "";
+  const checked = el.entryRampList.querySelector<HTMLInputElement>('input[type="radio"]:checked');
+  if (checked) checked.checked = false;
+  invalidateResults();
+  updateExplicitSelectionStatus();
+}
+
+function setExitRamp(ramp: RampItem): void {
+  selectedExitRampId = ramp.id;
+  el.exitSelectedName.textContent = `${formatRoute(ramp.route)} ${formatDirection(ramp.direction)} ${ramp.name} (${ramp.id})`;
+  el.exitSelectedBadge.hidden = false;
+  invalidateResults();
+  updateExplicitSelectionStatus();
+}
+
+function clearExitRamp(): void {
+  selectedExitRampId = null;
+  el.exitSelectedBadge.hidden = true;
+  el.exitSelectedName.textContent = "";
+  const checked = el.exitRampList.querySelector<HTMLInputElement>('input[type="radio"]:checked');
+  if (checked) checked.checked = false;
+  invalidateResults();
+  updateExplicitSelectionStatus();
+}
+
+async function initRamps(): Promise<void> {
+  el.rampsLoadingStatus.hidden = false;
+  el.rampsLoadingStatus.textContent = "ランプ台帳を読み込み中…";
+  el.rampsErrorPanel.hidden = true;
+  try {
+    rampsDataset = await loadRampsDataset(window.fetch.bind(window), RELEASE_ID);
+    el.rampsLoadingStatus.textContent = `正規ランプ台帳 ${String(rampsDataset.ramps.length)} 件を検証完了（選択可能: 入口 ${String(rampsDataset.capabilities.routableEntryCount)} / 出口 ${String(rampsDataset.capabilities.routableExitCount)}）`;
+    renderRampList("entry");
+    renderRampList("exit");
+    updateExplicitSelectionStatus();
+  } catch (err) {
+    el.rampsLoadingStatus.hidden = true;
+    el.rampsErrorPanel.hidden = false;
+    const msg = err instanceof Error ? err.message : String(err);
+    el.rampsErrorMessage.textContent = `ランプ台帳の読み込みまたは検証に失敗しました（${msg}）。再読み込みをお試しください。`;
+  }
+}
+
 // --- 探索 ---
 
 function setSearching(searching: boolean): void {
-  el.search.disabled = searching;
+  isSearching = searching;
+  updateSearchButtonState();
   el.cancel.hidden = !searching;
 }
 
@@ -814,6 +1049,32 @@ function startSearch(): void {
     return; // 入力不備では検索しない
   }
 
+  if (searchMode === "explicit") {
+    const val = validateExplicitSearch(selectedEntryRampId, selectedExitRampId, rampsDataset ?? undefined);
+    if (!val.valid) {
+      setStatus(val.error ?? "入口・出口を選択してください。");
+      if (!selectedEntryRampId) el.entryRampSearch.focus();
+      else if (!selectedExitRampId) el.exitRampSearch.focus();
+      return;
+    }
+    const currentCondition: ExplicitSearchCondition = {
+      entryRampId: selectedEntryRampId,
+      exitRampId: selectedExitRampId,
+      minMinutes: Number(el.minMinutes.value),
+      maxMinutes: Number(el.maxMinutes.value),
+      origin,
+    };
+    const dup = duplicateOperationMessage(currentCondition, lastSuccessCondition);
+    if (dup !== null) {
+      el.duplicateWarning.textContent = dup;
+      el.duplicateWarning.hidden = false;
+      setStatus(dup);
+      return;
+    }
+    el.duplicateWarning.hidden = true;
+    el.duplicateWarning.textContent = "";
+  }
+
   clearRecovery();
   requestCounter += 1;
   const requestId = `request-${String(requestCounter)}`;
@@ -823,6 +1084,12 @@ function startSearch(): void {
     releaseId: RELEASE_ID,
     pricingAt: new Date().toISOString(), // 押下時に 1 回だけ取得
     origin,
+    ...(searchMode === "explicit"
+      ? {
+          entryRampId: selectedEntryRampId!,
+          exitRampId: selectedExitRampId!,
+        }
+      : {}),
     minMinutes: Number(el.minMinutes.value),
     maxMinutes: Number(el.maxMinutes.value),
     vehicleProfile: VEHICLE_PROFILE,
@@ -1116,10 +1383,14 @@ function invalidateResults(): void {
   selectedCandidateId = null;
   mapView?.renderCandidates([]);
   clearResultRecovery();
+  lastSuccessCondition = null;
+  el.duplicateWarning.hidden = true;
+  el.duplicateWarning.textContent = "";
   if (inflightRequestId !== null) {
     stopWorker();
   }
   setSearching(false);
+  updateSearchButtonState();
   if (hasSearched) {
     setStatus("条件が変更されました。探索ボタンで再検索してください。");
   }
@@ -1248,6 +1519,64 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+// 検索モード切り替え
+const searchModeRadios = document.querySelectorAll<HTMLInputElement>('input[name="search-mode"]');
+for (const radio of searchModeRadios) {
+  radio.addEventListener("change", () => {
+    if (radio.checked) {
+      searchMode = radio.value as SearchMode;
+      el.explicitOdSection.hidden = searchMode !== "explicit";
+      invalidateResults();
+      updateExplicitSelectionStatus();
+    }
+  });
+}
+
+// 入口・出口ランプ検索・解除操作
+el.entryRampSearch.addEventListener("input", () => {
+  entryFilterQuery = el.entryRampSearch.value;
+  renderRampList("entry");
+});
+el.entryClearSearchBtn.addEventListener("click", () => {
+  el.entryRampSearch.value = "";
+  entryFilterQuery = "";
+  renderRampList("entry");
+  el.entryRampSearch.focus();
+});
+el.entryResetFilterBtn.addEventListener("click", () => {
+  el.entryRampSearch.value = "";
+  entryFilterQuery = "";
+  renderRampList("entry");
+  el.entryRampSearch.focus();
+});
+el.entryDeselectBtn.addEventListener("click", () => {
+  clearEntryRamp();
+});
+
+el.exitRampSearch.addEventListener("input", () => {
+  exitFilterQuery = el.exitRampSearch.value;
+  renderRampList("exit");
+});
+el.exitClearSearchBtn.addEventListener("click", () => {
+  el.exitRampSearch.value = "";
+  exitFilterQuery = "";
+  renderRampList("exit");
+  el.exitRampSearch.focus();
+});
+el.exitResetFilterBtn.addEventListener("click", () => {
+  el.exitRampSearch.value = "";
+  exitFilterQuery = "";
+  renderRampList("exit");
+  el.exitRampSearch.focus();
+});
+el.exitDeselectBtn.addEventListener("click", () => {
+  clearExitRamp();
+});
+
+el.rampsRetryBtn.addEventListener("click", () => {
+  void initRamps();
+});
+
 el.preset.value = "kandabashi";
 setSearching(false);
 setStatus("成果物を読み込み中…");
@@ -1255,6 +1584,7 @@ initMap();
 // 地図生成後にプリセットを適用し、出発地マーカーと要約を同期させる。
 applyPreset();
 createWorker(); // ブート: ready が来たらステータスへ反映される
+void initRamps();
 
 function applyPreset(): void {
   if (el.preset.value === "kandabashi") {

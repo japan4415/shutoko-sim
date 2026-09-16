@@ -6,3 +6,4 @@
 // （生成は `workers/scripts/seed-local-r2.mjs`、配信は `workers/src/releases.ts`）。
 
 export const KNOWN_RELEASES: readonly string[] = ["c1-real-v1", "c1-real-v2", "all-real-v1"];
+export const DEFAULT_RELEASE_ID = "all-real-v1";

@@ -115,6 +115,9 @@ describe("search-worker: 並行リリース切り替え時のライフサイク�
           if (id === "release-b") searchedB += 1;
           return JSON.stringify({
             status: "ok",
+            reason: null,
+            nearestAccess: null,
+            minPlanSeconds: null,
             candidates: [
               {
                 edgeIds: ["e1"],
@@ -234,7 +237,13 @@ describe("search-worker: 並行リリース切り替え時のライフサイク�
       }),
       searchPrepared: () => {
         searchCount += 1;
-        return JSON.stringify({ status: "ok", candidates: [] });
+        return JSON.stringify({
+          status: "ok",
+          reason: null,
+          nearestAccess: null,
+          minPlanSeconds: null,
+          candidates: [],
+        });
       },
     };
 
@@ -370,6 +379,9 @@ describe("search-worker: 並行リリース切り替え時のライフサイク�
           if (id === "release-b") searchedB += 1;
           return JSON.stringify({
             status: "ok",
+            reason: null,
+            nearestAccess: null,
+            minPlanSeconds: null,
             candidates: [
               {
                 edgeIds: ["e1"],

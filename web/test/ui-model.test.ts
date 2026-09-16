@@ -1,9 +1,16 @@
 // UI 純粋関数（src/ui/model.ts）のユニットテスト。
 import { describe, expect, it } from "vitest";
 import {
+  MAX_ACCESS_DISTANCE_METERS,
+  MAX_PRODUCT_MINUTES,
+  MAX_PRODUCT_SECONDS,
   SEARCH_TIMEOUT_MS,
   SUPPORTED_AREA_TEXT,
   TIMEOUT_TEXT,
+  accessMinutesFromMeters,
+  accessSecondsFromMeters,
+  baseSecondsFromPlanSeconds,
+  classifyNoCandidates,
   coordinateLabel,
   distanceText,
   errorMessage,
@@ -11,20 +18,27 @@ import {
   formatRank,
   geocodeErrorMessage,
   geolocationErrorMessage,
+  isAccessBeyondCap,
+  lowerMinClickOutcome,
+  minutesCeilFromSeconds,
   minutesFromSeconds,
+  nearestAccessText,
   reasonText,
   recommendedLabel,
   selectCandidate,
   statusMessage,
   timeBreakdownText,
+  timeWindowActions,
   tollText,
   toCardModel,
+  unreachableText,
   validateAddressQuery,
   validateInputFields,
   validateInputs,
   warningText,
 } from "../src/ui/model";
-import type { Candidate, SearchResult } from "../src/worker/types";
+import { MAX_ACCESS_DISTANCE_METERS as PIPELINE_MAX_ACCESS_DISTANCE_METERS } from "../src/worker/pipeline";
+import type { Candidate, SearchResult, SnappedOrigin } from "../src/worker/types";
 
 function sampleCandidate(overrides: Partial<Candidate> = {}): Candidate {
   return {
@@ -113,7 +127,13 @@ describe("statusMessage / errorMessage", () => {
       rankingMode: "time_per_yen",
       expandedStates: 10,
       candidates: [],
+      nearestAccess: null,
+      minPlanSeconds: null,
     };
+  }
+
+  function snapped(distanceMeters: number): SnappedOrigin {
+    return { nodeId: "n:1", lat: 35.67, lon: 139.4, distanceMeters };
   }
 
   it("TIME_WINDOW は実測の n〜m を含む文言", () => {
@@ -122,7 +142,6 @@ describe("statusMessage / errorMessage", () => {
   });
 
   it("reason コードごとの対応表", () => {
-    expect(statusMessage(result("NO_CONNECTION"), 15, 60)).toContain("30km");
     expect(statusMessage(result("NO_BILLING_PAIR"), 15, 60)).toContain("検証済み課金ペア");
     expect(statusMessage(result("NO_LOOP"), 15, 60)).toContain("周回ルート");
     expect(statusMessage(result("NO_HANDOFF"), 15, 60)).toContain("上限超過");
@@ -134,6 +153,312 @@ describe("statusMessage / errorMessage", () => {
     expect(text).toContain("対応範囲外");
     expect(text).toContain(SUPPORTED_AREA_TEXT);
     expect(SUPPORTED_AREA_TEXT).toContain("都心環状線");
+  });
+
+  it("対応範囲の文言は実装に忠実（一般道は探索しない・直線距離の概算）", () => {
+    // PR #30 で一般道エッジはグラフから除外済み。「一般道を含む」と読める表現は誤り。
+    expect(SUPPORTED_AREA_TEXT).not.toContain("一般道です");
+    expect(SUPPORTED_AREA_TEXT).toContain("直線距離の概算");
+    expect(SUPPORTED_AREA_TEXT).toContain("検証済み入出口");
+  });
+
+  it("NO_CONNECTION + nearestAccess は距離とアクセス往復の分数を示す（30km 固定文言を出さない）", () => {
+    const text = statusMessage({ ...result("NO_CONNECTION"), nearestAccess: snapped(55_000) }, 15, 60);
+    expect(text).toContain("対応範囲外");
+    expect(text).toContain("最寄り入口まで直線 約 55.0 km");
+    expect(text).toContain("片道 約 143 分（概算）");
+    expect(text).toContain("最大 4 時間では周回できません");
+    expect(text).not.toContain("30km");
+    expect(text).toContain(SUPPORTED_AREA_TEXT);
+  });
+
+  it("NO_CONNECTION でも最寄りが近距離なら時間の断定をしない（opus5 F2）", () => {
+    // maxAccessEntries により検証済み入口が候補に含まれない経路。nearestAccess は近い。
+    const close = { ...result("NO_CONNECTION"), nearestAccess: snapped(5_000) };
+    const text = statusMessage(close, 15, 60);
+    expect(text).toContain("検証済みの入口が見つかりませんでした");
+    expect(text).toContain("最寄り入口まで直線 約 5.0 km");
+    expect(text).not.toContain("最大 4 時間");
+    expect(text).not.toContain("アクセス往復だけで");
+    expect(classifyNoCandidates(close)).toBe("unsupported_area");
+  });
+
+  it("isAccessBeyondCap は cap 超過だけを真とする", () => {
+    expect(isAccessBeyondCap(snapped(MAX_ACCESS_DISTANCE_METERS))).toBe(false);
+    expect(isAccessBeyondCap(snapped(MAX_ACCESS_DISTANCE_METERS + 1))).toBe(true);
+  });
+
+  it("MAX_ACCESS_DISTANCE_METERS は pipeline と一致し、往復が製品上限以内", () => {
+    // Rust 既定 30km を変更せず web だけ 46km を明示するため、二重定義の一致を固定する。
+    expect(MAX_ACCESS_DISTANCE_METERS).toBe(PIPELINE_MAX_ACCESS_DISTANCE_METERS);
+    // cap 地点のアクセス往復は 240 分を超えない（超える地点は cap の外側）。
+    expect(accessSecondsFromMeters(MAX_ACCESS_DISTANCE_METERS) * 2).toBeLessThanOrEqual(
+      MAX_PRODUCT_SECONDS,
+    );
+  });
+
+  it("TIME_WINDOW で最短計画が 240 分を超えるなら数値根拠つきで到達不能を示す", () => {
+    const text = statusMessage(
+      { ...result("TIME_WINDOW"), nearestAccess: snapped(36_134), minPlanSeconds: 14_867 },
+      15,
+      240,
+    );
+    expect(text).toContain("確認できた範囲で最も短い計画時間は 約 248 分");
+    expect(text).toContain("最寄り入口まで直線 約 36.1 km");
+    expect(text).toContain("最大 4 時間では周回できません");
+    // 時間枠を広げても届かないので「広げる」導線を促さない。
+    expect(text).not.toContain("時間枠を広げる");
+    // 240 分超の値は「ループ部分が 240 分以内」の列挙範囲での最小であり、絶対的な
+    // 最短ではない（列挙外のより長いループがより小さい plan を持ち得る）。断定しない。
+    expect(text).not.toContain("周回できる最短");
+    expect(text).not.toContain("最短でも");
+  });
+
+  it("TIME_WINDOW で 240 分以内に収まるなら時間枠を広げる文言のまま", () => {
+    const text = statusMessage(
+      { ...result("TIME_WINDOW"), nearestAccess: snapped(29_575), minPlanSeconds: 12_450 },
+      15,
+      60,
+    );
+    expect(text).toContain("時間枠を広げる");
+    expect(text).not.toContain("最大 4 時間");
+  });
+
+  it("minPlanSeconds が無いときは到達不能を主張しない", () => {
+    expect(statusMessage(result("TIME_WINDOW"), 15, 60)).not.toContain("最大 4 時間");
+    expect(statusMessage({ ...result("NO_LOOP"), nearestAccess: snapped(31_035) }, 15, 60)).not.toContain(
+      "最大 4 時間",
+    );
+  });
+
+  it("打切りで minPlanSeconds が null の診断は到達不能を断定しない（correct_2 TEST-01-FINAL）", () => {
+    // beamWidth / maxExpandedStates が列挙を打ち切ると engine は真の最小を証明できず null を返す
+    // （crates/routing-core/src/lib.rs の `budget.truncated || diagnostic_budget.truncated`）。
+    // 値が無い以上「最短でも N 分」「最大 4 時間では周回できません」は出せず、
+    // 時間枠を広げる導線に留める。ビーム打切りでも 240 分以内の周回が存在し得るため。
+    const truncated = {
+      ...result("TIME_WINDOW"),
+      nearestAccess: snapped(36_134),
+      minPlanSeconds: null,
+    };
+    const text = statusMessage(truncated, 15, 60);
+    expect(text).toContain("時間枠を広げる");
+    expect(text).not.toContain("最短の計画時間でも");
+    expect(text).not.toContain("最大 4 時間");
+    expect(classifyNoCandidates(truncated)).toBe("time_window");
+
+    // 同じ理由・同じ最寄り入口でも、値が証明できていれば unreachable に倒す（境界の固定）。
+    expect(
+      classifyNoCandidates({ ...truncated, minPlanSeconds: MAX_PRODUCT_SECONDS + 1 }),
+    ).toBe("unreachable");
+    expect(
+      statusMessage({ ...truncated, minPlanSeconds: MAX_PRODUCT_SECONDS + 1 }, 15, 240),
+    ).toContain("最大 4 時間では周回できません");
+  });
+
+  it("240/240 では上限を広げず、最小時間を下げる導線だけを出す（R2-01 synthetic 固定）", () => {
+    // fixtures/synthetic-graph.json + originNodeId="i"・min=max=240・既定 SearchLimits の実測値。
+    // 唯一の合法周回は base 1876s（plan 2252s）で下限 240 分に届かず TIME_WINDOW になる。
+    // max=240 のまま「240 分に広げました」と偽る旧導線を固定で排除する。
+    const synthetic: SearchResult = { ...result("TIME_WINDOW"), minPlanSeconds: 2252 };
+    expect(baseSecondsFromPlanSeconds(2252)).toBe(1876);
+    expect(timeWindowActions(synthetic, 240, 240)).toEqual({
+      lowerMinMinutes: 31,
+      widenMaxMinutes: null,
+    });
+    const text = statusMessage(synthetic, 240, 240);
+    expect(text).toContain("最小時間を 31 分に下げる");
+    expect(text).not.toContain("広げる");
+    expect(text).not.toContain("最大 4 時間");
+    expect(classifyNoCandidates(synthetic)).toBe("time_window");
+  });
+
+  it("上限 240 分未満では従来どおり上限を広げる導線を残す（既存 60 分枠）", () => {
+    const tachikawa = {
+      ...result("TIME_WINDOW"),
+      nearestAccess: snapped(29_575),
+      minPlanSeconds: 12_450,
+    };
+    expect(timeWindowActions(tachikawa, 15, 60)).toEqual({
+      lowerMinMinutes: null,
+      widenMaxMinutes: 90,
+    });
+    const text = statusMessage(tachikawa, 15, 60);
+    expect(text).toContain("時間枠を広げる");
+    expect(text).not.toContain("最小時間を");
+  });
+
+  it("最小側が原因なら最小を下げ、上限も広げられるなら両方提示する", () => {
+    const ootemachi = {
+      ...result("TIME_WINDOW"),
+      nearestAccess: snapped(283),
+      minPlanSeconds: 1696,
+    };
+    expect(timeWindowActions(ootemachi, 60, 90)).toEqual({
+      lowerMinMinutes: 23,
+      widenMaxMinutes: 120,
+    });
+    const text = statusMessage(ootemachi, 60, 90);
+    expect(text).toContain("候補がありません");
+    expect(text).toContain("最小時間を 23 分に下げる");
+  });
+
+  it("打切り（minPlanSeconds null）で上限 240 分なら値を変えない操作を出さない", () => {
+    const truncatedAtMax: SearchResult = {
+      ...result("TIME_WINDOW"),
+      status: "truncated",
+      minPlanSeconds: null,
+    };
+    expect(timeWindowActions(truncatedAtMax, 240, 240)).toEqual({
+      lowerMinMinutes: null,
+      widenMaxMinutes: null,
+    });
+    const text = statusMessage(truncatedAtMax, 240, 240);
+    expect(text).toContain("時間枠を広げられないため");
+    expect(text).not.toContain("広げると見つかる");
+  });
+
+  it("14401 秒（240 分直上）は 241 分（4 時間超）と切り上げ、240 分と表示しない", () => {
+    const boundary: SearchResult = {
+      ...result("TIME_WINDOW"),
+      nearestAccess: snapped(36_134),
+      minPlanSeconds: MAX_PRODUCT_SECONDS + 1,
+    };
+    const text = statusMessage(boundary, 15, 240);
+    expect(text).toContain("確認できた範囲で最も短い計画時間は 約 241 分（4 時間超）");
+    expect(text).not.toContain("約 240 分");
+    expect(text).toContain("最大 4 時間では周回できません");
+    expect(classifyNoCandidates(boundary)).toBe("unreachable");
+    expect(minutesCeilFromSeconds(14_400)).toBe(240);
+    expect(minutesCeilFromSeconds(14_401)).toBe(241);
+  });
+
+  it("cap 直上のアクセス往復（約 240 分）を単独根拠にせず、周回と余裕時間の加算を明示する", () => {
+    // 46,001 m は往復ちょうど約 240 分（=4 時間）で、往復だけでは超えない。NO_CONNECTION は
+    // minPlanSeconds を返さないため、周回と余裕が加わって初めて上限を超えることを示す（R2-F6）。
+    const text = statusMessage(
+      { ...result("NO_CONNECTION"), nearestAccess: snapped(46_001) },
+      15,
+      240,
+    );
+    expect(text).toContain("最寄り入口までのアクセス往復だけで 約 240 分かかるうえ、周回と余裕時間も加わるため");
+    expect(text).toContain("最大 4 時間では周回できません");
+  });
+
+  it("SEARCH_LIMIT / NO_HANDOFF の候補ゼロは再試行へ分類し時間枠の拡大を偽らない", () => {
+    expect(classifyNoCandidates({ ...result("SEARCH_LIMIT"), status: "truncated" })).toBe("retry");
+    expect(classifyNoCandidates(result("NO_HANDOFF"))).toBe("retry");
+    // SEARCH_LIMIT は打切りの意味を status 文言に残す。
+    expect(statusMessage(result("SEARCH_LIMIT"), 15, 60)).toContain("上限に達し");
+    expect(statusMessage(result("SEARCH_LIMIT"), 15, 60)).not.toContain("時間枠を広げる");
+  });
+
+  it("SEARCH_LIMIT は打切りを確定事実として述べ、候補ありなら一部表示を落とさない（R3-05）", () => {
+    // budget.truncated のときだけ reason=SEARCH_LIMIT が立つので「可能性」ではない。
+    const zero = statusMessage({ ...result("SEARCH_LIMIT"), status: "truncated" }, 15, 60);
+    expect(zero).toContain("打ち切られています");
+    expect(zero).not.toContain("可能性");
+
+    // 候補が残る打切りでは「一部だけ」であることを示す。
+    const partial = statusMessage(
+      {
+        ...result("SEARCH_LIMIT"),
+        status: "truncated",
+        candidates: [sampleCandidate()],
+      },
+      15,
+      60,
+    );
+    expect(partial).toContain("打ち切られています");
+    expect(partial).toContain("一部の候補だけ");
+    expect(partial).not.toContain("可能性");
+  });
+
+  it("base 60 秒未満の周回は最小 1 分でも含められないため下限操作を出さない（R3-02 境界）", () => {
+    // plan = base + max(300, ceil(base/5))、エンジンは base < min*60 を棄却する。
+    // base=59s（plan 359s）は製品下限 1 分でも除外される（59 < 60）。
+    expect(baseSecondsFromPlanSeconds(359)).toBe(59);
+    const subMinute: SearchResult = { ...result("TIME_WINDOW"), minPlanSeconds: 359 };
+    expect(timeWindowActions(subMinute, 2, 240)).toEqual({
+      lowerMinMinutes: null,
+      widenMaxMinutes: null,
+    });
+    const text = statusMessage(subMinute, 2, 240);
+    expect(text).toContain("時間枠を広げられないため");
+    expect(text).not.toContain("最小時間を 1 分に下げる");
+
+    // base=60s（plan 360s）はちょうど下限 1 分で含められる。
+    expect(baseSecondsFromPlanSeconds(360)).toBe(60);
+    const atMinute: SearchResult = { ...result("TIME_WINDOW"), minPlanSeconds: 360 };
+    expect(timeWindowActions(atMinute, 2, 240)).toEqual({
+      lowerMinMinutes: 1,
+      widenMaxMinutes: null,
+    });
+    // 現在値が既に 1 分なら変わる操作は無い。
+    expect(timeWindowActions(atMinute, 1, 240)).toEqual({
+      lowerMinMinutes: null,
+      widenMaxMinutes: null,
+    });
+  });
+
+  it("lowerMinClickOutcome は下げられるときだけ適用し、同値・引上げと不正値を成功と告げない（R3-01）", () => {
+    // 240 → 23 は適用。
+    expect(lowerMinClickOutcome(240, 23)).toEqual({
+      nextValue: 23,
+      message: "最小時間を 23 分に下げました。再検索してください。",
+    });
+    // 同値は値を変えず、成功も告げない。
+    const same = lowerMinClickOutcome(23, 23);
+    expect(same.nextValue).toBeNull();
+    expect(same.message).not.toContain("下げました");
+    // 引上げ（15 → 23）も同様。
+    const raise = lowerMinClickOutcome(15, 23);
+    expect(raise.nextValue).toBeNull();
+    expect(raise.message).not.toContain("下げました");
+    expect(raise.message).toContain("15 分のまま");
+    // 不正な現在値も値を書き換えない。
+    const invalid = lowerMinClickOutcome(Number.NaN, 23);
+    expect(invalid.nextValue).toBeNull();
+    expect(invalid.message).not.toContain("下げました");
+  });
+
+  it("unreachableText / nearestAccessText は km と分だけを出す", () => {
+    expect(nearestAccessText(snapped(31_035))).toBe(
+      "最寄り入口まで直線 約 31.0 km・片道 約 81 分（概算）。",
+    );
+    const text = unreachableText(snapped(36_134), 14_867);
+    expect(text).toContain("確認できた範囲で最も短い計画時間は 約 248 分");
+    expect(text).toContain("最寄り入口までのアクセス往復だけで 約 188 分");
+    expect(text).toContain("最大 4 時間では周回できません");
+    // 列挙外のより長いループがより小さい plan を持ち得るため「最短」とは断定しない。
+    expect(text).not.toContain("最短");
+  });
+
+  it("classifyNoCandidates は復帰導線を分ける", () => {
+    expect(classifyNoCandidates(result("NO_CONNECTION"))).toBe("unsupported_area");
+    expect(classifyNoCandidates(result("NO_LOOP"))).toBe("unsupported_area");
+    expect(classifyNoCandidates(result("NO_BILLING_PAIR"))).toBe("unsupported_area");
+    expect(
+      classifyNoCandidates({ ...result("TIME_WINDOW"), minPlanSeconds: MAX_PRODUCT_SECONDS + 1 }),
+    ).toBe("unreachable");
+    expect(
+      classifyNoCandidates({ ...result("TIME_WINDOW"), minPlanSeconds: MAX_PRODUCT_SECONDS }),
+    ).toBe("time_window");
+    expect(classifyNoCandidates({ ...result("TIME_WINDOW"), minPlanSeconds: 12_450 })).toBe(
+      "time_window",
+    );
+    expect(classifyNoCandidates(result("TIME_WINDOW"))).toBe("time_window");
+    expect(classifyNoCandidates({ ...result(null), status: "truncated" })).toBe("retry");
+  });
+
+  it("アクセス概算はエンジンと同じ式（直線×1.3÷30km/h 切り上げ）", () => {
+    expect(accessSecondsFromMeters(46_000)).toBe(7176);
+    expect(accessMinutesFromMeters(31_035)).toBe(81);
+    expect(accessMinutesFromMeters(0)).toBe(0);
+    // cap 46km は片道往復で 240 分を使い切る距離として導出されている。
+    expect(accessMinutesFromMeters(46_000) * 2).toBe(MAX_PRODUCT_MINUTES);
+    expect(MAX_PRODUCT_MINUTES).toBe(240);
+    expect(MAX_PRODUCT_SECONDS).toBe(14_400);
   });
 
   it("ARTIFACT_MISMATCH / FETCH_FAILED は再読み込み案内、TIMEOUT は 10 秒文言", () => {

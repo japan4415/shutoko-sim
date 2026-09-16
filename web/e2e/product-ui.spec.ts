@@ -493,3 +493,412 @@ test("(16) 対応範囲外の出発地点は対応範囲を示し、有効な地
   await page.click("#search-btn");
   await expect(page.locator("#results .card").first()).toBeVisible();
 });
+
+// --- 広域（23 区 + 多摩）座標の境界と地図追従（web-001 追加分） ---
+
+/** 座標入力で出発地点を確定する（キーボード利用者と等価な手段）。 */
+async function setCoordinateOrigin(page: Page, lat: string, lon: string): Promise<void> {
+  await page.fill("#lat", lat);
+  await page.fill("#lon", lon);
+  // change は blur で発火するため、検索ボタンへフォーカスを移して確定させる。
+  await page.locator("#search-btn").focus();
+  await expect(page.locator("#origin-summary")).toContainText("座標入力");
+}
+
+/** 座標を直接指定して探索する。 */
+async function searchFromCoordinate(
+  page: Page,
+  lat: string,
+  lon: string,
+  min: string,
+  max: string,
+): Promise<void> {
+  await openApp(page);
+  await setCoordinateOrigin(page, lat, lon);
+  await setTimeRange(page, min, max);
+  await page.click("#search-btn");
+}
+
+test("(17) 立川駅（29.6km）は 15〜240 分で候補が返る", async ({ page }) => {
+  // 従来の 30km 固定 cap では NO_CONNECTION だった地点。46km cap + 時間窓で成立する。
+  await searchFromCoordinate(page, "35.6979", "139.4139", "15", "240");
+
+  const firstCard = page.locator("#results .card").first();
+  await expect(firstCard).toBeVisible();
+  // アクセスが長い地点なので「入り」の内訳が表示され、直線距離も出る。
+  await expect(firstCard).toContainText("入り");
+  await expect(firstCard).toContainText("入口まで（直線）");
+});
+
+test("(18) 八王子駅（36.1km）は 15〜240 分でも候補なしで数値理由を出す", async ({ page }) => {
+  await searchFromCoordinate(page, "35.6556", "139.3388", "15", "240");
+
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  const status = page.locator("#status");
+  // 最短計画が 240 分を超えるため、時間枠ではなく距離・時間の数値で説明する。
+  await expect(status).toContainText("最大 4 時間では周回できません");
+  // 240 分超の値は列挙範囲（ループ部分 ≤ 240 分）での最小なので「最短」とは断定しない。
+  await expect(status).toContainText("確認できた範囲で最も短い計画時間は");
+  await expect(status).not.toContainText("最短でも");
+  await expect(status).toContainText("km");
+
+  // 時間を広げても届かないので「時間の上限を広げる」は出さない。
+  await expect(page.locator("#recovery-actions")).toBeVisible();
+  await expect(page.locator("#recovery-actions button", { hasText: "時間の上限を広げる" })).toHaveCount(0);
+  // 有効な地点へ切り替える導線は残す。
+  await expect(
+    page.locator("#recovery-actions button", { hasText: "神田橋を出発地点にする" }),
+  ).toBeVisible();
+});
+
+test("(19) 奥多摩（cap 超）は対応範囲外と最寄り入口の距離を示す", async ({ page }) => {
+  // C1 最寄り入口が 46km cap を超える地点。NO_CONNECTION + nearestAccess を表示する。
+  await searchFromCoordinate(page, "35.8106", "139.0937", "15", "240");
+
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  const status = page.locator("#status");
+  await expect(status).toContainText("対応範囲外");
+  await expect(status).toContainText("最寄り入口まで直線");
+  await expect(status).toContainText("km");
+  await expect(status).toContainText("都心環状線");
+  await expect(page.locator("#recovery-actions")).toBeVisible();
+});
+
+test("(20) 立川駅でも指定枠 60 分なら従来どおり時間枠を広げる導線のまま", async ({ page }) => {
+  await searchFromCoordinate(page, "35.6979", "139.4139", "15", "60");
+
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  await expect(page.locator("#status")).toContainText("時間枠を広げる");
+  const widen = page.locator("#recovery-actions button", { hasText: "時間の上限を広げる" });
+  await expect(widen).toBeVisible();
+  await widen.click();
+  await expect(page.locator("#max-minutes")).toHaveValue("90");
+});
+
+test("(21) 座標確定で地図が追従し、マーカーが表示範囲内に入る", async ({ page }) => {
+  await searchFromCoordinate(page, "35.6979", "139.4139", "15", "240");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+
+  // pan/zoom はアニメーションするため、収束するまでポーリングして確認する。
+  await expect(async () => {
+    const mapBox = await page.locator("#map").boundingBox();
+    const markerBox = await page.locator("#map .origin-marker").boundingBox();
+    expect(mapBox).not.toBeNull();
+    expect(markerBox).not.toBeNull();
+    if (mapBox === null || markerBox === null) {
+      return;
+    }
+    expect(markerBox.x).toBeGreaterThanOrEqual(mapBox.x - 1);
+    expect(markerBox.y).toBeGreaterThanOrEqual(mapBox.y - 1);
+    expect(markerBox.x + markerBox.width).toBeLessThanOrEqual(mapBox.x + mapBox.width + 1);
+    expect(markerBox.y + markerBox.height).toBeLessThanOrEqual(mapBox.y + mapBox.height + 1);
+  }).toPass({ timeout: 5000 });
+});
+
+test("(22) 地図タップで指定した地点を確定して探索できる", async ({ page }) => {
+  await stubGeocode(page, { candidates: CANDIDATES });
+  await openApp(page);
+
+  // 専用モードに入ってからタップする（ドラッグ・ズームと競合しない）。
+  await page.click("#map-pick-btn");
+  await expect(page.locator("#map-pick-panel")).toBeVisible();
+  await expect(page.locator("#map-pick-confirm")).toBeDisabled();
+
+  const mapBox = await page.locator("#map").boundingBox();
+  expect(mapBox).not.toBeNull();
+  if (mapBox !== null) {
+    // 都心（初期中心）付近をタップする。
+    await page.locator("#map").click({
+      position: { x: Math.round(mapBox.width / 2), y: Math.round(mapBox.height / 2) },
+    });
+  }
+  await expect(page.locator("#map-pick-status")).toContainText("候補地点");
+  await expect(page.locator("#map .pending-marker")).toBeAttached();
+  await expect(page.locator("#map-pick-confirm")).toBeEnabled();
+
+  await page.click("#map-pick-confirm");
+  // 逆ジオコーディングはしないので座標ラベルで示す。
+  await expect(page.locator("#origin-summary")).toContainText("地図で指定（住所は未取得）");
+  await expect(page.locator("#origin-summary")).toContainText("35.");
+  await expect(page.locator("#map-pick-panel")).toBeHidden();
+
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+});
+
+test("(23) 地図タップ指定は Esc でキャンセルできる", async ({ page }) => {
+  await openApp(page);
+  await page.click("#map-pick-btn");
+  const mapBox = await page.locator("#map").boundingBox();
+  if (mapBox !== null) {
+    await page.locator("#map").click({
+      position: { x: Math.round(mapBox.width / 2), y: Math.round(mapBox.height / 2) },
+    });
+  }
+  await expect(page.locator("#map-pick-confirm")).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#map-pick-panel")).toBeHidden();
+  await expect(page.locator("#map .pending-marker")).toHaveCount(0);
+  // 出発地点は神田橋（起動時プリセット）のまま変わらない。
+  await expect(page.locator("#origin-summary")).toContainText("神田橋");
+});
+
+// --- correct-001: GPS 競合・タップ UI フォーカス・復帰導線（レビュー指摘の回帰） ---
+
+/** getCurrentPosition を保留し、テストから任意のタイミングで成功させるスタブ。 */
+async function stubGeolocationDeferred(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      __geoCallCount: number;
+      __geoResolve: ((p: unknown) => void) | null;
+    };
+    w.__geoCallCount = 0;
+    w.__geoResolve = null;
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: (onSuccess: (p: unknown) => void, _onError?: (e: unknown) => void) => {
+          w.__geoCallCount += 1;
+          w.__geoResolve = (p: unknown) => {
+            onSuccess(p);
+          };
+        },
+      },
+    });
+  });
+}
+
+test("(24) 現在地取得中に地図で確定すると、遅れた現在地は出発地点を上書きしない", async ({ page }) => {
+  // 地図追従のアニメーションを止め、確定地点のマーカー位置を決定的に比較する。
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await stubGeolocationDeferred(page);
+  await openApp(page);
+
+  // 現在地取得を開始して保留させる。
+  await page.click("#geolocate-btn");
+  await expect(page.locator("#geolocate-btn")).toHaveText("取得中…");
+
+  // 取得待ちの間に地図タップで出発地点を確定する（supersede）。
+  await page.click("#map-pick-btn");
+  const mapBox = await page.locator("#map").boundingBox();
+  expect(mapBox).not.toBeNull();
+  if (mapBox !== null) {
+    await page.locator("#map").click({
+      position: { x: Math.round(mapBox.width / 2), y: Math.round(mapBox.height / 2) },
+    });
+  }
+  await expect(page.locator("#map-pick-confirm")).toBeEnabled();
+  await page.click("#map-pick-confirm");
+  await expect(page.locator("#origin-summary")).toContainText("地図で指定（住所は未取得）");
+
+  // 確定時点の状態を記録する（遅延現在地 35.0, 135.0 とは異なること）。
+  const pickedLat = await page.locator("#lat").inputValue();
+  const pickedLon = await page.locator("#lon").inputValue();
+  expect(pickedLat).not.toBe("35");
+  expect(pickedLon).not.toBe("135");
+  const originMarker = page.locator("#map .origin-marker");
+  await expect(originMarker).toHaveCount(1);
+  const markerBefore = await originMarker.boundingBox();
+
+  // 確定後に現在地取得成功が届いても、確定済みの出発地点を上書きしない（SEC-01）。
+  await page.evaluate(
+    (p) => {
+      (window as unknown as { __geoResolve?: (x: unknown) => void }).__geoResolve?.(p);
+    },
+    { coords: { latitude: 35.0, longitude: 135.0, accuracy: 5 }, timestamp: Date.now() },
+  );
+  // 遅延コールバックが完了するまで待つ（取得中… の解除）。成功前から成立する
+  // アサーションだけで pass しないよう、完了を明示的に待ってから状態を検証する。
+  await expect(page.locator("#geolocate-btn")).toBeEnabled();
+  await expect(page.locator("#geolocate-btn")).toHaveText("現在地を使う");
+
+  await expect(page.locator("#origin-summary")).toContainText("地図で指定（住所は未取得）");
+  await expect(page.locator("#origin-summary")).not.toContainText("（現在地）");
+  // 座標入力も確定地点のまま（現在地の緯度経度へ化けていない）。
+  await expect(page.locator("#lat")).toHaveValue(pickedLat);
+  await expect(page.locator("#lon")).toHaveValue(pickedLon);
+  // 出発地マーカーも確定地点に留まる（現在地へ移動していない）。
+  const markerAfter = await originMarker.boundingBox();
+  expect(markerAfter).not.toBeNull();
+  if (markerBefore !== null && markerAfter !== null) {
+    expect(Math.abs(markerAfter.x - markerBefore.x)).toBeLessThanOrEqual(2);
+    expect(Math.abs(markerAfter.y - markerBefore.y)).toBeLessThanOrEqual(2);
+  }
+});
+
+test("(25) 地図タップ指定の確定/取消が視界に入り、フォーカスが論理的な起点へ戻る", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 700 });
+  await openApp(page);
+
+  await page.click("#map-pick-btn");
+  // F2: disabled の確定ボタンではなく、地図直下の状態文へフォーカスする。
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe("map-pick-status");
+  await expect(page.locator("#map-pick-panel")).toBeVisible();
+  // F6: モード中の地図には枠の手掛かりが付く。
+  await expect(page.locator("#map")).toHaveClass(/map--pick/);
+
+  const mapBox = await page.locator("#map").boundingBox();
+  expect(mapBox).not.toBeNull();
+  if (mapBox !== null) {
+    await page.locator("#map").click({
+      position: { x: Math.round(mapBox.width / 2), y: Math.round(mapBox.height / 2) },
+    });
+  }
+  await expect(page.locator("#map-pick-confirm")).toBeEnabled();
+  // F1: タップ後に確定ボタンがビューポート内に入る。
+  await expect(page.locator("#map-pick-confirm")).toBeInViewport();
+
+  await page.click("#map-pick-confirm");
+  // F3: 確定後は出発地点の要約（新しい起点）へフォーカスが戻る。
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe("origin-summary");
+
+  // 取消でもフォーカスが起動ボタンへ戻る。
+  await page.click("#map-pick-btn");
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe("map-pick-status");
+  await page.click("#map-pick-cancel");
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe("map-pick-btn");
+});
+
+test("(26) 候補ゼロの復帰導線がモバイル幅で視界に入りフォーカスされる", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 700 });
+  // 八王子駅: 240 分でも届かない到達不能ケース。
+  await searchFromCoordinate(page, "35.6556", "139.3388", "15", "240");
+
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  const recovery = page.locator("#recovery-actions");
+  await expect(recovery).toBeVisible();
+  // F5: 地図の下にあっても可視位置へスクロールされる。
+  await expect(recovery).toBeInViewport();
+  // F5: 主操作へフォーカスが移る。
+  const focusInRecovery = await page.evaluate(() => {
+    const region = document.getElementById("recovery-actions");
+    return region !== null && region.contains(document.activeElement);
+  });
+  expect(focusInRecovery).toBe(true);
+  // 到達不能なので「時間の上限を広げる」は出さない（誤った復帰導線の防止）。
+  await expect(recovery.locator("button", { hasText: "時間の上限を広げる" })).toHaveCount(0);
+});
+
+test("(27) prefers-reduced-motion では座標確定の地図追従がアニメーションせず即座に収まる", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openApp(page);
+  await setCoordinateOrigin(page, "35.6979", "139.4139");
+
+  // animate:false なのでアニメーション収束を待たずにマーカーが表示範囲内に入る。
+  const mapBox = await page.locator("#map").boundingBox();
+  const markerBox = await page.locator("#map .origin-marker").boundingBox();
+  expect(mapBox).not.toBeNull();
+  expect(markerBox).not.toBeNull();
+  if (mapBox !== null && markerBox !== null) {
+    expect(markerBox.x).toBeGreaterThanOrEqual(mapBox.x - 1);
+    expect(markerBox.y).toBeGreaterThanOrEqual(mapBox.y - 1);
+    expect(markerBox.x + markerBox.width).toBeLessThanOrEqual(mapBox.x + mapBox.width + 1);
+    expect(markerBox.y + markerBox.height).toBeLessThanOrEqual(mapBox.y + mapBox.height + 1);
+  }
+});
+
+test("(28) 240/240 では上限を広げず、最小時間を下げる導線で値が実際に変わり再検索できる", async ({ page }) => {
+  // 大手町: 確認できた範囲で最も短い周回は約 28 分（plan 1696s）で下限 240 分に届かない。
+  // 上限は既に製品上限 240 分なので「時間の上限を広げる」を出さず、最小時間を下げて
+  // 実際に値を変更する（review R2-01: 240 分へ「広げました」と偽る旧導線の回帰防止）。
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
+
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  await expect(page.locator("#status")).toContainText("候補がありません");
+  const recovery = page.locator("#recovery-actions");
+  await expect(recovery).toBeVisible();
+  // 上限 240 分では拡大操作（値が変わらない）を出さない。
+  await expect(recovery.locator("button", { hasText: "時間の上限を広げる" })).toHaveCount(0);
+  const lower = recovery.locator("button", { hasText: "最小時間を 23 分に下げる" });
+  await expect(lower).toBeVisible();
+
+  await lower.click();
+  // 値が実際に変わる（240 → 23）。上限は変わらない。
+  await expect(page.locator("#min-minutes")).toHaveValue("23");
+  await expect(page.locator("#max-minutes")).toHaveValue("240");
+
+  // 次の検索が実行でき、下限を下げたことで候補が返る。
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+});
+
+test("(29) 240/240 の復帰導線は最小時間を手入力すると失効し、そのまま再検索できる", async ({ page }) => {
+  // 復帰ボタンと同じ 23 を手入力（change は blur で発火）。古い「下げる」ボタンが
+  // 残ると 23→23 の no-op を『下げました』と偽る（review R3-01）。
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
+  const recovery = page.locator("#recovery-actions");
+  await expect(recovery).toBeVisible();
+  await expect(
+    recovery.locator("button", { hasText: "最小時間を 23 分に下げる" }),
+  ).toBeVisible();
+
+  await page.locator("#min-minutes").fill("23");
+  await page.locator("#max-minutes").focus(); // change を確定させる
+  await expect(recovery).toBeHidden();
+  await expect(page.locator("#status")).toContainText("条件が変更");
+
+  // 手入力した条件のまま再検索でき、候補が返る。
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+});
+
+test("(30) 復帰ボタンより小さい 15 を手入力しても古い導線は残らず、引上げを成功と告げない", async ({ page }) => {
+  // 23 より小さい 15 を手入力すると、残ったボタンは 15→23 の引上げになる（review R3-01）。
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
+  const recovery = page.locator("#recovery-actions");
+  await expect(recovery).toBeVisible();
+
+  await page.locator("#min-minutes").fill("15");
+  await page.locator("#max-minutes").focus();
+  await expect(recovery).toBeHidden();
+  await expect(page.locator("#min-minutes")).toHaveValue("15");
+  await expect(page.locator("#status")).not.toContainText("下げました");
+
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+});
+
+test("(31) 復帰ボタン押下時も現在値と比較し、引上げや no-op を成功と告げない", async ({ page }) => {
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
+  const recovery = page.locator("#recovery-actions");
+  const lower = recovery.locator("button", { hasText: "最小時間を 23 分に下げる" });
+  await expect(lower).toBeVisible();
+
+  // change を発火させずに値を 15 へ変える（描画後に現在値が変わった状態を模す）。
+  await page.evaluate(() => {
+    const input = document.getElementById("min-minutes");
+    if (input instanceof HTMLInputElement) {
+      input.value = "15";
+    }
+  });
+  await lower.click();
+
+  // 15 → 23 の引上げは行わず、成功も告げない。値は手入力のまま。
+  await expect(page.locator("#min-minutes")).toHaveValue("15");
+  await expect(page.locator("#status")).toContainText("ままです");
+  await expect(page.locator("#status")).not.toContainText("下げました");
+});
+
+test("(32) 成果物不一致の再読み込み案内は条件変更では消えない", async ({ page }) => {
+  await page.route(PRODUCT_GRAPH_URL, async (route) => {
+    const res = await route.fetch();
+    const body = await res.text();
+    await route.fulfill({ response: res, body: `${body}\n` }); // 末尾 1 バイト追加で不一致
+  });
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const recovery = page.locator("#recovery-actions");
+  await expect(recovery).toBeVisible();
+  await expect(recovery).toContainText("成果物を読み込めませんでした");
+
+  // 結果取得前の再読み込み案内は前回結果に基づかないため、条件変更でも残す。
+  await page.locator("#min-minutes").fill("20");
+  await page.locator("#max-minutes").focus();
+  await expect(recovery).toBeVisible();
+  await expect(
+    recovery.locator("button", { hasText: "再読み込み" }),
+  ).toBeVisible();
+});

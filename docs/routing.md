@@ -46,11 +46,13 @@ T_plan = T_base + buffer
 1. **アクセス時間の精度**: 直線距離 × 1.3 の概算のため、一方通行・河川・鉄道をまたぐ地域では実際と大きくずれうる。
 2. **一般道の禁止遷移遵守**: 一般道の交差点禁止転回は考慮しない。Google マップ側のルーティングに委ねられる。
 3. **帰路の経路特定**: 出口から出発地点への経路は1本に確定せず、時間も概算値になる。
-4. **`snappedOrigin` の一意性**: 入口アクセス地点は最大 `SearchLimits.max_access_entries`（デフォルト 5）件あり、候補ごとに異なる入口アクセス地点を持ちうる。
+4. **`snappedOrigin` の一意性**: 入口アクセス地点は最大 `SearchLimits.max_access_entries`（デフォルト 0 = 無制限、全 Entry アクセス地点）件あり、候補ごとに異なる入口アクセス地点を持ちうる。
 
 ## 探索手順
 
-1. **入口アクセス地点の選定**: リクエストが座標（`origin: { lat, lon }`）の場合、WASM 内で Entry エッジの from ノード（入口アクセス地点）を対象に等距円筒近似（Equirectangular approximation、東京付近 `cos(lat)` 補正）で距離を計算し、近い順に最大 `SearchLimits.max_access_entries`（デフォルト 5）件を選ぶ。入口アクセス地点が1件も得られない場合は探索を行わず `status: "no_candidates"`, `reason: "NO_CONNECTION"` を返す。`originNodeId` が直接指定された場合はその Entry エッジの from ノードを単一の入口アクセス地点として採用する。
+1. **入口アクセス地点の選定**: リクエストが座標（`origin: { lat, lon }`）の場合、WASM 内で Entry エッジの from ノード（入口アクセス地点）を対象に等距円筒近似（Equirectangular approximation、東京付近 `cos(lat)` 補正）で距離を計算し、近い順に最大 `SearchLimits.max_access_entries`（デフォルト 0 = 無制限、全 Entry アクセス地点）件を選ぶ。最寄りの入口アクセス地点が `SearchLimits.max_access_distance_meters`（デフォルト 30,000 m、0 は無制限）を超える場合も探索を行わず `status: "no_candidates"`, `reason: "NO_CONNECTION"` を返す。入口アクセス地点が1件も得られない場合、および `max_access_entries` の制限で検証済み課金ペアの入口がいずれも選ばれない場合も同じ `NO_CONNECTION` を返す（後者は `nearestAccess` が近距離でも起こり得るため、UI は距離キャップ超過を確認せずに「到達不能」を断定しない）。`originNodeId` が直接指定された場合はその Entry エッジの from ノードを単一の入口アクセス地点として採用する。
+   - 候補の有無にかかわらず、座標入力では最近接の入口アクセス地点を `nearestAccess`（`{ nodeId, lat, lon, distanceMeters }`）として返す。キャップ超過の `NO_CONNECTION` でも返すため、UI は「最寄り入口まで直線 o km」を提示できる。`originNodeId` 入力では `null`。
+    - 合法（禁止遷移を満たす）な周回が1件でも見つかった場合、時間枠で棄却したものを含む `planSeconds` の最小値を `minPlanSeconds` として返す。`TIME_WINDOW` の根拠（確認できた範囲で何分かかるか）を UI が提示できるようにする。この診断用の列挙はリクエストの `maxMinutes` ではなく製品上限 240 分で打ち切る。リクエスト枠で列挙を打ち切ると、枠より長い合法周回が「存在しない」ように見え、UI が時間枠を広げるべきかを誤るためである。また `SearchLimits.beamWidth`・`maxExpandedStates`・`maxPairs` などの資源上限が列挙を打ち切った場合は真の最小を証明できないため `minPlanSeconds` は `null` とし、UI は到達不能を断定しない。列挙が完走していれば `minPlanSeconds > 240 * 60` は「240 分以内に収まる合法周回が無い」ことを意味し（`planSeconds >= ループ秒数` より、240 分以内に収まる周回は必ず列挙に含まれる）、UI は「最大 4 時間でも周回できない」と断定できる。一方その値自体はループ部分が 240 分以内の周回だけを列挙した範囲での最小値であり、列挙外のより長い周回がより小さい `planSeconds` を持ち得るため、UI は絶対的な「最短」とは断定せず出所（確認できた範囲）を明示する。合法な周回が無い場合は `null`。時間枠で成立する候補を隠さないよう、`max_access_distance_meters` は cap であり真の到達判定は時間窓（`T_plan <= U * 60`）が行う。
    - 各入口アクセス地点 `i` から出発座標 `s` へのアクセス時間（`T_access`）は `haversine(s, i) × 1.3 ÷ 30 km/h` で概算する。出口 `o` から `s` への帰路時間（`T_return`）も `haversine(o_coord, s) × 1.3 ÷ 30 km/h` で概算する。一般道の経路探索は行わない（精度の制約は「精度の制約」節参照）。
    - 各入口アクセス地点を起点とした周回候補を以降のステップで独立に生成し、全アクセス地点の候補を合算して比較する。
 2. 各入口アクセス地点に対応する検証済み `billingPair` を対象とし、対応する入口エッジを持たないペアは早期スキップする。

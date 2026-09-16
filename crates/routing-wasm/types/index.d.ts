@@ -121,6 +121,33 @@ export interface SearchResult {
   rankingMode: "shutoko_time" | "time_per_yen" | string;
   expandedStates: number;
   candidates: Candidate[];
+  /**
+   * Nearest Entry access point to the coordinate origin (`origin` input).
+   * Reported even when no candidate is produced, including the cap-exceeded
+   * `NO_CONNECTION` early return. `null` for `originNodeId` input and when the
+   * graph has no Entry access points at all.
+   */
+  nearestAccess: SnappedOrigin | null;
+  /**
+   * Shortest `planSeconds` (`baseSeconds + bufferSeconds`) among legal loops
+   * whose loop time is within the 240-minute product cap. Loops the requested
+   * time window rejects are included, so this is the numeric basis for a
+   * `TIME_WINDOW` rejection: `minPlanSeconds > 240 * 60` means no window up to
+   * the 240-minute product limit can ever succeed.
+   *
+   * That reading is conditional. The enumeration is bounded by the product cap
+   * (loop seconds only) and by resource limits (`SearchLimits.beamWidth`,
+   * `maxExpandedStates`, `maxPairs`); the value is the smallest *enumerated*
+   * loop and may overstate the true global minimum. When a resource limit cut
+   * the enumeration short, the minimum is not provable and this is `null`, so
+   * callers must not claim "the shortest loop takes N minutes" or "even four
+   * hours cannot work" without a non-null value.
+   *
+   * `null` when no legal loop exists (e.g. `NO_CONNECTION`, `NO_LOOP`, or a
+   * search that never reached the loop-enumeration stage) and when the
+   * enumeration was truncated.
+   */
+  minPlanSeconds: number | null;
 }
 
 export interface RoutingErrorPayload {

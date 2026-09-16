@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use shutoko_routing_core::search_json;
+use shutoko_routing_core::{search_json, MAX_PRODUCT_MINUTES};
 
 fn graph() -> Value {
     serde_json::from_str(include_str!("../../../fixtures/synthetic-graph.json")).unwrap()
@@ -1076,6 +1076,24 @@ fn distance_cap_enforced_and_zero_means_unlimited() {
         res_inside["reason"], "NO_CONNECTION",
         "3 km cap: entry at ~4 km must trigger NO_CONNECTION"
     );
+    // Cap-exceeded NO_CONNECTION must still report the nearest Entry access
+    // point (distance in metres) so the UI can explain why the origin is out
+    // of range.  No loop enumeration runs, so minPlanSeconds stays null.
+    assert_eq!(
+        res_inside["nearestAccess"]["nodeId"], "e",
+        "cap-exceeded NO_CONNECTION must report the nearest Entry from-node"
+    );
+    let capped_distance = res_inside["nearestAccess"]["distanceMeters"]
+        .as_f64()
+        .expect("nearestAccess.distanceMeters must be a number");
+    assert!(
+        (3900.0..=4100.0).contains(&capped_distance),
+        "nearest entry is ~4 007 m away, got {capped_distance}"
+    );
+    assert!(
+        res_inside["minPlanSeconds"].is_null(),
+        "cap-exceeded early return must not report minPlanSeconds"
+    );
 
     // 5 km cap: entry ~4 007 m is within range → search proceeds (status ≠ NO_CONNECTION).
     let res_within: Value = serde_json::from_str(
@@ -1090,6 +1108,20 @@ fn distance_cap_enforced_and_zero_means_unlimited() {
     assert_ne!(
         res_within["reason"], "NO_CONNECTION",
         "5 km cap: entry at ~4 km must NOT trigger NO_CONNECTION"
+    );
+    // Coordinate input always reports the nearest access point, even when the
+    // search succeeds, and the only loop found equals the single candidate.
+    let within_distance = res_within["nearestAccess"]["distanceMeters"]
+        .as_f64()
+        .expect("nearestAccess must be reported for coordinate input");
+    assert!(
+        (3900.0..=4100.0).contains(&within_distance),
+        "nearest access must be the same ~4 007 m entry, got {within_distance}"
+    );
+    assert_eq!(
+        res_within["minPlanSeconds"].as_u64(),
+        res_within["candidates"][0]["duration"]["planSeconds"].as_u64(),
+        "single-candidate search: minPlanSeconds must equal the candidate planSeconds"
     );
 
     // 0.0 (unlimited): entry accessible regardless of distance.
@@ -1111,6 +1143,54 @@ fn distance_cap_enforced_and_zero_means_unlimited() {
         res_within["status"], res_unlimited["status"],
         "5 km cap and unlimited must produce the same search outcome"
     );
+    assert!(
+        res_unlimited["nearestAccess"].is_object(),
+        "unlimited cap: nearestAccess must still be reported for coordinate input"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// engine-001: nearestAccess / minPlanSeconds diagnostics
+// ---------------------------------------------------------------------------
+
+/// With `originNodeId` input no snapping happens, so `nearestAccess` is null.
+/// `minPlanSeconds` is independent of the input mode and must equal the single
+/// candidate's plan when that candidate's loop is the only legal loop.
+#[test]
+fn origin_node_input_has_no_nearest_access_but_reports_min_plan_seconds() {
+    let result = run(&graph(), &request(), json!({}));
+    assert_eq!(result["status"], "ok");
+    assert!(
+        result["nearestAccess"].is_null(),
+        "originNodeId input must not report nearestAccess, got {}",
+        result["nearestAccess"]
+    );
+    assert_eq!(
+        result["minPlanSeconds"].as_u64(),
+        candidates(&result)[0]["duration"]["planSeconds"].as_u64(),
+        "minPlanSeconds must equal the only legal loop's plan_seconds"
+    );
+}
+
+/// When no legal loop exists, `minPlanSeconds` is null and the reason is
+/// `NO_LOOP`, keeping the existing reason semantics unchanged.
+#[test]
+fn min_plan_seconds_is_null_when_no_legal_loop_exists() {
+    let mut g = graph();
+    g["edges"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|edge| edge["kind"] != "shutoko");
+    let mut r = request();
+    r["minMinutes"] = json!(1);
+    let result = run(&g, &r, json!({}));
+    assert_eq!(result["reason"], "NO_LOOP");
+    assert!(
+        result["minPlanSeconds"].is_null(),
+        "no legal loop must yield null minPlanSeconds, got {}",
+        result["minPlanSeconds"]
+    );
+    assert!(result["nearestAccess"].is_null());
 }
 
 // ---------------------------------------------------------------------------
@@ -1185,6 +1265,22 @@ fn access_time_from_coordinate_origin_affects_base_seconds_and_time_window() {
         res_far_narrow["reason"], "TIME_WINDOW",
         "far origin, window [30,40]: rejection reason must be TIME_WINDOW, not NO_CONNECTION"
     );
+    // TIME_WINDOW diagnostics: the nearest entry distance and the shortest plan
+    // time must be reported so the UI can explain why no candidate fits.
+    let narrow_nearest = res_far_narrow["nearestAccess"]["distanceMeters"]
+        .as_f64()
+        .expect("coordinate input must report nearestAccess");
+    assert!(
+        (3800.0..=3900.0).contains(&narrow_nearest),
+        "far origin nearest entry is ~3 842 m away, got {narrow_nearest}"
+    );
+    let narrow_min_plan = res_far_narrow["minPlanSeconds"]
+        .as_u64()
+        .expect("TIME_WINDOW must report minPlanSeconds");
+    assert!(
+        narrow_min_plan > 40 * 60,
+        "minPlanSeconds ({narrow_min_plan}) must exceed the 40 min window (2 400 s)"
+    );
 
     // ── Case 3: same far origin, wider window [30, 70] — candidate found ──
     let r_far_wide = json!({
@@ -1214,6 +1310,11 @@ fn access_time_from_coordinate_origin_affects_base_seconds_and_time_window() {
     assert!(
         base_far > 1876,
         "far origin base_seconds ({base_far}) must exceed the zero-access case (1876)"
+    );
+    assert_eq!(
+        res_far_wide["minPlanSeconds"].as_u64(),
+        c_far["duration"]["planSeconds"].as_u64(),
+        "single legal loop must be reported as minPlanSeconds"
     );
 }
 
@@ -1297,5 +1398,424 @@ fn max_access_entries_zero_means_unlimited_tries_all_entries() {
     assert!(
         !ids_capped.contains(&"zzz-section"),
         "cap=1: zzz-section must NOT be present (lex-larger entry excluded)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// correct-001: `minPlanSeconds` must cover every legal loop the product can
+// ever accept, not only loops inside the requested window (review TEST-01 /
+// opus5 F1).
+// ---------------------------------------------------------------------------
+
+/// A legal loop of 61 minutes only becomes visible when the *diagnostic*
+/// enumeration is not bounded by the requested 60-minute window.  Before the
+/// fix `minPlanSeconds` was `null` (the 3 660 s loop was pruned at 3 600 s),
+/// so the UI could not tell "widen the window" from "no loop at all".
+#[test]
+fn min_plan_seconds_covers_loops_pruned_by_the_request_window() {
+    let mut g = graph();
+    // Loop ab+bc+ca = 3 × 1220 s = 3 660 s (61 min) > 60 min window.
+    for edge in g["edges"].as_array_mut().unwrap() {
+        if edge["kind"] == "shutoko" {
+            edge["durationSeconds"] = json!(1220);
+        }
+    }
+    // originNodeId "i": access = 0, return = 16 s (same as the base fixture).
+    let r = json!({
+        "requestId": "diag-pruned-loop",
+        "releaseId": "synthetic-v1",
+        "originNodeId": "i",
+        "minMinutes": 30,
+        "maxMinutes": 60,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let result = run(&g, &r, json!({}));
+
+    // The requested window rejects the loop, but a legal loop exists.
+    assert_eq!(
+        result["status"], "no_candidates",
+        "61-min loop cannot fit a 60-min window"
+    );
+    assert_eq!(
+        result["reason"], "TIME_WINDOW",
+        "a legal loop outside the window must be TIME_WINDOW, not NO_LOOP"
+    );
+    // base = 0 + (30 + 3660 + 30) + 16 = 3736; buffer = max(300, ceil(3736/5)) = 748.
+    assert_eq!(
+        result["minPlanSeconds"].as_u64(),
+        Some(4484),
+        "minPlanSeconds must report the pruned 61-min loop (plan 4 484 s)"
+    );
+    assert!(
+        result["minPlanSeconds"].as_u64().unwrap() <= MAX_PRODUCT_MINUTES * 60,
+        "minPlanSeconds must stay inside the product cap"
+    );
+}
+
+/// Cross-pair: the loop-time pruning is a single bound shared by all pairs,
+/// while `planSeconds` adds per-pair access/return.  A shorter *plan* on a
+/// longer-loop pair can therefore be hidden by the requested window.  With a
+/// 45-min window the near pair's 46-min loop is pruned while the far pair's
+/// 44-min loop is enumerated; the reported minimum must still be the near
+/// pair's smaller plan, not the far pair's larger one.
+#[test]
+fn min_plan_seconds_is_not_hidden_by_cross_pair_pruning() {
+    // `MAX_PRODUCT_MINUTES_SECONDS` is asserted below; keep the local alias.
+    const MAX_PRODUCT_MINUTES_SECONDS: u64 = MAX_PRODUCT_MINUTES * 60;
+
+    let g = json!({
+        "schemaVersion": 2,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": [
+            {"id": "near-e", "lat": 35.0, "lon": 139.0},
+            {"id": "near-a", "lat": 35.001, "lon": 139.0},
+            {"id": "near-b", "lat": 35.002, "lon": 139.001},
+            {"id": "near-c", "lat": 35.001, "lon": 139.002},
+            {"id": "near-o", "lat": 35.0, "lon": 139.0},
+            {"id": "far-e", "lat": 35.0, "lon": 139.05},
+            {"id": "far-a", "lat": 35.001, "lon": 139.05},
+            {"id": "far-b", "lat": 35.002, "lon": 139.051},
+            {"id": "far-c", "lat": 35.001, "lon": 139.052},
+            {"id": "far-o", "lat": 35.0, "lon": 139.05}
+        ],
+        "edges": [
+            {"id":"near-entry","from":"near-e","to":"near-a","kind":"entry","durationSeconds":30,"distanceMeters":200},
+            {"id":"near-ab","from":"near-a","to":"near-b","kind":"shutoko","durationSeconds":920,"distanceMeters":10000},
+            {"id":"near-bc","from":"near-b","to":"near-c","kind":"shutoko","durationSeconds":920,"distanceMeters":10000},
+            {"id":"near-ca","from":"near-c","to":"near-a","kind":"shutoko","durationSeconds":920,"distanceMeters":10000},
+            {"id":"near-exit","from":"near-a","to":"near-o","kind":"exit","durationSeconds":30,"distanceMeters":200},
+            {"id":"far-entry","from":"far-e","to":"far-a","kind":"entry","durationSeconds":30,"distanceMeters":200},
+            {"id":"far-ab","from":"far-a","to":"far-b","kind":"shutoko","durationSeconds":880,"distanceMeters":10000},
+            {"id":"far-bc","from":"far-b","to":"far-c","kind":"shutoko","durationSeconds":880,"distanceMeters":10000},
+            {"id":"far-ca","from":"far-c","to":"far-a","kind":"shutoko","durationSeconds":880,"distanceMeters":10000},
+            {"id":"far-exit","from":"far-a","to":"far-o","kind":"exit","durationSeconds":30,"distanceMeters":200}
+        ],
+        "billingPairs": [
+            {
+                "id": "near-section",
+                "entryId": "near-entry",
+                "exitId": "near-exit",
+                "anchorNodeId": "near-a",
+                "entryToAnchorEdgeIds": ["near-entry"],
+                "anchorToExitEdgeIds": ["near-exit"],
+                "status": "verified",
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+            },
+            {
+                "id": "far-section",
+                "entryId": "far-entry",
+                "exitId": "far-exit",
+                "anchorNodeId": "far-a",
+                "entryToAnchorEdgeIds": ["far-entry"],
+                "anchorToExitEdgeIds": ["far-exit"],
+                "status": "verified",
+                "vehicleProfile": "passenger-car-etc",
+                "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+            }
+        ],
+        "forbiddenTransitions": []
+    });
+
+    let wide = json!({
+        "requestId": "diag-cross-wide",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.0, "lon": 139.0},
+        "minMinutes": 30,
+        "maxMinutes": 240,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let wide_result = run(&g, &wide, json!({}));
+    assert_eq!(wide_result["status"], "ok");
+    assert_eq!(
+        wide_result["candidates"].as_array().unwrap().len(),
+        2,
+        "both independent networks must be candidate-visible in a wide window"
+    );
+    // The near pair has the shorter plan; ranking is time-per-yen so it leads.
+    let near_plan = candidates(&wide_result)[0]["duration"]["planSeconds"]
+        .as_u64()
+        .unwrap();
+
+    let narrow = json!({
+        "requestId": "diag-cross-narrow",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.0, "lon": 139.0},
+        "minMinutes": 30,
+        "maxMinutes": 45,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let narrow_result = run(&g, &narrow, json!({}));
+    assert_eq!(narrow_result["status"], "no_candidates");
+    assert_eq!(narrow_result["reason"], "TIME_WINDOW");
+    assert_eq!(
+        narrow_result["minPlanSeconds"].as_u64(),
+        Some(near_plan),
+        "minPlanSeconds must reflect the near pair's smaller plan even though its \
+         46-min loop was pruned by the 45-min window"
+    );
+    assert!(
+        near_plan < MAX_PRODUCT_MINUTES_SECONDS,
+        "the near pair must fit the product cap"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// correct-001: NO_CONNECTION has a second origin — a reachable nearest Entry
+// that belongs to no accessible verified pair (opus5 F2).  The UI must be able
+// to tell this apart from the cap-exceeded case.
+// ---------------------------------------------------------------------------
+
+/// The nearest Entry from-node exists and is close (≈111 m), but it has no
+/// verified billing pair.  With `maxAccessEntries = 1` only that entry is
+/// selected, so no verified pair is reachable → `NO_CONNECTION` with a *close*
+/// `nearestAccess` and `minPlanSeconds = null`.  The UI must not claim "the
+/// access round trip alone takes four hours" for such a result.
+#[test]
+fn no_connection_can_report_a_close_nearest_entry_without_a_verified_pair() {
+    let g = json!({
+        "schemaVersion": 2,
+        "releaseId": "synthetic-v1",
+        "vehicleProfile": "passenger-car-etc",
+        "nodes": [
+            {"id": "close-e", "lat": 35.001, "lon": 139.0},
+            {"id": "close-a", "lat": 35.0011, "lon": 139.0},
+            {"id": "far-e", "lat": 35.01, "lon": 139.0},
+            {"id": "far-a", "lat": 35.011, "lon": 139.0},
+            {"id": "far-b", "lat": 35.012, "lon": 139.001},
+            {"id": "far-c", "lat": 35.011, "lon": 139.002},
+            {"id": "far-o", "lat": 35.01, "lon": 139.0}
+        ],
+        "edges": [
+            {"id":"close-entry","from":"close-e","to":"close-a","kind":"entry","durationSeconds":30,"distanceMeters":200},
+            {"id":"far-entry","from":"far-e","to":"far-a","kind":"entry","durationSeconds":30,"distanceMeters":200},
+            {"id":"far-ab","from":"far-a","to":"far-b","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"far-bc","from":"far-b","to":"far-c","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"far-ca","from":"far-c","to":"far-a","kind":"shutoko","durationSeconds":600,"distanceMeters":10000},
+            {"id":"far-exit","from":"far-a","to":"far-o","kind":"exit","durationSeconds":30,"distanceMeters":200}
+        ],
+        "billingPairs": [{
+            "id": "far-section",
+            "entryId": "far-entry",
+            "exitId": "far-exit",
+            "anchorNodeId": "far-a",
+            "entryToAnchorEdgeIds": ["far-entry"],
+            "anchorToExitEdgeIds": ["far-exit"],
+            "status": "verified",
+            "vehicleProfile": "passenger-car-etc",
+            "prices": [{"amountYen": 300, "effectiveFrom": "2026-01-01T00:00:00Z"}]
+        }],
+        "forbiddenTransitions": []
+    });
+    let r = json!({
+        "requestId": "no-connection-close-entry",
+        "releaseId": "synthetic-v1",
+        "origin": {"lat": 35.0, "lon": 139.0},
+        "minMinutes": 30,
+        "maxMinutes": 240,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    });
+    let result = run(&g, &r, json!({"maxAccessEntries": 1}));
+
+    assert_eq!(result["status"], "no_candidates");
+    assert_eq!(
+        result["reason"], "NO_CONNECTION",
+        "only the close, unpaired entry is accessible → no verified pair is reachable"
+    );
+    // The nearest entry is reported and is *close* (well inside the 46 km cap).
+    let nearest = &result["nearestAccess"];
+    assert_eq!(nearest["nodeId"], "close-e");
+    let distance = nearest["distanceMeters"].as_f64().unwrap();
+    assert!(
+        (50.0..=300.0).contains(&distance),
+        "nearest entry must be ~111 m away, got {distance}"
+    );
+    assert!(
+        distance < 46_000.0,
+        "close-entry NO_CONNECTION must not look like the cap-exceeded case"
+    );
+    assert!(
+        result["minPlanSeconds"].is_null(),
+        "no loop enumeration runs when no verified pair is reachable"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// correct_2: a truncated diagnostic enumeration must not report an unprovable
+// minimum (review TEST-01-FINAL) and `time_rejected` must be scoped to the
+// requested window (review V1 / V2).
+// ---------------------------------------------------------------------------
+
+/// Adds the lexicographically-first self-loop from the fixture anchor:
+/// `a-loop-0` costs 14 000 s and is enumerated before `ab`, so with
+/// `beamWidth = 1` the diagnostic pass records it and stops before the shorter
+/// `ab → bc → ca` loop (1 860 s) is ever seen.  This is exactly the synthetic
+/// counterexample from review TEST-01-FINAL.
+fn graph_with_long_anchor_self_loop() -> Value {
+    let mut g = graph();
+    g["edges"].as_array_mut().unwrap().push(json!({
+        "id": "a-loop-0",
+        "from": "a",
+        "to": "a",
+        "kind": "shutoko",
+        "durationSeconds": 14000,
+        "distanceMeters": 100000
+    }));
+    g
+}
+
+fn one_minute_request(request_id: &str) -> Value {
+    json!({
+        "requestId": request_id,
+        "releaseId": "synthetic-v1",
+        "originNodeId": "i",
+        "minMinutes": 1,
+        "maxMinutes": 1,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    })
+}
+
+/// `beamWidth = 1`: the diagnostic pass keeps the 14 000 s self-loop and stops
+/// (`paths_pg` records one result and reports truncation).  The unprovable
+/// 16 892 s value must NOT be reported as the shortest plan — before the fix
+/// the UI turned it into "even four hours cannot work".  `null` states the
+/// truth: no minimum was proven.
+#[test]
+fn min_plan_seconds_is_null_when_the_diagnostic_is_beam_truncated() {
+    let result = run(
+        &graph_with_long_anchor_self_loop(),
+        &one_minute_request("diag-beam-truncated"),
+        json!({"beamWidth": 1}),
+    );
+
+    assert_eq!(result["status"], "no_candidates");
+    assert_eq!(
+        result["reason"], "TIME_WINDOW",
+        "a legal loop exists outside the 1-minute window"
+    );
+    assert!(
+        result["minPlanSeconds"].is_null(),
+        "a beam-truncated diagnostic cannot prove the minimum, got {}",
+        result["minPlanSeconds"]
+    );
+}
+
+/// `maxExpandedStates = 5`: the candidate pass still finishes (2 expansions),
+/// but the diagnostic pass exhausts the expanded-state Budget — it records the
+/// 14 000 s self-loop before being cut off, and the post-processing loop stops
+/// before the shorter loop is measured.  As with the beam case the minimum is
+/// not provable and must be `null` instead of the 16 892 s value the fix
+/// removes.
+#[test]
+fn min_plan_seconds_is_null_when_the_diagnostic_budget_is_exhausted() {
+    let result = run(
+        &graph_with_long_anchor_self_loop(),
+        &one_minute_request("diag-budget-exhausted"),
+        json!({"maxExpandedStates": 5}),
+    );
+
+    assert_eq!(result["status"], "no_candidates");
+    assert!(
+        matches!(result["reason"].as_str(), Some("TIME_WINDOW" | "NO_LOOP")),
+        "a truncated diagnostic may only report an honest no-candidate reason, got {}",
+        result["reason"]
+    );
+    assert!(
+        result["minPlanSeconds"].is_null(),
+        "an expanded-state-truncated diagnostic cannot prove the minimum, got {}",
+        result["minPlanSeconds"]
+    );
+}
+
+/// Without truncation the diagnostic is exact: the same graph and request with
+/// the default limits enumerate both loops, so the shorter `ab → bc → ca`
+/// loop (plan 2 252 s, inside the product cap) is reported.  This is the
+/// control that separates "truncated ⇒ null" from "complete ⇒ exact".
+#[test]
+fn diagnostic_without_truncation_reports_the_true_minimum() {
+    let result = run(
+        &graph_with_long_anchor_self_loop(),
+        &one_minute_request("diag-complete"),
+        json!({}),
+    );
+
+    assert_eq!(result["status"], "no_candidates");
+    assert_eq!(result["reason"], "TIME_WINDOW");
+    assert_eq!(
+        result["minPlanSeconds"].as_u64(),
+        Some(2252),
+        "with a complete enumeration the short loop (plan 2 252 s) is the minimum"
+    );
+    assert!(
+        result["minPlanSeconds"].as_u64().unwrap() <= MAX_PRODUCT_MINUTES * 60,
+        "a value inside the product cap must drive the 'widen the window' guidance"
+    );
+}
+
+/// Boundary at `maxMinutes = 240`: the diagnostic pass is skipped because the
+/// candidate enumeration already uses the product cap.  With the default beam
+/// the enumeration is complete and the exact minimum is reported; with
+/// `beamWidth = 1` it truncates, so the result must be `SEARCH_LIMIT` +
+/// `truncated` with `minPlanSeconds = null` instead of a bogus TIME_WINDOW
+/// "unreachable" claim.
+#[test]
+fn max_minutes_boundary_240_reports_exact_or_truncated_never_bogus() {
+    let g = graph_with_long_anchor_self_loop();
+    let mut r = one_minute_request("diag-max-240");
+    r["minMinutes"] = json!(1);
+    r["maxMinutes"] = json!(240);
+
+    let exact = run(&g, &r, json!({}));
+    assert_eq!(exact["status"], "ok");
+    assert_eq!(
+        exact["minPlanSeconds"].as_u64(),
+        Some(2252),
+        "at the product cap the diagnostic is unnecessary and the candidate \
+         enumeration is exact"
+    );
+
+    let truncated = run(&g, &r, json!({"beamWidth": 1}));
+    assert_eq!(
+        truncated["status"], "truncated",
+        "a beam-truncated search must keep reporting SEARCH_LIMIT"
+    );
+    assert_eq!(truncated["reason"], "SEARCH_LIMIT");
+    assert!(
+        truncated["minPlanSeconds"].is_null(),
+        "a truncated enumeration must not report an unprovable minimum, got {}",
+        truncated["minPlanSeconds"]
+    );
+}
+
+/// Requirement 2 constraint: `NO_HANDOFF` is only reachable when
+/// `format_maps_url` exceeds 2 048 characters.  `select_waypoints` returns at
+/// most three waypoints and coordinates are printed with six decimals, so the
+/// generated URL stays far below the limit — even for pathological extreme
+/// coordinates.  `NO_HANDOFF` is therefore unreachable in practice and no
+/// reason is fabricated for it.
+#[test]
+fn maps_url_length_cannot_trigger_no_handoff_with_three_waypoints() {
+    use shutoko_routing_core::handoff::{format_maps_url, MAX_MAPS_URL_LENGTH};
+    use shutoko_routing_core::LatLng;
+
+    let endpoint = |lat: f64, lon: f64| LatLng { lat, lon };
+    let origin = endpoint(-89.999999, -179.999999);
+    let waypoints = vec![
+        endpoint(-89.999999, -179.999999),
+        endpoint(89.999999, 179.999999),
+        endpoint(35.689672, 139.764424),
+    ];
+    let url = format_maps_url(&origin, &waypoints).expect("three waypoints must fit the limit");
+    assert!(url.len() <= MAX_MAPS_URL_LENGTH);
+    assert!(
+        url.len() * 4 < MAX_MAPS_URL_LENGTH,
+        "with <= 3 waypoints the URL must stay far below 2 048 chars, got {}",
+        url.len()
     );
 }

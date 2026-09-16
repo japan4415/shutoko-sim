@@ -14,6 +14,16 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Kept here so `grid.rs` can import it via `crate::SNAP_RADIUS_METERS`.
 pub const SNAP_RADIUS_METERS: f64 = 200.0;
 
+/// Upper bound (minutes) on the planning time the product UI can ever accept.
+///
+/// Mirrors `SearchRequest::max_minutes`'s validation limit (240) and the UI's
+/// `max` attribute.  It is used to bound the *diagnostic* loop enumeration that
+/// feeds `minPlanSeconds`: because `planSeconds >= loop time`, every legal loop
+/// whose plan fits inside the product cap is enumerated by this bound, so the
+/// UI can decide "can any window up to 240 minutes ever work?" without the
+/// requested window silently pruning the evidence.
+pub const MAX_PRODUCT_MINUTES: u64 = 240;
+
 /// Detour factor for Tokyo urban areas. Straight-line distances underestimate
 /// actual driving distance due to the dense grid of one-way streets and turns.
 /// A value of 1.3 is a conservative estimate for the Tokyo metropolitan area.
@@ -282,6 +292,27 @@ pub struct SearchResult {
     pub ranking_mode: String,
     pub expanded_states: usize,
     pub candidates: Vec<Candidate>,
+    /// Nearest Entry access point to the coordinate origin, reported
+    /// independently of whether a candidate was produced (including the
+    /// cap-exceeded `NO_CONNECTION` early return).
+    ///
+    /// `None` for `originNodeId` input (no snapping happens) and when the
+    /// graph has no Entry access points at all.
+    #[serde(default)]
+    pub nearest_access: Option<SnappedOrigin>,
+    /// Shortest `plan_seconds` (`base + buffer`) over every legal loop found,
+    /// including loops rejected by the requested time window.  It is the
+    /// numeric basis for a `TIME_WINDOW` rejection.
+    ///
+    /// `None` when no legal loop exists (e.g. `NO_CONNECTION`, `NO_LOOP`, or a
+    /// search that never reached the loop-enumeration stage) **and also when a
+    /// resource limit cut the loop enumeration short** (beam width, expanded
+    /// state budget, or the billing-pair cap).  In that case the minimum is not
+    /// provable, so this stays `null`: the UI must not claim "even four hours
+    /// cannot work" nor "the shortest loop takes N minutes" without proof
+    /// (review TEST-01-FINAL / V1 / V2).
+    #[serde(default)]
+    pub min_plan_seconds: Option<u64>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RoutingError {
@@ -930,67 +961,84 @@ pub fn search_prepared(
     //      Entry from-nodes in the graph are candidates.
     //   2. If the snap grid is empty (no Entry edges at all), `NO_CONNECTION` is returned.
     //   3. If `max_access_distance_meters > 0.0` and the nearest entry exceeds that
-    //      distance, `NO_CONNECTION` is returned (out-of-service-area guard).
+    //      distance, `NO_CONNECTION` is returned (out-of-service-area guard).  The
+    //      nearest Entry access point is still reported in `nearestAccess`.
     // ---------------------------------------------------------------------------
-    let (origin_ll, access_node_indices): (LatLng, BTreeSet<usize>) =
-        match (&r.origin_node_id, &r.origin) {
-            (Some(id), None) => {
-                if !pg.has_node(id.as_str()) {
-                    return Err(invalid("unknown origin node"));
-                }
-                let node = pg.node(id.as_str());
-                let origin_ll = LatLng {
-                    lat: node.lat,
-                    lon: node.lon,
-                };
-                let idx = pg.index.node_pos[id.as_str()];
-                (origin_ll, std::iter::once(idx).collect())
+    let (origin_ll, access_node_indices, nearest_access): (
+        LatLng,
+        BTreeSet<usize>,
+        Option<SnappedOrigin>,
+    ) = match (&r.origin_node_id, &r.origin) {
+        (Some(id), None) => {
+            if !pg.has_node(id.as_str()) {
+                return Err(invalid("unknown origin node"));
             }
-            (None, Some(ll)) => {
-                // max_access_entries == 0 means "unlimited": pass usize::MAX so that
-                // k_nearest returns every entry in the graph.
-                let k = if pg.limits.max_access_entries == 0 {
-                    usize::MAX
-                } else {
-                    pg.limits.max_access_entries
-                };
-                let results = pg
-                    .index
-                    .snap_grid
-                    .k_nearest(ll.lat, ll.lon, k, &pg.graph.nodes);
-                if results.is_empty() {
-                    // Snap grid is empty — no Entry edges in the graph.
-                    return Ok(SearchResult {
-                        request_id: r.request_id.clone(),
-                        release_id: r.release_id.clone(),
-                        status: "no_candidates".into(),
-                        reason: Some("NO_CONNECTION".into()),
-                        ranking_mode: "shutoko_time".into(),
-                        expanded_states: 0,
-                        candidates: Vec::new(),
-                    });
-                }
-                // Distance sanity cap: if even the nearest Entry access point exceeds the
-                // allowed maximum, the origin is outside the operational area.
-                // 0.0 means unlimited (no cap applied).
-                if pg.limits.max_access_distance_meters > 0.0
-                    && results[0].0 > pg.limits.max_access_distance_meters
-                {
-                    return Ok(SearchResult {
-                        request_id: r.request_id.clone(),
-                        release_id: r.release_id.clone(),
-                        status: "no_candidates".into(),
-                        reason: Some("NO_CONNECTION".into()),
-                        ranking_mode: "shutoko_time".into(),
-                        expanded_states: 0,
-                        candidates: Vec::new(),
-                    });
-                }
-                let indices = results.into_iter().map(|(_, idx)| idx).collect();
-                (ll.clone(), indices)
+            let node = pg.node(id.as_str());
+            let origin_ll = LatLng {
+                lat: node.lat,
+                lon: node.lon,
+            };
+            let idx = pg.index.node_pos[id.as_str()];
+            (origin_ll, std::iter::once(idx).collect(), None)
+        }
+        (None, Some(ll)) => {
+            // max_access_entries == 0 means "unlimited": pass usize::MAX so that
+            // k_nearest returns every entry in the graph.
+            let k = if pg.limits.max_access_entries == 0 {
+                usize::MAX
+            } else {
+                pg.limits.max_access_entries
+            };
+            let results = pg
+                .index
+                .snap_grid
+                .k_nearest(ll.lat, ll.lon, k, &pg.graph.nodes);
+            if results.is_empty() {
+                // Snap grid is empty — no Entry edges in the graph.
+                return Ok(SearchResult {
+                    request_id: r.request_id.clone(),
+                    release_id: r.release_id.clone(),
+                    status: "no_candidates".into(),
+                    reason: Some("NO_CONNECTION".into()),
+                    ranking_mode: "shutoko_time".into(),
+                    expanded_states: 0,
+                    candidates: Vec::new(),
+                    nearest_access: None,
+                    min_plan_seconds: None,
+                });
             }
-            _ => return Err(invalid("origin resolution state unreachable")),
-        };
+            // Nearest Entry access point, independent of the distance cap below.
+            let (nearest_dist, nearest_idx) = results[0];
+            let nearest_node = &pg.graph.nodes[nearest_idx];
+            let nearest_access = Some(SnappedOrigin {
+                node_id: nearest_node.id.clone(),
+                lat: nearest_node.lat,
+                lon: nearest_node.lon,
+                distance_meters: nearest_dist,
+            });
+            // Distance sanity cap: if even the nearest Entry access point exceeds the
+            // allowed maximum, the origin is outside the operational area.
+            // 0.0 means unlimited (no cap applied).
+            if pg.limits.max_access_distance_meters > 0.0
+                && nearest_dist > pg.limits.max_access_distance_meters
+            {
+                return Ok(SearchResult {
+                    request_id: r.request_id.clone(),
+                    release_id: r.release_id.clone(),
+                    status: "no_candidates".into(),
+                    reason: Some("NO_CONNECTION".into()),
+                    ranking_mode: "shutoko_time".into(),
+                    expanded_states: 0,
+                    candidates: Vec::new(),
+                    nearest_access,
+                    min_plan_seconds: None,
+                });
+            }
+            let indices = results.into_iter().map(|(_, idx)| idx).collect();
+            (ll.clone(), indices, nearest_access)
+        }
+        _ => return Err(invalid("origin resolution state unreachable")),
+    };
 
     let mut budget = Budget::default();
     let mut candidates = Vec::new();
@@ -1012,6 +1060,9 @@ pub fn search_prepared(
     let mut legal_route = false;
     let mut time_rejected = false;
     let mut handoff_rejected = false;
+    // Shortest plan_seconds among legal loops, including loops the requested
+    // time window rejects. Reported as `minPlanSeconds`.
+    let mut min_plan_seconds: Option<u64> = None;
 
     let mut verified_pairs: Vec<(&BillingPair, Vec<&Edge>, Vec<&Edge>)> =
         Vec::with_capacity(pairs.len());
@@ -1020,6 +1071,11 @@ pub fn search_prepared(
         let post = path_pg(pg, &p.anchor_to_exit_edge_ids)?;
         verified_pairs.push((p, pre, post));
     }
+
+    // Separate budget for the diagnostic (product-cap) enumeration so that the
+    // extra loops it explores can never consume the candidate-search budget or
+    // trigger `SEARCH_LIMIT` truncation.
+    let mut diagnostic_budget = Budget::default();
 
     'pairs: for (p, pre, post) in verified_pairs {
         let entry_edge = pre[0];
@@ -1083,6 +1139,8 @@ pub fn search_prepared(
             legal_route = true;
             let base = access_secs + seconds(&highway) + return_secs;
             let buffer = 300.max(base.div_ceil(5));
+            let plan_seconds = base + buffer;
+            min_plan_seconds = Some(min_plan_seconds.map_or(plan_seconds, |m| m.min(plan_seconds)));
             if base < r.min_minutes * 60 || base + buffer > r.max_minutes * 60 {
                 time_rejected = true;
                 continue;
@@ -1216,6 +1274,68 @@ pub fn search_prepared(
                 handoff: handoff_payload,
             });
         }
+
+        // Diagnostic extension: the candidate enumeration above is bounded by
+        // the *requested* max window, so a legal loop longer than
+        // `max_minutes` is pruned and can never reach `minPlanSeconds`.  The UI
+        // compares `minPlanSeconds` against the 240-minute product cap to
+        // decide whether widening the window can ever help, so re-enumerate up
+        // to the product cap with a separate budget.  Loops beyond the request
+        // window are always time-rejected, so this only feeds the diagnostic
+        // and never changes candidate generation.
+        if r.max_minutes < MAX_PRODUCT_MINUTES {
+            let diagnostic_seconds = MAX_PRODUCT_MINUTES * 60;
+            let reachable = cached_reachable_set(pg, p.anchor_node_id.as_str(), diagnostic_seconds);
+            let diagnostic_loops = paths_pg(
+                pg,
+                &p.anchor_node_id,
+                &p.anchor_node_id,
+                EdgeKind::Shutoko,
+                pg.limits.max_loop_edges,
+                diagnostic_seconds,
+                &reachable,
+                &mut diagnostic_budget,
+            );
+            for cycle in &diagnostic_loops {
+                if !diagnostic_budget.take(&pg.limits) {
+                    break;
+                }
+                let highway: Vec<_> = pre.iter().chain(cycle).chain(&post).copied().collect();
+                if !allowed_pg(pg, &highway) {
+                    continue;
+                }
+                let base = access_secs + seconds(&highway) + return_secs;
+                let buffer = 300.max(base.div_ceil(5));
+                let plan_seconds = base + buffer;
+                min_plan_seconds =
+                    Some(min_plan_seconds.map_or(plan_seconds, |m| m.min(plan_seconds)));
+                found_loop = true;
+                legal_route = true;
+                // Only a loop that the *requested* window rejects justifies
+                // `TIME_WINDOW`.  The diagnostic pass re-enumerates up to the
+                // 240-minute product cap, so it also sees loops the requested
+                // window would have accepted; marking those as rejected would
+                // turn `NO_HANDOFF` into `TIME_WINDOW` and tell the user to
+                // widen a window that is not the problem (review V1).
+                if base < r.min_minutes * 60 || base + buffer > r.max_minutes * 60 {
+                    time_rejected = true;
+                }
+            }
+        }
+    }
+
+    // The product-cap decision ("no window up to 240 minutes can work") is only
+    // sound when the enumeration that produced `min_plan_seconds` was complete:
+    // because `plan_seconds >= loop seconds`, every legal loop that fits the cap
+    // is enumerated, so an enumerated minimum above the cap proves that none
+    // exists.  When a resource limit (beam width, expanded-state budget, or the
+    // billing-pair cap) cut the enumeration short that proof is unavailable and
+    // the number is only the minimum over the enumerated subset (it may exceed
+    // the true minimum).  Report `null` = "not proven", so the UI asserts
+    // neither "shortest" nor "unreachable" without evidence
+    // (review TEST-01-FINAL / V1 / V2).
+    if budget.truncated || diagnostic_budget.truncated {
+        min_plan_seconds = None;
     }
     let time_ranking = candidates.iter().any(|c| c.toll.amount_yen.is_none());
     candidates.sort_by(|a, b| {
@@ -1293,6 +1413,8 @@ pub fn search_prepared(
         .into(),
         expanded_states: budget.expanded,
         candidates: selected,
+        nearest_access,
+        min_plan_seconds,
     })
 }
 

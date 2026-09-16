@@ -3,23 +3,40 @@
 // 座標は GeoJSON が [lon, lat]、Leaflet が [lat, lon] のため、境界で必ず反転する。
 import L from "leaflet";
 import type { Candidate } from "../worker/types";
+import { fitBoundsAnimation, planOriginFocus } from "./focus";
 import { deriveSegments } from "./segments";
 import type { Coords } from "./segments";
 import { DEFAULT_TILE_SOURCE, tileAttribution } from "./tiles";
 import type { TileSource } from "./tiles";
 
 export type { Coords } from "./segments";
+export { FOCUS_ORIGIN_MIN_ZOOM, planOriginFocus, fitBoundsAnimation } from "./focus";
+export type { OriginFocusPlan } from "./focus";
 
 /** Leaflet 地図の操作インターフェース。DOM 直操作を main.ts から隠蔽する。 */
 export interface MapView {
   /** 出発地点マーカーを設置・移動する（重複生成しない）。 */
   setOrigin(p: { lat: number; lon: number }): void;
+  /**
+   * 出発地点が現在の表示範囲外なら pan/zoom して位置を見せる。
+   * 範囲内なら動かさない。prefers-reduced-motion ではアニメーションしない。
+   */
+  focusOrigin(p: { lat: number; lon: number }): void;
   /** 候補の経路を描画する。既存の候補レイヤーは破棄する。 */
   renderCandidates(candidates: Candidate[]): void;
   /** 候補を強調表示する。null で全候補を基準スタイルへ戻す。 */
   selectCandidate(id: string | null): void;
   /** 全候補（無ければ出発地点）に地図をフィットさせる。 */
   fitToCandidates(): void;
+  /**
+   * 地図タップで座標を拾うモードを切り替える。
+   * Leaflet はドラッグ後に click を発火しないため、パン・ズームと競合しない。
+   */
+  setPickMode(enabled: boolean): void;
+  /** タップで選んだ確定前の地点を表示する。null で消す。 */
+  setPendingOrigin(p: { lat: number; lon: number } | null): void;
+  /** タップ座標の通知先を登録する（複数登録可）。 */
+  onPickOrigin(cb: (p: { lat: number; lon: number }) => void): void;
   /** タイル読み込み失敗のコールバックを登録する（地図表示失敗からの復帰用）。 */
   onTileError(cb: (e: unknown) => void): void;
   /** タイル読み込み成功のコールバックを登録する（失敗状態の解除用）。 */
@@ -79,9 +96,19 @@ function extendBounds(bounds: L.LatLngBounds, latlngs: L.LatLngExpression[]): vo
 /** 地図を生成する。コンテナ要素以外の DOM グローバルには触れない。 */
 export function createMapView(
   container: HTMLElement,
-  options?: { tileSource?: TileSource },
+  options?: {
+    tileSource?: TileSource;
+    /** モーション低減設定の読み取り。省略時は matchMedia を参照する。 */
+    prefersReducedMotion?: () => boolean;
+  },
 ): MapView {
   const source = options?.tileSource ?? DEFAULT_TILE_SOURCE;
+  const reducedMotion =
+    options?.prefersReducedMotion ??
+    (() =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const map = L.map(container, { attributionControl: false, zoomControl: true });
   // 探索前から地図を見せ、タイル取得を開始するための初期表示（東京中心）。
   map.setView([35.6812, 139.7671], 12);
@@ -124,6 +151,21 @@ export function createMapView(
   const markers = new Map<string, L.Marker>();
   let candidateLayers: CandidateLayer[] = [];
   let selectedId: string | null = null;
+  // 地図タップで座標を拾うモード。有効なときだけ click を pending として通知する。
+  let pickModeEnabled = false;
+  const pickCallbacks: ((p: { lat: number; lon: number }) => void)[] = [];
+  let pendingMarker: L.Marker | null = null;
+
+  // Leaflet はパン/ズーム操作の後続 click を抑制するため、ドラッグと競合しない。
+  map.on("click", (event: L.LeafletMouseEvent) => {
+    if (!pickModeEnabled) {
+      return;
+    }
+    const point = { lat: event.latlng.lat, lon: event.latlng.lng };
+    for (const cb of pickCallbacks) {
+      cb(point);
+    }
+  });
 
   function applyStyles(): void {
     const hasSelection = selectedId !== null;
@@ -160,6 +202,66 @@ export function createMapView(
     marker.bindTooltip("出発地", { direction: "top" });
     marker.addTo(map);
     markers.set(originMarkerKey, marker);
+  }
+
+  /**
+   * 確定した出発地点が表示範囲外のときだけ pan/zoom する。
+   * 既に見えている場合は動かさず、reduced-motion ではアニメーションしない。
+   */
+  function focusOrigin(p: { lat: number; lon: number }): void {
+    const latlng = L.latLng(p.lat, p.lon);
+    const plan = planOriginFocus(map.getBounds().contains(latlng), map.getZoom(), reducedMotion());
+    if (plan === null) {
+      return;
+    }
+    if (plan.action === "setView") {
+      map.setView(latlng, plan.zoom, { animate: plan.animate });
+    } else {
+      map.panTo(latlng, { animate: plan.animate });
+    }
+  }
+
+  /** タップで選んだ確定前の地点を表示する（出発地マーカーとは別の見た目にする）。 */
+  function setPendingOrigin(p: { lat: number; lon: number } | null): void {
+    if (p === null) {
+      if (pendingMarker !== null) {
+        pendingMarker.remove();
+        pendingMarker = null;
+      }
+      return;
+    }
+    if (pendingMarker !== null) {
+      pendingMarker.setLatLng([p.lat, p.lon]);
+      return;
+    }
+    pendingMarker = L.marker([p.lat, p.lon], {
+      title: "候補地点",
+      icon: L.divIcon({
+        className: "pending-marker",
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+        html: '<span class="pending-marker__ring" aria-hidden="true"></span>',
+      }),
+    });
+    pendingMarker.bindTooltip("候補地点（未確定）", { direction: "top" });
+    pendingMarker.addTo(map);
+  }
+
+  function setPickMode(enabled: boolean): void {
+    pickModeEnabled = enabled;
+    container.classList.toggle("map--pick", enabled);
+    if (enabled) {
+      // タッチ端末にはカーソルが無いため、モード中は枠でも状態を示す（design F6）。
+      // ダブルタップズームは 1 回目のタップで pending を置いた直後にズームし
+      // 意図しない地点が残るため、モード中は無効化する（design F11）。
+      map.doubleClickZoom.disable();
+    } else {
+      map.doubleClickZoom.enable();
+    }
+  }
+
+  function onPickOrigin(cb: (p: { lat: number; lon: number }) => void): void {
+    pickCallbacks.push(cb);
   }
 
   function renderCandidates(candidates: Candidate[]): void {
@@ -239,7 +341,8 @@ export function createMapView(
       bounds.extend(origin.getLatLng());
     }
     if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [24, 24] });
+      // prefers-reduced-motion では fitBounds のアニメーションも止める（design F4）。
+      map.fitBounds(bounds, { padding: [24, 24], ...fitBoundsAnimation(reducedMotion()) });
     }
   }
 
@@ -262,17 +365,24 @@ export function createMapView(
   function destroy(): void {
     tileErrorCallbacks.length = 0;
     tileLoadCallbacks.length = 0;
+    pickCallbacks.length = 0;
+    pickModeEnabled = false;
     candidateLayers = [];
     markers.clear();
+    pendingMarker = null;
     map.off();
     map.remove();
   }
 
   return {
     setOrigin,
+    focusOrigin,
     renderCandidates,
     selectCandidate,
     fitToCandidates,
+    setPickMode,
+    setPendingOrigin,
+    onPickOrigin,
     onTileError,
     onTileLoad,
     reloadTiles,

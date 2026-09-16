@@ -12,7 +12,7 @@ const defaultRepoRoot = path.resolve(scriptDir, "../..");
 export const RELEASE_ID_REGEX = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 
 const MANIFEST_ARTIFACT_NAMES = ["graph.json", "snap-index.json"];
-const MANIFEST_ARTIFACT_ALLOWLIST = new Set(MANIFEST_ARTIFACT_NAMES);
+const MANIFEST_ARTIFACT_ALLOWLIST = new Set([...MANIFEST_ARTIFACT_NAMES, "ramps.json"]);
 const ENGINE_ARTIFACT_NAMES = [
   "shutoko_routing_bg.wasm",
   "shutoko_routing.js",

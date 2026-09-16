@@ -22,7 +22,9 @@ import {
   type WorkerResponse,
 } from "./types";
 
-export const DEFAULT_RELEASE_ID = "c1-real-v2";
+import { DEFAULT_RELEASE_ID } from "./artifact-hashes";
+
+export { DEFAULT_RELEASE_ID };
 
 /** 計測中の試行の状態。bench Worker では 1 メッセージ = 1 試行。 */
 interface BenchState {

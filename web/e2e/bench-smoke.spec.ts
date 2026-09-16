@@ -48,7 +48,7 @@ test("bench ページが cold/warm の 1 試行ずつを完走し envelope を�
 
   // 2 パターン × (cold 1 + warm 1) = 4 試行
   expect(envelope.trials).toHaveLength(4);
-  expect(envelope.releaseId).toBe("c1-real-v2");
+  expect(envelope.releaseId).toBe("all-real-v1");
   expect(envelope.targets.searchP95Ms).toBe(2000);
 
   const cold0 = findTrial(envelope, 0, "cold");
@@ -74,7 +74,7 @@ test("bench ページが cold/warm の 1 試行ずつを完走し envelope を�
   expect(cold0?.reason).toBeNull();
   expect(cold0?.candidateCount).toBeGreaterThan(0);
   expect(cold1?.resultStatus).toBe("ok");
-  expect(cold1?.candidateCount).toBe(2);
+  expect(cold1?.candidateCount).toBe(1);
 
   for (const [label, trial] of [
     ["pattern0 cold", cold0],
@@ -101,8 +101,8 @@ test("bench ページが cold/warm の 1 試行ずつを完走し envelope を�
     expect(graph?.deliveryType === "cache" || (graph?.transferSize ?? -1) === 0, label).toBe(true);
   }
 
-  // 最後に描画された試行（パターン 1 の warm = 候補 2 件）のカードが残っている。
-  await expect(page.locator("#results .card")).toHaveCount(2);
+  // 最後に描画された試行のカードが残っている。
+  await expect(page.locator("#results .card")).toHaveCount(1);
   await expect(page.locator("#status")).toContainText("完了: 4 試行");
   await expect(page.locator("#verdicts li")).toHaveCount(4);
   await expect(page.locator("#validate")).toHaveText("envelope: 検証 OK");

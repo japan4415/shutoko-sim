@@ -45,6 +45,11 @@ h2 {
   background: #fff;
 }
 
+[hidden],
+.panel[hidden] {
+  display: none !important;
+}
+
 label {
   display: block;
   font-size: 0.85rem;
@@ -107,6 +112,7 @@ button[disabled] {
 
 .row input {
   flex: 1 1 auto;
+  min-width: 0;
 }
 
 .row button {
@@ -530,5 +536,297 @@ button.chip {
   height: 44px;
   line-height: 44px;
   font-size: 1.4rem;
+}
+
+/* --- 検索方法の切り替え --- */
+.search-mode-radios {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .search-mode-radios {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.mode-radio-label {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: var(--surface);
+  min-height: 48px;
+  min-width: 0;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.mode-radio-label:hover {
+  border-color: var(--accent);
+}
+
+.mode-radio-label:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mode-radio-label input {
+  margin-bottom: 6px;
+}
+
+.mode-radio-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.mode-radio-desc {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* --- ランプ明示指定 UI --- */
+.ramp-pickers-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .ramp-pickers-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ramp-picker {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.ramp-picker h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.05rem;
+}
+
+.selected-ramp-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.selected-badge-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.selected-ramp-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  word-break: break-all;
+  min-width: 0;
+}
+
+.small-btn {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  min-height: 36px;
+}
+
+.chip-btn {
+  min-height: 38px;
+  padding: 4px 10px;
+}
+
+.zero-results-message {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.zero-results-message p {
+  margin: 0 0 8px 0;
+  font-size: 0.85rem;
+}
+
+.ramp-list {
+  max-height: 380px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #fafafa;
+}
+
+.ramp-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 10px;
+  min-height: 48px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+
+.ramp-item input[type="radio"] {
+  margin-top: 4px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.ramp-item:hover:not(.ramp-item--disabled) {
+  background: #f0f7ff;
+  border-color: #c2e0ff;
+}
+
+.ramp-item:has(input:checked) {
+  background: #e8f0fe;
+  border-color: var(--accent);
+}
+
+.ramp-item--disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: #f5f5f5;
+}
+
+.ramp-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ramp-item-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.ramp-route-badge {
+  background: #2b3a4a;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.02em;
+}
+
+.ramp-dir-badge {
+  background: #555e69;
+  color: #fff;
+  font-size: 0.72rem;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+.ramp-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #222;
+}
+
+.ramp-id {
+  font-size: 0.75rem;
+  color: #777;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.ramp-status-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: auto;
+}
+
+.ramp-status-badge--routable {
+  background: #e6f4ea;
+  color: #137333;
+  border: 1px solid #ceead6;
+}
+
+.ramp-status-badge--unsupported {
+  background: #fef7e0;
+  color: #b06000;
+  border: 1px solid #feefc3;
+}
+
+.ramp-status-badge--structural_no_loop {
+  background: #f3e8fd;
+  color: #7627bb;
+  border: 1px solid #e9d2fd;
+}
+
+.ramp-status-badge--closed {
+  background: #f1f3f4;
+  color: #5f6368;
+  border: 1px solid #dadce0;
+}
+
+.ramp-status-badge--wrong_kind {
+  background: #fce8e6;
+  color: #c5221f;
+  border: 1px solid #fad2cf;
+}
+
+.ramp-status-badge--boundary {
+  background: #e8eaed;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+}
+
+.ramp-disabled-reason {
+  margin: 4px 0 0 0;
+  font-size: 0.78rem;
+  color: #666;
+  line-height: 1.35;
+}
+
+.explicit-status-callout {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: #f8f9fa;
+  border-left: 4px solid var(--accent);
+  font-size: 0.88rem;
+  color: #333;
+}
+
+.duplicate-note {
+  color: var(--danger);
+  font-weight: 600;
+  margin-top: 4px;
 }
 

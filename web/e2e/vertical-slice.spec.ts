@@ -5,7 +5,7 @@
 // (d) graph.json 11 秒遅延で TIMEOUT の文言
 import { expect, test } from "@playwright/test";
 
-const GRAPH_URL = "**/releases/c1-real-v2/graph.json";
+const GRAPH_URL = "**/releases/*/graph.json";
 
 /**
  * (d) の 11 秒遅延をテスト終了時に解除するためのコントローラ。
@@ -58,11 +58,9 @@ test("(a) 神田橋プリセット 15〜60 で候補カードと Maps URL が表
 
   const firstCard = page.locator("#results .card").first();
   await expect(firstCard).toBeVisible();
-  // feat/drop-local-roads 以降、全 Entry を直線距離で探索するため、
-  // time_per_yen 最大の銀座入口→芝公園出口（ginza-shibakoen）が 1 位になる。
-  await expect(firstCard).toContainText("銀座入口");
+  await expect(firstCard).toContainText("神田橋入口");
   await expect(firstCard).toContainText("300");
-  await expect(page.locator("#results .card")).toHaveCount(2);
+  await expect(page.locator("#results .card")).toHaveCount(1);
 
   // 強調は所要時間の数値だけに当たり、但し書きは別要素の補助テキスト（design-review-002 C2）。
   await expect(firstCard.locator(".duration")).toHaveText(/^総所要時間: 約\d+分$/);
@@ -179,6 +177,6 @@ test("(e) 入力エラーを直して探索ボタンを 1 回押すと探索が�
   await page.click("#search-btn");
 
   await expect(page.locator("#results .card").first()).toBeVisible();
-  await expect(page.locator("#results .card")).toHaveCount(2);
+  await expect(page.locator("#results .card")).toHaveCount(1);
   await expect(page.locator("#input-errors li")).toHaveCount(0);
 });

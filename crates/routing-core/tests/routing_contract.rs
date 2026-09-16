@@ -1644,3 +1644,178 @@ fn no_connection_can_report_a_close_nearest_entry_without_a_verified_pair() {
         "no loop enumeration runs when no verified pair is reachable"
     );
 }
+
+// ---------------------------------------------------------------------------
+// correct_2: a truncated diagnostic enumeration must not report an unprovable
+// minimum (review TEST-01-FINAL) and `time_rejected` must be scoped to the
+// requested window (review V1 / V2).
+// ---------------------------------------------------------------------------
+
+/// Adds the lexicographically-first self-loop from the fixture anchor:
+/// `a-loop-0` costs 14 000 s and is enumerated before `ab`, so with
+/// `beamWidth = 1` the diagnostic pass records it and stops before the shorter
+/// `ab → bc → ca` loop (1 860 s) is ever seen.  This is exactly the synthetic
+/// counterexample from review TEST-01-FINAL.
+fn graph_with_long_anchor_self_loop() -> Value {
+    let mut g = graph();
+    g["edges"].as_array_mut().unwrap().push(json!({
+        "id": "a-loop-0",
+        "from": "a",
+        "to": "a",
+        "kind": "shutoko",
+        "durationSeconds": 14000,
+        "distanceMeters": 100000
+    }));
+    g
+}
+
+fn one_minute_request(request_id: &str) -> Value {
+    json!({
+        "requestId": request_id,
+        "releaseId": "synthetic-v1",
+        "originNodeId": "i",
+        "minMinutes": 1,
+        "maxMinutes": 1,
+        "vehicleProfile": "passenger-car-etc",
+        "pricingAt": "2026-09-10T00:00:00Z"
+    })
+}
+
+/// `beamWidth = 1`: the diagnostic pass keeps the 14 000 s self-loop and stops
+/// (`paths_pg` records one result and reports truncation).  The unprovable
+/// 16 892 s value must NOT be reported as the shortest plan — before the fix
+/// the UI turned it into "even four hours cannot work".  `null` states the
+/// truth: no minimum was proven.
+#[test]
+fn min_plan_seconds_is_null_when_the_diagnostic_is_beam_truncated() {
+    let result = run(
+        &graph_with_long_anchor_self_loop(),
+        &one_minute_request("diag-beam-truncated"),
+        json!({"beamWidth": 1}),
+    );
+
+    assert_eq!(result["status"], "no_candidates");
+    assert_eq!(
+        result["reason"], "TIME_WINDOW",
+        "a legal loop exists outside the 1-minute window"
+    );
+    assert!(
+        result["minPlanSeconds"].is_null(),
+        "a beam-truncated diagnostic cannot prove the minimum, got {}",
+        result["minPlanSeconds"]
+    );
+}
+
+/// `maxExpandedStates = 5`: the candidate pass still finishes (2 expansions),
+/// but the diagnostic pass exhausts the expanded-state Budget — it records the
+/// 14 000 s self-loop before being cut off, and the post-processing loop stops
+/// before the shorter loop is measured.  As with the beam case the minimum is
+/// not provable and must be `null` instead of the 16 892 s value the fix
+/// removes.
+#[test]
+fn min_plan_seconds_is_null_when_the_diagnostic_budget_is_exhausted() {
+    let result = run(
+        &graph_with_long_anchor_self_loop(),
+        &one_minute_request("diag-budget-exhausted"),
+        json!({"maxExpandedStates": 5}),
+    );
+
+    assert_eq!(result["status"], "no_candidates");
+    assert!(
+        matches!(result["reason"].as_str(), Some("TIME_WINDOW" | "NO_LOOP")),
+        "a truncated diagnostic may only report an honest no-candidate reason, got {}",
+        result["reason"]
+    );
+    assert!(
+        result["minPlanSeconds"].is_null(),
+        "an expanded-state-truncated diagnostic cannot prove the minimum, got {}",
+        result["minPlanSeconds"]
+    );
+}
+
+/// Without truncation the diagnostic is exact: the same graph and request with
+/// the default limits enumerate both loops, so the shorter `ab → bc → ca`
+/// loop (plan 2 252 s, inside the product cap) is reported.  This is the
+/// control that separates "truncated ⇒ null" from "complete ⇒ exact".
+#[test]
+fn diagnostic_without_truncation_reports_the_true_minimum() {
+    let result = run(
+        &graph_with_long_anchor_self_loop(),
+        &one_minute_request("diag-complete"),
+        json!({}),
+    );
+
+    assert_eq!(result["status"], "no_candidates");
+    assert_eq!(result["reason"], "TIME_WINDOW");
+    assert_eq!(
+        result["minPlanSeconds"].as_u64(),
+        Some(2252),
+        "with a complete enumeration the short loop (plan 2 252 s) is the minimum"
+    );
+    assert!(
+        result["minPlanSeconds"].as_u64().unwrap() <= MAX_PRODUCT_MINUTES * 60,
+        "a value inside the product cap must drive the 'widen the window' guidance"
+    );
+}
+
+/// Boundary at `maxMinutes = 240`: the diagnostic pass is skipped because the
+/// candidate enumeration already uses the product cap.  With the default beam
+/// the enumeration is complete and the exact minimum is reported; with
+/// `beamWidth = 1` it truncates, so the result must be `SEARCH_LIMIT` +
+/// `truncated` with `minPlanSeconds = null` instead of a bogus TIME_WINDOW
+/// "unreachable" claim.
+#[test]
+fn max_minutes_boundary_240_reports_exact_or_truncated_never_bogus() {
+    let g = graph_with_long_anchor_self_loop();
+    let mut r = one_minute_request("diag-max-240");
+    r["minMinutes"] = json!(1);
+    r["maxMinutes"] = json!(240);
+
+    let exact = run(&g, &r, json!({}));
+    assert_eq!(exact["status"], "ok");
+    assert_eq!(
+        exact["minPlanSeconds"].as_u64(),
+        Some(2252),
+        "at the product cap the diagnostic is unnecessary and the candidate \
+         enumeration is exact"
+    );
+
+    let truncated = run(&g, &r, json!({"beamWidth": 1}));
+    assert_eq!(
+        truncated["status"], "truncated",
+        "a beam-truncated search must keep reporting SEARCH_LIMIT"
+    );
+    assert_eq!(truncated["reason"], "SEARCH_LIMIT");
+    assert!(
+        truncated["minPlanSeconds"].is_null(),
+        "a truncated enumeration must not report an unprovable minimum, got {}",
+        truncated["minPlanSeconds"]
+    );
+}
+
+/// Requirement 2 constraint: `NO_HANDOFF` is only reachable when
+/// `format_maps_url` exceeds 2 048 characters.  `select_waypoints` returns at
+/// most three waypoints and coordinates are printed with six decimals, so the
+/// generated URL stays far below the limit — even for pathological extreme
+/// coordinates.  `NO_HANDOFF` is therefore unreachable in practice and no
+/// reason is fabricated for it.
+#[test]
+fn maps_url_length_cannot_trigger_no_handoff_with_three_waypoints() {
+    use shutoko_routing_core::handoff::{format_maps_url, MAX_MAPS_URL_LENGTH};
+    use shutoko_routing_core::LatLng;
+
+    let endpoint = |lat: f64, lon: f64| LatLng { lat, lon };
+    let origin = endpoint(-89.999999, -179.999999);
+    let waypoints = vec![
+        endpoint(-89.999999, -179.999999),
+        endpoint(89.999999, 179.999999),
+        endpoint(35.689672, 139.764424),
+    ];
+    let url = format_maps_url(&origin, &waypoints).expect("three waypoints must fit the limit");
+    assert!(url.len() <= MAX_MAPS_URL_LENGTH);
+    assert!(
+        url.len() * 4 < MAX_MAPS_URL_LENGTH,
+        "with <= 3 waypoints the URL must stay far below 2 048 chars, got {}",
+        url.len()
+    );
+}

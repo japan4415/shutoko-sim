@@ -537,7 +537,9 @@ test("(18) 八王子駅（36.1km）は 15〜240 分でも候補なしで数値�
   const status = page.locator("#status");
   // 最短計画が 240 分を超えるため、時間枠ではなく距離・時間の数値で説明する。
   await expect(status).toContainText("最大 4 時間では周回できません");
-  await expect(status).toContainText("最短の計画時間でも");
+  // 240 分超の値は列挙範囲（ループ部分 ≤ 240 分）での最小なので「最短」とは断定しない。
+  await expect(status).toContainText("確認できた範囲で最も短い計画時間は");
+  await expect(status).not.toContainText("最短でも");
   await expect(status).toContainText("km");
 
   // 時間を広げても届かないので「時間の上限を広げる」は出さない。
@@ -668,6 +670,8 @@ async function stubGeolocationDeferred(page: Page): Promise<void> {
 }
 
 test("(24) 現在地取得中に地図で確定すると、遅れた現在地は出発地点を上書きしない", async ({ page }) => {
+  // 地図追従のアニメーションを止め、確定地点のマーカー位置を決定的に比較する。
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await stubGeolocationDeferred(page);
   await openApp(page);
 
@@ -688,6 +692,15 @@ test("(24) 現在地取得中に地図で確定すると、遅れた現在地は
   await page.click("#map-pick-confirm");
   await expect(page.locator("#origin-summary")).toContainText("地図で指定（住所は未取得）");
 
+  // 確定時点の状態を記録する（遅延現在地 35.0, 135.0 とは異なること）。
+  const pickedLat = await page.locator("#lat").inputValue();
+  const pickedLon = await page.locator("#lon").inputValue();
+  expect(pickedLat).not.toBe("35");
+  expect(pickedLon).not.toBe("135");
+  const originMarker = page.locator("#map .origin-marker");
+  await expect(originMarker).toHaveCount(1);
+  const markerBefore = await originMarker.boundingBox();
+
   // 確定後に現在地取得成功が届いても、確定済みの出発地点を上書きしない（SEC-01）。
   await page.evaluate(
     (p) => {
@@ -695,8 +708,23 @@ test("(24) 現在地取得中に地図で確定すると、遅れた現在地は
     },
     { coords: { latitude: 35.0, longitude: 135.0, accuracy: 5 }, timestamp: Date.now() },
   );
+  // 遅延コールバックが完了するまで待つ（取得中… の解除）。成功前から成立する
+  // アサーションだけで pass しないよう、完了を明示的に待ってから状態を検証する。
+  await expect(page.locator("#geolocate-btn")).toBeEnabled();
+  await expect(page.locator("#geolocate-btn")).toHaveText("現在地を使う");
+
   await expect(page.locator("#origin-summary")).toContainText("地図で指定（住所は未取得）");
   await expect(page.locator("#origin-summary")).not.toContainText("（現在地）");
+  // 座標入力も確定地点のまま（現在地の緯度経度へ化けていない）。
+  await expect(page.locator("#lat")).toHaveValue(pickedLat);
+  await expect(page.locator("#lon")).toHaveValue(pickedLon);
+  // 出発地マーカーも確定地点に留まる（現在地へ移動していない）。
+  const markerAfter = await originMarker.boundingBox();
+  expect(markerAfter).not.toBeNull();
+  if (markerBefore !== null && markerAfter !== null) {
+    expect(Math.abs(markerAfter.x - markerBefore.x)).toBeLessThanOrEqual(2);
+    expect(Math.abs(markerAfter.y - markerBefore.y)).toBeLessThanOrEqual(2);
+  }
 });
 
 test("(25) 地図タップ指定の確定/取消が視界に入り、フォーカスが論理的な起点へ戻る", async ({ page }) => {

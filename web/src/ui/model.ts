@@ -207,26 +207,34 @@ export function nearestAccessText(nearestAccess: SnappedOrigin): string {
 
 /**
  * 最大 4 時間では周回できないことの数値根拠を示す文言。
- * - minPlanSeconds があれば「最短でも約 N 分」
+ * - minPlanSeconds があれば「確認できた範囲で最も短い計画時間は 約 N 分」
  * - nearestAccess があれば「アクセスの往復だけで約 N 分」「最寄り入口まで直線 約 N km」
  * 数値の根拠が 1 つも無ければ距離・時間を捏造しない。
+ *
+ * minPlanSeconds は「ループ部分が 240 分以内」の周回だけを列挙した範囲での最小値で、
+ * 列挙外のより長いループがより小さい plan を持つ可能性を排除できない（docs/interfaces.md）。
+ * したがって絶対的な「最短」とは断定せず、値の出所（確認できた範囲）を必ず添える。
+ * 「最大 4 時間では周回できません」自体は、列挙が資源上限で打ち切られていない
+ * （minPlanSeconds が non-null である）ことから厳密に成立する。
  */
 export function unreachableText(
   nearestAccess: SnappedOrigin | null,
   minPlanSeconds: number | null,
 ): string {
-  const reasons: string[] = [];
+  const evidence: string[] = [];
   if (minPlanSeconds !== null) {
-    reasons.push(`周回できる最短の計画時間でも 約 ${String(minutesFromSeconds(minPlanSeconds))} 分`);
+    evidence.push(
+      `確認できた範囲で最も短い計画時間は 約 ${String(minutesFromSeconds(minPlanSeconds))} 分`,
+    );
   }
   if (nearestAccess !== null) {
-    reasons.push(
+    evidence.push(
       `最寄り入口までのアクセス往復だけで 約 ${String(
         accessMinutesFromMeters(nearestAccess.distanceMeters) * 2,
       )} 分`,
     );
   }
-  const head = reasons.length > 0 ? `${reasons.join("、")}かかるため、` : "";
+  const head = evidence.length > 0 ? `${evidence.join("、")}かかるため、` : "";
   const access = nearestAccess !== null ? nearestAccessText(nearestAccess) : "";
   return `${head}最大 4 時間では周回できません。${access}${SUPPORTED_AREA_TEXT}`;
 }

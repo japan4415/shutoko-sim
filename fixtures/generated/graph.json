@@ -314980,7 +314980,7 @@
       ],
       "entryName": "宝町入口",
       "exitName": "神田橋出口",
-      "entryRampId": "ramp:y-south:yaesu-entry"
+      "entryRampId": "ramp:c1-inner:takaracho-entry"
     },
     {
       "id": "bp:c1-outer:ginza-shibakoen",
@@ -315274,7 +315274,8 @@
       "entryName": "神田橋入口",
       "exitName": "宝町出口",
       "entryRampId": "ramp:c1-outer:kandabashi-entry",
-      "exitRampId": "ramp:c1-inner:kyobashi-exit"
+      "exitRampId": "ramp:c1-outer:takaracho-exit",
+      "billingDistanceMeters": 1700
     },
     {
       "id": "bp:c1-outer:kasumigaseki-daikancho",
@@ -315680,17 +315681,6 @@
       "mainlineNodeId": "n:6241744894"
     },
     {
-      "id": "ramp:c1-outer:kyobashi-entry",
-      "facilityId": "fac:c1:kyobashi",
-      "name": "京橋",
-      "route": "C1",
-      "direction": "outer",
-      "kind": "general_entry",
-      "edgeId": "e:w378284514:0:f",
-      "nodeId": "n:1105125663",
-      "mainlineNodeId": "n:3977436333"
-    },
-    {
       "id": "ramp:c1-outer:shiodome-entry",
       "facilityId": "fac:c1:shiodome",
       "name": "汐留",
@@ -315724,17 +315714,6 @@
       "mainlineNodeId": "n:31253909"
     },
     {
-      "id": "ramp:1h-inbound:suzugamori-entry",
-      "facilityId": "fac:1h:suzugamori",
-      "name": "鈴ヶ森",
-      "route": "1H",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w5219298:0:f",
-      "nodeId": "n:579731767",
-      "mainlineNodeId": "n:6050449435"
-    },
-    {
       "id": "ramp:1h-inbound:heiwajima-entry",
       "facilityId": "fac:1h:heiwajima",
       "name": "平和島",
@@ -315744,28 +315723,6 @@
       "edgeId": "e:w256114185:0:f",
       "nodeId": "n:581893180",
       "mainlineNodeId": "n:2618098819"
-    },
-    {
-      "id": "ramp:1h-outbound:heiwajima-entry",
-      "facilityId": "fac:1h:heiwajima",
-      "name": "平和島",
-      "route": "1H",
-      "direction": "outbound",
-      "kind": "general_entry",
-      "edgeId": "e:w5213652:0:f",
-      "nodeId": "n:36720316",
-      "mainlineNodeId": "n:36720315"
-    },
-    {
-      "id": "ramp:1h-inbound:kukonishi-entry",
-      "facilityId": "fac:1h:kukonishi",
-      "name": "空港西",
-      "route": "1H",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w5213652:0:f",
-      "nodeId": "n:36720316",
-      "mainlineNodeId": "n:36720315"
     },
     {
       "id": "ramp:1h-inbound:haneda-entry",
@@ -315779,39 +315736,6 @@
       "mainlineNodeId": "n:6387199165"
     },
     {
-      "id": "ramp:1h-outbound:haneda-entry",
-      "facilityId": "fac:1h:haneda",
-      "name": "羽田",
-      "route": "1H",
-      "direction": "outbound",
-      "kind": "general_entry",
-      "edgeId": "e:w964191633:0:f",
-      "nodeId": "n:3817775783",
-      "mainlineNodeId": "n:3817775785"
-    },
-    {
-      "id": "ramp:1h-outbound:katsushima-entry",
-      "facilityId": "fac:1h:katsushima",
-      "name": "勝島",
-      "route": "1H",
-      "direction": "outbound",
-      "kind": "general_entry",
-      "edgeId": "e:w5219298:0:f",
-      "nodeId": "n:579731767",
-      "mainlineNodeId": "n:6050449435"
-    },
-    {
-      "id": "ramp:2-inbound:tengenji-entry",
-      "facilityId": "fac:2:tengenji",
-      "name": "天現寺",
-      "route": "2",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w202809279:0:f",
-      "nodeId": "n:2127484100",
-      "mainlineNodeId": "n:2127484099"
-    },
-    {
       "id": "ramp:2-inbound:meguro-entry",
       "facilityId": "fac:2:meguro",
       "name": "目黒",
@@ -315821,28 +315745,6 @@
       "edgeId": "e:w207535708:0:f",
       "nodeId": "n:2177935837",
       "mainlineNodeId": "n:2177935839"
-    },
-    {
-      "id": "ramp:2-inbound:ebara-entry",
-      "facilityId": "fac:2:ebara",
-      "name": "荏原",
-      "route": "2",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w805171060:0:f",
-      "nodeId": "n:2068189807",
-      "mainlineNodeId": "n:7530433787"
-    },
-    {
-      "id": "ramp:2-inbound:togoshi-entry",
-      "facilityId": "fac:2:togoshi",
-      "name": "戸越",
-      "route": "2",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w805171060:0:f",
-      "nodeId": "n:2068189807",
-      "mainlineNodeId": "n:7530433787"
     },
     {
       "id": "ramp:3-inbound:takagicho-entry",
@@ -315944,28 +315846,6 @@
       "mainlineNodeId": "n:1973313111"
     },
     {
-      "id": "ramp:4-inbound:shinjuku-entry",
-      "facilityId": "fac:4:shinjuku",
-      "name": "新宿",
-      "route": "4",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w26956959:0:f",
-      "nodeId": "n:6495134855",
-      "mainlineNodeId": "n:8302849481"
-    },
-    {
-      "id": "ramp:4-inbound:hatagaya-entry",
-      "facilityId": "fac:4:hatagaya",
-      "name": "幡ヶ谷",
-      "route": "4",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w381972985:0:f",
-      "nodeId": "n:3851809276",
-      "mainlineNodeId": "n:5685054810"
-    },
-    {
       "id": "ramp:4-outbound:eifuku-entry",
       "facilityId": "fac:4:eifuku",
       "name": "永福",
@@ -316032,17 +315912,6 @@
       "mainlineNodeId": "n:6368120239"
     },
     {
-      "id": "ramp:5-inbound:higashi-ikebukuro-entry",
-      "facilityId": "fac:5:higashi-ikebukuro",
-      "name": "東池袋",
-      "route": "5",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w182465955:0:f",
-      "nodeId": "n:1928229725",
-      "mainlineNodeId": "n:1928229724"
-    },
-    {
       "id": "ramp:5-outbound:higashi-ikebukuro-entry",
       "facilityId": "fac:5:higashi-ikebukuro",
       "name": "東池袋",
@@ -316060,9 +315929,9 @@
       "route": "5",
       "direction": "inbound",
       "kind": "general_entry",
-      "edgeId": "e:w182465953:0:f",
-      "nodeId": "n:1928229700",
-      "mainlineNodeId": "n:1928229701"
+      "edgeId": "e:w182465955:0:f",
+      "nodeId": "n:1928229725",
+      "mainlineNodeId": "n:1928229724"
     },
     {
       "id": "ramp:5-inbound:itabashi-honcho-entry",
@@ -316071,9 +315940,9 @@
       "route": "5",
       "direction": "inbound",
       "kind": "general_entry",
-      "edgeId": "e:w464736087:0:f",
-      "nodeId": "n:4598163085",
-      "mainlineNodeId": "n:4598163080"
+      "edgeId": "e:w182527894:0:f",
+      "nodeId": "n:1928885698",
+      "mainlineNodeId": "n:1928885697"
     },
     {
       "id": "ramp:5-outbound:itabashi-honcho-entry",
@@ -316109,17 +315978,6 @@
       "mainlineNodeId": "n:2191158528"
     },
     {
-      "id": "ramp:5-inbound:toda-minami-entry",
-      "facilityId": "fac:5:toda-minami",
-      "name": "戸田南",
-      "route": "5",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w409002623:0:f",
-      "nodeId": "n:2872561213",
-      "mainlineNodeId": "n:4108975291"
-    },
-    {
       "id": "ramp:5-outbound:hitotsubashi-entry",
       "facilityId": "fac:5:hitotsubashi",
       "name": "一ツ橋",
@@ -316140,39 +315998,6 @@
       "edgeId": "e:w45977417:0:f",
       "nodeId": "n:4088977320",
       "mainlineNodeId": "n:6244534907"
-    },
-    {
-      "id": "ramp:5-outbound:toda-entry",
-      "facilityId": "fac:5:toda",
-      "name": "戸田",
-      "route": "5",
-      "direction": "outbound",
-      "kind": "general_entry",
-      "edgeId": "e:w409002623:0:f",
-      "nodeId": "n:2872561213",
-      "mainlineNodeId": "n:4108975291"
-    },
-    {
-      "id": "ramp:6m-inbound:komagata-entry",
-      "facilityId": "fac:6m:komagata",
-      "name": "駒形",
-      "route": "6M",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w199311816:0:f",
-      "nodeId": "n:2093245883",
-      "mainlineNodeId": "n:2093245881"
-    },
-    {
-      "id": "ramp:6m-outbound:mukojima-entry",
-      "facilityId": "fac:6m:mukojima",
-      "name": "向島",
-      "route": "6M",
-      "direction": "outbound",
-      "kind": "general_entry",
-      "edgeId": "e:w41520089:0:f",
-      "nodeId": "n:1041276967",
-      "mainlineNodeId": "n:1041276905"
     },
     {
       "id": "ramp:6m-inbound:mukojima-entry",
@@ -316236,9 +316061,9 @@
       "route": "7",
       "direction": "inbound",
       "kind": "general_entry",
-      "edgeId": "e:w59664332:0:f",
-      "nodeId": "n:7301483738",
-      "mainlineNodeId": "n:8378201618"
+      "edgeId": "e:w59583395:0:f",
+      "nodeId": "n:7903143888",
+      "mainlineNodeId": "n:7903143893"
     },
     {
       "id": "ramp:7-inbound:ichinoe-entry",
@@ -316252,26 +316077,15 @@
       "mainlineNodeId": "n:8378201618"
     },
     {
-      "id": "ramp:9-inbound:kiba-entry",
-      "facilityId": "fac:9:kiba",
-      "name": "木場",
-      "route": "9",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w1024107817:0:f",
-      "nodeId": "n:3864472481",
-      "mainlineNodeId": "n:1640003756"
-    },
-    {
       "id": "ramp:9-outbound:fukuzumi-entry",
       "facilityId": "fac:9:fukuzumi",
       "name": "福住",
       "route": "9",
       "direction": "outbound",
       "kind": "general_entry",
-      "edgeId": "e:w4857854:0:f",
-      "nodeId": "n:1947552220",
-      "mainlineNodeId": "n:1947552219"
+      "edgeId": "e:w1024107817:0:f",
+      "nodeId": "n:3864472481",
+      "mainlineNodeId": "n:1640003756"
     },
     {
       "id": "ramp:9-outbound:shiohama-entry",
@@ -316472,39 +316286,6 @@
       "mainlineNodeId": "n:5977844774"
     },
     {
-      "id": "ramp:s1-inbound:shingo-entry",
-      "facilityId": "fac:s1:shingo",
-      "name": "新郷",
-      "route": "S1",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w205725086:0:f",
-      "nodeId": "n:2156964632",
-      "mainlineNodeId": "n:2156964639"
-    },
-    {
-      "id": "ramp:s1-outbound:shingo-entry",
-      "facilityId": "fac:s1:shingo",
-      "name": "新郷",
-      "route": "S1",
-      "direction": "outbound",
-      "kind": "general_entry",
-      "edgeId": "e:w28188012:0:f",
-      "nodeId": "n:5910007399",
-      "mainlineNodeId": "n:1354352937"
-    },
-    {
-      "id": "ramp:s1-inbound:angyo-entry",
-      "facilityId": "fac:s1:angyo",
-      "name": "安行",
-      "route": "S1",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w28188012:0:f",
-      "nodeId": "n:5910007399",
-      "mainlineNodeId": "n:1354352937"
-    },
-    {
       "id": "ramp:s1-inbound:araijuku-entry",
       "facilityId": "fac:s1:araijuku",
       "name": "新井宿",
@@ -316514,17 +316295,6 @@
       "edgeId": "e:w44351827:0:f",
       "nodeId": "n:563661478",
       "mainlineNodeId": "n:1226695201"
-    },
-    {
-      "id": "ramp:s1-outbound:adachi-iriya-entry",
-      "facilityId": "fac:s1:adachi-iriya",
-      "name": "足立入谷",
-      "route": "S1",
-      "direction": "outbound",
-      "kind": "general_entry",
-      "edgeId": "e:w205725086:0:f",
-      "nodeId": "n:2156964632",
-      "mainlineNodeId": "n:2156964639"
     },
     {
       "id": "ramp:s5-inbound:urawa-minami-entry",
@@ -316555,9 +316325,9 @@
       "route": "S5",
       "direction": "outbound",
       "kind": "general_entry",
-      "edgeId": "e:w56132891:0:f",
-      "nodeId": "n:252830367",
-      "mainlineNodeId": "n:1690305263"
+      "edgeId": "e:w383238620:0:f",
+      "nodeId": "n:1064146821",
+      "mainlineNodeId": "n:3817809629"
     },
     {
       "id": "ramp:s2-inbound:shintoshin-nishi-entry",
@@ -316566,9 +316336,9 @@
       "route": "S2",
       "direction": "inbound",
       "kind": "general_entry",
-      "edgeId": "e:w56132891:0:f",
-      "nodeId": "n:252830367",
-      "mainlineNodeId": "n:1690305263"
+      "edgeId": "e:w283918824:0:f",
+      "nodeId": "n:2877276571",
+      "mainlineNodeId": "n:2877276574"
     },
     {
       "id": "ramp:s2-outbound:shintoshin-nishi-entry",
@@ -316577,20 +316347,9 @@
       "route": "S2",
       "direction": "outbound",
       "kind": "general_entry",
-      "edgeId": "e:w56132891:0:f",
-      "nodeId": "n:252830367",
-      "mainlineNodeId": "n:1690305263"
-    },
-    {
-      "id": "ramp:s2-inbound:shintoshin-entry",
-      "facilityId": "fac:s2:shintoshin",
-      "name": "新都心",
-      "route": "S2",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w904691646:0:f",
-      "nodeId": "n:614599183",
-      "mainlineNodeId": "n:2108120471"
+      "edgeId": "e:w283918824:0:f",
+      "nodeId": "n:2877276571",
+      "mainlineNodeId": "n:2877276574"
     },
     {
       "id": "ramp:s2-outbound:shintoshin-entry",
@@ -316602,17 +316361,6 @@
       "edgeId": "e:w904691651:0:f",
       "nodeId": "n:1147135489",
       "mainlineNodeId": "n:2108155783"
-    },
-    {
-      "id": "ramp:s2-inbound:saitama-minuma-entry",
-      "facilityId": "fac:s2:saitama-minuma",
-      "name": "さいたま見沼",
-      "route": "S2",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w904691646:0:f",
-      "nodeId": "n:614599183",
-      "mainlineNodeId": "n:2108120471"
     },
     {
       "id": "ramp:c2-outer:gotanda-entry",
@@ -316648,28 +316396,6 @@
       "mainlineNodeId": "n:1928229701"
     },
     {
-      "id": "ramp:c2-inner:ogi-ohashi-entry",
-      "facilityId": "fac:c2:ogi-ohashi",
-      "name": "扇大橋",
-      "route": "C2",
-      "direction": "inner",
-      "kind": "general_entry",
-      "edgeId": "e:w434944289:0:f",
-      "nodeId": "n:4328524389",
-      "mainlineNodeId": "n:3578384614"
-    },
-    {
-      "id": "ramp:c2-outer:ogi-ohashi-entry",
-      "facilityId": "fac:c2:ogi-ohashi",
-      "name": "扇大橋",
-      "route": "C2",
-      "direction": "outer",
-      "kind": "general_entry",
-      "edgeId": "e:w434944289:0:f",
-      "nodeId": "n:4328524389",
-      "mainlineNodeId": "n:3578384614"
-    },
-    {
       "id": "ramp:c2-inner:senju-shinbashi-entry",
       "facilityId": "fac:c2:senju-shinbashi",
       "name": "千住新橋",
@@ -316681,26 +316407,15 @@
       "mainlineNodeId": "n:6382929609"
     },
     {
-      "id": "ramp:c2-outer:senju-shinbashi-entry",
-      "facilityId": "fac:c2:senju-shinbashi",
-      "name": "千住新橋",
-      "route": "C2",
-      "direction": "outer",
-      "kind": "general_entry",
-      "edgeId": "e:w60870186:0:f",
-      "nodeId": "n:1601912202",
-      "mainlineNodeId": "n:9847554773"
-    },
-    {
       "id": "ramp:c2-inner:yotsugi-entry",
       "facilityId": "fac:c2:yotsugi",
       "name": "四つ木",
       "route": "C2",
       "direction": "inner",
       "kind": "general_entry",
-      "edgeId": "e:w60870186:0:f",
-      "nodeId": "n:1601912202",
-      "mainlineNodeId": "n:9847554773"
+      "edgeId": "e:w58868493:0:f",
+      "nodeId": "n:1697722138",
+      "mainlineNodeId": "n:723656977"
     },
     {
       "id": "ramp:c2-outer:yotsugi-entry",
@@ -316725,17 +316440,6 @@
       "mainlineNodeId": "n:1592997567"
     },
     {
-      "id": "ramp:c2-inner:seishincho-entry",
-      "facilityId": "fac:c2:seishincho",
-      "name": "清新町",
-      "route": "C2",
-      "direction": "inner",
-      "kind": "general_entry",
-      "edgeId": "e:w751177053:0:f",
-      "nodeId": "n:7022713630",
-      "mainlineNodeId": "n:7022713629"
-    },
-    {
       "id": "ramp:c2-outer:kosuge-entry",
       "facilityId": "fac:c2:kosuge",
       "name": "小菅",
@@ -316745,17 +316449,6 @@
       "edgeId": "e:w60870186:0:f",
       "nodeId": "n:1601912202",
       "mainlineNodeId": "n:9847554773"
-    },
-    {
-      "id": "ramp:c2-outer:funaboribashi-entry",
-      "facilityId": "fac:c2:funaboribashi",
-      "name": "船堀橋",
-      "route": "C2",
-      "direction": "outer",
-      "kind": "general_entry",
-      "edgeId": "e:w59583395:0:f",
-      "nodeId": "n:7903143888",
-      "mainlineNodeId": "n:7903143893"
     },
     {
       "id": "ramp:c2-inner:nishi-ikebukuro-entry",
@@ -316778,39 +316471,6 @@
       "edgeId": "e:w464736087:0:f",
       "nodeId": "n:4598163085",
       "mainlineNodeId": "n:4598163080"
-    },
-    {
-      "id": "ramp:c2-inner:oji-minami-entry",
-      "facilityId": "fac:c2:oji-minami",
-      "name": "王子南",
-      "route": "C2",
-      "direction": "inner",
-      "kind": "general_entry",
-      "edgeId": "e:w434944289:0:f",
-      "nodeId": "n:4328524389",
-      "mainlineNodeId": "n:3578384614"
-    },
-    {
-      "id": "ramp:c2-outer:oji-kita-entry",
-      "facilityId": "fac:c2:oji-kita",
-      "name": "王子北",
-      "route": "C2",
-      "direction": "outer",
-      "kind": "general_entry",
-      "edgeId": "e:w434944289:0:f",
-      "nodeId": "n:4328524389",
-      "mainlineNodeId": "n:3578384614"
-    },
-    {
-      "id": "ramp:c2-inner:hatsudai-minami-entry",
-      "facilityId": "fac:c2:hatsudai-minami",
-      "name": "初台南",
-      "route": "C2",
-      "direction": "inner",
-      "kind": "general_entry",
-      "edgeId": "e:w381972985:0:f",
-      "nodeId": "n:3851809276",
-      "mainlineNodeId": "n:5685054810"
     },
     {
       "id": "ramp:c2-outer:tomigaya-entry",
@@ -316855,17 +316515,6 @@
       "edgeId": "e:w5171347:0:f",
       "nodeId": "n:35938038",
       "mainlineNodeId": "n:9053263610"
-    },
-    {
-      "id": "ramp:b-east:oi-entry",
-      "facilityId": "fac:b:oi",
-      "name": "大井",
-      "route": "B",
-      "direction": "east",
-      "kind": "general_entry",
-      "edgeId": "e:w405795841:0:f",
-      "nodeId": "n:31288829",
-      "mainlineNodeId": "n:7890941554"
     },
     {
       "id": "ramp:b-east:ariake-entry",
@@ -316962,9 +316611,9 @@
       "route": "B",
       "direction": "west",
       "kind": "general_entry",
-      "edgeId": "e:w1006338881:0:f",
-      "nodeId": "n:1736486542",
-      "mainlineNodeId": "n:9284737985"
+      "edgeId": "e:w788208928:0:f",
+      "nodeId": "n:2277933647",
+      "mainlineNodeId": "n:600747549"
     },
     {
       "id": "ramp:b-west:chidoricho-entry",
@@ -317017,9 +316666,9 @@
       "route": "B",
       "direction": "west",
       "kind": "general_entry",
-      "edgeId": "e:w5365199:0:f",
-      "nodeId": "n:364194613",
-      "mainlineNodeId": "n:12083472624"
+      "edgeId": "e:w32355491:0:f",
+      "nodeId": "n:3815254941",
+      "mainlineNodeId": "n:4964221846"
     },
     {
       "id": "ramp:b-east:higashi-ogishima-entry",
@@ -317055,39 +316704,6 @@
       "mainlineNodeId": "n:10876194307"
     },
     {
-      "id": "ramp:b-east:sugita-entry",
-      "facilityId": "fac:b:sugita",
-      "name": "杉田",
-      "route": "B",
-      "direction": "east",
-      "kind": "general_entry",
-      "edgeId": "e:w39276743:0:f",
-      "nodeId": "n:1599990009",
-      "mainlineNodeId": "n:470733711"
-    },
-    {
-      "id": "ramp:b-east:isogo-entry",
-      "facilityId": "fac:b:isogo",
-      "name": "磯子",
-      "route": "B",
-      "direction": "east",
-      "kind": "general_entry",
-      "edgeId": "e:w39276743:0:f",
-      "nodeId": "n:1599990009",
-      "mainlineNodeId": "n:470733711"
-    },
-    {
-      "id": "ramp:b-east:minamihommoku-futo-entry",
-      "facilityId": "fac:b:minamihommoku-futo",
-      "name": "南本牧ふ頭",
-      "route": "B",
-      "direction": "east",
-      "kind": "general_entry",
-      "edgeId": "e:w438362001:0:f",
-      "nodeId": "n:4361035648",
-      "mainlineNodeId": "n:9381845153"
-    },
-    {
       "id": "ramp:b-east:hommoku-futo-entry",
       "facilityId": "fac:b:hommoku-futo",
       "name": "本牧ふ頭",
@@ -317097,39 +316713,6 @@
       "edgeId": "e:w853280968:0:f",
       "nodeId": "n:7959540374",
       "mainlineNodeId": "n:13329998520"
-    },
-    {
-      "id": "ramp:b-west:sankeien-entry",
-      "facilityId": "fac:b:sankeien",
-      "name": "三溪園",
-      "route": "B",
-      "direction": "west",
-      "kind": "general_entry",
-      "edgeId": "e:w438362001:0:f",
-      "nodeId": "n:4361035648",
-      "mainlineNodeId": "n:9381845153"
-    },
-    {
-      "id": "ramp:b-west:ukishima-entry",
-      "facilityId": "fac:b:ukishima",
-      "name": "浮島",
-      "route": "B",
-      "direction": "west",
-      "kind": "general_entry",
-      "edgeId": "e:w5365199:0:f",
-      "nodeId": "n:364194613",
-      "mainlineNodeId": "n:12083472624"
-    },
-    {
-      "id": "ramp:b-east:ukishima-entry",
-      "facilityId": "fac:b:ukishima",
-      "name": "浮島",
-      "route": "B",
-      "direction": "east",
-      "kind": "general_entry",
-      "edgeId": "e:w5365199:0:f",
-      "nodeId": "n:364194613",
-      "mainlineNodeId": "n:12083472624"
     },
     {
       "id": "ramp:k1-inbound:daishi-entry",
@@ -317209,17 +316792,6 @@
       "mainlineNodeId": "n:581875622"
     },
     {
-      "id": "ramp:k1-inbound:higashi-kanagawa-entry",
-      "facilityId": "fac:k1:higashi-kanagawa",
-      "name": "東神奈川",
-      "route": "K1",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w247838153:0:f",
-      "nodeId": "n:8120955300",
-      "mainlineNodeId": "n:13394442743"
-    },
-    {
       "id": "ramp:k1-outbound:higashi-kanagawa-entry",
       "facilityId": "fac:k1:higashi-kanagawa",
       "name": "東神奈川",
@@ -317286,17 +316858,6 @@
       "mainlineNodeId": "n:4741655106"
     },
     {
-      "id": "ramp:k1-outbound:yokohama-eki-higashiguchi-entry",
-      "facilityId": "fac:k1:yokohama-eki-higashiguchi",
-      "name": "横浜駅東口",
-      "route": "K1",
-      "direction": "outbound",
-      "kind": "general_entry",
-      "edgeId": "e:w247838153:0:f",
-      "nodeId": "n:8120955300",
-      "mainlineNodeId": "n:13394442743"
-    },
-    {
       "id": "ramp:k5-inbound:daikoku-futo-entry",
       "facilityId": "fac:k5:daikoku-futo",
       "name": "大黒ふ頭",
@@ -317339,39 +316900,6 @@
       "edgeId": "e:w38092942:0:f",
       "nodeId": "n:1118762068",
       "mainlineNodeId": "n:1118762366"
-    },
-    {
-      "id": "ramp:y-north:yaesu-entry",
-      "facilityId": "fac:y:yaesu",
-      "name": "八重洲",
-      "route": "Y",
-      "direction": "north",
-      "kind": "general_entry",
-      "edgeId": "e:w46151740:0:f",
-      "nodeId": "n:588411742",
-      "mainlineNodeId": "n:6789046962"
-    },
-    {
-      "id": "ramp:y-south:yaesu-entry",
-      "facilityId": "fac:y:yaesu",
-      "name": "八重洲",
-      "route": "Y",
-      "direction": "south",
-      "kind": "general_entry",
-      "edgeId": "e:w378284514:0:f",
-      "nodeId": "n:1105125663",
-      "mainlineNodeId": "n:3977436333"
-    },
-    {
-      "id": "ramp:k2-inbound:yokohama-eki-nishiguchi-entry",
-      "facilityId": "fac:k2:yokohama-eki-nishiguchi",
-      "name": "横浜駅西口",
-      "route": "K2",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w247838153:0:f",
-      "nodeId": "n:8120955300",
-      "mainlineNodeId": "n:13394442743"
     },
     {
       "id": "ramp:k2-inbound:mitsuzawa-entry",
@@ -317429,17 +316957,6 @@
       "mainlineNodeId": "n:1648466213"
     },
     {
-      "id": "ramp:k3-inbound:nagata-entry",
-      "facilityId": "fac:k3:nagata",
-      "name": "永田",
-      "route": "K3",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w1021042293:0:f",
-      "nodeId": "n:1648466215",
-      "mainlineNodeId": "n:1648466213"
-    },
-    {
       "id": "ramp:k3-outbound:bandobashi-entry",
       "facilityId": "fac:k3:bandobashi",
       "name": "阪東橋",
@@ -317460,17 +316977,6 @@
       "edgeId": "e:w367047850:0:f",
       "nodeId": "n:4744793319",
       "mainlineNodeId": "n:7252867541"
-    },
-    {
-      "id": "ramp:k7-outbound:shin-yokohama-entry",
-      "facilityId": "fac:k7:shin-yokohama",
-      "name": "新横浜",
-      "route": "K7",
-      "direction": "outbound",
-      "kind": "general_entry",
-      "edgeId": "e:w783548646:0:f",
-      "nodeId": "n:7656669611",
-      "mainlineNodeId": "n:7318919095"
     },
     {
       "id": "ramp:k7-inbound:kishiya-namamugi-entry",
@@ -317515,28 +317021,6 @@
       "edgeId": "e:w733767653:0:f",
       "nodeId": "n:410442967",
       "mainlineNodeId": "n:7252683267"
-    },
-    {
-      "id": "ramp:k7-inbound:yokohama-kohoku-entry",
-      "facilityId": "fac:k7:yokohama-kohoku",
-      "name": "横浜港北",
-      "route": "K7",
-      "direction": "inbound",
-      "kind": "general_entry",
-      "edgeId": "e:w783548646:0:f",
-      "nodeId": "n:7656669611",
-      "mainlineNodeId": "n:7318919095"
-    },
-    {
-      "id": "ramp:k7-outbound:yokohama-kohoku-entry",
-      "facilityId": "fac:k7:yokohama-kohoku",
-      "name": "横浜港北",
-      "route": "K7",
-      "direction": "outbound",
-      "kind": "general_entry",
-      "edgeId": "e:w783548646:0:f",
-      "nodeId": "n:7656669611",
-      "mainlineNodeId": "n:7318919095"
     },
     {
       "id": "ramp:k7-inbound:yokohama-aoba-entry",
@@ -317633,20 +317117,9 @@
       "route": "C1",
       "direction": "outer",
       "kind": "general_exit",
-      "edgeId": "e:w203035343:1:f",
-      "nodeId": "n:260710835",
-      "mainlineNodeId": "n:260710834"
-    },
-    {
-      "id": "ramp:c1-inner:kasumigaseki-exit",
-      "facilityId": "fac:c1:kasumigaseki",
-      "name": "霞が関",
-      "route": "C1",
-      "direction": "inner",
-      "kind": "general_exit",
-      "edgeId": "e:w203035343:1:f",
-      "nodeId": "n:260710835",
-      "mainlineNodeId": "n:260710834"
+      "edgeId": "e:w1232083939:0:f",
+      "nodeId": "n:573233930",
+      "mainlineNodeId": "n:8512840451"
     },
     {
       "id": "ramp:c1-outer:daikancho-exit",
@@ -317660,37 +317133,15 @@
       "mainlineNodeId": "n:6285957242"
     },
     {
-      "id": "ramp:c1-outer:kandabashi-exit",
-      "facilityId": "fac:c1:kandabashi",
-      "name": "神田橋",
-      "route": "C1",
-      "direction": "outer",
-      "kind": "general_exit",
-      "edgeId": "e:w203035343:1:f",
-      "nodeId": "n:260710835",
-      "mainlineNodeId": "n:260710834"
-    },
-    {
-      "id": "ramp:c1-inner:kandabashi-exit",
-      "facilityId": "fac:c1:kandabashi",
-      "name": "神田橋",
-      "route": "C1",
-      "direction": "inner",
-      "kind": "general_exit",
-      "edgeId": "e:w203035343:1:f",
-      "nodeId": "n:260710835",
-      "mainlineNodeId": "n:260710834"
-    },
-    {
       "id": "ramp:c1-inner:kyobashi-exit",
       "facilityId": "fac:c1:kyobashi",
       "name": "京橋",
       "route": "C1",
       "direction": "inner",
       "kind": "general_exit",
-      "edgeId": "e:w297864314:11:f",
-      "nodeId": "n:1130812252",
-      "mainlineNodeId": "n:3977436348"
+      "edgeId": "e:w203301443:0:f",
+      "nodeId": "n:1105125707",
+      "mainlineNodeId": "n:2133066629"
     },
     {
       "id": "ramp:c1-outer:shintomicho-exit",
@@ -317765,20 +317216,9 @@
       "route": "1H",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w207659104:0:f",
-      "nodeId": "n:36719773",
-      "mainlineNodeId": "n:2179132980"
-    },
-    {
-      "id": "ramp:1h-outbound:heiwajima-exit",
-      "facilityId": "fac:1h:heiwajima",
-      "name": "平和島",
-      "route": "1H",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w5219394:10:f",
-      "nodeId": "n:36720321",
-      "mainlineNodeId": "n:36720320"
+      "edgeId": "e:w207659102:0:f",
+      "nodeId": "n:36719792",
+      "mainlineNodeId": "n:36719791"
     },
     {
       "id": "ramp:1h-inbound:heiwajima-exit",
@@ -317792,92 +317232,15 @@
       "mainlineNodeId": "n:4362178707"
     },
     {
-      "id": "ramp:1h-outbound:kukonishi-exit",
-      "facilityId": "fac:1h:kukonishi",
-      "name": "空港西",
-      "route": "1H",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w5219394:10:f",
-      "nodeId": "n:36720321",
-      "mainlineNodeId": "n:36720320"
-    },
-    {
-      "id": "ramp:1h-outbound:haneda-exit",
-      "facilityId": "fac:1h:haneda",
-      "name": "羽田",
-      "route": "1H",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w5219394:10:f",
-      "nodeId": "n:36720321",
-      "mainlineNodeId": "n:36720320"
-    },
-    {
-      "id": "ramp:1h-inbound:haneda-exit",
-      "facilityId": "fac:1h:haneda",
-      "name": "羽田",
-      "route": "1H",
-      "direction": "inbound",
-      "kind": "general_exit",
-      "edgeId": "e:w5219394:10:f",
-      "nodeId": "n:36720321",
-      "mainlineNodeId": "n:36720320"
-    },
-    {
-      "id": "ramp:1h-inbound:katsushima-exit",
-      "facilityId": "fac:1h:katsushima",
-      "name": "勝島",
-      "route": "1H",
-      "direction": "inbound",
-      "kind": "general_exit",
-      "edgeId": "e:w207659104:0:f",
-      "nodeId": "n:36719773",
-      "mainlineNodeId": "n:2179132980"
-    },
-    {
-      "id": "ramp:2-outbound:tengenji-exit",
-      "facilityId": "fac:2:tengenji",
-      "name": "天現寺",
-      "route": "2",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w203832854:1:f",
-      "nodeId": "n:7235056888",
-      "mainlineNodeId": "n:8108071787"
-    },
-    {
       "id": "ramp:2-outbound:meguro-exit",
       "facilityId": "fac:2:meguro",
       "name": "目黒",
       "route": "2",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w805171062:3:f",
-      "nodeId": "n:1509483677",
-      "mainlineNodeId": "n:9776203234"
-    },
-    {
-      "id": "ramp:2-outbound:ebara-exit",
-      "facilityId": "fac:2:ebara",
-      "name": "荏原",
-      "route": "2",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w805171062:3:f",
-      "nodeId": "n:1509483677",
-      "mainlineNodeId": "n:9776203234"
-    },
-    {
-      "id": "ramp:2-outbound:togoshi-exit",
-      "facilityId": "fac:2:togoshi",
-      "name": "戸越",
-      "route": "2",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w805171062:3:f",
-      "nodeId": "n:1509483677",
-      "mainlineNodeId": "n:9776203234"
+      "edgeId": "e:w207535709:0:f",
+      "nodeId": "n:2177935838",
+      "mainlineNodeId": "n:2177935842"
     },
     {
       "id": "ramp:3-outbound:takagicho-exit",
@@ -318007,9 +317370,9 @@
       "route": "4",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w381972983:3:f",
-      "nodeId": "n:3851809271",
-      "mainlineNodeId": "n:3851809270"
+      "edgeId": "e:w893332473:0:f",
+      "nodeId": "n:8302849491",
+      "mainlineNodeId": "n:8302849490"
     },
     {
       "id": "ramp:4-inbound:eifuku-exit",
@@ -318045,17 +317408,6 @@
       "mainlineNodeId": "n:7250757776"
     },
     {
-      "id": "ramp:4-inbound:hatsudai-exit",
-      "facilityId": "fac:4:hatsudai",
-      "name": "初台",
-      "route": "4",
-      "direction": "inbound",
-      "kind": "general_exit",
-      "edgeId": "e:w893332473:0:f",
-      "nodeId": "n:8302849491",
-      "mainlineNodeId": "n:8302849490"
-    },
-    {
       "id": "ramp:5-outbound:nishikanda-exit",
       "facilityId": "fac:5:nishikanda",
       "name": "西神田",
@@ -318065,17 +317417,6 @@
       "edgeId": "e:w844502072:1:f",
       "nodeId": "n:2130008050",
       "mainlineNodeId": "n:7877655900"
-    },
-    {
-      "id": "ramp:5-outbound:gokokuji-exit",
-      "facilityId": "fac:5:gokokuji",
-      "name": "護国寺",
-      "route": "5",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w777984385:4:f",
-      "nodeId": "n:9934063555",
-      "mainlineNodeId": "n:7496297588"
     },
     {
       "id": "ramp:5-outbound:higashi-ikebukuro-exit",
@@ -318117,9 +317458,9 @@
       "route": "5",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w1023394138:0:f",
-      "nodeId": "n:4362190090",
-      "mainlineNodeId": "n:4362190089"
+      "edgeId": "e:w182527897:1:f",
+      "nodeId": "n:1928885694",
+      "mainlineNodeId": "n:1928885682"
     },
     {
       "id": "ramp:5-inbound:itabashi-honcho-exit",
@@ -318128,9 +317469,9 @@
       "route": "5",
       "direction": "inbound",
       "kind": "general_exit",
-      "edgeId": "e:w1023394138:0:f",
-      "nodeId": "n:4362190090",
-      "mainlineNodeId": "n:4362190089"
+      "edgeId": "e:w182527897:1:f",
+      "nodeId": "n:1928885694",
+      "mainlineNodeId": "n:1928885682"
     },
     {
       "id": "ramp:5-outbound:nakadai-exit",
@@ -318139,9 +317480,9 @@
       "route": "5",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w1023394138:0:f",
-      "nodeId": "n:4362190090",
-      "mainlineNodeId": "n:4362190089"
+      "edgeId": "e:w201106517:1:f",
+      "nodeId": "n:2110614956",
+      "mainlineNodeId": "n:2110614954"
     },
     {
       "id": "ramp:5-outbound:takashimadaira-exit",
@@ -318153,17 +317494,6 @@
       "edgeId": "e:w199069177:5:f",
       "nodeId": "n:1889206242",
       "mainlineNodeId": "n:7160874945"
-    },
-    {
-      "id": "ramp:5-outbound:toda-minami-exit",
-      "facilityId": "fac:5:toda-minami",
-      "name": "戸田南",
-      "route": "5",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w409002624:0:f",
-      "nodeId": "n:2872561212",
-      "mainlineNodeId": "n:4108975292"
     },
     {
       "id": "ramp:5-inbound:hitotsubashi-exit",
@@ -318199,37 +317529,15 @@
       "mainlineNodeId": "n:7496297588"
     },
     {
-      "id": "ramp:5-inbound:toda-exit",
-      "facilityId": "fac:5:toda",
-      "name": "戸田",
-      "route": "5",
-      "direction": "inbound",
-      "kind": "general_exit",
-      "edgeId": "e:w409002624:0:f",
-      "nodeId": "n:2872561212",
-      "mainlineNodeId": "n:4108975292"
-    },
-    {
       "id": "ramp:6m-outbound:komagata-exit",
       "facilityId": "fac:6m:komagata",
       "name": "駒形",
       "route": "6M",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w1304022054:3:f",
-      "nodeId": "n:460049590",
-      "mainlineNodeId": "n:13256250764"
-    },
-    {
-      "id": "ramp:6m-inbound:mukojima-exit",
-      "facilityId": "fac:6m:mukojima",
-      "name": "向島",
-      "route": "6M",
-      "direction": "inbound",
-      "kind": "general_exit",
-      "edgeId": "e:w157812878:2:f",
-      "nodeId": "n:1671664897",
-      "mainlineNodeId": "n:1313849530"
+      "edgeId": "e:w390422110:1:f",
+      "nodeId": "n:1674175208",
+      "mainlineNodeId": "n:3935796665"
     },
     {
       "id": "ramp:6m-outbound:mukojima-exit",
@@ -318241,17 +317549,6 @@
       "edgeId": "e:w895871079:3:f",
       "nodeId": "n:1671664757",
       "mainlineNodeId": "n:1671664760"
-    },
-    {
-      "id": "ramp:6m-outbound:tsutsumidori-exit",
-      "facilityId": "fac:6m:tsutsumidori",
-      "name": "堤通",
-      "route": "6M",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w157812878:2:f",
-      "nodeId": "n:1671664897",
-      "mainlineNodeId": "n:1313849530"
     },
     {
       "id": "ramp:6m-inbound:tsutsumidori-exit",
@@ -318307,28 +317604,6 @@
       "edgeId": "e:w59664317:2:f",
       "nodeId": "n:7301483731",
       "mainlineNodeId": "n:8378201619"
-    },
-    {
-      "id": "ramp:9-outbound:kiba-exit",
-      "facilityId": "fac:9:kiba",
-      "name": "木場",
-      "route": "9",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w420082431:0:f",
-      "nodeId": "n:1640003757",
-      "mainlineNodeId": "n:4200625588"
-    },
-    {
-      "id": "ramp:9-inbound:fukuzumi-exit",
-      "facilityId": "fac:9:fukuzumi",
-      "name": "福住",
-      "route": "9",
-      "direction": "inbound",
-      "kind": "general_exit",
-      "edgeId": "e:w420082431:0:f",
-      "nodeId": "n:1640003757",
-      "mainlineNodeId": "n:4200625588"
     },
     {
       "id": "ramp:9-inbound:edagawa-exit",
@@ -318419,39 +317694,6 @@
       "mainlineNodeId": "n:2569265264"
     },
     {
-      "id": "ramp:6s-outbound:yashio-minami-exit",
-      "facilityId": "fac:6s:yashio-minami",
-      "name": "八潮南",
-      "route": "6S",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w251808352:1:f",
-      "nodeId": "n:925240920",
-      "mainlineNodeId": "n:2579787369"
-    },
-    {
-      "id": "ramp:6s-inbound:yashio-minami-exit",
-      "facilityId": "fac:6s:yashio-minami",
-      "name": "八潮南",
-      "route": "6S",
-      "direction": "inbound",
-      "kind": "general_exit",
-      "edgeId": "e:w251808352:1:f",
-      "nodeId": "n:925240920",
-      "mainlineNodeId": "n:2579787369"
-    },
-    {
-      "id": "ramp:6s-outbound:yashio-exit",
-      "facilityId": "fac:6s:yashio",
-      "name": "八潮",
-      "route": "6S",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w251808352:1:f",
-      "nodeId": "n:925240920",
-      "mainlineNodeId": "n:2579787369"
-    },
-    {
       "id": "ramp:1u-outbound:honcho-exit",
       "facilityId": "fac:1u:honcho",
       "name": "本町",
@@ -318474,26 +317716,15 @@
       "mainlineNodeId": "n:12189305117"
     },
     {
-      "id": "ramp:1u-outbound:ueno-exit",
-      "facilityId": "fac:1u:ueno",
-      "name": "上野",
-      "route": "1U",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w945962601:0:f",
-      "nodeId": "n:2402061967",
-      "mainlineNodeId": "n:1041298832"
-    },
-    {
       "id": "ramp:1u-outbound:iriya-exit",
       "facilityId": "fac:1u:iriya",
       "name": "入谷",
       "route": "1U",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w1304022054:3:f",
-      "nodeId": "n:460049590",
-      "mainlineNodeId": "n:13256250764"
+      "edgeId": "e:w945962601:0:f",
+      "nodeId": "n:2402061967",
+      "mainlineNodeId": "n:1041298832"
     },
     {
       "id": "ramp:s1-outbound:shikahamabashi-exit",
@@ -318516,28 +317747,6 @@
       "edgeId": "e:w1023900267:1:f",
       "nodeId": "n:4361138363",
       "mainlineNodeId": "n:4361138362"
-    },
-    {
-      "id": "ramp:s1-outbound:shingo-exit",
-      "facilityId": "fac:s1:shingo",
-      "name": "新郷",
-      "route": "S1",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w1023898383:1:f",
-      "nodeId": "n:1992672780",
-      "mainlineNodeId": "n:5910007402"
-    },
-    {
-      "id": "ramp:s1-inbound:shingo-exit",
-      "facilityId": "fac:s1:shingo",
-      "name": "新郷",
-      "route": "S1",
-      "direction": "inbound",
-      "kind": "general_exit",
-      "edgeId": "e:w205725087:0:f",
-      "nodeId": "n:2156964629",
-      "mainlineNodeId": "n:2156964642"
     },
     {
       "id": "ramp:s1-outbound:angyo-exit",
@@ -318639,17 +317848,6 @@
       "mainlineNodeId": "n:12756615647"
     },
     {
-      "id": "ramp:s2-outbound:shintoshin-exit",
-      "facilityId": "fac:s2:shintoshin",
-      "name": "新都心",
-      "route": "S2",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w904689118:2:f",
-      "nodeId": "n:614591159",
-      "mainlineNodeId": "n:614591161"
-    },
-    {
       "id": "ramp:s2-inbound:shintoshin-exit",
       "facilityId": "fac:s2:shintoshin",
       "name": "新都心",
@@ -318727,28 +317925,6 @@
       "mainlineNodeId": "n:4005035741"
     },
     {
-      "id": "ramp:c2-inner:senju-shinbashi-exit",
-      "facilityId": "fac:c2:senju-shinbashi",
-      "name": "千住新橋",
-      "route": "C2",
-      "direction": "inner",
-      "kind": "general_exit",
-      "edgeId": "e:w60870188:0:f",
-      "nodeId": "n:2195382272",
-      "mainlineNodeId": "n:761925139"
-    },
-    {
-      "id": "ramp:c2-outer:yotsugi-exit",
-      "facilityId": "fac:c2:yotsugi",
-      "name": "四つ木",
-      "route": "C2",
-      "direction": "outer",
-      "kind": "general_exit",
-      "edgeId": "e:w60870188:0:f",
-      "nodeId": "n:2195382272",
-      "mainlineNodeId": "n:761925139"
-    },
-    {
       "id": "ramp:c2-inner:yotsugi-exit",
       "facilityId": "fac:c2:yotsugi",
       "name": "四つ木",
@@ -318791,17 +317967,6 @@
       "edgeId": "e:w60870188:0:f",
       "nodeId": "n:2195382272",
       "mainlineNodeId": "n:761925139"
-    },
-    {
-      "id": "ramp:c2-inner:funaboribashi-exit",
-      "facilityId": "fac:c2:funaboribashi",
-      "name": "船堀橋",
-      "route": "C2",
-      "direction": "inner",
-      "kind": "general_exit",
-      "edgeId": "e:w751177046:0:f",
-      "nodeId": "n:7903143889",
-      "mainlineNodeId": "n:7022713610"
     },
     {
       "id": "ramp:c2-outer:nishi-ikebukuro-exit",
@@ -318848,17 +318013,6 @@
       "mainlineNodeId": "n:5653183407"
     },
     {
-      "id": "ramp:c2-outer:shin-itabashi-exit",
-      "facilityId": "fac:c2:shin-itabashi",
-      "name": "新板橋",
-      "route": "C2",
-      "direction": "outer",
-      "kind": "general_exit",
-      "edgeId": "e:w182527897:1:f",
-      "nodeId": "n:1928885694",
-      "mainlineNodeId": "n:1928885682"
-    },
-    {
       "id": "ramp:c2-outer:hatsudai-minami-exit",
       "facilityId": "fac:c2:hatsudai-minami",
       "name": "初台南",
@@ -318903,26 +318057,15 @@
       "mainlineNodeId": "n:8990001226"
     },
     {
-      "id": "ramp:b-west:oiminami-exit",
-      "facilityId": "fac:b:oiminami",
-      "name": "大井南",
-      "route": "B",
-      "direction": "west",
-      "kind": "general_exit",
-      "edgeId": "e:w4854087:12:f",
-      "nodeId": "n:31298924",
-      "mainlineNodeId": "n:4079502535"
-    },
-    {
       "id": "ramp:b-west:oi-exit",
       "facilityId": "fac:b:oi",
       "name": "大井",
       "route": "B",
       "direction": "west",
       "kind": "general_exit",
-      "edgeId": "e:w891282828:3:f",
-      "nodeId": "n:31288862",
-      "mainlineNodeId": "n:8284063780"
+      "edgeId": "e:w4854087:12:f",
+      "nodeId": "n:31298924",
+      "mainlineNodeId": "n:4079502535"
     },
     {
       "id": "ramp:b-west:ariake-exit",
@@ -319096,9 +318239,9 @@
       "route": "B",
       "direction": "east",
       "kind": "general_exit",
-      "edgeId": "e:w39249793:5:f",
-      "nodeId": "n:1599990024",
-      "mainlineNodeId": "n:470279665"
+      "edgeId": "e:w1020253302:1:f",
+      "nodeId": "n:294043105",
+      "mainlineNodeId": "n:10876136377"
     },
     {
       "id": "ramp:b-west:sugita-exit",
@@ -319123,26 +318266,15 @@
       "mainlineNodeId": "n:470279665"
     },
     {
-      "id": "ramp:b-west:minamihommoku-futo-exit",
-      "facilityId": "fac:b:minamihommoku-futo",
-      "name": "南本牧ふ頭",
-      "route": "B",
-      "direction": "west",
-      "kind": "general_exit",
-      "edgeId": "e:w760562349:4:f",
-      "nodeId": "n:6364949094",
-      "mainlineNodeId": "n:6364949093"
-    },
-    {
       "id": "ramp:b-west:hommoku-futo-exit",
       "facilityId": "fac:b:hommoku-futo",
       "name": "本牧ふ頭",
       "route": "B",
       "direction": "west",
       "kind": "general_exit",
-      "edgeId": "e:w760572072:0:f",
-      "nodeId": "n:4335094531",
-      "mainlineNodeId": "n:7105141621"
+      "edgeId": "e:w760562349:4:f",
+      "nodeId": "n:6364949094",
+      "mainlineNodeId": "n:6364949093"
     },
     {
       "id": "ramp:b-east:sankeien-exit",
@@ -319211,39 +318343,6 @@
       "mainlineNodeId": "n:7529354161"
     },
     {
-      "id": "ramp:k1-outbound:hamakawasaki-exit",
-      "facilityId": "fac:k1:hamakawasaki",
-      "name": "浜川崎",
-      "route": "K1",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w1022523258:1:f",
-      "nodeId": "n:925552191",
-      "mainlineNodeId": "n:925552190"
-    },
-    {
-      "id": "ramp:k1-outbound:shioiri-exit",
-      "facilityId": "fac:k1:shioiri",
-      "name": "汐入",
-      "route": "K1",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w1022520297:2:f",
-      "nodeId": "n:4360978736",
-      "mainlineNodeId": "n:9430482161"
-    },
-    {
-      "id": "ramp:k1-outbound:koyasu-exit",
-      "facilityId": "fac:k1:koyasu",
-      "name": "子安",
-      "route": "K1",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w810220980:2:f",
-      "nodeId": "n:2337123327",
-      "mainlineNodeId": "n:2337123333"
-    },
-    {
       "id": "ramp:k1-inbound:koyasu-exit",
       "facilityId": "fac:k1:koyasu",
       "name": "子安",
@@ -319272,9 +318371,9 @@
       "route": "K1",
       "direction": "inbound",
       "kind": "general_exit",
-      "edgeId": "e:w247838151:3:f",
-      "nodeId": "n:8120975721",
-      "mainlineNodeId": "n:8120975720"
+      "edgeId": "e:w724099522:1:f",
+      "nodeId": "n:1774388229",
+      "mainlineNodeId": "n:6790935665"
     },
     {
       "id": "ramp:k1-outbound:minato-mirai-exit",
@@ -319327,9 +318426,9 @@
       "route": "K1",
       "direction": "inbound",
       "kind": "general_exit",
-      "edgeId": "e:w1022523258:1:f",
-      "nodeId": "n:925552191",
-      "mainlineNodeId": "n:925552190"
+      "edgeId": "e:w1022520297:2:f",
+      "nodeId": "n:4360978736",
+      "mainlineNodeId": "n:9430482161"
     },
     {
       "id": "ramp:k1-inbound:namamugi-exit",
@@ -319360,9 +318459,9 @@
       "route": "K1",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w760527683:3:f",
-      "nodeId": "n:4741655080",
-      "mainlineNodeId": "n:7529030755"
+      "edgeId": "e:w810220980:2:f",
+      "nodeId": "n:2337123327",
+      "mainlineNodeId": "n:2337123333"
     },
     {
       "id": "ramp:k5-outbound:daikoku-futo-exit",
@@ -319409,70 +318508,15 @@
       "mainlineNodeId": "n:7319506147"
     },
     {
-      "id": "ramp:y-south:yaesu-exit",
-      "facilityId": "fac:y:yaesu",
-      "name": "八重洲",
-      "route": "Y",
-      "direction": "south",
-      "kind": "general_exit",
-      "edgeId": "e:w203301443:0:f",
-      "nodeId": "n:1105125707",
-      "mainlineNodeId": "n:2133066629"
-    },
-    {
-      "id": "ramp:y-north:yaesu-exit",
-      "facilityId": "fac:y:yaesu",
-      "name": "八重洲",
-      "route": "Y",
-      "direction": "north",
-      "kind": "general_exit",
-      "edgeId": "e:w4849052:8:f",
-      "nodeId": "n:1105125241",
-      "mainlineNodeId": "n:4114770742"
-    },
-    {
-      "id": "ramp:y-south:marunouchi-exit",
-      "facilityId": "fac:y:marunouchi",
-      "name": "丸の内",
-      "route": "Y",
-      "direction": "south",
-      "kind": "general_exit",
-      "edgeId": "e:w1232083939:0:f",
-      "nodeId": "n:573233930",
-      "mainlineNodeId": "n:8512840451"
-    },
-    {
       "id": "ramp:k2-outbound:yokohama-eki-nishiguchi-exit",
       "facilityId": "fac:k2:yokohama-eki-nishiguchi",
       "name": "横浜駅西口",
       "route": "K2",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w247838151:3:f",
-      "nodeId": "n:8120975721",
-      "mainlineNodeId": "n:8120975720"
-    },
-    {
-      "id": "ramp:k2-outbound:mitsuzawa-exit",
-      "facilityId": "fac:k2:mitsuzawa",
-      "name": "三ツ沢",
-      "route": "K2",
-      "direction": "outbound",
-      "kind": "general_exit",
       "edgeId": "e:w39744538:6:f",
       "nodeId": "n:476499286",
       "mainlineNodeId": "n:3817814421"
-    },
-    {
-      "id": "ramp:k3-outbound:shin-yamashita-exit",
-      "facilityId": "fac:k3:shin-yamashita",
-      "name": "新山下",
-      "route": "K3",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w760572072:0:f",
-      "nodeId": "n:4335094531",
-      "mainlineNodeId": "n:7105141621"
     },
     {
       "id": "ramp:k3-inbound:shin-yamashita-exit",
@@ -319503,9 +318547,9 @@
       "route": "K3",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w760718687:1:f",
-      "nodeId": "n:1648466199",
-      "mainlineNodeId": "n:3125197079"
+      "edgeId": "e:w174490699:4:f",
+      "nodeId": "n:1851661488",
+      "mainlineNodeId": "n:1851661479"
     },
     {
       "id": "ramp:k3-inbound:bandobashi-exit",
@@ -319536,9 +318580,9 @@
       "route": "K7",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "e:w734299106:22:f",
-      "nodeId": "n:7473451738",
-      "mainlineNodeId": "n:7656623437"
+      "edgeId": "e:w760536118:6:f",
+      "nodeId": "n:3710151991",
+      "mainlineNodeId": "n:6439841432"
     },
     {
       "id": "ramp:k7-inbound:shin-yokohama-exit",
@@ -319550,28 +318594,6 @@
       "edgeId": "e:w760536118:6:f",
       "nodeId": "n:3710151991",
       "mainlineNodeId": "n:6439841432"
-    },
-    {
-      "id": "ramp:k7-outbound:kishiya-namamugi-exit",
-      "facilityId": "fac:k7:kishiya-namamugi",
-      "name": "岸谷生麦",
-      "route": "K7",
-      "direction": "outbound",
-      "kind": "general_exit",
-      "edgeId": "e:w760527683:3:f",
-      "nodeId": "n:4741655080",
-      "mainlineNodeId": "n:7529030755"
-    },
-    {
-      "id": "ramp:k7-inbound:kishiya-namamugi-exit",
-      "facilityId": "fac:k7:kishiya-namamugi",
-      "name": "岸谷生麦",
-      "route": "K7",
-      "direction": "inbound",
-      "kind": "general_exit",
-      "edgeId": "e:w760527683:3:f",
-      "nodeId": "n:4741655080",
-      "mainlineNodeId": "n:7529030755"
     },
     {
       "id": "ramp:k7-outbound:baba-exit",

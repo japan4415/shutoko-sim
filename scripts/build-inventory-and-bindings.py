@@ -5,11 +5,13 @@ scripts/build-inventory-and-bindings.py
 Builds canonical ramp inventory (data/ramp-inventory.json) and
 OSM ramp bindings (data/osm-ramp-bindings.json) from:
   1. data/official-population-snapshot.json (official Shutoko population)
-  2. fixtures/osm/shutoko-all.json (full-network OSM fixture)
-  3. fixtures/generated/graph.json (pre-built topology edges for classified entry/exit validation)
+  2. data/ramp-support-decisions.json (reviewed facility-level decisions)
+  3. fixtures/osm/shutoko-all.json (full-network OSM fixture)
+  4. fixtures/generated/graph.json (directed entry/exit validation)
 
 Requirements:
-  - All active general entries and exits mapped 1:1 to verified OSM entry/exit edges.
+  - Every active general entry/exit is either verified-bound or explicitly unsupported.
+  - No nearest-edge/proximity fallback. New unclassified official records stop the build.
   - Zero consecutive/placeholder IDs (no osmNodeId = osmWayId + 1).
   - Every osmNodeId must be in osm_way_id.nodes.
   - Every motorwayNodeId must exist in the OSM graph.
@@ -18,17 +20,7 @@ Requirements:
 """
 
 import json
-import math
 import re
-import sys
-
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371000
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlam = math.radians(lon2 - lon1)
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlam/2)**2
-    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 FACILITY_SLUG_MAP = {
     "神田橋": "kandabashi", "宝町": "takaracho", "京橋": "kyobashi",
@@ -98,71 +90,30 @@ def main():
     with open("fixtures/osm/shutoko-all.json", "r", encoding="utf-8") as f:
         osm = json.load(f)
 
+    with open("data/ramp-support-decisions.json", "r", encoding="utf-8") as f:
+        support_file = json.load(f)
+
     osm_ways = {e["id"]: e for e in osm.get("elements", []) if e["type"] == "way"}
     osm_nodes = {e["id"]: e for e in osm.get("elements", []) if e["type"] == "node"}
-    osm_relations = [e for e in osm.get("elements", []) if e["type"] == "relation"]
-
     with open("fixtures/generated/graph.json", "r", encoding="utf-8") as f:
         g = json.load(f)
 
-    # Classify edges from graph
-    edges_by_kind = {"general_entry": [], "general_exit": []}
+    directed_edges = {}
     for e in g["edges"]:
-        ekind = e.get("kind")
-        if ekind == "entry":
-            target_kind = "general_entry"
-        elif ekind == "exit":
-            target_kind = "general_exit"
-        else:
-            continue
+        parts = e["id"].split(":")
+        if len(parts) >= 2 and parts[1].startswith("w"):
+            directed_edges[(int(parts[1][1:]), e["from"], e["to"])] = e
 
-        wid = int(e["id"].split(":")[1][1:])
-        fnid = int(e["from"].split(":")[1])
-        tnid = int(e["to"].split(":")[1])
-        w = osm_ways.get(wid, {})
-        wtags = w.get("tags", {})
-        gn = osm_nodes.get(fnid if target_kind == "general_entry" else tnid, {})
-        mn = osm_nodes.get(tnid if target_kind == "general_entry" else fnid, {})
-
-        edges_by_kind[target_kind].append({
-            "edge": e,
-            "edge_id": e["id"],
-            "way_id": wid,
-            "from_node_id": fnid,
-            "to_node_id": tnid,
-            "ground_node_id": gn.get("id"),
-            "motorway_node_id": mn.get("id"),
-            "lat": gn.get("lat", 0.0),
-            "lon": gn.get("lon", 0.0),
-            "name": wtags.get("name", ""),
-            "ref": str(wtags.get("ref", "")).strip(),
-            "dest": wtags.get("destination", "") or wtags.get("destination:ref", ""),
-            "way_nodes": w.get("nodes", []),
-        })
-
-    # Index junction nodes
-    junction_nodes_by_ref = {}
-    junction_nodes_by_name = {}
-    for n in osm_nodes.values():
-        tags = n.get("tags", {})
-        if tags.get("highway") == "motorway_junction":
-            ref = tags.get("ref")
-            name = tags.get("name")
-            if ref:
-                junction_nodes_by_ref.setdefault(str(ref).strip(), []).append(n)
-            if name:
-                junction_nodes_by_name.setdefault(name.strip(), []).append(n)
+    decisions = {d["rampId"]: d for d in support_file["decisions"]}
+    if len(decisions) != len(support_file["decisions"]):
+        raise SystemExit("duplicate rampId in ramp-support-decisions.json")
 
     all_official = snap["generalEntries"] + snap["generalExits"]
-    print(f"Matching {len(all_official)} official ramps to OSM edges...")
-
-    used_edges = {}
+    print(f"Classifying {len(all_official)} official ramps from reviewed decisions...")
     seen_facility_route_dir_kind = set()
     canonical_ramps = []
     bindings = []
-    unmatched = []
 
-    # Sort so that specific refs match first
     for item in all_official:
         fac_name = item["facilityName"]
         route = item["route"]
@@ -182,65 +133,12 @@ def main():
             ramp_id = f"ramp:{route.lower()}-{direction}:{slug}-{inout_no.lower()}-{kind.replace('general_', '')}"
         seen_facility_route_dir_kind.add((facility_id, route, direction, kind))
 
-        cands = edges_by_kind[kind]
-
-        target_coords = []
-        if inout_no in junction_nodes_by_ref:
-            for n in junction_nodes_by_ref[inout_no]:
-                target_coords.append((n["lat"], n["lon"], 150))
-        if fac_name in junction_nodes_by_name:
-            for n in junction_nodes_by_name[fac_name]:
-                target_coords.append((n["lat"], n["lon"], 100))
-        if not target_coords:
-            unmatched.append((fac_name, route, direction, kind, inout_no, "no official OSM junction evidence"))
-            continue
-
-        best_cand = None
-        best_score = -1e9
-
-        for c in cands:
-            # Never silently reuse one physical edge for a different official
-            # facility. Shared approaches require explicit evidence and a
-            # reviewed override, not a proximity heuristic.
-            if c["edge_id"] in used_edges and used_edges[c["edge_id"]] != (fac_name, route):
-                continue
-            text_score = 0
-            if inout_no and (inout_no == c["ref"] or inout_no in c["name"] or inout_no in c["dest"]):
-                text_score += 600
-            if fac_name in c["name"] or fac_name in c["dest"]:
-                text_score += 400
-            if route in c["name"] or route in c["ref"]:
-                text_score += 100
-
-            min_dist = 1e9
-            dist_weight = 0
-            for tlat, tlon, weight in target_coords:
-                d = haversine(c["lat"], c["lon"], tlat, tlon)
-                if d < min_dist:
-                    min_dist = d
-                    dist_weight = weight
-
-            if min_dist < 4000:
-                score = text_score + dist_weight * 2 - (min_dist / 10.0)
-                if score > best_score:
-                    best_score = score
-                    best_cand = c
-
-        if not best_cand:
-            unmatched.append((fac_name, route, direction, kind, inout_no, "no unique OSM edge within 4 km"))
-            continue
-
-        used_edges[best_cand["edge_id"]] = (fac_name, route)
-
-        ground_lat = best_cand["lat"]
-        ground_lon = best_cand["lon"]
-
-        # Ensure ground node is strictly in way_nodes
-        osm_node_id = best_cand["ground_node_id"]
-        motorway_node_id = best_cand["motorway_node_id"]
-        if osm_node_id not in best_cand["way_nodes"]:
-            # Pick closest node from way_nodes
-            osm_node_id = best_cand["way_nodes"][0] if kind == "general_entry" else best_cand["way_nodes"][-1]
+        decision = decisions.get(ramp_id)
+        if decision is None:
+            raise SystemExit(f"unclassified official ramp: {ramp_id}")
+        support_state = decision["supportState"]
+        if support_state not in ("verified_bound", "unsupported"):
+            raise SystemExit(f"invalid supportState for {ramp_id}: {support_state}")
 
         canonical_ramps.append({
             "rampId": ramp_id,
@@ -249,31 +147,48 @@ def main():
             "route": route,
             "direction": direction,
             "kind": kind,
-            "lat": round(ground_lat, 6),
-            "lon": round(ground_lon, 6),
+            "lat": decision["lat"],
+            "lon": decision["lon"],
             "restrictions": ["etc_only"] if "etc" in fac_url.lower() else [],
             "restrictionStatus": "verified" if "etc" in fac_url.lower() else "unverified",
             "status": "active",
             "source": fac_url,
             "sourceDate": "2026-09-16",
-            "coordinateSource": "https://www.openstreetmap.org/",
-            "coordinateStatus": "derived"
+            "coordinateSource": decision["coordinateSource"],
+            "coordinateStatus": decision["coordinateStatus"],
+            "supportState": support_state,
+            "supportReason": decision["supportReason"],
+            "supportEvidence": decision["supportEvidence"]
         })
 
-        bindings.append({
-            "rampId": ramp_id,
-            "osmWayId": best_cand["way_id"],
-            "osmNodeId": osm_node_id,
-            "motorwayNodeId": motorway_node_id,
-            "direction": direction,
-            "notes": f"OSM structural binding candidate for {fac_name} ({route} {direction})"
-        })
+        binding = decision.get("binding")
+        if support_state == "unsupported":
+            if binding is not None:
+                raise SystemExit(f"unsupported ramp unexpectedly has binding: {ramp_id}")
+            continue
+        if binding is None:
+            raise SystemExit(f"verified ramp lacks binding: {ramp_id}")
+        if binding["direction"] != direction:
+            raise SystemExit(f"binding direction mismatch for {ramp_id}")
+        way = osm_ways.get(binding["osmWayId"])
+        if way is None or binding["osmNodeId"] not in way.get("nodes", []):
+            raise SystemExit(f"binding way/node does not exist for {ramp_id}")
+        if binding["motorwayNodeId"] not in osm_nodes:
+            raise SystemExit(f"binding motorway node does not exist for {ramp_id}")
+        if kind == "general_entry":
+            edge_key = (binding["osmWayId"], f'n:{binding["osmNodeId"]}', f'n:{binding["motorwayNodeId"]}')
+            expected_kind = "entry"
+        else:
+            edge_key = (binding["osmWayId"], f'n:{binding["motorwayNodeId"]}', f'n:{binding["osmNodeId"]}')
+            expected_kind = "exit"
+        edge = directed_edges.get(edge_key)
+        if edge is None or edge.get("kind") != expected_kind:
+            raise SystemExit(f"binding is not an exact directed {expected_kind} segment: {ramp_id}")
+        bindings.append(binding)
 
-    if unmatched:
-        print("Refusing to write partial/fabricated inventory; unresolved official ramps:", file=sys.stderr)
-        for row in unmatched:
-            print("  " + " | ".join(row), file=sys.stderr)
-        raise SystemExit(f"{len(unmatched)} official ramps lack a unique evidence-backed OSM edge")
+    extra_decisions = sorted(set(decisions) - {r["rampId"] for r in canonical_ramps})
+    if extra_decisions:
+        raise SystemExit(f"support decisions contain non-official ramp IDs: {extra_decisions}")
 
     # Add 24 Boundary JCTs
     # Distinct boundary connections:
@@ -322,7 +237,10 @@ def main():
             "source": "https://search.shutoko.jp/",
             "sourceDate": "2026-09-16",
             "coordinateSource": "https://www.openstreetmap.org/",
-            "coordinateStatus": "derived"
+            "coordinateStatus": "derived",
+            "supportState": "not_routable",
+            "supportReason": "高速道路境界JCTであり一般選択ランプではない。",
+            "supportEvidence": ["data/official-population-snapshot.json"]
         })
 
     # Add closed ramps (historical Gofukubashi & Edobashi)
@@ -347,7 +265,10 @@ def main():
             "source": "https://www.shutoko.jp/use/network/",
             "sourceDate": "2026-09-16",
             "coordinateSource": "https://www.openstreetmap.org/",
-            "coordinateStatus": "derived"
+            "coordinateStatus": "derived",
+            "supportState": "not_routable",
+            "supportReason": "閉鎖済み施設であり一般選択ランプではない。",
+            "supportEvidence": ["https://www.shutoko.jp/use/network/"]
         })
         # Closed historical ramps intentionally have no active graph binding.
         # Reusing an unrelated live C1 edge would make them selectable and would
@@ -355,7 +276,7 @@ def main():
 
     # Output inventory file
     inv_file = {
-        "version": 2,
+        "version": 3,
         "source": "https://search.shutoko.jp/",
         "sourceDate": "2026-09-16",
         "coordinateSource": "https://www.openstreetmap.org/",
@@ -367,16 +288,21 @@ def main():
 
     # Output bindings file
     bindings_file = {
-        "version": 2,
+        "version": 3,
         "sourceDate": "2026-09-16",
-        "bindings": bindings
+        "bindings": bindings,
+        "sharedPhysicalOverrides": support_file["sharedPhysicalOverrides"]
     }
     with open("data/osm-ramp-bindings.json", "w", encoding="utf-8") as f:
         json.dump(bindings_file, f, ensure_ascii=False, indent=2)
 
     print(f"Generated data/ramp-inventory.json: {len(canonical_ramps)} ramps")
     active_general = [r for r in canonical_ramps if r["status"] == "active" and r["kind"] in ["general_entry", "general_exit"]]
-    print(f"  Active general ramps: {len(active_general)} (100% structurally matched to OSM ways/nodes)")
+    verified = [r for r in active_general if r["supportState"] == "verified_bound"]
+    unsupported = [r for r in active_general if r["supportState"] == "unsupported"]
+    print(f"  Active general ramps: {len(active_general)}")
+    print(f"  Verified-bound: {len(verified)}")
+    print(f"  Explicit unsupported: {len(unsupported)}")
     print(f"  Boundary ramps: {len(BOUNDARY_DEFS)}")
     print(f"  Closed ramps: {len(CLOSED_RAMPS)}")
     print(f"Generated data/osm-ramp-bindings.json: {len(bindings)} bindings")

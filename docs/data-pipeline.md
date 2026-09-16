@@ -163,7 +163,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって `manifest.json` の `unverifiedSections` 配列に自動列挙される。
 - **自動列挙対象**: グラフ内に存在するすべての入口・出口エッジのうち、検証済み課金ペアに採用されていないエッジ。OSM ウェイに `name` タグが存在する場合は「エッジID（ウェイ名）」の形式で可読性を担保。
 - **除外路線・通行規制スキップの注記**: C1 外の分岐路線（八重洲線、1号上野線、6号向島線等）や、静的道路グラフで適用外となった通行規制（conditional / no via / outside graph / disconnected / unrecognized 等のスキップカテゴリ）に関する注記も件数付きで同リストに収録。
-- **現状**: 現行リリース `all-real-v1` は課金ペア 8 件を保持するが、全線 topology で最初の出口にならない 2 件は `unverified` であり、検索対象となる `verified` は 6 件である。`unverifiedSections` は 371 件で、施設単位の OSM binding と非 C1 の課金ペア検証は継続課題である。
+- **現状**: 現行リリース `all-real-v1` は課金ペア 8 件を保持するが、全線 topology で最初の出口にならない 2 件は `unverified` であり、検索対象となる `verified` は 6 件である。公式一般ランプ371件のうち282件を施設単位の exact directed segment に bind し、89件は根拠付き `unsupported` としてグラフ外に隔離している。
 
 ## 6. 全24路線・正規ランプ台帳（Canonical Ramp Inventory）
 
@@ -187,24 +187,28 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 - **事実と推定・導出値の厳格な分離（Provenance & Verification）**:
   - **公式確認事実（Verified Facts）**: 施設名（`facilityName`）、路線（`route`）、方向（`direction`）、ランプ種別（`kind`）、供用状態（`status`）は、首都高速道路公式検索データ（`https://search.shutoko.jp/`）と現行の路線・出入口案内（`https://www.shutoko.jp/driving/route/`）を 2026-09-16 に照合した正本事実である。
   - **位置座標の導出（Derived Coordinates）**: 公式サイトには緯度経度の数値データは掲載されていない。active 一般ランプの `lat`, `lon` は `data/osm-ramp-bindings.json` の OpenStreetMap 候補から導出した値であり、`coordinateSource: "osm"`, `coordinateStatus: "derived"` として公式事実と区別する。境界 JCT と閉鎖済みランプは公開選択対象外で、OSM binding を持たない。
+  - **利用可能性（Support State）**: active 一般ランプは `supportState` が `verified_bound`（282件）または `unsupported`（89件）のどちらか一方である。後者も公式台帳から削除せず、`supportReason` と `supportEvidence` を保持する。境界 JCT と閉鎖済み施設は `not_routable` とする。
+  - **八重洲線の扱い**: 八重洲4件と丸の内1件は公式snapshotに保持する一方、現行fixtureのY線が construction/abandoned 状態でactive `motorway_link`を確認できず、公式liveページも再確認できなかったため `unsupported` とする。閉鎖を断定せず、宝町・C1・霞が関の近傍segmentを流用しない。
   - **利用制約の検証状況（Restriction Verification）**: 首都高では ETC 専用料金所の順次導入（35箇所以上）が進行中であるが、全ランプに対する制約調査は完了していない。そのため、未全数調査のランプは `restrictionStatus: "unverified"` として明示的にモデル化し、公式確認済みのランプ（神田橋、馬場等）のみ `restrictionStatus: "verified"` とする。制約が空配列 `[]` であることをもって「現金利用可能であることが公式確認された」と誤認させない。
 
 ### 6.2 公開成果物とグラフへのバインド（`ramps.json`）
 
 `crates/graph-builder` は探索用グラフ `graph.json` に加え、正規ランプ台帳をグラフの各エッジ・ノードに紐付けた公開成果物 `fixtures/generated/ramps.json` を同時に生成する。
 
-- `ramps.json`: 正規ランプ台帳全 399 ランプの属性・座標・グラフバインド状態を格納した公開成果物。公開選択対象として bound にするのは active な一般入口・出口 371 件だけであり、境界 JCT 24 件と閉鎖済み 4 件は台帳上で種別を保持しつつ unbound とする。
+- `ramps.json`: 正規ランプ台帳全399件を保持し、`verified_bound` 282件だけを公開選択対象として bound にする。`unsupported` 89件、境界JCT 24件、閉鎖済み4件は unbound とする。
 
 ## 7. OSM ランプバインディング（`data/osm-ramp-bindings.json`）
 
 正規ランプ台帳の active 一般ランプと OpenStreetMap 実データの要素（way / node）を決定論的に紐付ける。境界 JCT と閉鎖済みランプは台帳にのみ保持し、このファイルには含めない。
 
 - **バインディングファイル**: `data/osm-ramp-bindings.json`
+- **判断正本**: `data/ramp-support-decisions.json`。距離順位による fallback は使わず、未分類の公式レコードが現れた場合は生成を停止する。
 - **各要素の定義**:
   - `rampId`: 正規ランプ ID（例: `ramp:c1-outer:kandabashi-entry`）
   - `osmWayId`: ランプを表す OSM `motorway_link` ウェイ ID
   - `osmNodeId`: 一般道接続端点ノード（入口の乗込ノードまたは出口の流出ノード）
   - `motorwayNodeId`: 首都高本線（`motorway`）との分合流ノード ID
+  - `sharedPhysicalOverrides`: 公式同一施設の共有物理segmentである G15/G27 のメンバー、理由、証拠。重複を暗黙許可しない。
 - **Overpass クエリ戦略**:
   - 首都高速道路のリレーション（全 24 路線）および `network="首都高速道路"` タグを起点とし、関連する `motorway_link` を多ホップ展開（1〜4 ホップ）して抽出。
   - 一般道との接続判定は、地表コンテキストウェイ（車両通行可能な `highway` ウェイ）のノード集合との積集合により機械的・決定論的に特定。
@@ -242,15 +246,15 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 グラフビルダーは、ビルド時に以下のアーティファクトを生成・出力する:
 - `graph.json`: 道路ネットワークグラフ（ノード、エッジ、バインド済みランプ、OD 料金）
 - `snap-index.json`: 地表スナップ用入口アクセス地点インデックス
-- `ramps.json`: 正規ランプ台帳全 399 ランプの属性・座標・グラフバインド状態を格納した公開成果物（active 一般ランプ 371 件のみ bound）
+- `ramps.json`: 正規ランプ台帳全399件の属性・座標・support state・グラフバインド状態を格納した公開成果物（`verified_bound` 282件のみ bound）
 - `manifest.json`: 全成果物の SHA-256、未検証区間、検証済みペア出典情報
 
 ## 11. 保守・更新ワークフロー（ランプ・路線・料金の追加手順）
 
 路線拡張やランプの新設・改修、料金改定時は以下の手順で安全に更新を行う:
 
-1. **台帳追加**: `data/ramp-inventory.json` に新ランプ（`rampId`, `facilityName`, `route`, `direction`, `kind`, `restrictions`）を追加。
-2. **OSM バインディング**: `data/osm-ramp-bindings.json` に対応する `osmWayId`, `osmNodeId`, `motorwayNodeId` を追加。
+1. **公式snapshot更新**: `data/official-population-snapshot.json` を更新する。
+2. **根拠付き分類**: `data/ramp-support-decisions.json` に `verified_bound` と exact directed segment、または `unsupported` と理由・証拠を追加する。未分類のまま生成しない。
 3. **料金定義**: 必要に応じて `data/od-tariffs.json` に新 OD ペアの料金距離・料金額を追加。
 4. **自動バリデーション**: `cargo test -p shutoko-graph-builder` を実行。台帳・バインディング・料金の整合性検証（ID 参照整合性、座標範囲、料金範囲、10円丸め等）が自動的に走る。
 5. **フィクスチャ再生成**: `bash scripts/generate-fixtures.sh` を実行し、`fixtures/generated/` の成果物を更新。

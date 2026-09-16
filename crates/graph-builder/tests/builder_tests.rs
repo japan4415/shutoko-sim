@@ -4105,7 +4105,7 @@ fn test_cli_with_full_fixtures() {
     let ramps_raw = std::fs::read_to_string(out_dir.join("ramps.json")).unwrap();
     let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
     assert_eq!(ramps_json["totalRamps"], 399);
-    assert_eq!(ramps_json["boundRamps"], 371);
+    assert_eq!(ramps_json["boundRamps"], 282);
 
     let ramps = ramps_json["ramps"].as_array().expect("ramps array");
     let active_general = ramps
@@ -4116,7 +4116,20 @@ fn test_cli_with_full_fixtures() {
         })
         .collect::<Vec<_>>();
     assert_eq!(active_general.len(), 371);
-    assert!(active_general.iter().all(|r| r["bound"] == true));
+    assert_eq!(
+        active_general
+            .iter()
+            .filter(|r| r["supportState"] == "verified_bound" && r["bound"] == true)
+            .count(),
+        282
+    );
+    assert_eq!(
+        active_general
+            .iter()
+            .filter(|r| r["supportState"] == "unsupported" && r["bound"] == false)
+            .count(),
+        89
+    );
     assert!(ramps.iter().filter(|r| r["bound"] == true).all(|r| {
         r["status"] == "active"
             && matches!(r["kind"].as_str(), Some("general_entry" | "general_exit"))

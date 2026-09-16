@@ -2,7 +2,7 @@
 
 ## 現在地
 
-Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口 182・一般出口 189 を収録し、境界 JCT 24 件・閉鎖済み 4 件を加えた正規台帳は 399 件である。全線 OSM fixture から生成した `all-real-v1` は 22,824 nodes / 22,987 edges、active 一般ランプ 371/371 件を exact directed segment に bind し、boundary/closed は公開選択対象から除外する。一方、施設名が異なるレコードによる同一 OSM segment 共有候補が残るため、全 24 路線での施設単位 binding 正当性と周回探索成立は未検証であり、全線対応済みとは扱わない。課金ペア8件中、全線 topology で `FIRST_EXIT_MISMATCH` となる2件は `unverified` とし、検索可能なのは verified 6件だけである。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
+Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v1` は22,824 nodes / 22,987 edgesで、施設単位の証拠がある282件だけを exact directed segment に bind する。残るactive一般89件は理由・証拠付き `unsupported`、boundary/closedは `not_routable` として公開選択対象から除外する。課金ペア8件中、全線 topology で `FIRST_EXIT_MISMATCH` となる2件は `unverified` とし、検索可能なのは verified 6件だけである。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
 
 ## 実装順序と完了条件
 

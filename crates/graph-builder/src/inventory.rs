@@ -32,6 +32,12 @@ pub struct CanonicalRampInventoryItem {
     pub coordinate_status: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restriction_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub support_evidence: Vec<String>,
 }
 
 /// The root structure of `data/ramp-inventory.json`.
@@ -60,6 +66,20 @@ pub struct OsmRampBinding {
     pub notes: Option<String>,
 }
 
+/// Reviewed exception for multiple official IDs sharing one physical segment.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedPhysicalOverride {
+    pub id: String,
+    pub osm_way_id: i64,
+    pub osm_node_id: i64,
+    pub motorway_node_id: i64,
+    pub ramp_ids: Vec<String>,
+    pub reason: String,
+    #[serde(default)]
+    pub evidence: Vec<String>,
+}
+
 /// The root structure of `data/osm-ramp-bindings.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,6 +87,8 @@ pub struct OsmRampBindingsFile {
     pub version: u32,
     pub source_date: String,
     pub bindings: Vec<OsmRampBinding>,
+    #[serde(default)]
+    pub shared_physical_overrides: Vec<SharedPhysicalOverride>,
 }
 
 fn default_fixed_fee() -> u64 {
@@ -119,6 +141,10 @@ pub struct RampArtifactEntry {
     pub lat: f64,
     pub lon: f64,
     pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restrictions: Vec<String>,
     pub bound: bool,
@@ -222,6 +248,31 @@ pub fn validate_ramp_inventory(inv: &RampInventoryFile) -> Result<(), Vec<String
                 r.ramp_id, r.status
             ));
         }
+
+        if inv.version >= 3 {
+            let expected_general = r.status == "active"
+                && matches!(r.kind, RampKind::GeneralEntry | RampKind::GeneralExit);
+            let valid_state = if expected_general {
+                matches!(
+                    r.support_state.as_deref(),
+                    Some("verified_bound" | "unsupported")
+                )
+            } else {
+                r.support_state.as_deref() == Some("not_routable")
+            };
+            if !valid_state {
+                errors.push(format!(
+                    "ramp {} has supportState {:?} inconsistent with status/kind",
+                    r.ramp_id, r.support_state
+                ));
+            }
+            if r.support_reason.as_deref().unwrap_or_default().is_empty() {
+                errors.push(format!("ramp {} has empty supportReason", r.ramp_id));
+            }
+            if r.support_evidence.is_empty() {
+                errors.push(format!("ramp {} has no supportEvidence", r.ramp_id));
+            }
+        }
     }
 
     if errors.is_empty() {
@@ -251,6 +302,20 @@ pub fn validate_osm_ramp_bindings(
                 "binding for '{}' has direction '{}' but inventory requires '{}'",
                 b.ramp_id, b.direction, ramp.direction
             )),
+            Some(ramp)
+                if inv.version >= 3
+                    && (ramp.status != "active"
+                        || !matches!(
+                            ramp.kind,
+                            RampKind::GeneralEntry | RampKind::GeneralExit
+                        )
+                        || ramp.support_state.as_deref() != Some("verified_bound")) =>
+            {
+                errors.push(format!(
+                    "binding for '{}' references a non-routable inventory record",
+                    b.ramp_id
+                ))
+            }
             Some(_) => {}
         }
         if b.osm_way_id <= 0 {
@@ -287,17 +352,98 @@ pub fn validate_osm_ramp_bindings(
         }
     }
 
-    // Only active general ramps are required to be user-selectable. Boundary
-    // connectors and closed/planned ramps remain distinct inventory records,
-    // but must not be forced into the public entry/exit selection set.
+    // Active general records are exhaustively classified: verified records
+    // must have exactly one binding, unsupported records must have none.
     for r in &inv.ramps {
-        if r.status == "active"
-            && matches!(r.kind, RampKind::GeneralEntry | RampKind::GeneralExit)
-            && !bound_ramp_ids.contains(r.ramp_id.as_str())
+        if r.status == "active" && matches!(r.kind, RampKind::GeneralEntry | RampKind::GeneralExit)
+        {
+            match (inv.version, r.support_state.as_deref()) {
+                (0..=2, _) if !bound_ramp_ids.contains(r.ramp_id.as_str()) => {
+                    errors.push(format!(
+                        "active general ramp '{}' has no OSM binding",
+                        r.ramp_id
+                    ));
+                }
+                (_, Some("verified_bound")) if !bound_ramp_ids.contains(r.ramp_id.as_str()) => {
+                    errors.push(format!(
+                        "verified active general ramp '{}' has no OSM binding",
+                        r.ramp_id
+                    ));
+                }
+                (_, Some("unsupported")) if bound_ramp_ids.contains(r.ramp_id.as_str()) => {
+                    errors.push(format!(
+                        "unsupported active general ramp '{}' must not have an OSM binding",
+                        r.ramp_id
+                    ));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let binding_by_ramp: HashMap<&str, &OsmRampBinding> = bindings
+        .bindings
+        .iter()
+        .map(|b| (b.ramp_id.as_str(), b))
+        .collect();
+    for override_ in &bindings.shared_physical_overrides {
+        if override_.reason.is_empty()
+            || override_.evidence.is_empty()
+            || override_.ramp_ids.len() < 2
         {
             errors.push(format!(
-                "active general ramp '{}' has no OSM binding in bindings file",
-                r.ramp_id
+                "shared physical override '{}' lacks reason/evidence/members",
+                override_.id
+            ));
+            continue;
+        }
+        for ramp_id in &override_.ramp_ids {
+            match binding_by_ramp.get(ramp_id.as_str()) {
+                Some(b)
+                    if (b.osm_way_id, b.osm_node_id, b.motorway_node_id)
+                        == (
+                            override_.osm_way_id,
+                            override_.osm_node_id,
+                            override_.motorway_node_id,
+                        ) => {}
+                _ => errors.push(format!(
+                    "shared physical override '{}' does not match binding for '{}'",
+                    override_.id, ramp_id
+                )),
+            }
+        }
+    }
+
+    let override_segments: HashSet<(i64, i64, i64)> = bindings
+        .shared_physical_overrides
+        .iter()
+        .map(|o| (o.osm_way_id, o.osm_node_id, o.motorway_node_id))
+        .collect();
+    let mut segment_members: HashMap<(i64, i64, i64), Vec<&OsmRampBinding>> = HashMap::new();
+    for binding in &bindings.bindings {
+        segment_members
+            .entry((
+                binding.osm_way_id,
+                binding.osm_node_id,
+                binding.motorway_node_id,
+            ))
+            .or_default()
+            .push(binding);
+    }
+    for (segment, members) in segment_members {
+        let facility_names: HashSet<&str> = members
+            .iter()
+            .filter_map(|binding| inventory_by_ramp_id.get(binding.ramp_id.as_str()))
+            .map(|ramp| ramp.facility_name.as_str())
+            .collect();
+        if facility_names.len() > 1 && !override_segments.contains(&segment) {
+            errors.push(format!(
+                "cross-facility duplicate directed segment {:?}: {:?}",
+                segment,
+                members
+                    .iter()
+                    .map(|binding| binding.ramp_id.as_str())
+                    .collect::<Vec<_>>()
             ));
         }
     }
@@ -533,6 +679,8 @@ pub fn bind_ramps_to_graph(
                 lat: item.lat,
                 lon: item.lon,
                 status: item.status.clone(),
+                support_state: item.support_state.clone(),
+                support_reason: item.support_reason.clone(),
                 restrictions: item.restrictions.clone(),
                 bound: true,
                 edge_id: Some(edge.id.clone()),
@@ -554,6 +702,8 @@ pub fn bind_ramps_to_graph(
                 lat: item.lat,
                 lon: item.lon,
                 status: item.status.clone(),
+                support_state: item.support_state.clone(),
+                support_reason: item.support_reason.clone(),
                 restrictions: item.restrictions.clone(),
                 bound: false,
                 edge_id: None,
@@ -819,9 +969,47 @@ mod tests {
         assert!(res.is_ok(), "bindings validation failed: {:?}", res);
         assert_eq!(
             bindings.bindings.len(),
-            371,
-            "only active general ramps should have OSM bindings"
+            282,
+            "only verified active general ramps should have OSM bindings"
         );
+
+        let binding_by_id: HashMap<_, _> = bindings
+            .bindings
+            .iter()
+            .map(|b| (b.ramp_id.as_str(), b))
+            .collect();
+        let active_general: Vec<_> = inv
+            .ramps
+            .iter()
+            .filter(|r| {
+                r.status == "active"
+                    && matches!(r.kind, RampKind::GeneralEntry | RampKind::GeneralExit)
+            })
+            .collect();
+        assert_eq!(active_general.len(), 371);
+        assert_eq!(
+            active_general
+                .iter()
+                .filter(|r| r.support_state.as_deref() == Some("verified_bound"))
+                .count(),
+            282
+        );
+        assert_eq!(
+            active_general
+                .iter()
+                .filter(|r| r.support_state.as_deref() == Some("unsupported"))
+                .count(),
+            89
+        );
+        for ramp in &active_general {
+            let bound = binding_by_id.contains_key(ramp.ramp_id.as_str());
+            assert_eq!(
+                ramp.support_state.as_deref() == Some("verified_bound"),
+                bound,
+                "verified-bound XOR unsupported contract failed for {}",
+                ramp.ramp_id
+            );
+        }
 
         // Validate that no placeholder IDs exist (e.g. osmNodeId == osmWayId + 1)
         for b in &bindings.bindings {
@@ -846,6 +1034,94 @@ mod tests {
             "bindings against OSM fixture validation failed: {:?}",
             osm_res
         );
+
+        // Every verified binding names the exact directed graph edge and kind.
+        let graph_path = find_data_file("fixtures/generated/graph.json");
+        let graph: Graph = serde_json::from_str(&fs::read_to_string(graph_path).unwrap()).unwrap();
+        for b in &bindings.bindings {
+            let ramp = inv.ramps.iter().find(|r| r.ramp_id == b.ramp_id).unwrap();
+            let expected_kind = if ramp.kind == RampKind::GeneralEntry {
+                EdgeKind::Entry
+            } else {
+                EdgeKind::Exit
+            };
+            let (from, to) = if ramp.kind == RampKind::GeneralEntry {
+                (
+                    format!("n:{}", b.osm_node_id),
+                    format!("n:{}", b.motorway_node_id),
+                )
+            } else {
+                (
+                    format!("n:{}", b.motorway_node_id),
+                    format!("n:{}", b.osm_node_id),
+                )
+            };
+            assert!(
+                graph.edges.iter().any(|e| {
+                    e.id.split(':').nth(1) == Some(format!("w{}", b.osm_way_id).as_str())
+                        && e.from == from
+                        && e.to == to
+                        && e.kind == expected_kind
+                }),
+                "{} does not reference an exact directed {:?} edge",
+                b.ramp_id,
+                expected_kind
+            );
+        }
+
+        // Cross-facility segment reuse is forbidden. Same-name official IDs
+        // remain facility-level aliases; G15/G27 are additionally documented.
+        let inventory_by_id: HashMap<_, _> =
+            inv.ramps.iter().map(|r| (r.ramp_id.as_str(), r)).collect();
+        let mut by_segment: HashMap<(i64, i64, i64), Vec<&OsmRampBinding>> = HashMap::new();
+        for b in &bindings.bindings {
+            by_segment
+                .entry((b.osm_way_id, b.osm_node_id, b.motorway_node_id))
+                .or_default()
+                .push(b);
+        }
+        for group in by_segment.values() {
+            let facilities: HashSet<_> = group
+                .iter()
+                .map(|b| inventory_by_id[b.ramp_id.as_str()].facility_name.as_str())
+                .collect();
+            assert!(
+                facilities.len() <= 1,
+                "cross-facility directed segment duplicate: {:?}",
+                group.iter().map(|b| b.ramp_id.as_str()).collect::<Vec<_>>()
+            );
+        }
+        let override_ids: HashSet<_> = bindings
+            .shared_physical_overrides
+            .iter()
+            .map(|o| o.id.as_str())
+            .collect();
+        assert_eq!(override_ids, HashSet::from(["G15", "G27"]));
+
+        // Regression lockouts for the known false nearest-edge mappings.
+        let forbidden = [
+            ("ramp:b-west:maihama-entry", 1006338881),
+            ("ramp:5-outbound:toda-entry", 409002623),
+            ("ramp:5-inbound:toda-exit", 409002624),
+            ("ramp:6s-outbound:yashio-exit", 251808352),
+            ("ramp:y-south:yaesu-entry", 378284514),
+            ("ramp:y-south:yaesu-exit", 203301443),
+            ("ramp:y-south:marunouchi-exit", 1232083939),
+            ("ramp:k1-inbound:asada-exit", 1022523258),
+        ];
+        for (ramp_id, way_id) in forbidden {
+            assert_ne!(
+                binding_by_id.get(ramp_id).map(|b| b.osm_way_id),
+                Some(way_id)
+            );
+        }
+        for ramp in &inv.ramps {
+            if ramp.status != "active"
+                || matches!(ramp.kind, RampKind::BoundaryIn | RampKind::BoundaryOut)
+            {
+                assert!(!binding_by_id.contains_key(ramp.ramp_id.as_str()));
+            }
+        }
     }
 
     #[test]
@@ -887,6 +1163,9 @@ mod tests {
                     coordinate_source: Some("osm".into()),
                     coordinate_status: Some("derived".into()),
                     restriction_status: Some("unverified".into()),
+                    support_state: None,
+                    support_reason: None,
+                    support_evidence: vec![],
                 },
                 CanonicalRampInventoryItem {
                     ramp_id: "ramp:test:1".into(),
@@ -904,6 +1183,9 @@ mod tests {
                     coordinate_source: Some("osm".into()),
                     coordinate_status: Some("derived".into()),
                     restriction_status: Some("unverified".into()),
+                    support_state: None,
+                    support_reason: None,
+                    support_evidence: vec![],
                 },
             ],
         };
@@ -934,6 +1216,9 @@ mod tests {
                 coordinate_source: Some("osm".into()),
                 coordinate_status: Some("derived".into()),
                 restriction_status: Some("unverified".into()),
+                support_state: None,
+                support_reason: None,
+                support_evidence: vec![],
             }],
         };
         assert!(validate_ramp_inventory(&inv).is_err());
@@ -963,6 +1248,9 @@ mod tests {
                 coordinate_source: Some("osm".into()),
                 coordinate_status: Some("bogus_status".into()),
                 restriction_status: Some("unverified".into()),
+                support_state: None,
+                support_reason: None,
+                support_evidence: vec![],
             }],
         };
         assert!(validate_ramp_inventory(&inv).is_err());

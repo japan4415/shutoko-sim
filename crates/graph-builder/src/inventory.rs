@@ -610,11 +610,17 @@ pub fn validate_osm_ramp_bindings_against_osm(
             node_map.get(&b.osm_node_id),
         ) {
             if let (Some(lat), Some(lon)) = (node.lat, node.lon) {
+                // Coarse displacement guard only: most active-ramp inventory
+                // coordinates are derived from this same binding, so this is
+                // not an independent facility-identity check. Identity relies
+                // primarily on OSM name/ref/destination signals, exact/shared
+                // segment triplets, official-facility consistency, and the
+                // per-ramp evidence recorded by the data pipeline.
                 let distance =
                     crate::topology::haversine_distance_meters(ramp.lat, ramp.lon, lat, lon);
                 if distance > 5_000 {
                     errors.push(format!(
-                        "binding for '{}' is {}m from its official inventory coordinate (limit 5000m)",
+                        "binding for '{}' is {}m from its inventory coordinate (limit 5000m)",
                         b.ramp_id, distance
                     ));
                 }

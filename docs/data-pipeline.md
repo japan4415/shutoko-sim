@@ -208,7 +208,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
   - `osmWayId`: ランプを表す OSM `motorway_link` ウェイ ID
   - `osmNodeId`: 一般道接続端点ノード（入口の乗込ノードまたは出口の流出ノード）
   - `motorwayNodeId`: 首都高本線（`motorway`）との分合流ノード ID
-  - `sharedPhysicalOverrides`: 公式同一施設の共有物理segmentである G15/G27 のメンバー、理由、証拠。重複を暗黙許可しない。
+  - `sharedPhysicalOverrides`: 公式番号が異なる共有物理segmentである G15/G27/G53 の完全なメンバー集合、directed segment triplet、理由、証拠。検証は表示名ではなく `facilityId` を用い、同名施設を暗黙のaliasとして許可しない。
 - **Overpass クエリ戦略**:
   - 首都高速道路のリレーション（全 24 路線）および `network="首都高速道路"` タグを起点とし、関連する `motorway_link` を多ホップ展開（1〜4 ホップ）して抽出。
   - 一般道との接続判定は、地表コンテキストウェイ（車両通行可能な `highway` ウェイ）のノード集合との積集合により機械的・決定論的に特定。

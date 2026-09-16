@@ -386,7 +386,26 @@ pub fn validate_osm_ramp_bindings(
         .iter()
         .map(|b| (b.ramp_id.as_str(), b))
         .collect();
+    let mut segment_members: HashMap<(i64, i64, i64), Vec<&OsmRampBinding>> = HashMap::new();
+    for binding in &bindings.bindings {
+        segment_members
+            .entry((
+                binding.osm_way_id,
+                binding.osm_node_id,
+                binding.motorway_node_id,
+            ))
+            .or_default()
+            .push(binding);
+    }
+    let mut override_ids = HashSet::new();
+    let mut override_by_segment = HashMap::new();
     for override_ in &bindings.shared_physical_overrides {
+        if !override_ids.insert(override_.id.as_str()) {
+            errors.push(format!(
+                "duplicate shared physical override id '{}'",
+                override_.id
+            ));
+        }
         if override_.reason.is_empty()
             || override_.evidence.is_empty()
             || override_.ramp_ids.len() < 2
@@ -396,6 +415,25 @@ pub fn validate_osm_ramp_bindings(
                 override_.id
             ));
             continue;
+        }
+        let segment = (
+            override_.osm_way_id,
+            override_.osm_node_id,
+            override_.motorway_node_id,
+        );
+        if let Some(previous) = override_by_segment.insert(segment, override_) {
+            errors.push(format!(
+                "shared physical overrides '{}' and '{}' declare the same directed segment {:?}",
+                previous.id, override_.id, segment
+            ));
+        }
+        let declared_members: HashSet<&str> =
+            override_.ramp_ids.iter().map(String::as_str).collect();
+        if declared_members.len() != override_.ramp_ids.len() {
+            errors.push(format!(
+                "shared physical override '{}' contains duplicate members",
+                override_.id
+            ));
         }
         for ramp_id in &override_.ramp_ids {
             match binding_by_ramp.get(ramp_id.as_str()) {
@@ -412,39 +450,59 @@ pub fn validate_osm_ramp_bindings(
                 )),
             }
         }
+        let actual_members: HashSet<&str> = segment_members
+            .get(&segment)
+            .into_iter()
+            .flatten()
+            .map(|binding| binding.ramp_id.as_str())
+            .collect();
+        if actual_members != declared_members {
+            errors.push(format!(
+                "shared physical override '{}' members do not exactly match directed segment {:?}: declared={:?}, actual={:?}",
+                override_.id, segment, declared_members, actual_members
+            ));
+        }
+        let facility_ids: HashSet<&str> = actual_members
+            .iter()
+            .filter_map(|ramp_id| inventory_by_ramp_id.get(*ramp_id))
+            .map(|ramp| ramp.facility_id.as_str())
+            .collect();
+        if facility_ids.len() <= 1 {
+            errors.push(format!(
+                "shared physical override '{}' does not describe a cross-facility directed segment",
+                override_.id
+            ));
+        }
     }
 
-    let override_segments: HashSet<(i64, i64, i64)> = bindings
-        .shared_physical_overrides
-        .iter()
-        .map(|o| (o.osm_way_id, o.osm_node_id, o.motorway_node_id))
-        .collect();
-    let mut segment_members: HashMap<(i64, i64, i64), Vec<&OsmRampBinding>> = HashMap::new();
-    for binding in &bindings.bindings {
-        segment_members
-            .entry((
-                binding.osm_way_id,
-                binding.osm_node_id,
-                binding.motorway_node_id,
-            ))
-            .or_default()
-            .push(binding);
-    }
-    for (segment, members) in segment_members {
-        let facility_names: HashSet<&str> = members
+    for (segment, members) in &segment_members {
+        let facility_ids: HashSet<&str> = members
             .iter()
             .filter_map(|binding| inventory_by_ramp_id.get(binding.ramp_id.as_str()))
-            .map(|ramp| ramp.facility_name.as_str())
+            .map(|ramp| ramp.facility_id.as_str())
             .collect();
-        if facility_names.len() > 1 && !override_segments.contains(&segment) {
-            errors.push(format!(
-                "cross-facility duplicate directed segment {:?}: {:?}",
-                segment,
-                members
-                    .iter()
-                    .map(|binding| binding.ramp_id.as_str())
-                    .collect::<Vec<_>>()
-            ));
+        if facility_ids.len() > 1 {
+            let actual_members: HashSet<&str> = members
+                .iter()
+                .map(|binding| binding.ramp_id.as_str())
+                .collect();
+            match override_by_segment.get(segment) {
+                Some(override_)
+                    if override_
+                        .ramp_ids
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<HashSet<_>>()
+                        == actual_members => {}
+                Some(override_) => errors.push(format!(
+                    "cross-facility duplicate directed segment {:?} does not exactly match override '{}': {:?}",
+                    segment, override_.id, actual_members
+                )),
+                None => errors.push(format!(
+                    "cross-facility duplicate directed segment {:?} lacks an exact override: {:?}",
+                    segment, actual_members
+                )),
+            }
         }
     }
 
@@ -1069,8 +1127,9 @@ mod tests {
             );
         }
 
-        // Cross-facility segment reuse is forbidden. Same-name official IDs
-        // remain facility-level aliases; G15/G27 are additionally documented.
+        // Every directed segment reused across facility IDs must have one
+        // declaration whose triplet and complete member set exactly match.
+        // Display-name equality is intentionally irrelevant.
         let inventory_by_id: HashMap<_, _> =
             inv.ramps.iter().map(|r| (r.ramp_id.as_str(), r)).collect();
         let mut by_segment: HashMap<(i64, i64, i64), Vec<&OsmRampBinding>> = HashMap::new();
@@ -1080,23 +1139,57 @@ mod tests {
                 .or_default()
                 .push(b);
         }
-        for group in by_segment.values() {
-            let facilities: HashSet<_> = group
+        let declared_by_segment: HashMap<_, HashSet<_>> = bindings
+            .shared_physical_overrides
+            .iter()
+            .map(|override_| {
+                (
+                    (
+                        override_.osm_way_id,
+                        override_.osm_node_id,
+                        override_.motorway_node_id,
+                    ),
+                    override_
+                        .ramp_ids
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<HashSet<_>>(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            declared_by_segment.len(),
+            bindings.shared_physical_overrides.len(),
+            "each override must declare a unique directed segment"
+        );
+        let mut cross_facility_segments = HashSet::new();
+        for (segment, group) in &by_segment {
+            let facility_ids: HashSet<_> = group
                 .iter()
-                .map(|b| inventory_by_id[b.ramp_id.as_str()].facility_name.as_str())
+                .map(|b| inventory_by_id[b.ramp_id.as_str()].facility_id.as_str())
                 .collect();
-            assert!(
-                facilities.len() <= 1,
-                "cross-facility directed segment duplicate: {:?}",
-                group.iter().map(|b| b.ramp_id.as_str()).collect::<Vec<_>>()
-            );
+            if facility_ids.len() > 1 {
+                cross_facility_segments.insert(*segment);
+                let actual_members: HashSet<_> = group.iter().map(|b| b.ramp_id.as_str()).collect();
+                assert_eq!(
+                    declared_by_segment.get(segment),
+                    Some(&actual_members),
+                    "cross-facility duplicate must exactly match its declared override: {:?}",
+                    segment
+                );
+            }
         }
+        assert_eq!(
+            cross_facility_segments,
+            declared_by_segment.keys().copied().collect(),
+            "every declared override must exactly identify a cross-facility duplicate triplet"
+        );
         let override_ids: HashSet<_> = bindings
             .shared_physical_overrides
             .iter()
             .map(|o| o.id.as_str())
             .collect();
-        assert_eq!(override_ids, HashSet::from(["G15", "G27"]));
+        assert_eq!(override_ids, HashSet::from(["G15", "G27", "G53"]));
 
         // Regression lockouts for the known false nearest-edge mappings.
         let forbidden = [
@@ -1122,6 +1215,45 @@ mod tests {
                 assert!(!binding_by_id.contains_key(ramp.ramp_id.as_str()));
             }
         }
+    }
+
+    #[test]
+    fn test_reject_inexact_shared_physical_override_contract() {
+        let inv_path = find_data_file("data/ramp-inventory.json");
+        let bin_path = find_data_file("data/osm-ramp-bindings.json");
+        let inv: RampInventoryFile =
+            serde_json::from_str(&fs::read_to_string(inv_path).unwrap()).unwrap();
+        let bindings: OsmRampBindingsFile =
+            serde_json::from_str(&fs::read_to_string(bin_path).unwrap()).unwrap();
+
+        // G53 is the regression case: its facility IDs differ while every
+        // display name is 大師, so removing the declaration must fail.
+        let mut missing = bindings.clone();
+        missing
+            .shared_physical_overrides
+            .retain(|override_| override_.id != "G53");
+        assert!(validate_osm_ramp_bindings(&missing, &inv).is_err());
+
+        // An override may neither omit a real segment member nor declare a
+        // different triplet for otherwise valid members.
+        let mut incomplete = bindings.clone();
+        incomplete
+            .shared_physical_overrides
+            .iter_mut()
+            .find(|override_| override_.id == "G53")
+            .unwrap()
+            .ramp_ids
+            .pop();
+        assert!(validate_osm_ramp_bindings(&incomplete, &inv).is_err());
+
+        let mut wrong_triplet = bindings;
+        wrong_triplet
+            .shared_physical_overrides
+            .iter_mut()
+            .find(|override_| override_.id == "G53")
+            .unwrap()
+            .motorway_node_id += 1;
+        assert!(validate_osm_ramp_bindings(&wrong_triplet, &inv).is_err());
     }
 
     #[test]

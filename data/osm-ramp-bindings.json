@@ -2293,6 +2293,23 @@
         "data/official-population-snapshot.json",
         "https://www.openstreetmap.org/way/250490200"
       ]
+    },
+    {
+      "id": "G53",
+      "osmWayId": 964191633,
+      "osmNodeId": 3817775783,
+      "motorwayNodeId": 3817775785,
+      "rampIds": [
+        "ramp:k1-inbound:daishi-entry",
+        "ramp:k1-outbound:daishi-entry",
+        "ramp:k1-inbound:daishi-683-entry"
+      ],
+      "reason": "公式番号151・152A・683の大師入口は同一の一意entry componentへ接続するため、異なるfacilityIdを維持したまま同一physical entry segmentを共有する。",
+      "evidence": [
+        "analyze-duplicate-bindings-001.json:G53",
+        "data/official-population-snapshot.json",
+        "https://www.openstreetmap.org/way/964191633"
+      ]
     }
   ]
 }

@@ -472,6 +472,14 @@ struct OwnedIndex {
     ramp_by_edge: HashMap<String, usize>,
     /// Maps (entry_ramp_id, exit_ramp_id) → index into `graph.od_tariffs`.
     od_tariff_map: HashMap<(String, String), usize>,
+    /// GeneralEntry ramp indices by access node ID, sorted by ramp ID.
+    general_entries_by_node: HashMap<String, Vec<usize>>,
+    /// GeneralExit ramp indices by facility ID, sorted by ramp ID.
+    general_exits_by_facility: HashMap<String, Vec<usize>>,
+    /// Distinct exit ramp indices referenced by Verified billing pairs, sorted by ramp ID.
+    verified_pair_exit_ramps: Vec<usize>,
+    /// Verified billing pair indices by entry ramp ID, sorted by pair ID.
+    verified_pairs_by_entry_ramp: HashMap<String, Vec<usize>>,
     /// Strongly-connected component for every graph node. Components are built
     /// over Shutoko edges only; Entry and Exit connectors never make a cycle.
     component_by_node: Vec<usize>,
@@ -849,6 +857,8 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
     let mut ramp_by_id: HashMap<String, usize> = HashMap::with_capacity(g.ramps.len());
     let mut ramp_by_edge: HashMap<String, usize> = HashMap::with_capacity(g.ramps.len());
     let mut general_entry_from_ids = BTreeSet::new();
+    let mut general_entries_by_node: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut general_exits_by_facility: HashMap<String, Vec<usize>> = HashMap::new();
     for (i, r) in g.ramps.iter().enumerate() {
         if r.id.is_empty() || r.id.len() > 256 || ramp_by_id.insert(r.id.clone(), i).is_some() {
             return Err(invalid("duplicate, oversized, or empty ramp id"));
@@ -879,8 +889,58 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
         }
         if r.kind == RampKind::GeneralEntry {
             general_entry_from_ids.insert(edge.from.clone());
+            general_entries_by_node
+                .entry(r.node_id.clone())
+                .or_default()
+                .push(i);
+        } else if r.kind == RampKind::GeneralExit {
+            general_exits_by_facility
+                .entry(r.facility_id.clone())
+                .or_default()
+                .push(i);
         }
         ramp_by_edge.insert(r.edge_id.clone(), i);
+    }
+    for list in general_entries_by_node.values_mut() {
+        list.sort_by(|&a, &b| g.ramps[a].id.cmp(&g.ramps[b].id));
+    }
+    for list in general_exits_by_facility.values_mut() {
+        list.sort_by(|&a, &b| g.ramps[a].id.cmp(&g.ramps[b].id));
+    }
+
+    let mut verified_pairs_by_entry_ramp: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut verified_pair_exit_ramp_set: BTreeSet<String> = BTreeSet::new();
+    for (i, p) in g.billing_pairs.iter().enumerate() {
+        if p.status == VerificationStatus::Verified {
+            let entry_ramp_id = p.entry_ramp_id.as_deref().or_else(|| {
+                ramp_by_edge
+                    .get(&p.entry_id)
+                    .map(|&idx| g.ramps[idx].id.as_str())
+            });
+            if let Some(er_id) = entry_ramp_id {
+                verified_pairs_by_entry_ramp
+                    .entry(er_id.to_string())
+                    .or_default()
+                    .push(i);
+            }
+            let exit_ramp_id = p.exit_ramp_id.as_deref().or_else(|| {
+                ramp_by_edge
+                    .get(&p.exit_id)
+                    .map(|&idx| g.ramps[idx].id.as_str())
+            });
+            if let Some(xr_id) = exit_ramp_id {
+                verified_pair_exit_ramp_set.insert(xr_id.to_string());
+            }
+        }
+    }
+    for list in verified_pairs_by_entry_ramp.values_mut() {
+        list.sort_by(|&a, &b| g.billing_pairs[a].id.cmp(&g.billing_pairs[b].id));
+    }
+    let mut verified_pair_exit_ramps: Vec<usize> = Vec::new();
+    for xr_id in verified_pair_exit_ramp_set {
+        if let Some(&idx) = ramp_by_id.get(&xr_id) {
+            verified_pair_exit_ramps.push(idx);
+        }
     }
 
     // Canonical ramps are authoritative when present: only verified-bound
@@ -914,6 +974,10 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
         ramp_by_id,
         ramp_by_edge,
         od_tariff_map,
+        general_entries_by_node,
+        general_exits_by_facility,
+        verified_pair_exit_ramps,
+        verified_pairs_by_entry_ramp,
         component_by_node,
         component_has_cycle,
         cycle_catalog_anchors,
@@ -1146,13 +1210,28 @@ impl Budget {
 
 /// Reverse Dijkstra tree pointing every mainline node toward `target`.
 /// Equal-cost paths use the lexicographically smaller first edge.
+///
+/// `allowed` optionally restricts the search to the forward-reachable set of a
+/// single entry (`forward_dist[node] != u64::MAX`). That set is closed under
+/// outgoing Shutoko edges by construction, so every path that starts inside it
+/// stays inside it: restricting the reverse search therefore cannot change any
+/// `dist[a]` for an anchor `a` in the set, it only avoids settling nodes that no
+/// candidate anchor can ever reach. This is the bounded per-request work that
+/// keeps the shared expanded-state budget from being consumed by nearby entry
+/// tiers whose forward component is a small stub (Issue #57 review V5-01).
 fn reverse_shortest_tree(
     pg: &PreparedGraph,
     target: usize,
+    allowed: Option<&[u64]>,
 ) -> (Vec<u64>, Vec<Option<usize>>, usize) {
     use std::cmp::Reverse;
     let mut dist = vec![u64::MAX; pg.graph.nodes.len()];
     let mut next_edge = vec![None; pg.graph.nodes.len()];
+    // The entry's forward set is closed under outgoing edges, so if the target
+    // itself is outside it no node inside it can reach the target.
+    if allowed.is_some_and(|forward| forward[target] == u64::MAX) {
+        return (dist, next_edge, 0);
+    }
     let mut heap = BinaryHeap::new();
     dist[target] = 0;
     heap.push(Reverse((0u64, target)));
@@ -1175,6 +1254,9 @@ fn reverse_shortest_tree(
                 continue;
             }
             let from = pg.index.node_pos[edge.from.as_str()];
+            if allowed.is_some_and(|forward| forward[from] == u64::MAX) {
+                continue;
+            }
             let new_cost = cost.saturating_add(edge.duration_seconds);
             let replace = new_cost < dist[from]
                 || (new_cost == dist[from]
@@ -1192,7 +1274,7 @@ fn reverse_shortest_tree(
 fn topology_cycles_at(pg: &PreparedGraph, anchor: usize, budget: &mut Budget) -> Vec<Vec<usize>> {
     let cached = pg.cycle_cache.borrow().get(&anchor).cloned();
     let cached = cached.unwrap_or_else(|| {
-        let (dist, next_edge, expanded_states) = reverse_shortest_tree(pg, anchor);
+        let (dist, next_edge, expanded_states) = reverse_shortest_tree(pg, anchor, None);
         let anchor_id = pg.graph.nodes[anchor].id.as_str();
         let mut cycles = Vec::new();
         for edge in pg
@@ -1486,55 +1568,46 @@ pub fn prepare(g: Graph, l: &SearchLimits) -> Result<PreparedGraph, RoutingError
     Ok(pg)
 }
 
-fn explicit_pair_search(
+struct DynamicOdOutcome {
+    candidate: Option<Candidate>,
+    min_plan_seconds: Option<u64>,
+    found_cycle: bool,
+    legal_route: bool,
+    time_rejected: bool,
+    handoff_rejected: bool,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn evaluate_dynamic_od(
     pg: &PreparedGraph,
     r: &SearchRequest,
     now: OffsetDateTime,
     origin_ll: &LatLng,
-    nearest_access: Option<SnappedOrigin>,
-) -> Result<SearchResult, RoutingError> {
-    let entry_id = r.entry_ramp_id.as_deref().expect("validated entry ramp");
-    let exit_id = r.exit_ramp_id.as_deref().expect("validated exit ramp");
-    let entry_ramp = &pg.graph.ramps[pg.index.ramp_by_id[entry_id]];
-    let exit_ramp = &pg.graph.ramps[pg.index.ramp_by_id[exit_id]];
+    entry_ramp: &Ramp,
+    exit_ramp: &Ramp,
+    forward_dist: &[u64],
+    previous_edge: &[Option<usize>],
+    budget: &mut Budget,
+    is_explicit: bool,
+) -> Result<DynamicOdOutcome, RoutingError> {
     let entry_edge = pg.edge(entry_ramp.edge_id.as_str());
     let exit_edge = pg.edge(exit_ramp.edge_id.as_str());
     let entry_mainline = pg.index.node_pos[entry_ramp.mainline_node_id.as_str()];
     let exit_mainline = pg.index.node_pos[exit_ramp.mainline_node_id.as_str()];
 
-    let mut budget = Budget::default();
-    let (forward_dist, previous_edge, forward_expanded) = forward_shortest_tree(pg, entry_mainline);
-    if !budget.charge(forward_expanded, &pg.limits) {
-        return Ok(SearchResult {
-            request_id: r.request_id.clone(),
-            release_id: r.release_id.clone(),
-            status: "truncated".into(),
-            reason: Some("SEARCH_LIMIT".into()),
-            ranking_mode: "shutoko_time".into(),
-            expanded_states: budget.expanded,
-            candidates: Vec::new(),
-            nearest_access,
-            min_plan_seconds: None,
-        });
-    }
-    let (reverse_dist, next_edge, reverse_expanded) = reverse_shortest_tree(pg, exit_mainline);
+    let (reverse_dist, next_edge, reverse_expanded) =
+        reverse_shortest_tree(pg, exit_mainline, Some(forward_dist));
     if !budget.charge(reverse_expanded, &pg.limits) {
-        return Ok(SearchResult {
-            request_id: r.request_id.clone(),
-            release_id: r.release_id.clone(),
-            status: "truncated".into(),
-            reason: Some("SEARCH_LIMIT".into()),
-            ranking_mode: "shutoko_time".into(),
-            expanded_states: budget.expanded,
-            candidates: Vec::new(),
-            nearest_access,
+        return Ok(DynamicOdOutcome {
+            candidate: None,
             min_plan_seconds: None,
+            found_cycle: false,
+            legal_route: false,
+            time_rejected: false,
+            handoff_rejected: false,
         });
     }
 
-    // Candidate anchors are exactly the cyclic SCC nodes that are forward
-    // reachable from the entry and reverse reachable from the exit. The
-    // admissible approach+egress lower bound orders them; node ID breaks ties.
     let mut anchors: Vec<usize> = pg
         .index
         .cycle_catalog_anchors
@@ -1571,20 +1644,19 @@ fn explicit_pair_search(
     let return_secs = estimated_access_seconds(return_dist);
     let mut min_plan_seconds = None;
     let mut found_cycle = false;
+    let mut legal_route = false;
+    let mut time_rejected = false;
+    let mut handoff_rejected = false;
     let mut candidate = None;
 
-    // Usually the first anchor succeeds. If restrictions invalidate it, keep
-    // following the complete deterministic ordering until a route is found or
-    // the explicit state budget is reached (which is reported as SEARCH_LIMIT,
-    // never as an unreachable OD).
     for anchor in anchors {
-        let Some(approach) = reconstruct_forward(pg, &previous_edge, entry_mainline, anchor) else {
+        let Some(approach) = reconstruct_forward(pg, previous_edge, entry_mainline, anchor) else {
             continue;
         };
         let Some(egress) = reconstruct_reverse(pg, &next_edge, anchor, exit_mainline) else {
             continue;
         };
-        for cycle in topology_cycles_at(pg, anchor, &mut budget) {
+        for cycle in topology_cycles_at(pg, anchor, budget) {
             if budget.truncated {
                 break;
             }
@@ -1606,31 +1678,30 @@ fn explicit_pair_search(
             if highway.len() > 20_000 || !allowed_pg(pg, &highway) {
                 continue;
             }
+            legal_route = true;
             let base = access_secs + seconds(&highway) + return_secs;
             let buffer = 300.max(base.div_ceil(5));
             let plan = base + buffer;
             min_plan_seconds = Some(min_plan_seconds.map_or(plan, |old: u64| old.min(plan)));
             if base < r.min_minutes * 60 || plan > r.max_minutes * 60 {
+                time_rejected = true;
                 continue;
             }
             if candidate.is_some() {
-                // Keep the first route in the documented deterministic anchor
-                // order, but continue to compute the catalogue-wide diagnostic
-                // minimum without allocating more candidate payloads.
                 continue;
             }
 
             let billing_pair = pg.graph.billing_pairs.iter().find(|pair| {
                 pair.status == VerificationStatus::Verified
-                    && (pair.entry_ramp_id.as_deref() == Some(entry_id)
+                    && (pair.entry_ramp_id.as_deref() == Some(entry_ramp.id.as_str())
                         || pair.entry_id == entry_edge.id)
-                    && (pair.exit_ramp_id.as_deref() == Some(exit_id)
+                    && (pair.exit_ramp_id.as_deref() == Some(exit_ramp.id.as_str())
                         || pair.exit_id == exit_edge.id)
             });
             let tariff = pg
                 .index
                 .od_tariff_map
-                .get(&(entry_id.to_owned(), exit_id.to_owned()))
+                .get(&(entry_ramp.id.clone(), exit_ramp.id.clone()))
                 .map(|&idx| &pg.graph.od_tariffs[idx])
                 .filter(|tariff| {
                     tariff
@@ -1675,8 +1746,8 @@ fn explicit_pair_search(
                 };
 
             let ids = edge_ids(&highway);
-            let candidate_id = std::iter::once(entry_id)
-                .chain(std::iter::once(exit_id))
+            let candidate_id = std::iter::once(entry_ramp.id.as_str())
+                .chain(std::iter::once(exit_ramp.id.as_str()))
                 .chain(ids.iter().map(String::as_str))
                 .map(|value| format!("{}:{}", value.len(), value))
                 .collect::<String>();
@@ -1706,8 +1777,18 @@ fn explicit_pair_search(
                         }
                     })
                 });
-            let maps_url = handoff::format_maps_url(&departure, &waypoints)
-                .map_err(|()| invalid("explicit route handoff URL exceeds supported length"))?;
+            let maps_url = match handoff::format_maps_url(&departure, &waypoints) {
+                Ok(url) => url,
+                Err(()) => {
+                    if is_explicit {
+                        return Err(invalid(
+                            "explicit route handoff URL exceeds supported length",
+                        ));
+                    }
+                    handoff_rejected = true;
+                    continue;
+                }
+            };
             let ranking_reason = if amount.is_some() {
                 "BEST_TIME_PER_YEN"
             } else {
@@ -1758,7 +1839,7 @@ fn explicit_pair_search(
                 shutoko_distance_meters: meters(&highway),
                 toll: Toll {
                     billing_pair_id: billing_pair.map_or_else(
-                        || format!("od:{entry_id}:{exit_id}"),
+                        || format!("od:{}:{}", entry_ramp.id, exit_ramp.id),
                         |pair| pair.id.clone(),
                     ),
                     charged_section_count: 1,
@@ -1776,7 +1857,11 @@ fn explicit_pair_search(
                     distance_meters: meters(&loop_refs),
                     validated: true,
                 },
-                reasons: vec![ranking_reason.into(), "EXPLICIT_OD".into()],
+                reasons: if is_explicit {
+                    vec![ranking_reason.into(), "EXPLICIT_OD".into()]
+                } else {
+                    Vec::new()
+                },
                 warnings: vec![
                     "STATIC_TRAVEL_TIME".into(),
                     "HANDOFF_WAYPOINTS_UNVERIFIED".into(),
@@ -1795,12 +1880,76 @@ fn explicit_pair_search(
         }
     }
 
-    let candidates: Vec<Candidate> = candidate.into_iter().collect();
-    let (status, reason) = if budget.truncated {
-        ("truncated", Some("SEARCH_LIMIT"))
-    } else if !candidates.is_empty() {
+    Ok(DynamicOdOutcome {
+        candidate,
+        min_plan_seconds,
+        found_cycle,
+        legal_route,
+        time_rejected,
+        handoff_rejected,
+    })
+}
+
+fn explicit_pair_search(
+    pg: &PreparedGraph,
+    r: &SearchRequest,
+    now: OffsetDateTime,
+    origin_ll: &LatLng,
+    nearest_access: Option<SnappedOrigin>,
+) -> Result<SearchResult, RoutingError> {
+    let entry_id = r.entry_ramp_id.as_deref().expect("validated entry ramp");
+    let exit_id = r.exit_ramp_id.as_deref().expect("validated exit ramp");
+    let entry_ramp = &pg.graph.ramps[pg.index.ramp_by_id[entry_id]];
+    let exit_ramp = &pg.graph.ramps[pg.index.ramp_by_id[exit_id]];
+    let entry_mainline = pg.index.node_pos[entry_ramp.mainline_node_id.as_str()];
+
+    let mut budget = Budget::default();
+    let (forward_dist, previous_edge, forward_expanded) = forward_shortest_tree(pg, entry_mainline);
+    if !budget.charge(forward_expanded, &pg.limits) {
+        return Ok(SearchResult {
+            request_id: r.request_id.clone(),
+            release_id: r.release_id.clone(),
+            status: "truncated".into(),
+            reason: Some("SEARCH_LIMIT".into()),
+            ranking_mode: "shutoko_time".into(),
+            expanded_states: budget.expanded,
+            candidates: Vec::new(),
+            nearest_access,
+            min_plan_seconds: None,
+        });
+    }
+
+    let outcome = evaluate_dynamic_od(
+        pg,
+        r,
+        now,
+        origin_ll,
+        entry_ramp,
+        exit_ramp,
+        &forward_dist,
+        &previous_edge,
+        &mut budget,
+        true,
+    )?;
+
+    if budget.truncated {
+        return Ok(SearchResult {
+            request_id: r.request_id.clone(),
+            release_id: r.release_id.clone(),
+            status: "truncated".into(),
+            reason: Some("SEARCH_LIMIT".into()),
+            ranking_mode: "shutoko_time".into(),
+            expanded_states: budget.expanded,
+            candidates: Vec::new(),
+            nearest_access,
+            min_plan_seconds: None,
+        });
+    }
+
+    let candidates: Vec<Candidate> = outcome.candidate.into_iter().collect();
+    let (status, reason) = if !candidates.is_empty() {
         ("ok", None)
-    } else if found_cycle && min_plan_seconds.is_some() {
+    } else if outcome.found_cycle && outcome.min_plan_seconds.is_some() {
         ("no_candidates", Some("TIME_WINDOW"))
     } else {
         ("no_candidates", Some("NO_LOOP"))
@@ -1823,11 +1972,766 @@ fn explicit_pair_search(
         expanded_states: budget.expanded,
         candidates,
         nearest_access,
-        min_plan_seconds: if budget.truncated {
-            None
-        } else {
-            min_plan_seconds
-        },
+        min_plan_seconds: outcome.min_plan_seconds,
+    })
+}
+
+fn coordinate_tier_search(
+    pg: &PreparedGraph,
+    r: &SearchRequest,
+    now: OffsetDateTime,
+    origin_ll: &LatLng,
+    access_node_indices: &BTreeSet<usize>,
+    nearest_access: Option<SnappedOrigin>,
+) -> Result<SearchResult, RoutingError> {
+    struct EntryTier<'a> {
+        ramp: &'a Ramp,
+        access_dist: f64,
+        access_secs: u64,
+    }
+
+    let mut entry_tiers = Vec::new();
+    for &node_idx in access_node_indices {
+        let node = &pg.graph.nodes[node_idx];
+        let access_dist = distance_meters(origin_ll.lat, origin_ll.lon, node.lat, node.lon);
+        if pg.limits.max_access_distance_meters > 0.0
+            && access_dist > pg.limits.max_access_distance_meters
+        {
+            continue;
+        }
+        let access_secs = estimated_access_seconds(access_dist);
+        if let Some(ramp_indices) = pg.index.general_entries_by_node.get(&node.id) {
+            for &r_idx in ramp_indices {
+                let ramp = &pg.graph.ramps[r_idx];
+                if let Some(ref req_entry) = r.entry_ramp_id {
+                    if ramp.id != *req_entry {
+                        continue;
+                    }
+                }
+                entry_tiers.push(EntryTier {
+                    ramp,
+                    access_dist,
+                    access_secs,
+                });
+            }
+        }
+    }
+
+    if entry_tiers.is_empty() {
+        return Ok(SearchResult {
+            request_id: r.request_id.clone(),
+            release_id: r.release_id.clone(),
+            status: "no_candidates".into(),
+            reason: Some("NO_CONNECTION".into()),
+            ranking_mode: "shutoko_time".into(),
+            expanded_states: 0,
+            candidates: Vec::new(),
+            nearest_access,
+            min_plan_seconds: None,
+        });
+    }
+
+    entry_tiers.sort_by(|a, b| {
+        a.access_dist
+            .total_cmp(&b.access_dist)
+            .then_with(|| a.access_secs.cmp(&b.access_secs))
+            .then_with(|| a.ramp.id.cmp(&b.ramp.id))
+    });
+
+    let mut budget = Budget::default();
+    let mut diagnostic_budget = Budget::default();
+    let mut global_min_plan_seconds: Option<u64> = None;
+    let mut global_legal_route = false;
+    let mut global_time_rejected = false;
+    let mut global_handoff_rejected = false;
+    // The nearest access tier owns the diagnostic. When it has been fully
+    // evaluated and exposes at least one legal loop, the user's window — not a
+    // farther entry — is the reason no candidate fits, so the search stops and
+    // reports `TIME_WINDOW`/`NO_HANDOFF` with the proven `minPlanSeconds`.
+    // Deeper fall-through is reserved for a nearest entry that cannot form any
+    // legal loop at all (structural dead end), which keeps the nearest-entry
+    // priority while restoring the coordinate recovery path (review V5-01/V5-03
+    // product requirement). A truncated tier never terminates this way: the
+    // fail-closed `SEARCH_LIMIT` path is unchanged.
+    for (tier_index, tier) in entry_tiers.into_iter().enumerate() {
+        let is_nearest_tier = tier_index == 0;
+        if budget.truncated {
+            return Ok(SearchResult {
+                request_id: r.request_id.clone(),
+                release_id: r.release_id.clone(),
+                status: "truncated".into(),
+                reason: Some("SEARCH_LIMIT".into()),
+                ranking_mode: "shutoko_time".into(),
+                expanded_states: budget.expanded,
+                candidates: Vec::new(),
+                nearest_access,
+                min_plan_seconds: None,
+            });
+        }
+
+        let verified_pairs: Vec<usize> = pg
+            .index
+            .verified_pairs_by_entry_ramp
+            .get(&tier.ramp.id)
+            .map(|indices| {
+                indices
+                    .iter()
+                    .copied()
+                    .filter(|&p_idx| {
+                        let p = &pg.graph.billing_pairs[p_idx];
+                        if let Some(ref req_exit) = r.exit_ramp_id {
+                            let matches_pair = p.exit_ramp_id.as_deref() == Some(req_exit.as_str());
+                            let matches_exit_edge = p.exit_id == *req_exit;
+                            let matches_ramp = pg
+                                .index
+                                .ramp_by_id
+                                .get(req_exit)
+                                .is_some_and(|&idx| pg.graph.ramps[idx].edge_id == p.exit_id);
+                            if !matches_pair && !matches_exit_edge && !matches_ramp {
+                                return false;
+                            }
+                        }
+                        true
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if !verified_pairs.is_empty() {
+            // Verified Tier
+            if verified_pairs.len() > pg.limits.max_pairs {
+                budget.truncated = true;
+                return Ok(SearchResult {
+                    request_id: r.request_id.clone(),
+                    release_id: r.release_id.clone(),
+                    status: "truncated".into(),
+                    reason: Some("SEARCH_LIMIT".into()),
+                    ranking_mode: "time_per_yen".into(),
+                    expanded_states: budget.expanded,
+                    candidates: Vec::new(),
+                    nearest_access,
+                    min_plan_seconds: None,
+                });
+            }
+
+            let mut tier_candidates: Vec<Candidate> = Vec::new();
+            let mut tier_min_plan: Option<u64> = None;
+            let mut tier_candidate_edges = 0usize;
+
+            'verified: for &p_idx in &verified_pairs {
+                let p = &pg.graph.billing_pairs[p_idx];
+                let pre = path_pg(pg, &p.entry_to_anchor_edge_ids)?;
+                let post = path_pg(pg, &p.anchor_to_exit_edge_ids)?;
+                let entry_edge = pre[0];
+                let exit_edge = post.last().unwrap();
+                let access_dist = tier.access_dist;
+                let access_secs = tier.access_secs;
+                let exit_to_node = pg.node(exit_edge.to.as_str());
+                let return_dist = distance_meters(
+                    exit_to_node.lat,
+                    exit_to_node.lon,
+                    origin_ll.lat,
+                    origin_ll.lon,
+                );
+                let return_secs = estimated_access_seconds(return_dist);
+                let reachable =
+                    cached_reachable_set(pg, p.anchor_node_id.as_str(), r.max_minutes * 60);
+                let loops = paths_pg(
+                    pg,
+                    &p.anchor_node_id,
+                    &p.anchor_node_id,
+                    EdgeKind::Shutoko,
+                    pg.limits.max_loop_edges,
+                    r.max_minutes * 60,
+                    &reachable,
+                    &mut budget,
+                );
+                if budget.truncated {
+                    // The pair enumeration is incomplete, but any candidate that
+                    // was already fully validated inside this tier stays valid.
+                    // Keep it and report truncation instead of discarding it
+                    // (Issue #57 review V5-03).
+                    break 'verified;
+                }
+
+                for cycle in &loops {
+                    if !budget.take(&pg.limits) {
+                        break 'verified;
+                    }
+                    let highway: Vec<_> = pre.iter().chain(cycle).chain(&post).copied().collect();
+                    if !allowed_pg(pg, &highway) {
+                        continue;
+                    }
+                    global_legal_route = true;
+                    let base = access_secs + seconds(&highway) + return_secs;
+                    let buffer = 300.max(base.div_ceil(5));
+                    let plan_seconds = base + buffer;
+                    tier_min_plan =
+                        Some(tier_min_plan.map_or(plan_seconds, |m| m.min(plan_seconds)));
+                    if base < r.min_minutes * 60 || base + buffer > r.max_minutes * 60 {
+                        global_time_rejected = true;
+                        continue;
+                    }
+                    if tier_candidates.len() == pg.limits.beam_width
+                        || tier_candidate_edges + highway.len() > 20_000
+                    {
+                        // Same-tier storage limit: keep the candidates that were
+                        // already validated and stop this tier (V5-03).
+                        budget.truncated = true;
+                        break 'verified;
+                    }
+                    tier_candidate_edges += highway.len();
+                    let price = p.prices.iter().find(|v| {
+                        utc(&v.effective_from).is_ok_and(|from| from <= now)
+                            && v.effective_to
+                                .as_deref()
+                                .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
+                    });
+                    let ids = edge_ids(&highway);
+                    let id = std::iter::once(p.id.as_str())
+                        .chain(ids.iter().map(String::as_str))
+                        .map(|s| format!("{}:{}", s.len(), s))
+                        .collect::<String>();
+
+                    let mut coordinates: Vec<[f64; 2]> = Vec::with_capacity(highway.len() + 1);
+                    if let Some(first) = highway.first() {
+                        let n = pg.node(first.from.as_str());
+                        coordinates.push([n.lon, n.lat]);
+                    }
+                    for e in &highway {
+                        let n = pg.node(e.to.as_str());
+                        coordinates.push([n.lon, n.lat]);
+                    }
+
+                    let mut road_names: Vec<String> = Vec::new();
+                    for e in &highway {
+                        if let Some(name) = &e.name {
+                            if !road_names.iter().any(|n| n == name) {
+                                road_names.push(name.clone());
+                            }
+                        }
+                    }
+
+                    let access_node = pg.node(&entry_edge.from);
+                    let snapped_origin = SnappedOrigin {
+                        node_id: entry_edge.from.clone(),
+                        lat: access_node.lat,
+                        lon: access_node.lon,
+                        distance_meters: access_dist,
+                    };
+
+                    let departure = r.origin.clone().unwrap_or_else(|| origin_ll.clone());
+                    let waypoints = handoff::select_waypoints(
+                        entry_edge.from.as_str(),
+                        cycle,
+                        exit_edge,
+                        |id| {
+                            pg.index.node_pos.get(id).map(|&i| {
+                                let n = &pg.graph.nodes[i];
+                                LatLng {
+                                    lat: n.lat,
+                                    lon: n.lon,
+                                }
+                            })
+                        },
+                    );
+                    let maps_url = match handoff::format_maps_url(&departure, &waypoints) {
+                        Ok(url) => url,
+                        Err(()) => {
+                            global_handoff_rejected = true;
+                            continue;
+                        }
+                    };
+                    let handoff_payload = Handoff {
+                        origin: departure.clone(),
+                        destination: departure,
+                        waypoints,
+                        maps_url,
+                        verification_set_version: None,
+                    };
+
+                    // Display names follow the authoritative BillingPair model:
+                    // the pair's own entry/exit name wins, then the Ramp ledger.
+                    let entry_ramp_info = RampInfo {
+                        edge_id: p.entry_id.clone(),
+                        name: p
+                            .entry_name
+                            .clone()
+                            .or_else(|| Some(tier.ramp.name.clone())),
+                        ramp_id: Some(tier.ramp.id.clone()),
+                        route: Some(tier.ramp.route.clone()),
+                        direction: Some(tier.ramp.direction.clone()),
+                    };
+                    let exit_ramp = pg
+                        .index
+                        .ramp_by_id
+                        .get(p.exit_ramp_id.as_deref().unwrap_or_default())
+                        .map(|&idx| &pg.graph.ramps[idx])
+                        .or_else(|| {
+                            pg.index
+                                .ramp_by_edge
+                                .get(&p.exit_id)
+                                .map(|&idx| &pg.graph.ramps[idx])
+                        });
+                    let exit_ramp_info = RampInfo {
+                        edge_id: p.exit_id.clone(),
+                        name: p
+                            .exit_name
+                            .clone()
+                            .or_else(|| exit_ramp.map(|r| r.name.clone())),
+                        ramp_id: exit_ramp
+                            .map(|r| r.id.clone())
+                            .or_else(|| p.exit_ramp_id.clone()),
+                        route: exit_ramp.map(|r| r.route.clone()),
+                        direction: exit_ramp.map(|r| r.direction.clone()),
+                    };
+
+                    let od_tariff = match (
+                        entry_ramp_info.ramp_id.as_deref(),
+                        exit_ramp_info.ramp_id.as_deref(),
+                    ) {
+                        (Some(e_id), Some(x_id)) => pg
+                            .index
+                            .od_tariff_map
+                            .get(&(e_id.to_string(), x_id.to_string()))
+                            .map(|&idx| &pg.graph.od_tariffs[idx]),
+                        _ => None,
+                    };
+
+                    let (toll_amount, toll_from, toll_to, toll_distance, toll_source) =
+                        if let Some(price) = price {
+                            (
+                                Some(price.amount_yen),
+                                Some(price.effective_from.clone()),
+                                price.effective_to.clone(),
+                                od_tariff
+                                    .map(|t| t.billing_distance_meters)
+                                    .or(p.billing_distance_meters),
+                                Some("table".to_string()),
+                            )
+                        } else if !p.prices.is_empty() {
+                            (
+                                None,
+                                None,
+                                None,
+                                od_tariff
+                                    .map(|t| t.billing_distance_meters)
+                                    .or(p.billing_distance_meters),
+                                None,
+                            )
+                        } else if let Some(tariff) = od_tariff.filter(|t| {
+                            t.effective_from
+                                .as_deref()
+                                .is_none_or(|from| utc(from).is_ok_and(|from| from <= now))
+                                && t.effective_to
+                                    .as_deref()
+                                    .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
+                        }) {
+                            (
+                                tariff.amount_yen.or_else(|| {
+                                    Some(calculate_etc_toll_yen(tariff.billing_distance_meters))
+                                }),
+                                tariff.effective_from.clone(),
+                                tariff.effective_to.clone(),
+                                Some(tariff.billing_distance_meters),
+                                Some("od_tariff".to_string()),
+                            )
+                        } else if let Some(dist) = p.billing_distance_meters {
+                            (
+                                Some(calculate_etc_toll_yen(dist)),
+                                None,
+                                None,
+                                Some(dist),
+                                Some("calculated".to_string()),
+                            )
+                        } else {
+                            (None, None, None, None, None)
+                        };
+
+                    tier_candidates.push(Candidate {
+                        id,
+                        release_id: r.release_id.clone(),
+                        origin: r.origin.clone(),
+                        origin_node_id: entry_edge.from.clone(),
+                        snapped_origin,
+                        entry: entry_ramp_info,
+                        exit: exit_ramp_info,
+                        entry_id: p.entry_id.clone(),
+                        exit_id: p.exit_id.clone(),
+                        road_names,
+                        edge_ids: ids,
+                        geometry: GeoJsonLineString {
+                            r#type: "LineString".into(),
+                            coordinates,
+                        },
+                        duration: Duration {
+                            access_seconds: access_secs,
+                            shutoko_seconds: seconds(&highway),
+                            return_seconds: return_secs,
+                            base_seconds: base,
+                            buffer_seconds: buffer,
+                            plan_seconds: base + buffer,
+                        },
+                        distance_meters: meters(&highway),
+                        shutoko_distance_meters: meters(&highway),
+                        toll: Toll {
+                            billing_pair_id: p.id.clone(),
+                            charged_section_count: 1,
+                            amount_yen: toll_amount,
+                            pricing_at: r.pricing_at.clone(),
+                            effective_from: toll_from,
+                            effective_to: toll_to,
+                            billing_distance_meters: toll_distance,
+                            toll_source,
+                        },
+                        r#loop: Loop {
+                            anchor_node_id: p.anchor_node_id.clone(),
+                            edge_ids: edge_ids(cycle),
+                            duration_seconds: seconds(cycle),
+                            distance_meters: meters(cycle),
+                            validated: true,
+                        },
+                        reasons: Vec::new(),
+                        warnings: vec![
+                            "STATIC_TRAVEL_TIME".into(),
+                            "HANDOFF_WAYPOINTS_UNVERIFIED".into(),
+                        ],
+                        handoff: handoff_payload,
+                    });
+                }
+
+                if r.max_minutes < MAX_PRODUCT_MINUTES {
+                    let diagnostic_seconds = MAX_PRODUCT_MINUTES * 60;
+                    let reachable =
+                        cached_reachable_set(pg, p.anchor_node_id.as_str(), diagnostic_seconds);
+                    let diagnostic_loops = paths_pg(
+                        pg,
+                        &p.anchor_node_id,
+                        &p.anchor_node_id,
+                        EdgeKind::Shutoko,
+                        pg.limits.max_loop_edges,
+                        diagnostic_seconds,
+                        &reachable,
+                        &mut diagnostic_budget,
+                    );
+                    for cycle in &diagnostic_loops {
+                        if !diagnostic_budget.take(&pg.limits) {
+                            break;
+                        }
+                        let highway: Vec<_> =
+                            pre.iter().chain(cycle).chain(&post).copied().collect();
+                        if !allowed_pg(pg, &highway) {
+                            continue;
+                        }
+                        let base = access_secs + seconds(&highway) + return_secs;
+                        let buffer = 300.max(base.div_ceil(5));
+                        let plan_seconds = base + buffer;
+                        tier_min_plan =
+                            Some(tier_min_plan.map_or(plan_seconds, |m| m.min(plan_seconds)));
+                        global_legal_route = true;
+                        if base < r.min_minutes * 60 || base + buffer > r.max_minutes * 60 {
+                            global_time_rejected = true;
+                        }
+                    }
+                }
+            }
+
+            if !tier_candidates.is_empty() {
+                tier_candidates.sort_by(|a, b| {
+                    let ratio = ((b.duration.shutoko_seconds as u128)
+                        * (a.toll.amount_yen.unwrap_or(1) as u128))
+                        .cmp(
+                            &((a.duration.shutoko_seconds as u128)
+                                * (b.toll.amount_yen.unwrap_or(1) as u128)),
+                        );
+                    ratio
+                        .then_with(|| b.duration.shutoko_seconds.cmp(&a.duration.shutoko_seconds))
+                        .then_with(|| {
+                            (a.duration.access_seconds + a.duration.return_seconds)
+                                .cmp(&(b.duration.access_seconds + b.duration.return_seconds))
+                        })
+                        .then_with(|| a.id.cmp(&b.id))
+                });
+                let mut selected: Vec<Candidate> = Vec::new();
+                for c in tier_candidates {
+                    if selected.iter().any(|s| similar_pg(pg, &c, s)) {
+                        continue;
+                    }
+                    selected.push(c);
+                    if selected.len() == pg.limits.max_candidates {
+                        break;
+                    }
+                }
+                let time_ranking = selected.iter().any(|c| c.toll.amount_yen.is_none());
+                for (i, c) in selected.iter_mut().enumerate() {
+                    c.reasons = if i == 0 {
+                        vec![
+                            if time_ranking {
+                                "BEST_SHUTOKO_TIME".to_string()
+                            } else {
+                                "BEST_TIME_PER_YEN".to_string()
+                            },
+                            "ONE_SECTION_TOLL".to_string(),
+                        ]
+                    } else {
+                        vec!["ONE_SECTION_TOLL".to_string()]
+                    };
+                }
+                let min_p = if budget.truncated || diagnostic_budget.truncated {
+                    None
+                } else {
+                    global_min_plan_seconds.map_or(tier_min_plan, |g| {
+                        Some(tier_min_plan.map_or(g, |t| g.min(t)))
+                    })
+                };
+                return Ok(SearchResult {
+                    request_id: r.request_id.clone(),
+                    release_id: r.release_id.clone(),
+                    status: if budget.truncated { "truncated" } else { "ok" }.into(),
+                    reason: if budget.truncated {
+                        Some("SEARCH_LIMIT".into())
+                    } else {
+                        None
+                    },
+                    ranking_mode: if time_ranking {
+                        "shutoko_time".into()
+                    } else {
+                        "time_per_yen".into()
+                    },
+                    expanded_states: budget.expanded,
+                    candidates: selected,
+                    nearest_access,
+                    min_plan_seconds: min_p,
+                });
+            }
+
+            global_min_plan_seconds = global_min_plan_seconds.map_or(tier_min_plan, |g| {
+                Some(tier_min_plan.map_or(g, |t| g.min(t)))
+            });
+            if is_nearest_tier && global_legal_route && !budget.truncated {
+                break;
+            }
+            continue;
+        }
+
+        // Dynamic Tier
+        let mut exits: Vec<&Ramp> = Vec::new();
+        if let Some(same_fac) = pg
+            .index
+            .general_exits_by_facility
+            .get(&tier.ramp.facility_id)
+        {
+            for &xr_idx in same_fac {
+                let xr = &pg.graph.ramps[xr_idx];
+                if xr.edge_id == tier.ramp.edge_id
+                    || xr.mainline_node_id == tier.ramp.mainline_node_id
+                {
+                    continue;
+                }
+                if let Some(ref req_exit) = r.exit_ramp_id {
+                    if xr.id != *req_exit {
+                        continue;
+                    }
+                }
+                exits.push(xr);
+            }
+        }
+        exits.sort_by(|a, b| a.id.cmp(&b.id));
+        if exits.len() > 2 {
+            exits.truncate(2);
+        }
+
+        if exits.is_empty() {
+            for &xr_idx in &pg.index.verified_pair_exit_ramps {
+                let xr = &pg.graph.ramps[xr_idx];
+                if xr.edge_id == tier.ramp.edge_id
+                    || xr.mainline_node_id == tier.ramp.mainline_node_id
+                {
+                    continue;
+                }
+                if let Some(ref req_exit) = r.exit_ramp_id {
+                    if xr.id != *req_exit {
+                        continue;
+                    }
+                }
+                exits.push(xr);
+            }
+            exits.sort_by(|a, b| a.id.cmp(&b.id));
+            if exits.len() > 2 {
+                exits.truncate(2);
+            }
+        }
+
+        if exits.is_empty() {
+            continue;
+        }
+
+        let entry_mainline = pg.index.node_pos[tier.ramp.mainline_node_id.as_str()];
+        let (forward_dist, previous_edge, forward_expanded) =
+            forward_shortest_tree(pg, entry_mainline);
+        if !budget.charge(forward_expanded, &pg.limits) {
+            return Ok(SearchResult {
+                request_id: r.request_id.clone(),
+                release_id: r.release_id.clone(),
+                status: "truncated".into(),
+                reason: Some("SEARCH_LIMIT".into()),
+                ranking_mode: "shutoko_time".into(),
+                expanded_states: budget.expanded,
+                candidates: Vec::new(),
+                nearest_access,
+                min_plan_seconds: None,
+            });
+        }
+
+        let mut tier_candidates: Vec<Candidate> = Vec::new();
+        let mut tier_min_plan: Option<u64> = None;
+
+        for exit_ramp in exits {
+            let outcome = evaluate_dynamic_od(
+                pg,
+                r,
+                now,
+                origin_ll,
+                tier.ramp,
+                exit_ramp,
+                &forward_dist,
+                &previous_edge,
+                &mut budget,
+                false,
+            )?;
+            if budget.truncated {
+                // The tier is incomplete: stop evaluating further exits but keep
+                // any candidates that were fully validated for earlier exits.
+                // Falling through to a farther entry is not allowed.
+                break;
+            }
+            global_legal_route |= outcome.legal_route;
+            global_time_rejected |= outcome.time_rejected;
+            global_handoff_rejected |= outcome.handoff_rejected;
+            tier_min_plan = tier_min_plan.map_or(outcome.min_plan_seconds, |m| {
+                Some(outcome.min_plan_seconds.map_or(m, |t| m.min(t)))
+            });
+            if let Some(c) = outcome.candidate {
+                tier_candidates.push(c);
+            }
+        }
+
+        if !tier_candidates.is_empty() {
+            let (priced, unknown): (Vec<_>, Vec<_>) = tier_candidates
+                .into_iter()
+                .partition(|c| c.toll.amount_yen.is_some());
+            let mut cohort = if !priced.is_empty() { priced } else { unknown };
+            let time_ranking = cohort.iter().any(|c| c.toll.amount_yen.is_none());
+            cohort.sort_by(|a, b| {
+                let ratio = if time_ranking {
+                    std::cmp::Ordering::Equal
+                } else {
+                    ((b.duration.shutoko_seconds as u128)
+                        * (a.toll.amount_yen.unwrap_or(1) as u128))
+                        .cmp(
+                            &((a.duration.shutoko_seconds as u128)
+                                * (b.toll.amount_yen.unwrap_or(1) as u128)),
+                        )
+                };
+                ratio
+                    .then_with(|| b.duration.shutoko_seconds.cmp(&a.duration.shutoko_seconds))
+                    .then_with(|| {
+                        (a.duration.access_seconds + a.duration.return_seconds)
+                            .cmp(&(b.duration.access_seconds + b.duration.return_seconds))
+                    })
+                    .then_with(|| a.id.cmp(&b.id))
+            });
+
+            let mut selected: Vec<Candidate> = Vec::new();
+            for c in cohort {
+                if selected.iter().any(|s| similar_pg(pg, &c, s)) {
+                    continue;
+                }
+                selected.push(c);
+                if selected.len() == pg.limits.max_candidates {
+                    break;
+                }
+            }
+            for (i, c) in selected.iter_mut().enumerate() {
+                c.reasons = if i == 0 {
+                    vec![
+                        if time_ranking {
+                            "BEST_SHUTOKO_TIME".to_string()
+                        } else {
+                            "BEST_TIME_PER_YEN".to_string()
+                        },
+                        "ONE_SECTION_TOLL".to_string(),
+                    ]
+                } else {
+                    vec!["ONE_SECTION_TOLL".to_string()]
+                };
+            }
+            let ranking_mode = if time_ranking {
+                "shutoko_time"
+            } else {
+                "time_per_yen"
+            };
+            let min_p = if budget.truncated || diagnostic_budget.truncated {
+                None
+            } else {
+                global_min_plan_seconds.map_or(tier_min_plan, |g| {
+                    Some(tier_min_plan.map_or(g, |t| g.min(t)))
+                })
+            };
+            return Ok(SearchResult {
+                request_id: r.request_id.clone(),
+                release_id: r.release_id.clone(),
+                status: if budget.truncated { "truncated" } else { "ok" }.into(),
+                reason: if budget.truncated {
+                    Some("SEARCH_LIMIT".into())
+                } else {
+                    None
+                },
+                ranking_mode: ranking_mode.into(),
+                expanded_states: budget.expanded,
+                candidates: selected,
+                nearest_access,
+                min_plan_seconds: min_p,
+            });
+        }
+
+        global_min_plan_seconds = global_min_plan_seconds.map_or(tier_min_plan, |g| {
+            Some(tier_min_plan.map_or(g, |t| g.min(t)))
+        });
+        if is_nearest_tier && global_legal_route && !budget.truncated {
+            break;
+        }
+    }
+
+    let reason = if budget.truncated {
+        Some("SEARCH_LIMIT")
+    } else if !global_legal_route {
+        Some("NO_LOOP")
+    } else if global_handoff_rejected && !global_time_rejected {
+        Some("NO_HANDOFF")
+    } else {
+        Some("TIME_WINDOW")
+    };
+    let status = if budget.truncated {
+        "truncated"
+    } else {
+        "no_candidates"
+    };
+    let min_p = if budget.truncated || diagnostic_budget.truncated {
+        None
+    } else {
+        global_min_plan_seconds
+    };
+    Ok(SearchResult {
+        request_id: r.request_id.clone(),
+        release_id: r.release_id.clone(),
+        status: status.into(),
+        reason: reason.map(str::to_owned),
+        ranking_mode: "shutoko_time".into(),
+        expanded_states: budget.expanded,
+        candidates: Vec::new(),
+        nearest_access,
+        min_plan_seconds: min_p,
     })
 }
 
@@ -1952,6 +2856,17 @@ pub fn search_prepared(
 
     if r.entry_ramp_id.is_some() && r.exit_ramp_id.is_some() {
         return explicit_pair_search(pg, r, now, &origin_ll, nearest_access);
+    }
+
+    if r.origin.is_some() && !pg.graph.ramps.is_empty() {
+        return coordinate_tier_search(
+            pg,
+            r,
+            now,
+            &origin_ll,
+            &access_node_indices,
+            nearest_access,
+        );
     }
 
     let mut budget = Budget::default();

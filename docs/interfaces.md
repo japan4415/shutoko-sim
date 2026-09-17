@@ -128,13 +128,13 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 - `beam_width`: 小規模グラフの全単純閉路列挙で各深さに保持する状態数（デフォルト 200）。全線グラフはSCC/逆Dijkstra閉路カタログを使う
 - `max_loop_edges`: 本線閉路探索エッジ数上限（デフォルト 2,000、入力として受理する上限 5,000）
 - `min_loop_meters`: 最小ループ距離（デフォルト 5,000m、マイクロループ排除）
-- `max_pairs`: 従来の課金ペア探索対象上限（デフォルト 10）。入口・出口双方を指定する明示OD探索には適用しない
+- `max_pairs`: 課金ペア探索対象上限（デフォルト 10）。座標検索（入口 tier 探索）では各 tier 内で評価する検証済み課金ペア数の上限として tier 単位に適用される。従来のノード検索（`originNodeId`）や、`origin` 座標を伴わない片側ランプ指定では全体の課金ペア探索対象上限として機能する。`origin` 座標と片側ランプ指定を併用した場合は座標検索として tier 単位に適用される。入口・出口双方を指定する明示OD探索には適用しない
 - `max_access_distance_meters`: 最大アクセス距離（デフォルト 30,000m）
 - `max_access_entries`: 最大アクセス入口数（デフォルト 0 = 無制限）
 
 ### 探索結果の status と reason コード
 結果は `requestId`、`releaseId`、`status`（`ok` / `no_candidates` / `truncated`）、`reason`、`rankingMode`、`expandedStates`、`candidates`、`nearestAccess`、`minPlanSeconds` を持つ。`reason` は該当時のみ以下のコードをとる:
-- `NO_CONNECTION`: 入口アクセス地点（Entry エッジ from ノード）が1件も得られない、最寄りの入口アクセス地点が `SearchLimits.max_access_distance_meters` を超える、または `SearchLimits.max_access_entries` により検証済み課金ペアの入口がアクセス候補に含まれない。前2者は原点がデータ被覆の外側であることを意味し、`nearestAccess` は cap 超過の距離になる（cap を 0 = 無制限にした場合はこの限りでない）。3者目は `nearestAccess` が近距離でも生じ得るため、UI は距離キャップ超過を確認してから「到達不能」を断定する。
+- `NO_CONNECTION`: 入口アクセス地点（Entry エッジ from ノード）が1件も得られない、または最寄りの入口アクセス地点が `SearchLimits.max_access_distance_meters` を超える場合に発生する。座標検索では `entry_tiers` が空（距離キャップ超過または一般入口ランプ不在）のときにのみ発生し、検証済み課金ペアが無くても動的 OD tier が評価されるため「課金ペア不在による NO_CONNECTION」は生じない。一方、従来のノード検索（`originNodeId`）や、`origin` 座標を伴わない片側ランプ指定では、`SearchLimits.max_access_entries` により検証済み課金ペアの入口がアクセス候補に含まれない場合にも本理由が返る（`origin` 座標と片側ランプ指定を併用した場合は座標検索として扱われるため、本理由は上記の `entry_tiers` が空の場合に限る）。先頭2つ（入口アクセス地点0件・距離キャップ超過）は原点がデータ被覆の外側であることを意味し、`nearestAccess` は cap 超過の距離になる（cap を 0 = 無制限にした場合はこの限りでない）。`max_access_entries` 制限による場合は `nearestAccess` が近距離でも生じ得るため、UI は距離キャップ超過を確認してから「到達不能」を断定する。
 - `NO_BILLING_PAIR`: 有効な課金ペアが 1 件も存在しない
 - `NO_LOOP`: 周回ループが見つからない、または進入不可
 - `TIME_WINDOW`: 指定所要時間枠（minMinutes〜maxMinutes）に収まる候補がない
@@ -146,7 +146,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | フィールド | 型 | 内容 |
 | --- | --- | --- |
 | `nearestAccess` | `SnappedOrigin \| null` | 座標入力（`origin`）における最近接の入口アクセス地点（`{ nodeId, lat, lon, distanceMeters }`）。距離キャップ超過の `NO_CONNECTION` でも返す。`originNodeId` 入力および Entry アクセス地点が0件のときは `null` |
-| `minPlanSeconds` | `number \| null` | ループ時間が製品上限 240 分以内にある合法（禁止遷移を満たす）周回の `planSeconds`（`baseSeconds + bufferSeconds`）の最小値。指定時間枠で棄却した周回も含む。列挙は「ループ部分の秒数 ≤ 240 分」で打ち切られるため、その値は列挙範囲内の最小値であり真の全周回最小を上回り得る。**`minPlanSeconds > 240 * 60` を「240 分以内に収まる合法周回が無い」の根拠として使えるのは、列挙が資源上限で打ち切られていない場合に限る**。`SearchLimits.beamWidth`・`maxExpandedStates`・`maxPairs`（または候補側の上限）が列挙を打ち切ったときは真の最小が証明できないため `null` を返す（この場合 UI は「最短でも N 分」「最大 4 時間でも無理」を断定してはならない）。値が non-null でも `240 * 60` を超えるときは列挙範囲内の最小にすぎず列挙外のより長い周回がより小さい `planSeconds` を持ち得るため、UI は絶対的な「最短」と断定せず出所（確認できた範囲）を明示する。`240 * 60` 以下の値は「240 分以内に収まる周回が存在する」ことの根拠として使える。合法な周回が1件も無い場合も `null`。`TIME_WINDOW` の数値根拠（最寄り入口までの距離は `nearestAccess.distanceMeters`）として使う |
+| `minPlanSeconds` | `number \| null` | ループ時間が製品上限 240 分以内にある合法（禁止遷移を満たす）周回の `planSeconds`（`baseSeconds + bufferSeconds`）の最小値。指定時間枠で棄却した周回も含む。座標検索では最近接入口 tier が診断（`TIME_WINDOW` / `NO_HANDOFF`）を確定する場合、値は評価済み tier 内の最小値となる（合法周回を持つ最近接 tier で診断を確定し遠方入口へフォールスルーしないため）。従来のノード検索（`originNodeId`）や、`origin` 座標を伴わない片側ランプ指定では評価された検証済み課金ペア全体における最小値となる。`origin` 座標と片側ランプ指定を併用した場合は座標検索と同様に評価済み tier 内の最小値となる。列挙は「ループ部分の秒数 ≤ 240 分」で打ち切られるため、その値は列挙範囲内の最小値であり真の全周回最小を上回り得る。**`minPlanSeconds > 240 * 60` を「240 分以内に収まる合法周回が無い」の根拠として使えるのは、列挙が資源上限で打ち切られていない場合に限る**。`SearchLimits.beamWidth`・`maxExpandedStates`・`maxPairs`（または候補側の上限）が列挙を打ち切ったときは真の最小が証明できないため `null` を返す（この場合 UI は「最短でも N 分」「最大 4 時間でも無理」を断定してはならない）。値が non-null でも `240 * 60` を超えるときは列挙範囲内の最小にすぎず列挙外のより長い周回がより小さい `planSeconds` を持ち得るため、UI は絶対的な「最短」と断定せず出所（確認できた範囲）を明示する。`240 * 60` 以下の値は「240 分以内に収まる周回が存在する」ことの根拠として使える。合法な周回が1件も無い場合も `null`。`TIME_WINDOW` の数値根拠（最寄り入口までの距離は `nearestAccess.distanceMeters`）として使う |
 
 ### 候補の必須フィールド
 

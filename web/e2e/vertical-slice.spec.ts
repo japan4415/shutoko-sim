@@ -1,8 +1,10 @@
 // issue #12 完了条件の E2E 検証。
 // (a) 神田橋プリセット → 15〜60 → 候補カードと Maps URL / window.open 引数
-// (b) 60〜90 で TIME_WINDOW の文言
+// (b) 60〜90 分で TIME_WINDOW 診断（Issue #57）
 // (c) graph.json 改ざんで ARTIFACT_MISMATCH の文言
 // (d) graph.json 11 秒遅延で TIMEOUT の文言
+// (e) 入力エラー修正後の再検索
+// (f) 240/240 の指定枠で TIME_WINDOW 診断と復帰導線（Issue #57）
 import { expect, test } from "@playwright/test";
 
 const GRAPH_URL = "**/releases/*/graph.json";
@@ -108,9 +110,32 @@ test("(b) 60〜90 分は TIME_WINDOW の文言が表示される", async ({ page
   await page.fill("#max-minutes", "90");
   await page.click("#search-btn");
 
+  // Issue #57: 最近接の神田橋入口 tier は完全評価済みで合法周回（計画 ~28.6 分）を
+  // 持つが、60 分下限に届かない。最近接入口優先の診断として、遠方入口へ縮退せず
+  // TIME_WINDOW と証明済み minPlanSeconds を返す（座標検索のまま復帰導線が機能する）。
   await expect(page.locator("#status")).toContainText(
     "指定時間枠（60〜90 分）に収まる候補がありません",
   );
+});
+
+test("(f) 240/240 の指定枠は TIME_WINDOW 診断と最小時間の復帰導線を出す", async ({ page }) => {
+  await openApp(page);
+  await page.selectOption("#origin-preset", "kandabashi");
+  await page.fill("#min-minutes", "240");
+  await page.fill("#max-minutes", "240");
+  await page.click("#search-btn");
+
+  // Issue #57: 最近接 tier が完全評価済みで合法周回を持つため、打切り（SEARCH_LIMIT）
+  // ではなく TIME_WINDOW と証明済み minPlanSeconds を返す。上限は既に製品上限 240 分
+  // なので「時間の上限を広げる」は出さず、最小時間を下げる導線だけを出す。
+  await expect(page.locator("#status")).toContainText("候補がありません");
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  await expect(
+    page.locator("#recovery-actions button", { hasText: "時間の上限を広げる" }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator("#recovery-actions button", { hasText: "最小時間を" }),
+  ).toBeVisible();
 });
 
 test("(c) graph.json 改ざんは ARTIFACT_MISMATCH で停止する", async ({ page }) => {

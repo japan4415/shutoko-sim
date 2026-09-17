@@ -4,7 +4,7 @@
 
 Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v1` は22,824 nodes / 22,987 edgesで、証拠がある232件だけを exact directed segment に bind する。残るactive一般139件は理由・証拠付き `unsupported`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み232件は `routable` 197件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。課金ペア8件中、両端点を一意なverified-boundランプへ逆引きできる2件だけを `verified` とし、残る6件は `unverified` とする。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
 
-このverified pairの縮退は正確性優先の意図的 deviation である。誤帰属 binding と曖昧な課金端点を除外したため、東京駅の現行実測は15〜60分で神田橋入口→宝町出口の1候補、`minPlanSeconds=1,743`秒（約29.05分）に限られる。旧データで成立した30〜60分は `no_candidates/TIME_WINDOW` となり、上限を240分へ広げても回復しない。release real-graph testはこの能力低下と29/30分の上限境界を明示的に固定する。
+このverified pairの縮退と最近接入口優先（Issue #57）は正確性優先の設計である。座標検索は最近接の構造的に利用可能な入口 tier を優先し、東京駅の現行実測は最近接の宝町入口 tier（`ramp:c1-inner:takaracho-entry` → `ramp:c1-outer:takaracho-exit`）が選択され、`minPlanSeconds=1,610`秒（約26.83分）となる。15〜26分窓では最近接 tier の周回が上限を超えるため `no_candidates/TIME_WINDOW` 診断となり、15〜27分窓で成立する。また、30〜60分窓でも同一の宝町 tier から計画時間 2,795 秒・周回 20,205 m の候補が成立する（料金は未算出、`shutoko_time`）。release real-graph test はこの26/27分境界および30〜60分窓の成立、さらに目黒代表座標での最近接目黒ランプ選択を明示的に固定する。
 
 ## 実装順序と完了条件
 

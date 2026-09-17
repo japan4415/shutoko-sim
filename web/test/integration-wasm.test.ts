@@ -326,7 +326,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
     }
   }, 30_000);
 
-  it("狭い 60 分窓でも実エンジンが minPlanSeconds を返す（診断の上界 240 分）", async () => {
+  it("狭い 60 分窓の座標検索は最近接 tier の TIME_WINDOW 診断を返す", async () => {
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
     const glue = await import(gluePath.href);
     await glue.default({ module_or_path: toBinary(wasmBytes) });
@@ -348,16 +348,69 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       const result = parseSearchResult(
         glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
       );
+      // Issue #57: 立川駅の最近接入口 tier (4号高井戸) は完全評価され、合法周回を
+      // 持つが 60 分窓に収まらない。最近接入口優先の診断として TIME_WINDOW と
+      // 証明済み minPlanSeconds を返し、遠方の入口へは縮退しない。これにより UI の
+      // 時間枠復帰導線（上限を広げる / 最小時間を下げる）が座標検索でも機能する。
       expect(result.status).toBe("no_candidates");
       expect(result.reason).toBe("TIME_WINDOW");
-      // 60 分窓では候補にならないが、240 分以内の合法周回の最短計画は診断として返る。
-      // not.toBeNull() は undefined を通す（undefined !== null）ため、型 assertion で固定する。
-      expect(typeof result.minPlanSeconds).toBe("number");
-      const minPlanSeconds = result.minPlanSeconds as number;
-      expect(minPlanSeconds).toBeGreaterThan(60 * 60);
-      expect(minPlanSeconds).toBeLessThanOrEqual(240 * 60);
+      expect(result.minPlanSeconds).toBe(10_727);
+      expect(result.candidates).toHaveLength(0);
+      expect(result.expandedStates).toBeLessThan(100_000);
     } finally {
       pg.free();
     }
   }, 30_000);
+
+  it("目黒座標は最近接の目黒入口を動的 OD として選び shutoko_time を返す", async () => {
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    const glue = await import(gluePath.href);
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
+    const graphObj = JSON.parse(graphJson) as { releaseId: string };
+    const releaseId = graphObj.releaseId;
+    const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+    try {
+      // 目黒入口直上と目黒近傍の 2 座標 × 3 時間窓（Issue #57 受入条件）。
+      const cases: [number, number, number, number][] = [
+        [35.635681, 139.718489, 15, 60],
+        [35.635681, 139.718489, 30, 120],
+        [35.635681, 139.718489, 52, 120],
+        [35.63239, 139.71524, 15, 60],
+        [35.63239, 139.71524, 30, 120],
+        [35.63239, 139.71524, 52, 120],
+      ];
+      for (const [lat, lon, minMinutes, maxMinutes] of cases) {
+        const msg: UiSearchMessage = {
+          type: "search",
+          requestId: `integration-meguro-${String(lat)}-${String(lon)}-${String(minMinutes)}-${String(maxMinutes)}`,
+          releaseId,
+          pricingAt: "2026-09-10T00:00:00Z",
+          origin: { lat, lon },
+          minMinutes,
+          maxMinutes,
+          vehicleProfile: "passenger-car-etc",
+        };
+        const requestJson = JSON.stringify(buildSearchRequest(msg));
+        const first = glue.searchPrepared(pg, requestJson);
+        const second = glue.searchPrepared(pg, requestJson);
+        // 同一入力の再実行はバイト完全一致（決定論）。
+        expect(second).toBe(first);
+        const result = parseSearchResult(first);
+        expect(result.status).toBe("ok");
+        expect(result.candidates.length).toBeGreaterThan(0);
+        expect(result.expandedStates).toBeLessThanOrEqual(100_000);
+        expect(result.rankingMode).toBe("shutoko_time");
+        for (const candidate of result.candidates) {
+          // 最近接入口優先: 返る入口はすべて目黒入口、出口は同施設の目黒出口。
+          expect(candidate.entry.rampId).toBe("ramp:2-inbound:meguro-entry");
+          expect(candidate.exit.rampId).toBe("ramp:2-outbound:meguro-exit");
+          // 動的 OD は料金未算出（amountYen=null）。
+          expect(candidate.toll.amountYen).toBeNull();
+        }
+      }
+    } finally {
+      pg.free();
+    }
+  }, 60_000);
 });

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "releaseId": "all-real-v1",
+  "releaseId": "all-real-v2",
   "engineVersion": "0.1.0",
   "graphVersion": "1.0.0",
-  "builtAt": "2026-09-16T00:00:00Z",
+  "builtAt": "2026-09-17T00:00:00Z",
   "sourceDate": "2026-09-16",
   "coverage": {
     "area": "Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)",
@@ -808,17 +808,17 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "30a3e2158cdd50bc1b9a904bec33e6ad2ad3eeaaa5e826ff70918eb409b47849",
+      "sha256": "29d009edb9ae058789d41e8f20893dbd4858a0d8295987027e2ecbfc5f93264b",
       "byteLength": 7089932
     },
     {
       "path": "ramps.json",
-      "sha256": "f0744676e3827f773394c514aaf636f524b3c3e44dfa80fdb546f8ad66b49f06",
+      "sha256": "1365f8926ef71a819941c546499b780e81256fc0ab920e32171173322eade1e0",
       "byteLength": 277569
     },
     {
       "path": "snap-index.json",
-      "sha256": "11edc8bb12a4f66feaf074dcb7d011942a40cb6208d7c590a0458d35145c7e49",
+      "sha256": "595f8d9fc9946477f7b31ca68cd0129fa27a96810693b893a5c9fd2ae3a10b2c",
       "byteLength": 15244
     }
   ]

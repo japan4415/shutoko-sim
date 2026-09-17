@@ -91,7 +91,7 @@ UI → Web Worker のリクエスト例（値は形式を示す架空例）:
 }
 ```
 
-Web Worker は `ready`、`result`、`error` を返し、各探索応答に request ID を付ける。`ready` の payload は `{ "type": "ready", "releaseId": "c1-real-v2" }` で、初期化（取得・照合・WASM init）完了時に 1 度だけ送る。`error` の `code` 一覧は次のとおり。
+Web Worker は `ready`、`result`、`error` を返し、各探索応答に request ID を付ける。`ready` の payload は `{ "type": "ready", "releaseId": "all-real-v2" }` で、初期化（取得・照合・WASM init）完了時に 1 度だけ送る。`error` の `code` 一覧は次のとおり。
 
 | `error.code` | 発生箇所 | 意味 |
 | --- | --- | --- |

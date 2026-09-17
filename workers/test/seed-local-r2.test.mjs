@@ -88,17 +88,19 @@ test("manifest artifact paths are fixed safe basenames", (t) => {
   );
 });
 
-test("all-real-v1 requires ramps.json while c1-real-v1/v2 remain backward compatible", (t) => {
+test("all-real releases require ramps.json while c1-real-v1/v2 remain backward compatible", (t) => {
   for (const releaseId of ["c1-real-v1", "c1-real-v2"]) {
     const repoRoot = createRepo(t, { releaseId });
     assert.doesNotThrow(() => seedR2({ repoRoot, runCommand: () => {}, log: quiet }));
   }
 
-  const missingRampsRoot = createRepo(t, { releaseId: "all-real-v1" });
-  assert.throws(
-    () => seedR2({ repoRoot: missingRampsRoot, runCommand: () => assert.fail("must not publish"), log: quiet }),
-    /missing required artifact ramps\.json/
-  );
+  for (const releaseId of ["all-real-v1", "all-real-v2"]) {
+    const missingRampsRoot = createRepo(t, { releaseId });
+    assert.throws(
+      () => seedR2({ repoRoot: missingRampsRoot, runCommand: () => assert.fail("must not publish"), log: quiet }),
+      /missing required artifact ramps\.json/
+    );
+  }
 });
 
 test("all four engine artifacts are required in local and remote modes", (t) => {

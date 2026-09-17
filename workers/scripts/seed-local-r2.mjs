@@ -107,10 +107,9 @@ function validateManifestArtifacts(manifest, fixturesDir, log) {
     log(`  ✓ Verified ${artifactPath}`);
   }
 
-  const requiredArtifacts =
-    manifest.releaseId === "all-real-v1"
-      ? [...MANIFEST_ARTIFACT_NAMES, "ramps.json"]
-      : MANIFEST_ARTIFACT_NAMES;
+  const requiredArtifacts = manifest.releaseId.startsWith("all-real-")
+    ? [...MANIFEST_ARTIFACT_NAMES, "ramps.json"]
+    : MANIFEST_ARTIFACT_NAMES;
   for (const required of requiredArtifacts) {
     if (!seen.has(required)) {
       throw new Error(`manifest.artifacts is missing required artifact ${required}`);

@@ -14,7 +14,7 @@ fn real_graph() -> Graph {
 fn real_graph_deserialization_and_schema_validation() {
     let g = real_graph();
     assert_eq!(g.schema_version, 2);
-    assert_eq!(g.release_id, "all-real-v1");
+    assert_eq!(g.release_id, "all-real-v2");
     assert_eq!(g.vehicle_profile, "passenger-car-etc");
     assert!(!g.nodes.is_empty(), "nodes must not be empty");
     assert!(!g.edges.is_empty(), "edges must not be empty");
@@ -133,7 +133,7 @@ fn real_graph_routing_core_search_returns_candidates() {
 
     let request = SearchRequest {
         request_id: "req-c1-kandabashi-1".into(),
-        release_id: "all-real-v1".into(),
+        release_id: "all-real-v2".into(),
         origin_node_id: Some("n:1070862943".into()),
         origin: None, // Kandabashi surface street node
         entry_ramp_id: None,
@@ -161,7 +161,7 @@ fn real_graph_routing_core_search_returns_candidates() {
         result.expanded_states
     );
     assert_eq!(result.request_id, "req-c1-kandabashi-1");
-    assert_eq!(result.release_id, "all-real-v1");
+    assert_eq!(result.release_id, "all-real-v2");
     assert!(
         !result.candidates.is_empty(),
         "expected at least 1 candidate route from real graph"
@@ -211,7 +211,7 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
 
     let make_request = |pricing_at: &str| SearchRequest {
         request_id: format!("req-{}", pricing_at),
-        release_id: "all-real-v1".into(),
+        release_id: "all-real-v2".into(),
         origin_node_id: Some("n:1070862943".into()),
         origin: None,
         entry_ramp_id: None,
@@ -278,7 +278,7 @@ fn real_graph_search_json_wasm_contract_parity() {
     let graph_json = real_graph_str();
     let request_json = serde_json::json!({
         "requestId": "req-c1-json",
-        "releaseId": "all-real-v1",
+        "releaseId": "all-real-v2",
         "originNodeId": "n:1070862943",
         "minMinutes": 15,
         "maxMinutes": 60,
@@ -603,7 +603,7 @@ fn real_graph_coordinate_input_snap_and_candidate_enrichment() {
     // 神田橋入口の一般道側始点 n:1070862943 の実座標をそのまま使う。
     let request = SearchRequest {
         request_id: "req-c1-coord".into(),
-        release_id: "all-real-v1".into(),
+        release_id: "all-real-v2".into(),
         origin_node_id: None,
         origin: Some(shutoko_routing_core::LatLng {
             lat: 35.6896727,
@@ -669,7 +669,7 @@ fn real_graph_no_entry_edges_coordinate_is_no_connection() {
     let limits = SearchLimits::default();
     let request = SearchRequest {
         request_id: "req-no-entry".into(),
-        release_id: "all-real-v1".into(),
+        release_id: "all-real-v2".into(),
         origin_node_id: None,
         origin: Some(shutoko_routing_core::LatLng {
             lat: 35.62,
@@ -778,7 +778,7 @@ fn osaka_station_returns_no_connection_due_to_distance_cap() {
     let limits = SearchLimits::default(); // max_access_distance_meters = 30 000 m
     let request = SearchRequest {
         request_id: "req-osaka-no-conn".into(),
-        release_id: "all-real-v1".into(),
+        release_id: "all-real-v2".into(),
         origin_node_id: None,
         origin: Some(LatLng {
             lat: 34.7025,
@@ -825,7 +825,7 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
     let limits = SearchLimits::default(); // max_access_entries=0 (unlimited), 30 km cap
     let request = |request_id: &str, min_minutes: u64, max_minutes: u64| SearchRequest {
         request_id: request_id.into(),
-        release_id: "all-real-v1".into(),
+        release_id: "all-real-v2".into(),
         origin_node_id: None,
         origin: Some(LatLng {
             lat: 35.6812,
@@ -946,7 +946,7 @@ fn shinjuku_and_shibuya_stations_return_candidates() {
 
     let request = |station: &str, lat: f64, lon: f64| SearchRequest {
         request_id: format!("req-{station}"),
-        release_id: "all-real-v1".into(),
+        release_id: "all-real-v2".into(),
         origin_node_id: None,
         origin: Some(LatLng { lat, lon }),
         entry_ramp_id: None,
@@ -1074,7 +1074,7 @@ fn wide_access_limits() -> SearchLimits {
 fn coordinate_request(request_id: &str, lat: f64, lon: f64, max_minutes: u64) -> SearchRequest {
     SearchRequest {
         request_id: request_id.into(),
-        release_id: "all-real-v1".into(),
+        release_id: "all-real-v2".into(),
         origin_node_id: None,
         origin: Some(LatLng { lat, lon }),
         entry_ramp_id: None,
@@ -1292,7 +1292,7 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         &g,
         &SearchRequest {
             request_id: "req-kandabashi-node".into(),
-            release_id: "all-real-v1".into(),
+            release_id: "all-real-v2".into(),
             origin_node_id: Some("n:1070862943".into()),
             origin: None,
             entry_ramp_id: None,
@@ -1433,7 +1433,7 @@ fn meguro_coordinates_select_nearest_entry_across_windows() {
     for ((lat, lon), (min, max, plan, min_plan, loop_meters)) in cases {
         let request = SearchRequest {
             request_id: format!("req-meguro-{lat}-{lon}-{min}-{max}"),
-            release_id: "all-real-v1".into(),
+            release_id: "all-real-v2".into(),
             origin_node_id: None,
             origin: Some(LatLng { lat, lon }),
             entry_ramp_id: None,
@@ -1549,7 +1549,7 @@ fn meguro_explicit_ramp_pair_matches_coordinate_route() {
     for (min, max, plan, min_plan, loop_meters) in cases {
         let request = SearchRequest {
             request_id: format!("req-meguro-explicit-{min}-{max}"),
-            release_id: "all-real-v1".into(),
+            release_id: "all-real-v2".into(),
             origin_node_id: None,
             origin: Some(LatLng {
                 lat: 35.635681,

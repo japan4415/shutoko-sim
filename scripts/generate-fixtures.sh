@@ -22,8 +22,8 @@ cargo run --manifest-path "${REPO_ROOT}/Cargo.toml" --bin shutoko-graph-builder 
   --bindings "${BINDINGS_PATH}" \
   --tariffs "${TARIFFS_PATH}" \
   --out-dir "${OUT_DIR}" \
-  --release-id "all-real-v1" \
-  --built-at "2026-09-16T00:00:00Z" \
+  --release-id "all-real-v2" \
+  --built-at "2026-09-17T00:00:00Z" \
   --source-date "2026-09-16" \
   --vehicle-profile "passenger-car-etc" \
   --coverage-area "Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)" \

@@ -163,7 +163,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって `manifest.json` の `unverifiedSections` 配列に自動列挙される。
 - **自動列挙対象**: グラフ内に存在するすべての入口・出口エッジのうち、検証済み課金ペアに採用されていないエッジ。OSM ウェイに `name` タグが存在する場合は「エッジID（ウェイ名）」の形式で可読性を担保。
 - **除外路線・通行規制スキップの注記**: C1 外の分岐路線（八重洲線、1号上野線、6号向島線等）や、静的道路グラフで適用外となった通行規制（conditional / no via / outside graph / disconnected / unrecognized 等のスキップカテゴリ）に関する注記も件数付きで同リストに収録。
-- **現状**: 現行リリース `all-real-v1` は監査用課金ペア8件を保持するが、両端点のexact edgeが一意なverified-boundランプへ逆引きでき、公式施設名とも一致する2件だけが `verified` である。残る6件は `unverified` として候補生成から除外する。公式一般ランプ371件のうち232件を exact directed segment に bindし、139件は根拠付き `unsupported` としてグラフ外に隔離している。
+- **現状**: 現行リリース `all-real-v2` は監査用課金ペア8件を保持するが、両端点のexact edgeが一意なverified-boundランプへ逆引きでき、公式施設名とも一致する2件だけが `verified` である。残る6件は `unverified` として候補生成から除外する。公式一般ランプ371件のうち232件を exact directed segment に bindし、139件は根拠付き `unsupported` としてグラフ外に隔離している。
 
 ## 6. 全24路線・正規ランプ台帳（Canonical Ramp Inventory）
 

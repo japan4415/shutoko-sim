@@ -55,7 +55,7 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
       const exitId = `fixture-exit-${String(index)}`;
       return {
         id,
-        releaseId: "all-real-v1",
+        releaseId: "all-real-v2",
         origin: { lat: 35.6896727, lon: 139.7644248 },
         originNodeId: "fixture-origin",
         snappedOrigin: { nodeId: "fixture-origin", lat: 35.6896727, lon: 139.7644248, distanceMeters: 500 + index },
@@ -91,7 +91,7 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
     };
     const result = {
       requestId: "",
-      releaseId: "all-real-v1",
+      releaseId: "all-real-v2",
       status: "ok",
       reason: null,
       rankingMode: "time_per_yen",
@@ -103,7 +103,7 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
     class FixtureWorker {
       onmessage: ((event: MessageEvent) => void) | null = null;
       constructor() {
-        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v1" } } as MessageEvent), 0);
+        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v2" } } as MessageEvent), 0);
       }
       postMessage(message: { requestId: string }): void {
         const response = { type: "result", requestId: message.requestId, result: { ...result, requestId: message.requestId } };

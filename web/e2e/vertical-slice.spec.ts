@@ -1,10 +1,10 @@
 // issue #12 完了条件の E2E 検証。
 // (a) 神田橋プリセット → 15〜60 → 候補カードと Maps URL / window.open 引数
-// (b) 60〜90 で近接 tier のフォールバック候補（Issue #57）
+// (b) 60〜90 分で TIME_WINDOW 診断（Issue #57）
 // (c) graph.json 改ざんで ARTIFACT_MISMATCH の文言
 // (d) graph.json 11 秒遅延で TIMEOUT の文言
 // (e) 入力エラー修正後の再検索
-// (f) 到達不能な指定枠の SEARCH_LIMIT 打切り文言（Issue #57）
+// (f) 240/240 の指定枠で TIME_WINDOW 診断と復帰導線（Issue #57）
 import { expect, test } from "@playwright/test";
 
 const GRAPH_URL = "**/releases/*/graph.json";

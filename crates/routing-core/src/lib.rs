@@ -2246,9 +2246,14 @@ fn coordinate_tier_search(
                         verification_set_version: None,
                     };
 
+                    // Display names follow the authoritative BillingPair model:
+                    // the pair's own entry/exit name wins, then the Ramp ledger.
                     let entry_ramp_info = RampInfo {
                         edge_id: p.entry_id.clone(),
-                        name: Some(tier.ramp.name.clone()),
+                        name: p
+                            .entry_name
+                            .clone()
+                            .or_else(|| Some(tier.ramp.name.clone())),
                         ramp_id: Some(tier.ramp.id.clone()),
                         route: Some(tier.ramp.route.clone()),
                         direction: Some(tier.ramp.direction.clone()),
@@ -2266,9 +2271,10 @@ fn coordinate_tier_search(
                         });
                     let exit_ramp_info = RampInfo {
                         edge_id: p.exit_id.clone(),
-                        name: exit_ramp
-                            .map(|r| r.name.clone())
-                            .or_else(|| p.exit_name.clone()),
+                        name: p
+                            .exit_name
+                            .clone()
+                            .or_else(|| exit_ramp.map(|r| r.name.clone())),
                         ramp_id: exit_ramp
                             .map(|r| r.id.clone())
                             .or_else(|| p.exit_ramp_id.clone()),
@@ -2452,10 +2458,15 @@ fn coordinate_tier_search(
                         break;
                     }
                 }
+                let time_ranking = selected.iter().any(|c| c.toll.amount_yen.is_none());
                 for (i, c) in selected.iter_mut().enumerate() {
                     c.reasons = if i == 0 {
                         vec![
-                            "BEST_TIME_PER_YEN".to_string(),
+                            if time_ranking {
+                                "BEST_SHUTOKO_TIME".to_string()
+                            } else {
+                                "BEST_TIME_PER_YEN".to_string()
+                            },
                             "ONE_SECTION_TOLL".to_string(),
                         ]
                     } else {
@@ -2474,7 +2485,11 @@ fn coordinate_tier_search(
                     release_id: r.release_id.clone(),
                     status: "ok".into(),
                     reason: None,
-                    ranking_mode: "time_per_yen".into(),
+                    ranking_mode: if time_ranking {
+                        "shutoko_time".into()
+                    } else {
+                        "time_per_yen".into()
+                    },
                     expanded_states: budget.expanded,
                     candidates: selected,
                     nearest_access,

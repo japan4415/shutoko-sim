@@ -2211,3 +2211,770 @@ fn boundary_jct_and_half_ic_model_contract() {
         assert_eq!(deserialized, k);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Issue #57: coordinate entry-tier search (nearest entry, dynamic OD, Budget)
+// ---------------------------------------------------------------------------
+mod coordinate_entry_tiers {
+    use shutoko_routing_core::{
+        search, BillingPair, Edge, EdgeKind, Graph, LatLng, Node, OdTariff, Price, Ramp, RampKind,
+        SearchLimits, SearchRequest, VerificationStatus,
+    };
+
+    const RELEASE: &str = "tier-v1";
+    const PROFILE: &str = "passenger-car-etc";
+    const PRICING_AT: &str = "2026-09-10T00:00:00Z";
+    const ORIGIN_LAT: f64 = 35.7000;
+    const ORIGIN_LON: f64 = 139.7000;
+
+    /// Minimal graph builder for the coordinate-tier contract.
+    ///
+    /// A three-node mainline cycle L1→L2→L3→L1 (1800 s / 30 km) is the shared
+    /// loop; tests add GeneralEntry/GeneralExit ramps whose surface nodes are
+    /// placed at controlled distances from the fixed origin.
+    struct World {
+        nodes: Vec<Node>,
+        edges: Vec<Edge>,
+        ramps: Vec<Ramp>,
+        pairs: Vec<BillingPair>,
+        tariffs: Vec<OdTariff>,
+    }
+
+    impl World {
+        fn base(with_mainline_cycle: bool) -> Self {
+            let mut world = World {
+                nodes: Vec::new(),
+                edges: Vec::new(),
+                ramps: Vec::new(),
+                pairs: Vec::new(),
+                tariffs: Vec::new(),
+            };
+            if with_mainline_cycle {
+                world.node("L1", ORIGIN_LAT, ORIGIN_LON);
+                world.node("L2", 35.7100, 139.7000);
+                world.node("L3", 35.7050, 139.7100);
+                world.shutoko("c12", "L1", "L2", 600, 10_000);
+                world.shutoko("c23", "L2", "L3", 600, 10_000);
+                world.shutoko("c31", "L3", "L1", 600, 10_000);
+            }
+            world
+        }
+
+        fn new() -> Self {
+            Self::base(true)
+        }
+
+        fn node(&mut self, id: &str, lat: f64, lon: f64) {
+            if self.nodes.iter().any(|n| n.id == id) {
+                return;
+            }
+            self.nodes.push(Node {
+                id: id.into(),
+                lat,
+                lon,
+            });
+        }
+
+        fn shutoko(&mut self, id: &str, from: &str, to: &str, seconds: u64, meters: u64) {
+            self.edges.push(Edge {
+                id: id.into(),
+                from: from.into(),
+                to: to.into(),
+                kind: EdgeKind::Shutoko,
+                duration_seconds: seconds,
+                distance_meters: meters,
+                name: Some("C1".into()),
+            });
+        }
+
+        /// Two-node mainline cycle `a`↔`b` derived from the given one-way time.
+        fn cycle2(&mut self, a: &str, b: &str, seconds: u64, meters: u64) {
+            self.shutoko(&format!("{a}->{b}"), a, b, seconds, meters);
+            self.shutoko(&format!("{b}->{a}"), b, a, seconds, meters);
+        }
+
+        fn entry(
+            &mut self,
+            ramp_id: &str,
+            facility: &str,
+            surface: &str,
+            lat: f64,
+            lon: f64,
+            mainline: &str,
+        ) -> String {
+            let edge_id = format!("e:{ramp_id}");
+            self.node(surface, lat, lon);
+            self.edges.push(Edge {
+                id: edge_id.clone(),
+                from: surface.into(),
+                to: mainline.into(),
+                kind: EdgeKind::Entry,
+                duration_seconds: 30,
+                distance_meters: 200,
+                name: None,
+            });
+            self.ramps.push(Ramp {
+                id: ramp_id.into(),
+                facility_id: facility.into(),
+                name: format!("{ramp_id}:name"),
+                route: "C1".into(),
+                direction: "inner".into(),
+                kind: RampKind::GeneralEntry,
+                edge_id: edge_id.clone(),
+                node_id: surface.into(),
+                mainline_node_id: mainline.into(),
+                restrictions: vec![],
+            });
+            edge_id
+        }
+
+        fn exit(
+            &mut self,
+            ramp_id: &str,
+            facility: &str,
+            surface: &str,
+            lat: f64,
+            lon: f64,
+            mainline: &str,
+        ) -> String {
+            let edge_id = format!("e:{ramp_id}");
+            self.node(surface, lat, lon);
+            self.edges.push(Edge {
+                id: edge_id.clone(),
+                from: mainline.into(),
+                to: surface.into(),
+                kind: EdgeKind::Exit,
+                duration_seconds: 30,
+                distance_meters: 200,
+                name: None,
+            });
+            self.ramps.push(Ramp {
+                id: ramp_id.into(),
+                facility_id: facility.into(),
+                name: format!("{ramp_id}:name"),
+                route: "C1".into(),
+                direction: "inner".into(),
+                kind: RampKind::GeneralExit,
+                edge_id: edge_id.clone(),
+                node_id: surface.into(),
+                mainline_node_id: mainline.into(),
+                restrictions: vec![],
+            });
+            edge_id
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        fn verified_pair(
+            &mut self,
+            pair_id: &str,
+            entry_edge: &str,
+            exit_edge: &str,
+            anchor: &str,
+            entry_ramp: &str,
+            exit_ramp: &str,
+            entry_name: &str,
+            exit_name: &str,
+        ) {
+            self.pairs.push(BillingPair {
+                id: pair_id.into(),
+                entry_id: entry_edge.into(),
+                exit_id: exit_edge.into(),
+                anchor_node_id: anchor.into(),
+                entry_to_anchor_edge_ids: vec![entry_edge.into()],
+                anchor_to_exit_edge_ids: vec![exit_edge.into()],
+                status: VerificationStatus::Verified,
+                vehicle_profile: PROFILE.into(),
+                prices: vec![Price {
+                    amount_yen: 300,
+                    effective_from: "2022-03-31T15:00:00Z".into(),
+                    effective_to: None,
+                }],
+                entry_name: Some(entry_name.into()),
+                exit_name: Some(exit_name.into()),
+                entry_ramp_id: Some(entry_ramp.into()),
+                exit_ramp_id: Some(exit_ramp.into()),
+                billing_distance_meters: Some(1_500),
+            });
+        }
+
+        fn tariff(&mut self, entry_ramp: &str, exit_ramp: &str, meters: u64, yen: u64) {
+            self.tariffs.push(OdTariff {
+                entry_ramp_id: entry_ramp.into(),
+                exit_ramp_id: exit_ramp.into(),
+                billing_distance_meters: meters,
+                amount_yen: Some(yen),
+                effective_from: Some("2022-03-31T15:00:00Z".into()),
+                effective_to: None,
+            });
+        }
+
+        fn graph(&self) -> Graph {
+            Graph {
+                schema_version: 2,
+                release_id: RELEASE.into(),
+                vehicle_profile: PROFILE.into(),
+                nodes: self.nodes.clone(),
+                edges: self.edges.clone(),
+                billing_pairs: self.pairs.clone(),
+                forbidden_transitions: vec![],
+                ramps: self.ramps.clone(),
+                od_tariffs: self.tariffs.clone(),
+            }
+        }
+    }
+
+    fn request(min_minutes: u64, max_minutes: u64) -> SearchRequest {
+        SearchRequest {
+            request_id: format!("tier-{min_minutes}-{max_minutes}"),
+            release_id: RELEASE.into(),
+            origin_node_id: None,
+            origin: Some(LatLng {
+                lat: ORIGIN_LAT,
+                lon: ORIGIN_LON,
+            }),
+            entry_ramp_id: None,
+            exit_ramp_id: None,
+            min_minutes,
+            max_minutes,
+            vehicle_profile: PROFILE.into(),
+            pricing_at: PRICING_AT.into(),
+        }
+    }
+
+    fn entry_ramps(result: &shutoko_routing_core::SearchResult) -> Vec<Option<String>> {
+        result
+            .candidates
+            .iter()
+            .map(|c| c.entry.ramp_id.clone())
+            .collect()
+    }
+
+    fn exit_ramps(result: &shutoko_routing_core::SearchResult) -> Vec<Option<String>> {
+        result
+            .candidates
+            .iter()
+            .map(|c| c.exit.ramp_id.clone())
+            .collect()
+    }
+
+    /// Two GeneralEntry ramps share one snapped node. The lexicographically
+    /// smaller ramp ID must win the tie, and the farther entry must not be
+    /// reached while the nearest tier already yields a candidate.
+    #[test]
+    fn tiers_order_by_distance_then_stable_ramp_id() {
+        let mut world = World::new();
+        let near_exit = world.exit(
+            "ramp:t:a-exit",
+            "fac:t:a",
+            "tA",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L2",
+        );
+        let _ = near_exit;
+        world.entry(
+            "ramp:t:a-entry-1",
+            "fac:t:a",
+            "sA",
+            35.7010,
+            ORIGIN_LON,
+            "L1",
+        );
+        world.entry(
+            "ramp:t:a-entry-2",
+            "fac:t:a",
+            "sA",
+            35.7010,
+            ORIGIN_LON,
+            "L1",
+        );
+        let far_exit = world.exit(
+            "ramp:t:b-exit",
+            "fac:t:b",
+            "tB",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L2",
+        );
+        let _ = far_exit;
+        world.entry("ramp:t:b-entry", "fac:t:b", "sB", 35.7030, ORIGIN_LON, "L1");
+
+        let result = search(&world.graph(), &request(30, 60), &SearchLimits::default()).unwrap();
+        assert_eq!(result.status, "ok", "reason={:?}", result.reason);
+        assert!(!result.candidates.is_empty());
+        assert_eq!(
+            result.candidates[0].entry.ramp_id.as_deref(),
+            Some("ramp:t:a-entry-1"),
+            "the lex-smaller ramp at the nearest snap node must win"
+        );
+        assert_eq!(result.candidates[0].snapped_origin.node_id, "sA");
+        assert!(
+            !entry_ramps(&result)
+                .iter()
+                .any(|id| id.as_deref() == Some("ramp:t:b-entry")),
+            "farther tier must not be selected while the nearest tier has a candidate"
+        );
+    }
+
+    /// A Verified entry tier evaluates only its own pair exits (priced path),
+    /// never the unknown-toll dynamic exit attached to the same facility.
+    #[test]
+    fn verified_entry_uses_only_its_pair_exit() {
+        let mut world = World::new();
+        let entry_edge = world.entry("ramp:t:v-entry", "fac:t:v", "sV", 35.7010, ORIGIN_LON, "L1");
+        let pair_exit_edge = world.exit(
+            "ramp:t:v-exit",
+            "fac:t:v",
+            "tV",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L1",
+        );
+        // Same facility, but a different (non-verified) mainline node: it would
+        // be dynamically usable if the verified tier mixed cohorts.
+        world.exit(
+            "ramp:t:v-side-exit",
+            "fac:t:v",
+            "tVS",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L3",
+        );
+        world.verified_pair(
+            "bp:t:verified",
+            &entry_edge,
+            &pair_exit_edge,
+            "L1",
+            "ramp:t:v-entry",
+            "ramp:t:v-exit",
+            "V入口",
+            "V出口",
+        );
+
+        let result = search(&world.graph(), &request(30, 60), &SearchLimits::default()).unwrap();
+        assert_eq!(result.status, "ok", "reason={:?}", result.reason);
+        assert_eq!(result.candidates.len(), 1);
+        let candidate = &result.candidates[0];
+        assert_eq!(candidate.exit.ramp_id.as_deref(), Some("ramp:t:v-exit"));
+        assert_eq!(candidate.toll.amount_yen, Some(300));
+        assert_eq!(candidate.toll.billing_pair_id, "bp:t:verified");
+        assert_eq!(result.ranking_mode, "time_per_yen");
+        assert_eq!(candidate.entry.name.as_deref(), Some("V入口"));
+        assert_eq!(candidate.exit.name.as_deref(), Some("V出口"));
+        assert!(
+            !exit_ramps(&result)
+                .iter()
+                .any(|id| id.as_deref() == Some("ramp:t:v-side-exit")),
+            "a verified tier must not emit dynamic unknown-toll candidates"
+        );
+    }
+
+    /// With no Verified pair, at most two same-facility exits by stable ramp ID
+    /// are evaluated; the third is never used.
+    #[test]
+    fn same_facility_exits_are_bounded_and_stable() {
+        let mut world = World::new();
+        world.entry("ramp:t:c-entry", "fac:t:c", "sC", 35.7010, ORIGIN_LON, "L1");
+        world.exit(
+            "ramp:t:c-exit-1",
+            "fac:t:c",
+            "tC1",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L2",
+        );
+        world.exit(
+            "ramp:t:c-exit-2",
+            "fac:t:c",
+            "tC2",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L3",
+        );
+        world.exit(
+            "ramp:t:c-exit-3",
+            "fac:t:c",
+            "tC3",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L2",
+        );
+
+        let result = search(&world.graph(), &request(30, 60), &SearchLimits::default()).unwrap();
+        assert_eq!(result.status, "ok", "reason={:?}", result.reason);
+        assert!(!result.candidates.is_empty());
+        assert!(result.candidates.len() <= 2);
+        assert_eq!(
+            result.candidates[0].exit.ramp_id.as_deref(),
+            Some("ramp:t:c-exit-1"),
+            "stable ID order must pick the lex-smaller exit first"
+        );
+        for id in exit_ramps(&result) {
+            let id = id.expect("dynamic candidates carry an exit ramp id");
+            assert!(
+                id == "ramp:t:c-exit-1" || id == "ramp:t:c-exit-2",
+                "third same-facility exit must not be evaluated: {id}"
+            );
+        }
+    }
+
+    /// A same-facility exit that shares the entry's mainline node is degenerate
+    /// and must be rejected in favour of the valid exit.
+    #[test]
+    fn degenerate_same_mainline_exit_is_rejected() {
+        let mut world = World::new();
+        world.entry("ramp:t:g-entry", "fac:t:g", "sG", 35.7010, ORIGIN_LON, "L1");
+        world.exit(
+            "ramp:t:g-deg-exit",
+            "fac:t:g",
+            "tGdeg",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L1",
+        );
+        world.exit(
+            "ramp:t:g-ok-exit",
+            "fac:t:g",
+            "tGok",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L2",
+        );
+
+        let result = search(&world.graph(), &request(30, 60), &SearchLimits::default()).unwrap();
+        assert_eq!(result.status, "ok", "reason={:?}", result.reason);
+        assert!(!result.candidates.is_empty());
+        for id in exit_ramps(&result) {
+            assert_eq!(
+                id.as_deref(),
+                Some("ramp:t:g-ok-exit"),
+                "the same-mainline degenerate exit must never be used"
+            );
+        }
+    }
+
+    /// An entry whose facility has no exit falls back to the distinct exits
+    /// referenced by existing Verified BillingPairs.
+    #[test]
+    fn verified_pair_exit_is_used_as_fallback() {
+        let mut world = World::new();
+        world.entry("ramp:t:d-entry", "fac:t:d", "sD", 35.7010, ORIGIN_LON, "L1");
+        let other_entry_edge = world.entry(
+            "ramp:t:d-other-entry",
+            "fac:t:d-other",
+            "sDother",
+            35.7300,
+            ORIGIN_LON,
+            "L2",
+        );
+        let fallback_exit_edge = world.exit(
+            "ramp:t:d-fallback-exit",
+            "fac:t:d-other",
+            "tDfallback",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L2",
+        );
+        world.verified_pair(
+            "bp:t:fallback",
+            &other_entry_edge,
+            &fallback_exit_edge,
+            "L2",
+            "ramp:t:d-other-entry",
+            "ramp:t:d-fallback-exit",
+            "Other入口",
+            "Other出口",
+        );
+
+        let result = search(&world.graph(), &request(30, 60), &SearchLimits::default()).unwrap();
+        assert_eq!(result.status, "ok", "reason={:?}", result.reason);
+        assert_eq!(
+            result.candidates[0].entry.ramp_id.as_deref(),
+            Some("ramp:t:d-entry"),
+            "the nearest dynamic tier must win"
+        );
+        assert_eq!(
+            result.candidates[0].exit.ramp_id.as_deref(),
+            Some("ramp:t:d-fallback-exit"),
+            "fallback exit comes from the Verified pair ledger"
+        );
+        assert_eq!(result.candidates[0].toll.amount_yen, None);
+        assert_eq!(result.ranking_mode, "shutoko_time");
+    }
+
+    /// A nearest tier that is fully evaluated with no candidate (a dead-end
+    /// mainline with no cycle) falls through to a farther tier.
+    #[test]
+    fn fully_evaluated_no_candidate_tier_falls_through() {
+        let mut world = World::new();
+        world.node("D1", 35.7005, 139.7000);
+        world.node("D2", 35.7010, 139.7000);
+        world.shutoko("d12", "D1", "D2", 120, 1_000);
+        world.entry(
+            "ramp:t:dead-entry",
+            "fac:t:dead",
+            "sDead",
+            35.7010,
+            ORIGIN_LON,
+            "D1",
+        );
+        world.exit(
+            "ramp:t:dead-exit",
+            "fac:t:dead",
+            "tDead",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "D2",
+        );
+        world.entry(
+            "ramp:t:live-entry",
+            "fac:t:live",
+            "sLive",
+            35.7030,
+            ORIGIN_LON,
+            "L1",
+        );
+        world.exit(
+            "ramp:t:live-exit",
+            "fac:t:live",
+            "tLive",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L2",
+        );
+
+        let result = search(&world.graph(), &request(30, 60), &SearchLimits::default()).unwrap();
+        assert_eq!(result.status, "ok", "reason={:?}", result.reason);
+        assert_eq!(
+            result.candidates[0].entry.ramp_id.as_deref(),
+            Some("ramp:t:live-entry"),
+            "the fully evaluated no-candidate nearest tier must fall through"
+        );
+    }
+
+    /// When the shared Budget is exhausted while evaluating a farther tier, the
+    /// search fails closed with SEARCH_LIMIT instead of reaching a valid entry.
+    #[test]
+    fn budget_exhaustion_blocks_farther_fallback() {
+        let mut world = World::base(false);
+        world.node("A1", ORIGIN_LAT, ORIGIN_LON);
+        world.node("A2", 35.7100, 139.7000);
+        world.cycle2("A1", "A2", 1_200, 20_000);
+        world.entry(
+            "ramp:t:budget-near",
+            "fac:t:budget-near",
+            "sBN",
+            35.7010,
+            ORIGIN_LON,
+            "A1",
+        );
+        world.exit(
+            "ramp:t:budget-near-exit",
+            "fac:t:budget-near",
+            "tBN",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "A2",
+        );
+        world.node("B1", 35.7030, 139.7000);
+        world.node("B2", 35.7130, 139.7000);
+        world.cycle2("B1", "B2", 1_200, 20_000);
+        world.entry(
+            "ramp:t:budget-far",
+            "fac:t:budget-far",
+            "sBF",
+            35.7030,
+            ORIGIN_LON,
+            "B1",
+        );
+        world.exit(
+            "ramp:t:budget-far-exit",
+            "fac:t:budget-far",
+            "tBF",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "B2",
+        );
+
+        let limits = SearchLimits {
+            max_expanded_states: 5,
+            ..SearchLimits::default()
+        };
+        let result = search(&world.graph(), &request(30, 60), &limits).unwrap();
+        assert_eq!(result.status, "truncated", "reason={:?}", result.reason);
+        assert_eq!(result.reason.as_deref(), Some("SEARCH_LIMIT"));
+        assert!(result.candidates.is_empty());
+        assert_eq!(result.expanded_states, 5);
+        assert!(
+            !entry_ramps(&result)
+                .iter()
+                .any(|id| id.as_deref() == Some("ramp:t:budget-far")),
+            "a truncated tier must not silently select a farther entry"
+        );
+    }
+
+    /// `max_pairs` bounds Verified pairs only; more dynamic entry tiers than
+    /// `max_pairs` must not by itself truncate the search.
+    #[test]
+    fn dynamic_entry_count_is_independent_of_max_pairs() {
+        let mut world = World::new();
+        for index in 0..3 {
+            let entry = format!("ramp:t:p-dyn-{index}");
+            let exit = format!("ramp:t:p-dyn-{index}-exit");
+            let branch = format!("P{index}");
+            let branch_end = format!("P{index}b");
+            let lat = 35.7004 + (index as f64) * 0.0002;
+            world.node(&branch, lat, ORIGIN_LON);
+            world.node(&branch_end, lat + 0.0005, ORIGIN_LON);
+            world.shutoko(&format!("p{index}"), &branch, &branch_end, 120, 1_000);
+            world.entry(
+                &entry,
+                &format!("fac:t:p-dyn-{index}"),
+                &format!("s{index}"),
+                lat,
+                ORIGIN_LON,
+                &branch,
+            );
+            world.exit(
+                &exit,
+                &format!("fac:t:p-dyn-{index}"),
+                &format!("t{index}"),
+                ORIGIN_LAT,
+                ORIGIN_LON,
+                &branch_end,
+            );
+        }
+        let entry_edge = world.entry("ramp:t:p-entry", "fac:t:p", "sP", 35.7300, ORIGIN_LON, "L1");
+        let exit_edge = world.exit(
+            "ramp:t:p-exit",
+            "fac:t:p",
+            "tP",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L1",
+        );
+        world.verified_pair(
+            "bp:t:max-pairs",
+            &entry_edge,
+            &exit_edge,
+            "L1",
+            "ramp:t:p-entry",
+            "ramp:t:p-exit",
+            "P入口",
+            "P出口",
+        );
+
+        let limits = SearchLimits {
+            max_pairs: 1,
+            ..SearchLimits::default()
+        };
+        let result = search(&world.graph(), &request(30, 60), &limits).unwrap();
+        assert_eq!(result.status, "ok", "reason={:?}", result.reason);
+        assert_eq!(
+            result.candidates[0].entry.ramp_id.as_deref(),
+            Some("ramp:t:p-entry")
+        );
+        assert_eq!(result.candidates[0].toll.amount_yen, Some(300));
+    }
+
+    fn cohort_world(with_tariff: bool) -> World {
+        let mut world = World::new();
+        let entry_edge = world.entry("ramp:t:h-entry", "fac:t:h", "sH", 35.7010, ORIGIN_LON, "L1");
+        let _ = entry_edge;
+        world.exit(
+            "ramp:t:h-exit-1",
+            "fac:t:h",
+            "tH1",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L2",
+        );
+        world.exit(
+            "ramp:t:h-exit-2",
+            "fac:t:h",
+            "tH2",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L3",
+        );
+        if with_tariff {
+            world.tariff("ramp:t:h-entry", "ramp:t:h-exit-1", 4_300, 300);
+        }
+        world
+    }
+
+    /// One un-priced dynamic exit plus one OD-tariff exit must produce a single
+    /// priced cohort; unknown and priced candidates never mix.
+    #[test]
+    fn dynamic_tier_cohort_is_homogeneous() {
+        let priced = search(
+            &cohort_world(true).graph(),
+            &request(30, 60),
+            &SearchLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(priced.status, "ok", "reason={:?}", priced.reason);
+        assert!(!priced.candidates.is_empty());
+        assert_eq!(priced.ranking_mode, "time_per_yen");
+        for candidate in &priced.candidates {
+            assert_eq!(candidate.toll.amount_yen, Some(300));
+            assert_eq!(candidate.exit.ramp_id.as_deref(), Some("ramp:t:h-exit-1"));
+        }
+
+        let unpriced = search(
+            &cohort_world(false).graph(),
+            &request(30, 60),
+            &SearchLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(unpriced.status, "ok", "reason={:?}", unpriced.reason);
+        assert!(!unpriced.candidates.is_empty());
+        assert_eq!(unpriced.ranking_mode, "shutoko_time");
+        for candidate in &unpriced.candidates {
+            assert_eq!(candidate.toll.amount_yen, None);
+        }
+    }
+
+    /// `max_candidates` is applied inside the winning tier.
+    #[test]
+    fn tier_local_max_candidates_is_respected() {
+        let mut world = World::new();
+        world.entry("ramp:t:m-entry", "fac:t:m", "sM", 35.7010, ORIGIN_LON, "L1");
+        world.exit(
+            "ramp:t:m-exit-1",
+            "fac:t:m",
+            "tM1",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L2",
+        );
+        world.exit(
+            "ramp:t:m-exit-2",
+            "fac:t:m",
+            "tM2",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L3",
+        );
+        let limits = SearchLimits {
+            max_candidates: 1,
+            ..SearchLimits::default()
+        };
+        let result = search(&world.graph(), &request(30, 60), &limits).unwrap();
+        assert_eq!(result.status, "ok", "reason={:?}", result.reason);
+        assert_eq!(result.candidates.len(), 1);
+    }
+
+    /// Repeated searches of the same coordinate request serialize identically.
+    #[test]
+    fn repeated_coordinate_tier_json_is_deterministic() {
+        let graph = cohort_world(true).graph();
+        let first = search(&graph, &request(30, 60), &SearchLimits::default()).unwrap();
+        let second = search(&graph, &request(30, 60), &SearchLimits::default()).unwrap();
+        assert_eq!(
+            serde_json::to_string(&first).unwrap(),
+            serde_json::to_string(&second).unwrap(),
+            "coordinate tier search must be byte-deterministic"
+        );
+    }
+}

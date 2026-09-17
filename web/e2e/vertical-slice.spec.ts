@@ -103,34 +103,39 @@ test("(a) 神田橋プリセット 15〜60 で候補カードと Maps URL が表
   expect(calls[0]?.[2]).toBe("noopener");
 });
 
-test("(b) 神田橋プリセット 60〜90 分は近接 tier のフォールバックで候補が返る", async ({ page }) => {
+test("(b) 60〜90 分は TIME_WINDOW の文言が表示される", async ({ page }) => {
   await openApp(page);
   await page.selectOption("#origin-preset", "kandabashi");
   await page.fill("#min-minutes", "60");
   await page.fill("#max-minutes", "90");
   await page.click("#search-btn");
 
-  // Issue #57: 検証済みの神田橋入口 tier では 60〜90 分に収まる周回が得られないため、
-  // 次の近接 tier（c1-inner 神田橋入口、約 65 m）が動的 OD として候補化する。
-  await expect(page.locator("#status")).toContainText("候補が 2 件見つかりました。");
-  await expect(page.locator("#results .card")).toHaveCount(2);
+  // Issue #57: 最近接の神田橋入口 tier は完全評価済みで合法周回（計画 ~28.6 分）を
+  // 持つが、60 分下限に届かない。最近接入口優先の診断として、遠方入口へ縮退せず
+  // TIME_WINDOW と証明済み minPlanSeconds を返す（座標検索のまま復帰導線が機能する）。
+  await expect(page.locator("#status")).toContainText(
+    "指定時間枠（60〜90 分）に収まる候補がありません",
+  );
 });
 
-test("(f) 到達不能な指定枠は SEARCH_LIMIT の打切り文言で fail-closed を示す", async ({ page }) => {
+test("(f) 240/240 の指定枠は TIME_WINDOW 診断と最小時間の復帰導線を出す", async ({ page }) => {
   await openApp(page);
   await page.selectOption("#origin-preset", "kandabashi");
   await page.fill("#min-minutes", "240");
   await page.fill("#max-minutes", "240");
   await page.click("#search-btn");
 
-  // Issue #57: 完全評価済み no-candidate tier のフォールスルーが共有 Budget を使い切るため、
-  // 遠方の Verified 入口へ縮退せず打切り（SEARCH_LIMIT）で停止する。
-  await expect(page.locator("#status")).toContainText("探索が上限に達したため");
-  await expect(page.locator("#status")).toContainText("打ち切られています");
+  // Issue #57: 最近接 tier が完全評価済みで合法周回を持つため、打切り（SEARCH_LIMIT）
+  // ではなく TIME_WINDOW と証明済み minPlanSeconds を返す。上限は既に製品上限 240 分
+  // なので「時間の上限を広げる」は出さず、最小時間を下げる導線だけを出す。
+  await expect(page.locator("#status")).toContainText("候補がありません");
   await expect(page.locator("#results .card")).toHaveCount(0);
   await expect(
     page.locator("#recovery-actions button", { hasText: "時間の上限を広げる" }),
   ).toHaveCount(0);
+  await expect(
+    page.locator("#recovery-actions button", { hasText: "最小時間を" }),
+  ).toBeVisible();
 });
 
 test("(c) graph.json 改ざんは ARTIFACT_MISMATCH で停止する", async ({ page }) => {

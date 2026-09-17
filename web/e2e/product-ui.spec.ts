@@ -277,17 +277,15 @@ test("(4) 住所検索失敗は RATE_LIMITED 文言を出し時間入力を保�
 });
 
 test("(5) 候補なしから時間を広げる導線で上限が増える", async ({ page }) => {
+  // Issue #57 以降も座標検索は最近接 tier の TIME_WINDOW 診断と minPlanSeconds を
+  // 返すため、時間枠復帰導線は座標入力のまま機能する（明示ODへ退避しない）。
+  await stubGeocode(page, { candidates: CANDIDATES });
   await openApp(page);
-  // Issue #57 以降、座標検索は遠方入口へ縮退せず打切り（SEARCH_LIMIT）へ倒れるため、
-  // TIME_WINDOW の時間枠復帰導線は明示OD（神田橋入口→宝町出口）で実エンジンから再現する。
-  // この OD の最短計画 1,665 秒 (≒27.8 分) に対し 90〜120 分はどの周回も下限を満たさない。
-  await selectExplicitRamps(
-    page,
-    "ramp:c1-outer:kandabashi-entry",
-    "ramp:c1-outer:takaracho-exit",
-  );
+  await searchByAddress(page, 0);
 
-  await setTimeRange(page, "90", "120");
+  // 大手町の最近接 tier（神田橋入口）の最短計画は約 42 分。15〜30 分窓では
+  // どの周回も上限を超えるため、候補なし + 上限拡大の復帰導線になる。
+  await setTimeRange(page, "15", "30");
   await page.click("#search-btn");
 
   await expect(page.locator("#status")).toContainText("候補がありません");
@@ -297,8 +295,8 @@ test("(5) 候補なしから時間を広げる導線で上限が増える", asyn
   await expect(widen).toBeVisible();
 
   await widen.click();
-  // 120 → 150 に増え、フォーカスも移る。
-  await expect(page.locator("#max-minutes")).toHaveValue("150");
+  // 30 → 60 に増え、フォーカスも移る。
+  await expect(page.locator("#max-minutes")).toHaveValue("60");
 });
 
 test("(6) カード選択と地図が同期し帰属表示と経路線がある", async ({ page }) => {
@@ -593,26 +591,6 @@ async function searchFromCoordinate(
   await page.click("#search-btn");
 }
 
-/**
- * 明示ODモードで入口・出口ランプを 1 件ずつ選択する。
- * 座標検索が Issue #57 で打切り（SEARCH_LIMIT）へ倒れた後も、TIME_WINDOW の
- * 時間枠復帰導線（上限拡大 / 最小時間引き下げ）は明示ODで実エンジンから再現できる。
- */
-async function selectExplicitRamps(
-  page: Page,
-  entryRampId: string,
-  exitRampId: string,
-): Promise<void> {
-  await page.click('input[name="search-mode"][value="explicit"]');
-  await expect(page.locator("#ramps-loading-status")).toContainText("399 件を検証完了");
-  await page.locator("#entry-ramp-search").fill(entryRampId);
-  await expect(page.locator("#entry-ramp-list .ramp-item")).toHaveCount(1);
-  await page.locator('#entry-ramp-list input[type="radio"]:not([disabled])').check();
-  await page.locator("#exit-ramp-search").fill(exitRampId);
-  await expect(page.locator("#exit-ramp-list .ramp-item")).toHaveCount(1);
-  await page.locator('#exit-ramp-list input[type="radio"]:not([disabled])').check();
-}
-
 test("(17) 立川駅（29.6km）は 15〜240 分で候補が返る", async ({ page }) => {
   // 従来の 30km 固定 cap では NO_CONNECTION だった地点。46km cap + 時間窓で成立する。
   await searchFromCoordinate(page, "35.6979", "139.4139", "15", "240");
@@ -650,17 +628,18 @@ test("(19) 奥多摩（cap 超）は対応範囲外と最寄り入口の距離�
   await expect(page.locator("#recovery-actions")).toBeVisible();
 });
 
-test("(20) 立川駅の 60 分窓は座標検索が SEARCH_LIMIT に fail-closed する", async ({ page }) => {
+test("(20) 立川駅でも指定枠 60 分なら従来どおり時間枠を広げる導線のまま", async ({ page }) => {
+  // Issue #57: 立川駅の最近接 tier (4号高井戸) は完全評価済みで合法周回を持つが
+  // 60 分窓に収まらない。最近接入口優先の診断として TIME_WINDOW と minPlanSeconds を
+  // 返すため、時間枠復帰導線は座標検索のまま機能する。
   await searchFromCoordinate(page, "35.6979", "139.4139", "15", "60");
 
   await expect(page.locator("#results .card")).toHaveCount(0);
-  await expect(page.locator("#status")).toContainText("探索が上限に達したため");
-  await expect(page.locator("#status")).toContainText("打ち切られています");
-  // 打切りは時間枠では説明できないため、上限拡大の復帰導線を出さない（誤った拡大を促さない）。
-  await expect(page.locator("#recovery-actions")).toBeVisible();
-  await expect(
-    page.locator("#recovery-actions button", { hasText: "時間の上限を広げる" }),
-  ).toHaveCount(0);
+  await expect(page.locator("#status")).toContainText("時間枠を広げる");
+  const widen = page.locator("#recovery-actions button", { hasText: "時間の上限を広げる" });
+  await expect(widen).toBeVisible();
+  await widen.click();
+  await expect(page.locator("#max-minutes")).toHaveValue("90");
 });
 
 test("(21) 座標確定で地図が追従し、マーカーが表示範囲内に入る", async ({ page }) => {
@@ -850,8 +829,9 @@ test("(25) 地図タップ指定の確定/取消が視界に入り、フォー�
 
 test("(26) 候補ゼロの復帰導線がモバイル幅で視界に入りフォーカスされる", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 700 });
-  // 立川駅 60 分窓: 最近接 tier が完全評価済み no-candidate となり、完全評価後の
-  // フォールスルーが共有 Budget を使い切って SEARCH_LIMIT に fail-closed する（Issue #57）。
+  // 立川駅 60 分窓: 最近接 tier (4号高井戸) は完全評価済みで合法周回を持つが
+  // 60 分窓に収まらない。TIME_WINDOW + 証明済み minPlanSeconds を返すため、
+  // 時間枠復帰導線がモバイル幅でも視界に入る（Issue #57）。
   await searchFromCoordinate(page, "35.6979", "139.4139", "15", "60");
 
   await expect(page.locator("#results .card")).toHaveCount(0);
@@ -865,8 +845,10 @@ test("(26) 候補ゼロの復帰導線がモバイル幅で視界に入りフォ
     return region !== null && region.contains(document.activeElement);
   });
   expect(focusInRecovery).toBe(true);
-  // 到達不能なので「時間の上限を広げる」は出さない（誤った復帰導線の防止）。
-  await expect(recovery.locator("button", { hasText: "時間の上限を広げる" })).toHaveCount(0);
+  // 60 分窓は上限 240 分未満なので、値が実際に変わる「時間の上限を広げる」を出す。
+  await expect(
+    recovery.locator("button", { hasText: "時間の上限を広げる" }),
+  ).toBeVisible();
 });
 
 test("(27) prefers-reduced-motion では座標確定の地図追従がアニメーションせず即座に収まる", async ({ page }) => {
@@ -888,18 +870,12 @@ test("(27) prefers-reduced-motion では座標確定の地図追従がアニメ�
 });
 
 test("(28) 240/240 では上限を広げず、最小時間を下げる導線で値が実際に変わり再検索できる", async ({ page }) => {
-  // 神田橋入口→宝町出口の最短計画は約 28 分（plan 1,665s）で下限 240 分に届かない。
+  // 大手町の最近接 tier（神田橋入口、plan 2,520s ≒ 42 分）は下限 240 分に届かない。
   // 上限は既に製品上限 240 分なので「時間の上限を広げる」を出さず、最小時間を下げて
   // 実際に値を変更する（review R2-01: 240 分へ「広げました」と偽る旧導線の回帰防止）。
-  // Issue #57 以降、座標検索の TIME_WINDOW は打切りへ倒れるため明示ODで再現する。
-  await openApp(page);
-  await selectExplicitRamps(
-    page,
-    "ramp:c1-outer:kandabashi-entry",
-    "ramp:c1-outer:takaracho-exit",
-  );
-  await setTimeRange(page, "240", "240");
-  await page.click("#search-btn");
+  // Issue #57 以降も座標検索が TIME_WINDOW + minPlanSeconds を返すため、復帰導線は
+  // 明示ODへ退避せず座標入力のまま検証する。
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
 
   await expect(page.locator("#results .card")).toHaveCount(0);
   await expect(page.locator("#status")).toContainText("候補がありません");
@@ -907,12 +883,12 @@ test("(28) 240/240 では上限を広げず、最小時間を下げる導線で�
   await expect(recovery).toBeVisible();
   // 上限 240 分では拡大操作（値が変わらない）を出さない。
   await expect(recovery.locator("button", { hasText: "時間の上限を広げる" })).toHaveCount(0);
-  const lower = recovery.locator("button", { hasText: "最小時間を 22 分に下げる" });
+  const lower = recovery.locator("button", { hasText: "最小時間を 35 分に下げる" });
   await expect(lower).toBeVisible();
 
   await lower.click();
-  // 値が実際に変わる（240 → 22）。上限は変わらない。
-  await expect(page.locator("#min-minutes")).toHaveValue("22");
+  // 値が実際に変わる（240 → 35）。上限は変わらない。
+  await expect(page.locator("#min-minutes")).toHaveValue("35");
   await expect(page.locator("#max-minutes")).toHaveValue("240");
 
   // 次の検索が実行でき、下限を下げたことで候補が返る。
@@ -921,23 +897,16 @@ test("(28) 240/240 では上限を広げず、最小時間を下げる導線で�
 });
 
 test("(29) 240/240 の復帰導線は最小時間を手入力すると失効し、そのまま再検索できる", async ({ page }) => {
-  // 復帰ボタンと同じ 22 を手入力（change は blur で発火）。古い「下げる」ボタンが
-  // 残ると 22→22 の no-op を『下げました』と偽る（review R3-01）。
-  await openApp(page);
-  await selectExplicitRamps(
-    page,
-    "ramp:c1-outer:kandabashi-entry",
-    "ramp:c1-outer:takaracho-exit",
-  );
-  await setTimeRange(page, "240", "240");
-  await page.click("#search-btn");
+  // 復帰ボタンと同じ 35 を手入力（change は blur で発火）。古い「下げる」ボタンが
+  // 残ると 35→35 の no-op を『下げました』と偽る（review R3-01）。
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
   const recovery = page.locator("#recovery-actions");
   await expect(recovery).toBeVisible();
   await expect(
-    recovery.locator("button", { hasText: "最小時間を 22 分に下げる" }),
+    recovery.locator("button", { hasText: "最小時間を 35 分に下げる" }),
   ).toBeVisible();
 
-  await page.locator("#min-minutes").fill("22");
+  await page.locator("#min-minutes").fill("35");
   await page.locator("#max-minutes").focus(); // change を確定させる
   await expect(recovery).toBeHidden();
   await expect(page.locator("#status")).toContainText("条件が変更");
@@ -964,16 +933,9 @@ test("(30) 復帰ボタンより小さい 15 を手入力しても古い導線�
 });
 
 test("(31) 復帰ボタン押下時も現在値と比較し、引上げや no-op を成功と告げない", async ({ page }) => {
-  await openApp(page);
-  await selectExplicitRamps(
-    page,
-    "ramp:c1-outer:kandabashi-entry",
-    "ramp:c1-outer:takaracho-exit",
-  );
-  await setTimeRange(page, "240", "240");
-  await page.click("#search-btn");
+  await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
   const recovery = page.locator("#recovery-actions");
-  const lower = recovery.locator("button", { hasText: "最小時間を 22 分に下げる" });
+  const lower = recovery.locator("button", { hasText: "最小時間を 35 分に下げる" });
   await expect(lower).toBeVisible();
 
   // change を発火させずに値を 15 へ変える（描画後に現在値が変わった状態を模す）。
@@ -985,7 +947,7 @@ test("(31) 復帰ボタン押下時も現在値と比較し、引上げや no-op
   });
   await lower.click();
 
-  // 15 → 22 の引上げは行わず、成功も告げない。値は手入力のまま。
+  // 15 → 35 の引上げは行わず、成功も告げない。値は手入力のまま。
   await expect(page.locator("#min-minutes")).toHaveValue("15");
   await expect(page.locator("#status")).toContainText("ままです");
   await expect(page.locator("#status")).not.toContainText("下げました");

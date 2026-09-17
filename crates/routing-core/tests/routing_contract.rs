@@ -2287,12 +2287,6 @@ mod coordinate_entry_tiers {
             });
         }
 
-        /// Two-node mainline cycle `a`↔`b` derived from the given one-way time.
-        fn cycle2(&mut self, a: &str, b: &str, seconds: u64, meters: u64) {
-            self.shutoko(&format!("{a}->{b}"), a, b, seconds, meters);
-            self.shutoko(&format!("{b}->{a}"), b, a, seconds, meters);
-        }
-
         fn entry(
             &mut self,
             ramp_id: &str,
@@ -2752,64 +2746,208 @@ mod coordinate_entry_tiers {
         );
     }
 
-    /// When the shared Budget is exhausted while evaluating a farther tier, the
-    /// search fails closed with SEARCH_LIMIT instead of reaching a valid entry.
+    /// A fully evaluated no-candidate tier (a dead-end mainline) falls through
+    /// to a farther tier. When the shared Budget is then exhausted while
+    /// evaluating that farther tier, the search fails closed with SEARCH_LIMIT
+    /// instead of returning an empty `NO_LOOP`/`TIME_WINDOW` or silently
+    /// selecting the farther entry. This fixes the earlier version of the test
+    /// that truncated on the very first tier and never exercised the exact
+    /// fall-through boundary (review V5-04).
     #[test]
-    fn budget_exhaustion_blocks_farther_fallback() {
+    fn budget_exhaustion_on_later_tier_after_fully_evaluated_tier() {
         let mut world = World::base(false);
-        world.node("A1", ORIGIN_LAT, ORIGIN_LON);
-        world.node("A2", 35.7100, 139.7000);
-        world.cycle2("A1", "A2", 1_200, 20_000);
+        // ── Tier 0 (nearest, ~111 m): dead-end D1 → D2 with a same-facility
+        //    exit. It is fully evaluated (forward +1, reverse +1, no cycle) and
+        //    yields no legal loop, so it must fall through. ──
+        world.node("D1", 35.7005, 139.7000);
+        world.node("D2", 35.7010, 139.7000);
+        world.shutoko("d12", "D1", "D2", 120, 1_000);
         world.entry(
-            "ramp:t:budget-near",
-            "fac:t:budget-near",
-            "sBN",
+            "ramp:t:near-entry",
+            "fac:t:near",
+            "sNear",
             35.7010,
             ORIGIN_LON,
-            "A1",
+            "D1",
         );
         world.exit(
-            "ramp:t:budget-near-exit",
-            "fac:t:budget-near",
-            "tBN",
+            "ramp:t:near-exit",
+            "fac:t:near",
+            "tNear",
             ORIGIN_LAT,
             ORIGIN_LON,
-            "A2",
+            "D2",
         );
-        world.node("B1", 35.7030, 139.7000);
-        world.node("B2", 35.7130, 139.7000);
-        world.cycle2("B1", "B2", 1_200, 20_000);
+        // ── Tier 1 (farther, ~1.1 km): a 20-edge dead-end chain whose forward
+        //    tree cannot fit in the remaining Budget, so its charge truncates
+        //    the search on the second tier. ──
         world.entry(
-            "ramp:t:budget-far",
-            "fac:t:budget-far",
-            "sBF",
-            35.7030,
+            "ramp:t:far-entry",
+            "fac:t:far",
+            "sFar",
+            35.7100,
             ORIGIN_LON,
-            "B1",
+            "B0",
         );
+        world.node("B0", 35.7100, 139.7000);
+        for index in 0..20usize {
+            let next = index + 1;
+            world.node(
+                &format!("B{next}"),
+                35.7100 + (next as f64) * 0.000_01,
+                139.7000,
+            );
+            world.shutoko(
+                &format!("b{index}"),
+                &format!("B{index}"),
+                &format!("B{next}"),
+                120,
+                1_000,
+            );
+        }
         world.exit(
-            "ramp:t:budget-far-exit",
-            "fac:t:budget-far",
-            "tBF",
+            "ramp:t:far-exit",
+            "fac:t:far",
+            "tFar",
             ORIGIN_LAT,
             ORIGIN_LON,
-            "B2",
+            "B20",
         );
 
+        // Tier 0 consumes exactly 4 expanded states (2 forward + 2 reverse);
+        // tier 1's forward tree needs 21 and cannot fit in the remaining 2.
         let limits = SearchLimits {
-            max_expanded_states: 5,
+            max_expanded_states: 6,
             ..SearchLimits::default()
         };
         let result = search(&world.graph(), &request(30, 60), &limits).unwrap();
         assert_eq!(result.status, "truncated", "reason={:?}", result.reason);
         assert_eq!(result.reason.as_deref(), Some("SEARCH_LIMIT"));
         assert!(result.candidates.is_empty());
-        assert_eq!(result.expanded_states, 5);
+        assert_eq!(
+            result.expanded_states, 6,
+            "the shared Budget is charged to its ceiling exactly once"
+        );
+        assert!(
+            result.min_plan_seconds.is_none(),
+            "a truncated tier cannot prove a minimum plan"
+        );
         assert!(
             !entry_ramps(&result)
                 .iter()
-                .any(|id| id.as_deref() == Some("ramp:t:budget-far")),
-            "a truncated tier must not silently select a farther entry"
+                .any(|id| id.as_deref() == Some("ramp:t:far-entry")),
+            "a truncated farther tier must not silently select its entry"
+        );
+    }
+
+    /// The nearest access tier owns the diagnostic: when it is fully evaluated
+    /// and exposes a legal loop that the window rejects, the search reports
+    /// `TIME_WINDOW` with the proven `minPlanSeconds` instead of falling through
+    /// to a farther entry (review V5-01/V5-03 product requirement).
+    #[test]
+    fn nearest_tier_time_window_owns_the_diagnostic() {
+        let mut world = World::base(false);
+        // A 3 300 s loop (plan ~90 min) is legal but cannot fit a 30–60 minute
+        // window, so the nearest tier is fully evaluated with no candidate.
+        world.node("A1", 35.7005, ORIGIN_LON);
+        world.node("A2", 35.7100, ORIGIN_LON);
+        world.node("A3", 35.7050, 139.7100);
+        world.shutoko("a12", "A1", "A2", 1_100, 10_000);
+        world.shutoko("a23", "A2", "A3", 1_100, 10_000);
+        world.shutoko("a31", "A3", "A1", 1_100, 10_000);
+        world.entry(
+            "ramp:t:near-entry",
+            "fac:t:near",
+            "sNear",
+            35.7010,
+            ORIGIN_LON,
+            "A1",
+        );
+        world.exit(
+            "ramp:t:near-exit",
+            "fac:t:near",
+            "tNear",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "A2",
+        );
+        // A farther entry that would expose the same loop must NOT be selected.
+        world.entry(
+            "ramp:t:far-entry",
+            "fac:t:far",
+            "sFar",
+            35.7300,
+            ORIGIN_LON,
+            "A1",
+        );
+        world.exit(
+            "ramp:t:far-exit",
+            "fac:t:far",
+            "tFar",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "A2",
+        );
+
+        let result = search(&world.graph(), &request(30, 60), &SearchLimits::default()).unwrap();
+        assert_eq!(result.status, "no_candidates", "reason={:?}", result.reason);
+        assert_eq!(result.reason.as_deref(), Some("TIME_WINDOW"));
+        assert!(result.candidates.is_empty());
+        assert!(
+            result.min_plan_seconds.is_some(),
+            "the fully evaluated nearest tier proves a minimum plan"
+        );
+        assert!(
+            !entry_ramps(&result)
+                .iter()
+                .any(|id| id.as_deref() == Some("ramp:t:far-entry")),
+            "a fully evaluated nearest tier must not fall through to a farther entry"
+        );
+    }
+
+    /// Diagnostic truncation on the coordinate tier path (review V5-02): a
+    /// candidate whose enumeration completed must still report
+    /// `minPlanSeconds = null` when the wider product-cap diagnostic pass was
+    /// cut short. Without the fix only the Verified-tier `ok` return checked
+    /// `diagnostic_budget`, so an unprovable value leaked to the UI.
+    #[test]
+    fn diagnostic_truncation_nulls_min_plan_even_with_candidate() {
+        let mut world = World::new();
+        // A self-loop at the anchor that fits the 240-minute diagnostic pass but
+        // not a 60-minute candidate window, plus a short in-window loop.
+        world.shutoko("l-loop", "L1", "L1", 4_000, 10_000);
+        let entry_edge = world.entry("ramp:t:v-entry", "fac:t:v", "sV", 35.7010, ORIGIN_LON, "L1");
+        let exit_edge = world.exit(
+            "ramp:t:v-exit",
+            "fac:t:v",
+            "tV",
+            ORIGIN_LAT,
+            ORIGIN_LON,
+            "L1",
+        );
+        world.verified_pair(
+            "bp:t:v",
+            &entry_edge,
+            &exit_edge,
+            "L1",
+            "ramp:t:v-entry",
+            "ramp:t:v-exit",
+            "V入口",
+            "V出口",
+        );
+
+        // The candidate pass completes with a candidate (5 expansions), but the
+        // wider diagnostic pass needs a 6th and truncates.
+        let limits = SearchLimits {
+            max_expanded_states: 5,
+            ..SearchLimits::default()
+        };
+        let result = search(&world.graph(), &request(1, 60), &limits).unwrap();
+        assert_eq!(result.status, "ok", "reason={:?}", result.reason);
+        assert_eq!(result.candidates.len(), 1);
+        assert!(
+            result.min_plan_seconds.is_none(),
+            "a diagnostic-truncated enumeration cannot prove the minimum plan (V5-02)"
         );
     }
 

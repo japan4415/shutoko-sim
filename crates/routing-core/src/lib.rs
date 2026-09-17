@@ -1210,13 +1210,28 @@ impl Budget {
 
 /// Reverse Dijkstra tree pointing every mainline node toward `target`.
 /// Equal-cost paths use the lexicographically smaller first edge.
+///
+/// `allowed` optionally restricts the search to the forward-reachable set of a
+/// single entry (`forward_dist[node] != u64::MAX`). That set is closed under
+/// outgoing Shutoko edges by construction, so every path that starts inside it
+/// stays inside it: restricting the reverse search therefore cannot change any
+/// `dist[a]` for an anchor `a` in the set, it only avoids settling nodes that no
+/// candidate anchor can ever reach. This is the bounded per-request work that
+/// keeps the shared expanded-state budget from being consumed by nearby entry
+/// tiers whose forward component is a small stub (Issue #57 review V5-01).
 fn reverse_shortest_tree(
     pg: &PreparedGraph,
     target: usize,
+    allowed: Option<&[u64]>,
 ) -> (Vec<u64>, Vec<Option<usize>>, usize) {
     use std::cmp::Reverse;
     let mut dist = vec![u64::MAX; pg.graph.nodes.len()];
     let mut next_edge = vec![None; pg.graph.nodes.len()];
+    // The entry's forward set is closed under outgoing edges, so if the target
+    // itself is outside it no node inside it can reach the target.
+    if allowed.is_some_and(|forward| forward[target] == u64::MAX) {
+        return (dist, next_edge, 0);
+    }
     let mut heap = BinaryHeap::new();
     dist[target] = 0;
     heap.push(Reverse((0u64, target)));
@@ -1239,6 +1254,9 @@ fn reverse_shortest_tree(
                 continue;
             }
             let from = pg.index.node_pos[edge.from.as_str()];
+            if allowed.is_some_and(|forward| forward[from] == u64::MAX) {
+                continue;
+            }
             let new_cost = cost.saturating_add(edge.duration_seconds);
             let replace = new_cost < dist[from]
                 || (new_cost == dist[from]
@@ -1256,7 +1274,7 @@ fn reverse_shortest_tree(
 fn topology_cycles_at(pg: &PreparedGraph, anchor: usize, budget: &mut Budget) -> Vec<Vec<usize>> {
     let cached = pg.cycle_cache.borrow().get(&anchor).cloned();
     let cached = cached.unwrap_or_else(|| {
-        let (dist, next_edge, expanded_states) = reverse_shortest_tree(pg, anchor);
+        let (dist, next_edge, expanded_states) = reverse_shortest_tree(pg, anchor, None);
         let anchor_id = pg.graph.nodes[anchor].id.as_str();
         let mut cycles = Vec::new();
         for edge in pg
@@ -1577,7 +1595,8 @@ fn evaluate_dynamic_od(
     let entry_mainline = pg.index.node_pos[entry_ramp.mainline_node_id.as_str()];
     let exit_mainline = pg.index.node_pos[exit_ramp.mainline_node_id.as_str()];
 
-    let (reverse_dist, next_edge, reverse_expanded) = reverse_shortest_tree(pg, exit_mainline);
+    let (reverse_dist, next_edge, reverse_expanded) =
+        reverse_shortest_tree(pg, exit_mainline, Some(forward_dist));
     if !budget.charge(reverse_expanded, &pg.limits) {
         return Ok(DynamicOdOutcome {
             candidate: None,
@@ -2025,8 +2044,17 @@ fn coordinate_tier_search(
     let mut global_legal_route = false;
     let mut global_time_rejected = false;
     let mut global_handoff_rejected = false;
-
-    for tier in entry_tiers {
+    // The nearest access tier owns the diagnostic. When it has been fully
+    // evaluated and exposes at least one legal loop, the user's window — not a
+    // farther entry — is the reason no candidate fits, so the search stops and
+    // reports `TIME_WINDOW`/`NO_HANDOFF` with the proven `minPlanSeconds`.
+    // Deeper fall-through is reserved for a nearest entry that cannot form any
+    // legal loop at all (structural dead end), which keeps the nearest-entry
+    // priority while restoring the coordinate recovery path (review V5-01/V5-03
+    // product requirement). A truncated tier never terminates this way: the
+    // fail-closed `SEARCH_LIMIT` path is unchanged.
+    for (tier_index, tier) in entry_tiers.into_iter().enumerate() {
+        let is_nearest_tier = tier_index == 0;
         if budget.truncated {
             return Ok(SearchResult {
                 request_id: r.request_id.clone(),
@@ -2090,7 +2118,7 @@ fn coordinate_tier_search(
             let mut tier_min_plan: Option<u64> = None;
             let mut tier_candidate_edges = 0usize;
 
-            for &p_idx in &verified_pairs {
+            'verified: for &p_idx in &verified_pairs {
                 let p = &pg.graph.billing_pairs[p_idx];
                 let pre = path_pg(pg, &p.entry_to_anchor_edge_ids)?;
                 let post = path_pg(pg, &p.anchor_to_exit_edge_ids)?;
@@ -2119,32 +2147,16 @@ fn coordinate_tier_search(
                     &mut budget,
                 );
                 if budget.truncated {
-                    return Ok(SearchResult {
-                        request_id: r.request_id.clone(),
-                        release_id: r.release_id.clone(),
-                        status: "truncated".into(),
-                        reason: Some("SEARCH_LIMIT".into()),
-                        ranking_mode: "time_per_yen".into(),
-                        expanded_states: budget.expanded,
-                        candidates: Vec::new(),
-                        nearest_access,
-                        min_plan_seconds: None,
-                    });
+                    // The pair enumeration is incomplete, but any candidate that
+                    // was already fully validated inside this tier stays valid.
+                    // Keep it and report truncation instead of discarding it
+                    // (Issue #57 review V5-03).
+                    break 'verified;
                 }
 
                 for cycle in &loops {
                     if !budget.take(&pg.limits) {
-                        return Ok(SearchResult {
-                            request_id: r.request_id.clone(),
-                            release_id: r.release_id.clone(),
-                            status: "truncated".into(),
-                            reason: Some("SEARCH_LIMIT".into()),
-                            ranking_mode: "time_per_yen".into(),
-                            expanded_states: budget.expanded,
-                            candidates: Vec::new(),
-                            nearest_access,
-                            min_plan_seconds: None,
-                        });
+                        break 'verified;
                     }
                     let highway: Vec<_> = pre.iter().chain(cycle).chain(&post).copied().collect();
                     if !allowed_pg(pg, &highway) {
@@ -2163,18 +2175,10 @@ fn coordinate_tier_search(
                     if tier_candidates.len() == pg.limits.beam_width
                         || tier_candidate_edges + highway.len() > 20_000
                     {
+                        // Same-tier storage limit: keep the candidates that were
+                        // already validated and stop this tier (V5-03).
                         budget.truncated = true;
-                        return Ok(SearchResult {
-                            request_id: r.request_id.clone(),
-                            release_id: r.release_id.clone(),
-                            status: "truncated".into(),
-                            reason: Some("SEARCH_LIMIT".into()),
-                            ranking_mode: "time_per_yen".into(),
-                            expanded_states: budget.expanded,
-                            candidates: Vec::new(),
-                            nearest_access,
-                            min_plan_seconds: None,
-                        });
+                        break 'verified;
                     }
                     tier_candidate_edges += highway.len();
                     let price = p.prices.iter().find(|v| {
@@ -2483,8 +2487,12 @@ fn coordinate_tier_search(
                 return Ok(SearchResult {
                     request_id: r.request_id.clone(),
                     release_id: r.release_id.clone(),
-                    status: "ok".into(),
-                    reason: None,
+                    status: if budget.truncated { "truncated" } else { "ok" }.into(),
+                    reason: if budget.truncated {
+                        Some("SEARCH_LIMIT".into())
+                    } else {
+                        None
+                    },
                     ranking_mode: if time_ranking {
                         "shutoko_time".into()
                     } else {
@@ -2500,6 +2508,9 @@ fn coordinate_tier_search(
             global_min_plan_seconds = global_min_plan_seconds.map_or(tier_min_plan, |g| {
                 Some(tier_min_plan.map_or(g, |t| g.min(t)))
             });
+            if is_nearest_tier && global_legal_route && !budget.truncated {
+                break;
+            }
             continue;
         }
 
@@ -2589,17 +2600,10 @@ fn coordinate_tier_search(
                 false,
             )?;
             if budget.truncated {
-                return Ok(SearchResult {
-                    request_id: r.request_id.clone(),
-                    release_id: r.release_id.clone(),
-                    status: "truncated".into(),
-                    reason: Some("SEARCH_LIMIT".into()),
-                    ranking_mode: "shutoko_time".into(),
-                    expanded_states: budget.expanded,
-                    candidates: Vec::new(),
-                    nearest_access,
-                    min_plan_seconds: None,
-                });
+                // The tier is incomplete: stop evaluating further exits but keep
+                // any candidates that were fully validated for earlier exits.
+                // Falling through to a farther entry is not allowed.
+                break;
             }
             global_legal_route |= outcome.legal_route;
             global_time_rejected |= outcome.time_rejected;
@@ -2667,7 +2671,7 @@ fn coordinate_tier_search(
             } else {
                 "time_per_yen"
             };
-            let min_p = if budget.truncated {
+            let min_p = if budget.truncated || diagnostic_budget.truncated {
                 None
             } else {
                 global_min_plan_seconds.map_or(tier_min_plan, |g| {
@@ -2677,8 +2681,12 @@ fn coordinate_tier_search(
             return Ok(SearchResult {
                 request_id: r.request_id.clone(),
                 release_id: r.release_id.clone(),
-                status: "ok".into(),
-                reason: None,
+                status: if budget.truncated { "truncated" } else { "ok" }.into(),
+                reason: if budget.truncated {
+                    Some("SEARCH_LIMIT".into())
+                } else {
+                    None
+                },
                 ranking_mode: ranking_mode.into(),
                 expanded_states: budget.expanded,
                 candidates: selected,
@@ -2690,6 +2698,9 @@ fn coordinate_tier_search(
         global_min_plan_seconds = global_min_plan_seconds.map_or(tier_min_plan, |g| {
             Some(tier_min_plan.map_or(g, |t| g.min(t)))
         });
+        if is_nearest_tier && global_legal_route && !budget.truncated {
+            break;
+        }
     }
 
     let reason = if budget.truncated {
@@ -2706,7 +2717,7 @@ fn coordinate_tier_search(
     } else {
         "no_candidates"
     };
-    let min_p = if budget.truncated {
+    let min_p = if budget.truncated || diagnostic_budget.truncated {
         None
     } else {
         global_min_plan_seconds

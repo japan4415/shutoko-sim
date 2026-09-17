@@ -815,9 +815,9 @@ fn osaka_station_returns_no_connection_due_to_distance_cap() {
 /// 「より遠い Verified 入口 (神田橋) を選ぶ」挙動は最近接入口優先へ
 /// 置き換わったため、期待値を動的 OD へ更新する。
 ///
-/// 窓を 26 分以下へ狭めると最近接 tier が時間外となり、完全評価後の
-/// フォールスルーが共有 Budget を使い切って `SEARCH_LIMIT` で fail-closed
-/// する (TIME_WINDOW へ縮退させず、遠方 Verified 入口も選ばない)。
+/// 窓を 26 分以下へ狭めると最近接 tier (宝町入口) は完全評価済みで合法周回を
+/// 持つが、その最短計画 1,610 秒が上限を超える。最近接入口優先の診断として
+/// `TIME_WINDOW` と証明済み `minPlanSeconds` を返し、遠方入口へは縮退しない。
 #[test]
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn tokyo_station_returns_candidates_with_unlimited_entries() {
@@ -877,8 +877,9 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
     assert_eq!(result.min_plan_seconds, Some(1_610));
 
     // 最短計画 1,610 秒 (≒26.83 分) の成立境界を固定する。27 分上限では同じ
-    // 宝町候補が成立し、26 分上限では最近接 tier が時間外となって完全評価後の
-    // フォールスルーが共有 Budget を使い切り SEARCH_LIMIT で fail-closed する。
+    // 宝町候補が成立し、26 分上限では最近接 tier (宝町入口) が完全評価されたうえで
+    // その唯一の合法周回が上限を超える。最近接 tier の診断が確定するため、
+    // 遠方入口を探さず `TIME_WINDOW` と証明済み `minPlanSeconds` を返す。
     let at_plan_boundary = search(&g, &request("req-tokyo-max-27", 15, 27), &limits)
         .expect("15-27 minute search must not error");
     assert_eq!(at_plan_boundary.status, "ok");
@@ -886,10 +887,14 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
 
     let below_plan_boundary = search(&g, &request("req-tokyo-max-26", 15, 26), &limits)
         .expect("15-26 minute search must not error");
-    assert_eq!(below_plan_boundary.status, "truncated");
-    assert_eq!(below_plan_boundary.reason.as_deref(), Some("SEARCH_LIMIT"));
+    assert_eq!(below_plan_boundary.status, "no_candidates");
+    assert_eq!(below_plan_boundary.reason.as_deref(), Some("TIME_WINDOW"));
     assert!(below_plan_boundary.candidates.is_empty());
-    assert_eq!(below_plan_boundary.min_plan_seconds, None);
+    assert_eq!(
+        below_plan_boundary.min_plan_seconds,
+        Some(1_610),
+        "最近接 tier を完全評価済みなので 26 分窓でも最短計画を証明できる"
+    );
 
     // 30〜60 分窓では同じ宝町 tier が長い周回 (20,205 m) を選ぶ。
     let wide_window = search(&g, &request("req-tokyo-30-60", 30, 60), &limits)
@@ -925,10 +930,11 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
 /// 新宿駅・渋谷駅の最近接入口 tier 実測契約 (Issue #57)。
 ///
 /// 新宿駅 (35.6896, 139.7006) の最寄りは 4号外苑入口 (約 1.56 km) だが、
-/// 4号外苑は構造的にループを構成しないため完全評価済み no-candidate tier と
-/// なり、続く近接 tier も同様に棄却される。共有 Budget (maxExpandedStates)
-/// は、候補を生む渋谷入口 tier (約 3.6 km) に到達する前に尽きるため、
-/// 遠方入口へ縮退せず `SEARCH_LIMIT` で fail-closed する。
+/// 4号外苑は構造的に出口へ到達できない dead-end tier (合法周回なし) である。
+/// そこで fall-through し、同じく合法周回を持たない近接 tier を挟んで、
+/// 最初に窓内候補を生む 4号ランプ入口 tier (約 1.74 km) が選ばれる。
+/// 共有 Budget は展開状態を forward-reachable 集合へ制限することで
+/// 近接 tier を評価し切っても枯渇しない (expanded < maxExpandedStates)。
 ///
 /// 渋谷駅 (35.6580, 139.7016) の最寄りは 3号渋谷入口 (約 612 m) で、
 /// 同一施設の対向出口を持つため動的 OD 候補が成立する。
@@ -951,8 +957,8 @@ fn shinjuku_and_shibuya_stations_return_candidates() {
         pricing_at: "2026-09-10T00:00:00Z".into(),
     };
 
-    // ── 新宿駅: 近接 tier は完全評価済み no-candidate で、Budget 枯渇により
-    //    遠方の渋谷入口 tier へ到達できない (fail-closed)。 ──
+    // ── 新宿駅: dead-end な近接 tier を fall-through し、最初に窓内候補を
+    //    生む 4号ランプ入口 tier が選ばれる。遠方 Verified 入口へは縮退しない。 ──
     let shinjuku = search(&g, &request("新宿駅", 35.6896, 139.7006), &limits)
         .unwrap_or_else(|e| panic!("新宿駅 search must not error: {e}"));
     eprintln!(
@@ -963,22 +969,46 @@ fn shinjuku_and_shibuya_stations_return_candidates() {
         shinjuku.expanded_states
     );
     assert_eq!(
-        shinjuku.status, "truncated",
-        "新宿駅 unlimited entries: 共有 Budget 枯渇は SEARCH_LIMIT で fail-closed すること。reason={:?}",
+        shinjuku.status, "ok",
+        "新宿駅 unlimited entries: 近接 dead-end tier を飛ばして候補が得られること。reason={:?}",
         shinjuku.reason
     );
-    assert_eq!(shinjuku.reason.as_deref(), Some("SEARCH_LIMIT"));
-    assert!(
-        shinjuku.candidates.is_empty(),
-        "新宿駅: 予算枯渇時は遠方入口の候補を返さない"
+    assert_eq!(shinjuku.candidates.len(), 1);
+    let shinjuku_candidate = &shinjuku.candidates[0];
+    assert_eq!(
+        shinjuku_candidate.entry.ramp_id.as_deref(),
+        Some("ramp:4-inbound:ramp-entry")
     );
     assert_eq!(
-        shinjuku.expanded_states, limits.max_expanded_states,
-        "新宿駅: Budget 上限まで展開して打ち切ること"
+        shinjuku_candidate.exit.ramp_id.as_deref(),
+        Some("ramp:4-outbound:ramp-exit")
     );
-    assert_ne!(
-        shinjuku.status, "no_candidates",
-        "新宿駅: 完全評価済み TIME_WINDOW / NO_LOOP と区別できること"
+    assert_eq!(shinjuku_candidate.duration.plan_seconds, 3_518);
+    assert_eq!(shinjuku_candidate.r#loop.distance_meters, 13_797);
+    assert_eq!(shinjuku_candidate.toll.amount_yen, None);
+    assert_eq!(shinjuku.ranking_mode, "shutoko_time");
+    assert_eq!(shinjuku.min_plan_seconds, Some(3_359));
+    assert!(
+        shinjuku.expanded_states < limits.max_expanded_states,
+        "新宿駅: forward-reachable 制限により Budget を使い切らずに候補へ到達すること (expanded={})",
+        shinjuku.expanded_states
+    );
+    let shinjuku_nearest = shinjuku
+        .nearest_access
+        .as_ref()
+        .expect("coordinate input must report nearestAccess");
+    assert!(
+        (1_500.0..1_600.0).contains(&shinjuku_nearest.distance_meters),
+        "新宿駅 nearest entry must be 4号外苑 (~1.56 km), got {:.0} m",
+        shinjuku_nearest.distance_meters
+    );
+
+    let shinjuku_repeat = search(&g, &request("新宿駅", 35.6896, 139.7006), &limits)
+        .unwrap_or_else(|e| panic!("新宿駅 repeat search must not error: {e}"));
+    assert_eq!(
+        serde_json::to_string(&shinjuku).unwrap(),
+        serde_json::to_string(&shinjuku_repeat).unwrap(),
+        "新宿駅: 同一入力の再実行はバイト完全一致すること"
     );
 
     // ── 渋谷駅: 最近接の 3号渋谷入口 tier が動的 OD 候補を返す。 ──
@@ -1287,32 +1317,31 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
 }
 
 // ---------------------------------------------------------------------------
-// Issue #57: narrow-window coordinate searches fail closed with SEARCH_LIMIT.
+// Issue #57: narrow-window coordinate searches report the nearest tier's
+// diagnostic instead of falling through.
 //
 // Under nearest-entry-tier semantics the nearest tier (Tachikawa: 4号高井戸
-// 18.6 km / Hachioji: K7横浜青葉 21.4 km) is fully evaluated, but every legal
-// loop it exposes exceeds the 60-minute window. The fully evaluated no-candidate
-// tier falls through, and the shared Budget is exhausted before any farther
-// tier can be completed, so the search reports SEARCH_LIMIT instead of silently
-// selecting a farther Verified entry. `minPlanSeconds` is unprovable on
-// truncation and must stay null — this is intentionally different from a fully
-// evaluated TIME_WINDOW result, which still reports the true minimum.
+// 18.6 km / Hachioji: K7横浜青葉 21.4 km) is fully evaluated and exposes legal
+// loops, but every one of them exceeds the 60-minute window. Because the nearest
+// access tier owns the diagnostic, the search stops there and reports
+// `TIME_WINDOW` with the proven `minPlanSeconds` — the same product behavior the
+// coordinate search had before Issue #57 and the value the UI recovery path
+// (widen the upper bound / lower the minimum) is built on. A farther entry is
+// never silently selected just to satisfy the window.
 // ---------------------------------------------------------------------------
 
 /// 立川駅・八王子駅の 60 分窓 (Issue #57 最近接入口 tier 実測契約)。
 ///
-/// 最近接 tier は完全評価されるが合法周回が 60 分窓に収まらないため、
-/// 完全評価済み no-candidate tier のフォールスルーが共有 Budget を使い切り、
-/// 遠方入口へ縮退せず `SEARCH_LIMIT` で fail-closed する。打ち切り時は
-/// `minPlanSeconds` を証明できないため null となる。併せて同一入力の決定論と
+/// 最近接 tier は完全評価され、合法周回が 60 分窓に収まらないため、
+/// `TIME_WINDOW` と証明済み `minPlanSeconds` を返す。併せて同一入力の決定論と
 /// 10 秒以内の応答を確認する。
 #[test]
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
-fn tokyo_wide_narrow_window_fails_closed_and_is_deterministic() {
+fn tokyo_wide_narrow_window_reports_nearest_tier_time_window() {
     let g = real_graph();
     let wide = wide_access_limits();
 
-    // ── 立川駅 60 分窓: 最近接 tier は時間外 → Budget 枯渇で SEARCH_LIMIT ──
+    // ── 立川駅 60 分窓: 最近接 tier は完全評価済み・時間外 → TIME_WINDOW ──
     let started = std::time::Instant::now();
     let tachikawa = search(
         &g,
@@ -1322,17 +1351,22 @@ fn tokyo_wide_narrow_window_fails_closed_and_is_deterministic() {
     .expect("tachikawa narrow search must not error");
     let elapsed = started.elapsed();
 
-    assert_eq!(tachikawa.status, "truncated");
-    assert_eq!(tachikawa.reason.as_deref(), Some("SEARCH_LIMIT"));
+    assert_eq!(tachikawa.status, "no_candidates");
+    assert_eq!(tachikawa.reason.as_deref(), Some("TIME_WINDOW"));
     assert!(tachikawa.candidates.is_empty());
     assert_eq!(
-        tachikawa.min_plan_seconds, None,
-        "打ち切り時は minPlanSeconds を証明できないため null であること"
+        tachikawa.min_plan_seconds,
+        Some(10_727),
+        "完全評価済みの最近接 tier の最短計画を証明できること"
     );
-    assert_eq!(tachikawa.expanded_states, wide.max_expanded_states);
+    assert!(
+        tachikawa.expanded_states < wide.max_expanded_states,
+        "診断確定は Budget を使い切らずに完了すること (expanded={})",
+        tachikawa.expanded_states
+    );
     assert!(
         elapsed < std::time::Duration::from_secs(10),
-        "narrow-window fail-closed must answer within 10 s, took {elapsed:?}"
+        "narrow-window diagnostic must answer within 10 s, took {elapsed:?}"
     );
 
     // ── 決定論: 同一入力の再実行で結果が一致する ──
@@ -1352,18 +1386,18 @@ fn tokyo_wide_narrow_window_fails_closed_and_is_deterministic() {
         serde_json::to_string(&tachikawa).unwrap()
     );
 
-    // ── 八王子駅 60 分窓: 同じく SEARCH_LIMIT で fail-closed ──
+    // ── 八王子駅 60 分窓: 同じく最近接 tier の TIME_WINDOW 診断 ──
     let hachioji = search(
         &g,
         &coordinate_request("req-hachioji-narrow", 35.6556, 139.3388, 60),
         &wide,
     )
     .expect("hachioji narrow search must not error");
-    assert_eq!(hachioji.status, "truncated");
-    assert_eq!(hachioji.reason.as_deref(), Some("SEARCH_LIMIT"));
+    assert_eq!(hachioji.status, "no_candidates");
+    assert_eq!(hachioji.reason.as_deref(), Some("TIME_WINDOW"));
     assert!(hachioji.candidates.is_empty());
-    assert_eq!(hachioji.min_plan_seconds, None);
-    assert_eq!(hachioji.expanded_states, wide.max_expanded_states);
+    assert_eq!(hachioji.min_plan_seconds, Some(13_377));
+    assert!(hachioji.expanded_states < wide.max_expanded_states);
 }
 
 // ---------------------------------------------------------------------------
@@ -1484,6 +1518,89 @@ fn meguro_coordinates_select_nearest_entry_across_windows() {
             serde_json::to_string(&result).unwrap(),
             serde_json::to_string(&repeat).unwrap(),
             "meguro ({lat}, {lon}) {min}-{max}: repeated calls must be deterministic"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Issue #57 acceptance: explicit ramp mode must still select the Meguro entry
+// pair directly (review V5-06).
+//
+// The coordinate path above proves the nearest-entry tier resolves to
+// `ramp:2-inbound:meguro-entry`. This test pins the explicit
+// `entryRampId`/`exitRampId` path independently so the refactor that introduced
+// `evaluate_dynamic_od` cannot silently regress explicit ramp routing.
+// ---------------------------------------------------------------------------
+
+/// Explicit 目黒入口 → 目黒出口 across every Issue #57 window.
+#[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn meguro_explicit_ramp_pair_matches_coordinate_route() {
+    let g = real_graph();
+    let limits = SearchLimits::default();
+
+    // (min, max, expected planSeconds, expected minPlanSeconds, loop metres)
+    let cases: [(u64, u64, u64, u64, u64); 3] = [
+        (15, 60, 2_884, 2_734, 13_797),
+        (30, 120, 2_884, 2_734, 13_797),
+        (52, 120, 3_957, 2_734, 20_205),
+    ];
+
+    for (min, max, plan, min_plan, loop_meters) in cases {
+        let request = SearchRequest {
+            request_id: format!("req-meguro-explicit-{min}-{max}"),
+            release_id: "all-real-v1".into(),
+            origin_node_id: None,
+            origin: Some(LatLng {
+                lat: 35.635681,
+                lon: 139.718489,
+            }),
+            entry_ramp_id: Some("ramp:2-inbound:meguro-entry".into()),
+            exit_ramp_id: Some("ramp:2-outbound:meguro-exit".into()),
+            min_minutes: min,
+            max_minutes: max,
+            vehicle_profile: "passenger-car-etc".into(),
+            pricing_at: "2026-09-10T00:00:00Z".into(),
+        };
+        let result = search(&g, &request, &limits)
+            .unwrap_or_else(|e| panic!("explicit meguro {min}-{max} search must not error: {e}"));
+        assert_eq!(
+            result.status, "ok",
+            "explicit meguro {min}-{max}: reason={:?}",
+            result.reason
+        );
+        assert_eq!(result.candidates.len(), 1);
+        let candidate = &result.candidates[0];
+        assert_eq!(
+            candidate.entry.ramp_id.as_deref(),
+            Some("ramp:2-inbound:meguro-entry")
+        );
+        assert_eq!(
+            candidate.exit.ramp_id.as_deref(),
+            Some("ramp:2-outbound:meguro-exit")
+        );
+        assert_eq!(
+            candidate.duration.plan_seconds, plan,
+            "explicit meguro {min}-{max}: same plan as the coordinate path"
+        );
+        assert_eq!(
+            candidate.r#loop.distance_meters, loop_meters,
+            "explicit meguro {min}-{max}: same loop as the coordinate path"
+        );
+        assert_eq!(
+            candidate.toll.amount_yen, None,
+            "explicit meguro {min}-{max}: no tariff for this OD"
+        );
+        assert_eq!(result.ranking_mode, "shutoko_time");
+        assert_eq!(result.min_plan_seconds, Some(min_plan));
+        assert!(result.expanded_states <= limits.max_expanded_states);
+
+        let repeat = search(&g, &request, &limits)
+            .unwrap_or_else(|e| panic!("explicit meguro repeat must not error: {e}"));
+        assert_eq!(
+            serde_json::to_string(&result).unwrap(),
+            serde_json::to_string(&repeat).unwrap(),
+            "explicit meguro {min}-{max}: repeated calls must be deterministic"
         );
     }
 }

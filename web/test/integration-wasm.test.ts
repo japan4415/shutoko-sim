@@ -326,7 +326,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
     }
   }, 30_000);
 
-  it("狭い 60 分窓でも実エンジンが minPlanSeconds を返す（診断の上界 240 分）", async () => {
+  it("狭い 60 分窓の座標検索は実エンジンで SEARCH_LIMIT に fail-closed する", async () => {
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
     const glue = await import(gluePath.href);
     await glue.default({ module_or_path: toBinary(wasmBytes) });
@@ -348,16 +348,70 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       const result = parseSearchResult(
         glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
       );
-      expect(result.status).toBe("no_candidates");
-      expect(result.reason).toBe("TIME_WINDOW");
-      // 60 分窓では候補にならないが、240 分以内の合法周回の最短計画は診断として返る。
-      // not.toBeNull() は undefined を通す（undefined !== null）ため、型 assertion で固定する。
-      expect(typeof result.minPlanSeconds).toBe("number");
-      const minPlanSeconds = result.minPlanSeconds as number;
-      expect(minPlanSeconds).toBeGreaterThan(60 * 60);
-      expect(minPlanSeconds).toBeLessThanOrEqual(240 * 60);
+      // Issue #57: 立川駅の最近接入口 tier は完全評価されるが、合法周回が 60 分窓に
+      // 収まらない。完全評価済み no-candidate tier のフォールスルーが共有 Budget を
+      // 使い切るため、遠方の Verified 入口へ縮退せず SEARCH_LIMIT で fail-closed する。
+      // minPlanSeconds は打ち切り時には証明不能なため null（完全評価済み TIME_WINDOW
+      // とは区別する）。
+      expect(result.status).toBe("truncated");
+      expect(result.reason).toBe("SEARCH_LIMIT");
+      expect(result.minPlanSeconds).toBeNull();
+      expect(result.candidates).toHaveLength(0);
+      expect(result.expandedStates).toBeLessThanOrEqual(100_000);
     } finally {
       pg.free();
     }
   }, 30_000);
+
+  it("目黒座標は最近接の目黒入口を動的 OD として選び shutoko_time を返す", async () => {
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    const glue = await import(gluePath.href);
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
+    const graphObj = JSON.parse(graphJson) as { releaseId: string };
+    const releaseId = graphObj.releaseId;
+    const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+    try {
+      // 目黒入口直上と目黒近傍の 2 座標 × 3 時間窓（Issue #57 受入条件）。
+      const cases: [number, number, number, number][] = [
+        [35.635681, 139.718489, 15, 60],
+        [35.635681, 139.718489, 30, 120],
+        [35.635681, 139.718489, 52, 120],
+        [35.63239, 139.71524, 15, 60],
+        [35.63239, 139.71524, 30, 120],
+        [35.63239, 139.71524, 52, 120],
+      ];
+      for (const [lat, lon, minMinutes, maxMinutes] of cases) {
+        const msg: UiSearchMessage = {
+          type: "search",
+          requestId: `integration-meguro-${String(lat)}-${String(lon)}-${String(minMinutes)}-${String(maxMinutes)}`,
+          releaseId,
+          pricingAt: "2026-09-10T00:00:00Z",
+          origin: { lat, lon },
+          minMinutes,
+          maxMinutes,
+          vehicleProfile: "passenger-car-etc",
+        };
+        const requestJson = JSON.stringify(buildSearchRequest(msg));
+        const first = glue.searchPrepared(pg, requestJson);
+        const second = glue.searchPrepared(pg, requestJson);
+        // 同一入力の再実行はバイト完全一致（決定論）。
+        expect(second).toBe(first);
+        const result = parseSearchResult(first);
+        expect(result.status).toBe("ok");
+        expect(result.candidates.length).toBeGreaterThan(0);
+        expect(result.expandedStates).toBeLessThanOrEqual(100_000);
+        expect(result.rankingMode).toBe("shutoko_time");
+        for (const candidate of result.candidates) {
+          // 最近接入口優先: 返る入口はすべて目黒入口、出口は同施設の目黒出口。
+          expect(candidate.entry.rampId).toBe("ramp:2-inbound:meguro-entry");
+          expect(candidate.exit.rampId).toBe("ramp:2-outbound:meguro-exit");
+          // 動的 OD は料金未算出（amountYen=null）。
+          expect(candidate.toll.amountYen).toBeNull();
+        }
+      }
+    } finally {
+      pg.free();
+    }
+  }, 60_000);
 });

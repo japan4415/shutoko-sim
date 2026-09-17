@@ -1,8 +1,10 @@
 // issue #12 完了条件の E2E 検証。
 // (a) 神田橋プリセット → 15〜60 → 候補カードと Maps URL / window.open 引数
-// (b) 60〜90 で TIME_WINDOW の文言
+// (b) 60〜90 で近接 tier のフォールバック候補（Issue #57）
 // (c) graph.json 改ざんで ARTIFACT_MISMATCH の文言
 // (d) graph.json 11 秒遅延で TIMEOUT の文言
+// (e) 入力エラー修正後の再検索
+// (f) 到達不能な指定枠の SEARCH_LIMIT 打切り文言（Issue #57）
 import { expect, test } from "@playwright/test";
 
 const GRAPH_URL = "**/releases/*/graph.json";
@@ -101,16 +103,34 @@ test("(a) 神田橋プリセット 15〜60 で候補カードと Maps URL が表
   expect(calls[0]?.[2]).toBe("noopener");
 });
 
-test("(b) 60〜90 分は TIME_WINDOW の文言が表示される", async ({ page }) => {
+test("(b) 神田橋プリセット 60〜90 分は近接 tier のフォールバックで候補が返る", async ({ page }) => {
   await openApp(page);
   await page.selectOption("#origin-preset", "kandabashi");
   await page.fill("#min-minutes", "60");
   await page.fill("#max-minutes", "90");
   await page.click("#search-btn");
 
-  await expect(page.locator("#status")).toContainText(
-    "指定時間枠（60〜90 分）に収まる候補がありません",
-  );
+  // Issue #57: 検証済みの神田橋入口 tier では 60〜90 分に収まる周回が得られないため、
+  // 次の近接 tier（c1-inner 神田橋入口、約 65 m）が動的 OD として候補化する。
+  await expect(page.locator("#status")).toContainText("候補が 2 件見つかりました。");
+  await expect(page.locator("#results .card")).toHaveCount(2);
+});
+
+test("(f) 到達不能な指定枠は SEARCH_LIMIT の打切り文言で fail-closed を示す", async ({ page }) => {
+  await openApp(page);
+  await page.selectOption("#origin-preset", "kandabashi");
+  await page.fill("#min-minutes", "240");
+  await page.fill("#max-minutes", "240");
+  await page.click("#search-btn");
+
+  // Issue #57: 完全評価済み no-candidate tier のフォールスルーが共有 Budget を使い切るため、
+  // 遠方の Verified 入口へ縮退せず打切り（SEARCH_LIMIT）で停止する。
+  await expect(page.locator("#status")).toContainText("探索が上限に達したため");
+  await expect(page.locator("#status")).toContainText("打ち切られています");
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  await expect(
+    page.locator("#recovery-actions button", { hasText: "時間の上限を広げる" }),
+  ).toHaveCount(0);
 });
 
 test("(c) graph.json 改ざんは ARTIFACT_MISMATCH で停止する", async ({ page }) => {

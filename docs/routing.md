@@ -65,7 +65,7 @@ T_plan = T_base + buffer
    - 座標検索（`origin` 座標が指定されている場合）は、近傍の入口アクセス地点を出発地からの距離順にソートした入口 tier を評価する最近接入口優先探索を行う。各 tier 内で検証済み課金ペアがあれば優先評価し、なければ構造的に利用可能な一般出口への動的 OD を探索する。
    - 座標検索において、完全評価された最近接 tier に合法周回が存在する場合は、その tier が `TIME_WINDOW` / `NO_HANDOFF` 診断を担い、遠方の入口へフォールスルーせず確定する。構造的に周回が存在しない（structurally dead）最近接 tier のみ後続 tier へフォールスルーする。
    - 座標検索で料金根拠のない動的 OD 候補を含む場合、候補集合全体の順位付けは `shutoko_time`（首都高走行時間順）に切り替える。
-   - `originNodeId` 指定（`origin` なし）や、片側ランプ指定（`entryRampId` または `exitRampId` のいずれか片方のみ指定）の検索は、入口 tier による動的 OD 探索を行わず、従来の検証済み課金ペア探索経路（legacy verified-pair path）を維持する。
+   - `originNodeId` 指定（`origin` なし）や、`origin` 座標を伴わない片側ランプ指定（`entryRampId` または `exitRampId` のいずれか片方のみ指定）の検索は、入口 tier による動的 OD 探索を行わず、従来の検証済み課金ペア探索経路（legacy verified-pair path）を維持する。`origin` 座標と片側ランプ指定を併用した場合は座標検索（最近接入口優先探索）が優先され、指定ランプはその tier 探索内の制約として扱われる。
 3. **SCC・逆到達性索引と本線閉路カタログ**:
    - `prepare` 時に Shutoko エッジだけの forward/reverse adjacency と強連結成分（SCC）を構築する。各 cyclic SCC からノードID順に最大32アンカーを均等抽出し、アンカーの各先頭エッジについて逆Dijkstraで決定論的な最短帰還路を作る。順序は `(アプローチ+イグレスの時間下界, anchorNodeId)`、同距離経路はedge ID辞書順で固定する。
    - 全線グラフでは単純路の全列挙を行わない。明示ODは入口からのforward Dijkstraと出口へのreverse Dijkstraにより、両方から到達可能なcyclic SCCカタログだけを評価する。座標・課金ペア検索も大規模グラフでは同じ逆最短閉路を用いる。小規模契約fixtureだけは全単純閉路列挙を維持する。

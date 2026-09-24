@@ -609,6 +609,9 @@ export interface RouteOverviewStepModel {
   detail: string;
 }
 
+export const RADIAL_HANDOFF_NOTICE =
+  "Google マップへの引き継ぎは、実機での確認が済むまで利用できません";
+
 /** 候補カードの描画モデル。 */
 export interface CardModel {
   id: string;
@@ -637,6 +640,7 @@ export interface CardModel {
   chargedSection: string;
   warnings: string[];
   mapsUrl: string;
+  mapsHandoffNotice: string | null;
   geometry: GeoJsonLineString;
   entryId: string;
   exitId: string;
@@ -825,6 +829,7 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     chargedSection,
     warnings: candidate.warnings.map(warningText),
     mapsUrl,
+    mapsHandoffNotice: isRadial ? RADIAL_HANDOFF_NOTICE : null,
     geometry: candidate.geometry,
     entryId: candidate.entryId,
     exitId: candidate.exitId,

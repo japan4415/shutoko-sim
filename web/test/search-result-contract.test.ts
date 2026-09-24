@@ -7,6 +7,7 @@ import duplicateLegs from "../../fixtures/candidate-v2/invalid-edge-route-legs-d
 import missingLegs from "../../fixtures/candidate-v2/invalid-edge-route-legs-missing.json?raw";
 import hashMismatch from "../../fixtures/candidate-v2/invalid-resolved-segment-hash-mismatch.json?raw";
 import {
+  hexDigest,
   parseSearchResult,
   PipelineError,
   RESULT_CONTRACT_MISMATCH,
@@ -131,6 +132,66 @@ describe("parseSearchResult の実行時検証", () => {
       JSON.stringify(validResult({ status: "ok", reason: null, candidates: [candidate] })),
     );
     expect(result.candidates[0]?.pairKind).toBe("radialReturn");
+  });
+
+  it("radialReturn は device verification 済み handoff を受け入れ、不正形を拒否する", async () => {
+    const mapsUrls = [
+      "https://www.google.com/maps/dir/?api=1&origin=35.0,139.0&destination=35.1,139.1&travelmode=driving",
+      "https://www.google.com/maps/dir/?api=1&origin=35.1,139.1&destination=35.4,139.4&travelmode=driving",
+      "https://www.google.com/maps/dir/?api=1&origin=35.4,139.4&destination=35.0,139.0&travelmode=driving",
+    ];
+    const urlSha256 = await Promise.all(
+      mapsUrls.map((mapsUrl) => hexDigest(new TextEncoder().encode(mapsUrl).buffer as ArrayBuffer)),
+    );
+    const enabledHandoff = {
+      enabled: true,
+      legUrls: ["surface_access", "loop_transfer", "surface_return"].map((role, index) => ({
+        role,
+        mapsUrl: mapsUrls[index],
+        urlSha256: urlSha256[index],
+      })),
+      disabledReason: null,
+    };
+    const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
+    candidate.handoff = enabledHandoff;
+    await expect(
+      parseSearchResult(
+        JSON.stringify(validResult({ status: "ok", reason: null, candidates: [candidate] })),
+      ),
+    ).resolves.toMatchObject({ candidates: [{ handoff: { enabled: true } }] });
+
+    for (const mutate of [
+      (handoff: Record<string, unknown>) => {
+        handoff.disabledReason = "device_verification_pending";
+      },
+      (handoff: Record<string, unknown>) => {
+        handoff.legUrls = (handoff.legUrls as unknown[]).slice(0, 1);
+      },
+      (handoff: Record<string, unknown>) => {
+        const leg = (handoff.legUrls as Record<string, unknown>[])[0];
+        if (leg !== undefined) {
+          leg.urlSha256 = "0".repeat(64);
+        }
+      },
+    ]) {
+      const invalid = JSON.parse(radialCandidate) as Record<string, unknown>;
+      const invalidHandoff = structuredClone(enabledHandoff) as Record<string, unknown>;
+      mutate(invalidHandoff);
+      invalid.handoff = invalidHandoff;
+      await expect(
+        parseSearchResult(
+          JSON.stringify(validResult({ status: "ok", reason: null, candidates: [invalid] })),
+        ),
+      ).rejects.toThrowError(/device verification|URL|SHA-256/);
+    }
+
+    const invalidDisabled = JSON.parse(radialCandidate) as Record<string, unknown>;
+    (invalidDisabled.handoff as Record<string, unknown>).disabledReason = "other";
+    await expect(
+      parseSearchResult(
+        JSON.stringify(validResult({ status: "ok", reason: null, candidates: [invalidDisabled] })),
+      ),
+    ).rejects.toThrowError(/device verification/);
   });
 
   it("surface leg は許可fieldと距離・時間の0同値条件を厳密に検証する", async () => {

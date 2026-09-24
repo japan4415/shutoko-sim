@@ -16,6 +16,11 @@ export interface SearchRequest {
   pricingAt: string;
 }
 
+export interface DeviceVerificationReleaseConfig {
+  manifestJson: string;
+  evaluatedAt: string;
+}
+
 export interface SearchLimits {
   maxExpandedStates?: number;
   beamWidth?: number;
@@ -43,6 +48,7 @@ export interface SearchLimits {
   maxGraphNodes?: number;
   /** Maximum number of edges allowed in the graph. Default: 3,000,000. */
   maxGraphEdges?: number;
+  deviceVerification?: DeviceVerificationReleaseConfig;
 }
 
 export interface SnappedOrigin {
@@ -336,9 +342,64 @@ export interface Handoff {
   verificationSetVersion: string | null;
 }
 
-export interface RadialHandoff {
-  enabled: false;
-  legUrls: string[];
+export type MapsHandoffLegRole = "surface_access" | "loop_transfer" | "surface_return";
+
+export interface MapsHandoffLegWire {
+  role: MapsHandoffLegRole;
+  mapsUrl: string;
+  urlSha256: string;
+}
+
+export type RadialHandoff =
+  | {
+      enabled: true;
+      legUrls: [MapsHandoffLegWire, MapsHandoffLegWire, MapsHandoffLegWire];
+      disabledReason: null;
+    }
+  | {
+      enabled: false;
+      legUrls: [];
+      disabledReason: "device_verification_pending";
+    };
+
+export type DeviceVerificationOs = "android" | "ios";
+export type DeviceVerificationClient = "web" | "app";
+export type DeviceVerificationResult = "passed" | "failed" | "missing" | "expired";
+
+export interface DeviceVerificationLeg {
+  role: MapsHandoffLegRole;
+  urlSha256: string;
+  expectedRoad: string;
+  expectedDirection: string;
+}
+
+interface DeviceVerificationRecordBase {
+  os: DeviceVerificationOs;
+  osVersion: string;
+  client: DeviceVerificationClient;
+  clientName: string;
+  clientVersion: string;
+}
+
+export type DeviceVerificationRecord =
+  | (DeviceVerificationRecordBase & {
+      verifiedAt: string;
+      result: Exclude<DeviceVerificationResult, "missing">;
+      expiresAt: string;
+    })
+  | (DeviceVerificationRecordBase & {
+      verifiedAt: null;
+      result: Extract<DeviceVerificationResult, "missing">;
+      expiresAt: null;
+    });
+
+export interface DeviceVerificationManifest {
+  schemaVersion: 1;
+  routePlanId: string;
+  releaseId: string;
+  urlBuilderVersion: "google-maps-split/v1";
+  legs: DeviceVerificationLeg[];
+  verifications: DeviceVerificationRecord[];
 }
 
 interface CandidateBase {

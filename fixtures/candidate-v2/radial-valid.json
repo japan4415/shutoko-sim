@@ -169,6 +169,7 @@
   "warnings": ["STATIC_TRAVEL_TIME", "HANDOFF_WAYPOINTS_UNVERIFIED"],
   "handoff": {
     "enabled": false,
-    "legUrls": []
+    "legUrls": [],
+    "disabledReason": "device_verification_pending"
   }
 }

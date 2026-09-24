@@ -52,9 +52,22 @@ fn estimated_access_seconds(dist_m: f64) -> u64 {
 }
 
 mod candidate_v2;
+mod device_verification;
 mod graph_v4;
 pub mod grid;
 pub mod handoff;
+
+pub use device_verification::{
+    evaluate_device_verification_gate, parse_device_verification_manifest,
+    DeviceVerificationClient, DeviceVerificationGateBlocker, DeviceVerificationGateDecision,
+    DeviceVerificationLeg, DeviceVerificationManifest, DeviceVerificationManifestError,
+    DeviceVerificationOs, DeviceVerificationRecord, DeviceVerificationReleaseConfig,
+    DeviceVerificationResult, DEVICE_VERIFICATION_MANIFEST_SCHEMA_VERSION,
+};
+pub use handoff::{
+    maps_url_sha256, MapsHandoffError, MapsHandoffLeg, MapsHandoffLegRole, MapsHandoffLegWire,
+    SplitMapsHandoff, DEVICE_VERIFICATION_PENDING, MAX_MAPS_WAYPOINTS, URL_BUILDER_VERSION,
+};
 
 pub use candidate_v2::{
     validate_radial_return_candidate, validate_topology_only_candidate,
@@ -267,6 +280,8 @@ pub struct SearchLimits {
     /// Excludes small JCT connectors, ramps, and spiral loops (e.g. Ohashi JCT ~1.1km).
     /// Defaults to 5,000m (5.0 km).
     pub min_loop_meters: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_verification: Option<DeviceVerificationReleaseConfig>,
 }
 impl Default for SearchLimits {
     fn default() -> Self {
@@ -283,6 +298,7 @@ impl Default for SearchLimits {
             // 30 km: beyond this the engine is outside its operational area.
             max_access_distance_meters: 30_000.0,
             min_loop_meters: 5_000,
+            device_verification: None,
         }
     }
 }
@@ -3090,6 +3106,55 @@ fn build_radial_candidate(
 
     let entry_edge = pg.edge(pair.entry_id.as_str());
     let exit_edge = pg.edge(pair.exit_id.as_str());
+    let RouteAnchor::DirectedJunction(anchor) = &pair.route_plan.anchor else {
+        return Err(invalid("radial candidate requires directedJunction"));
+    };
+    let mandatory_lap_leg = edge_route_legs
+        .iter()
+        .find(|leg| leg.role == RoutePlanSegmentRole::MandatoryLap)
+        .ok_or_else(|| invalid("radial candidate requires mandatory lap"))?;
+    let mandatory_lap_edges = highway
+        [mandatory_lap_leg.start_edge_index..mandatory_lap_leg.end_edge_index_exclusive]
+        .to_vec();
+    let generated_handoff = handoff::build_split_maps_handoff(
+        origin_ll,
+        entry_edge.from.as_str(),
+        anchor.merge_node_id.as_str(),
+        &mandatory_lap_edges,
+        anchor.branch_node_id.as_str(),
+        exit_edge.to.as_str(),
+        |node_id| {
+            let node = pg.node(node_id);
+            Some(LatLng {
+                lat: node.lat,
+                lon: node.lon,
+            })
+        },
+    )
+    .map_err(|error| {
+        invalid(format!(
+            "radial split Maps URL generation failed: {error:?}"
+        ))
+    })?;
+    let release_device_verification = pg.limits.device_verification.as_ref();
+    let device_verification_gate = device_verification::evaluate_device_verification_gate(
+        release_device_verification.map(|config| config.manifest_json.as_str()),
+        pair.id.as_str(),
+        r.release_id.as_str(),
+        &generated_handoff,
+        release_device_verification.map(|config| config.evaluated_at.as_str()),
+    );
+    let radial_handoff = CandidateV2Handoff::from_device_verification_gate(
+        &generated_handoff,
+        pair.id.as_str(),
+        r.release_id.as_str(),
+        &device_verification_gate,
+    )
+    .map_err(|error| {
+        invalid(format!(
+            "radial split Maps handoff validation failed: {error:?}"
+        ))
+    })?;
     let entry_node = pg.node(entry_edge.from.as_str());
     let exit_node = pg.node(exit_edge.to.as_str());
     let entry_distance =
@@ -3243,10 +3308,7 @@ fn build_radial_candidate(
             "STATIC_TRAVEL_TIME".into(),
             "HANDOFF_WAYPOINTS_UNVERIFIED".into(),
         ],
-        handoff: CandidateV2Handoff {
-            enabled: false,
-            leg_urls: Vec::new(),
-        },
+        handoff: radial_handoff,
     };
     validate_radial_return_candidate(&candidate)?;
     Ok(candidate)
@@ -3970,6 +4032,8 @@ pub fn search(
     search_prepared(&pg, r)
 }
 
+const MAX_SEARCH_LIMITS_JSON_BYTES: usize = 2 * 1024 * 1024;
+
 /// Parse and validate strict JSON, then serialize the search response.
 ///
 /// Internally uses [`prepare`] + [`search_prepared`] to avoid cloning the
@@ -3984,7 +4048,7 @@ pub fn search_json(
     const MAX_GRAPH_JSON_BYTES: usize = 512 * 1024 * 1024;
     if graph_json.len() > MAX_GRAPH_JSON_BYTES
         || request_json.len() > 16 * 1024
-        || limits_json.len() > 4096
+        || limits_json.len() > MAX_SEARCH_LIMITS_JSON_BYTES
     {
         return Err(invalid("JSON payload exceeds prototype size limit"));
     }
@@ -4010,7 +4074,7 @@ pub fn search_json(
 /// [`search_prepared_json`] (or [`search_prepared`]) for fast repeated search.
 pub fn prepare_json(graph_json: &str, limits_json: &str) -> Result<PreparedGraph, RoutingError> {
     const MAX_GRAPH_JSON_BYTES: usize = 512 * 1024 * 1024;
-    if graph_json.len() > MAX_GRAPH_JSON_BYTES || limits_json.len() > 4096 {
+    if graph_json.len() > MAX_GRAPH_JSON_BYTES || limits_json.len() > MAX_SEARCH_LIMITS_JSON_BYTES {
         return Err(invalid("JSON payload exceeds prototype size limit"));
     }
     let parsed_graph = graph_v4::read_graph_json(graph_json)?;

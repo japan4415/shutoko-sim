@@ -150,7 +150,7 @@ function fileURLToPathSafe(url: URL): string {
 describe("実 WASM 統合（fetch モック → loadRelease → search）", () => {
   it("旧graph契約のbuild metadataをstaleとして判定する", () => {
     const current: WasmBuildContract = {
-      contractVersion: 3,
+      contractVersion: 4,
       engineVersion: "0.1.0",
       graphSchemaVersion: 4,
       supportedGraphSchemaVersions: [2, 3, 4],
@@ -422,6 +422,61 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       expect(result.minPlanSeconds).toBe(10_727);
       expect(result.candidates).toHaveLength(0);
       expect(result.expandedStates).toBeLessThan(100_000);
+    } finally {
+      pg.free();
+    }
+  }, 30_000);
+
+  it("release gate の passed manifest を WASM 境界と Web reader まで通す", async () => {
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    const glue = await import(gluePath.href);
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(
+      new URL("fixtures/graph-v4/graph-radial-fixture.json", root),
+      "utf8",
+    );
+    const manifest = JSON.parse(
+      await readFile(new URL("data/device-verification-manifest.json", root), "utf8"),
+    ) as Record<string, unknown>;
+    for (const record of manifest.verifications as Record<string, unknown>[]) {
+      record.osVersion = "test-os";
+      record.clientVersion = "test-client";
+      record.verifiedAt = "2026-09-24T00:00:00Z";
+      record.result = "passed";
+      record.expiresAt = "2026-10-24T00:00:00Z";
+    }
+    const pg = glue.prepare(
+      graphJson,
+      JSON.stringify({
+        deviceVerification: {
+          manifestJson: JSON.stringify(manifest),
+          evaluatedAt: "2026-09-25T00:00:00Z",
+        },
+      }),
+    );
+    try {
+      const result = await parseSearchResult(
+        glue.searchPrepared(
+          pg,
+          JSON.stringify({
+            requestId: "device-gate-wasm",
+            releaseId: "graph-v4-fixture-v1",
+            originNodeId: "fixture:node:entry:ground",
+            minMinutes: 1,
+            maxMinutes: 60,
+            vehicleProfile: "passenger-car-etc",
+            pricingAt: "2020-01-01T00:00:00Z",
+          }),
+        ),
+      );
+      const candidate = result.candidates[0];
+      expect(candidate?.pairKind).toBe("radialReturn");
+      if (candidate?.pairKind === "radialReturn") {
+        expect(candidate.handoff.enabled).toBe(true);
+        if (candidate.handoff.enabled) {
+          expect(candidate.handoff.legUrls).toHaveLength(3);
+        }
+      }
     } finally {
       pg.free();
     }

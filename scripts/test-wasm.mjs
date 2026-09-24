@@ -15,6 +15,9 @@ const generatedGraph = await readFile(
 const generatedManifest = JSON.parse(
   await readFile(new URL('../fixtures/generated/manifest.json', import.meta.url), 'utf8'),
 );
+const deviceVerificationManifest = JSON.parse(
+  await readFile(new URL('../data/device-verification-manifest.json', import.meta.url), 'utf8'),
+);
 const request = await readFile(new URL('../fixtures/synthetic-request.json', import.meta.url), 'utf8');
 const bytes = await readFile(new URL('../dist/wasm/shutoko_routing_bg.wasm', import.meta.url));
 await init({ module_or_path: bytes });
@@ -37,6 +40,11 @@ assert.equal(radialCandidate.duration.shutokoSeconds, 1440);
 assert.equal(radialCandidate.shutokoDistanceMeters, 23400);
 assert.equal(radialCandidate.edgeRouteLegs.length, 4);
 assert.equal(radialCandidate.estimatedLegs.length, 2);
+assert.deepEqual(radialCandidate.handoff, {
+  enabled: false,
+  legUrls: [],
+  disabledReason: 'device_verification_pending',
+});
 assert.equal(
   radialCandidate.distanceMeters,
   radialCandidate.shutokoDistanceMeters +
@@ -53,6 +61,36 @@ assert.equal(generatedManifest.graphSchemaVersion, 4);
 assert.equal(generatedManifest.billingPairsVersion, 'v2');
 assert.equal(generatedManifest.routePlanVersion, 1);
 assert.match(generatedManifest.routeMembershipsSha256, /^[0-9a-f]{64}$/);
+
+for (const record of deviceVerificationManifest.verifications) {
+  record.osVersion = 'test-os';
+  record.clientVersion = 'test-client';
+  record.verifiedAt = '2026-09-24T00:00:00Z';
+  record.result = 'passed';
+  record.expiresAt = '2026-10-24T00:00:00Z';
+}
+const verifiedSchema4Pg = prepare(
+  schema4Graph,
+  JSON.stringify({
+    deviceVerification: {
+      manifestJson: JSON.stringify(deviceVerificationManifest),
+      evaluatedAt: '2026-09-25T00:00:00Z',
+    },
+  }),
+);
+const verifiedRadialResult = JSON.parse(searchPrepared(verifiedSchema4Pg, radialRequest));
+const verifiedHandoff = verifiedRadialResult.candidates[0].handoff;
+assert.equal(verifiedHandoff.enabled, true);
+assert.equal(verifiedHandoff.disabledReason, null);
+assert.deepEqual(
+  verifiedHandoff.legUrls.map((leg) => leg.role),
+  ['surface_access', 'loop_transfer', 'surface_return'],
+);
+assert.deepEqual(
+  verifiedHandoff.legUrls.map((leg) => leg.urlSha256),
+  deviceVerificationManifest.legs.map((leg) => leg.urlSha256),
+);
+verifiedSchema4Pg.free();
 assert.throws(
   () => prepare(JSON.stringify({ ...JSON.parse(schema4Graph), schemaVersion: 5 }), '{}'),
   'unknown graph schema version must throw',

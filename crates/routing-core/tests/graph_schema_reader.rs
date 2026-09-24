@@ -287,6 +287,52 @@ fn schema_4_mandatory_lap_is_one_contiguous_relation_mainline_subpath() {
 }
 
 #[test]
+fn schema_4_legacy_membership_requires_one_ordered_relation_segment() {
+    let mut extra = with_fragment("legacy");
+    let extra_edges = vec!["fixture:edge:legacy:loop".to_owned()];
+    extra["routeMemberships"][0]["segments"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "segmentId": "fixture:relation:C1:inner:extra",
+            "sourceKind": "relationMainline",
+            "sourceRelationId": "fixture:relation:C1",
+            "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+            "bindingEvidenceId": null,
+            "orderedEdgeIds": extra_edges,
+            "orderedEdgeIdsSha256": ""
+        }));
+    refresh_edge_hashes(&mut extra);
+    assert!(prepare_json(&extra.to_string(), "{}").is_err());
+
+    let mut reordered = with_fragment("legacy");
+    reordered["routeMemberships"][0]["segments"][0]["orderedEdgeIds"] =
+        Value::from(Vec::<String>::new());
+    refresh_edge_hashes(&mut reordered);
+    assert!(prepare_json(&reordered.to_string(), "{}").is_err());
+}
+
+#[test]
+fn schema_4_rejects_endpoint_route_mismatch_and_unverified_short_connector() {
+    for mutate in [
+        |graph: &mut Value| graph["ramps"][0]["route"] = Value::from("other-route"),
+        |graph: &mut Value| graph["ramps"][0]["direction"] = Value::from("other-direction"),
+        |graph: &mut Value| {
+            graph["billingPairs"][0]["routePlan"]["anchor"]["excludedShortConnector"]["edgeCount"] =
+                Value::from(2)
+        },
+        |graph: &mut Value| {
+            graph["billingPairs"][0]["routePlan"]["anchor"]["excludedShortConnector"]
+                ["distanceMeters"] = Value::from(101)
+        },
+    ] {
+        let mut graph = with_fragment("radial");
+        mutate(&mut graph);
+        assert!(prepare_json(&graph.to_string(), "{}").is_err());
+    }
+}
+
+#[test]
 fn schema_4_rejects_inconsistent_radial_capability_and_statuses() {
     for status in ["unverified", "topology_only"] {
         let mut graph = with_fragment("radial");

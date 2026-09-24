@@ -873,6 +873,82 @@ fn real_graph_no_entry_edges_coordinate_is_no_connection() {
     assert!(result.candidates.is_empty());
 }
 
+struct EightPairContract {
+    pair_id: &'static str,
+    origin_node_id: &'static str,
+    anchor_node_id: &'static str,
+    exit_edge_id: &'static str,
+    max_minutes: u64,
+    own_pair: bool,
+}
+
+const EIGHT_PAIR_CONTRACTS: [EightPairContract; 8] = [
+    EightPairContract {
+        pair_id: "bp:c1-inner:daikancho-kasumigaseki",
+        origin_node_id: "n:1866081909",
+        anchor_node_id: "n:297945194",
+        exit_edge_id: "e:w1232166619:0:f",
+        max_minutes: 60,
+        own_pair: false,
+    },
+    EightPairContract {
+        pair_id: "bp:c1-inner:kasumigaseki-shibakoen",
+        origin_node_id: "n:573233927",
+        anchor_node_id: "n:264877748",
+        exit_edge_id: "e:w203873821:2:f",
+        max_minutes: 60,
+        own_pair: false,
+    },
+    EightPairContract {
+        pair_id: "bp:c1-inner:shibakoen-shiodome",
+        origin_node_id: "n:254367256",
+        anchor_node_id: "n:31295430",
+        exit_edge_id: "e:w45068171:1:f",
+        max_minutes: 30,
+        own_pair: false,
+    },
+    EightPairContract {
+        pair_id: "bp:c1-inner:takaracho-kandabashi",
+        origin_node_id: "n:1105125663",
+        anchor_node_id: "n:1891818143",
+        exit_edge_id: "e:w390441534:2:f",
+        max_minutes: 60,
+        own_pair: false,
+    },
+    EightPairContract {
+        pair_id: "bp:c1-outer:ginza-shibakoen",
+        origin_node_id: "n:835996316",
+        anchor_node_id: "n:31254160",
+        exit_edge_id: "e:w944671542:0:f",
+        max_minutes: 60,
+        own_pair: false,
+    },
+    EightPairContract {
+        pair_id: "bp:c1-outer:kandabashi-takaracho",
+        origin_node_id: "n:1070862943",
+        anchor_node_id: "n:499831338",
+        exit_edge_id: "e:w297864314:11:f",
+        max_minutes: 60,
+        own_pair: true,
+    },
+    EightPairContract {
+        pair_id: "bp:c1-outer:kasumigaseki-daikancho",
+        origin_node_id: "n:577255402",
+        anchor_node_id: "n:577255571",
+        exit_edge_id: "e:w276920911:6:f",
+        max_minutes: 60,
+        own_pair: true,
+    },
+    EightPairContract {
+        pair_id: "bp:c1-outer:shibakoen-iikura",
+        origin_node_id: "n:940044988",
+        anchor_node_id: "n:31296971",
+        exit_edge_id: "e:w203832842:4:f",
+        max_minutes: 60,
+        own_pair: false,
+    },
+];
+
 #[test]
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn test_eight_pairs_determinism_and_performance_table() {
@@ -891,14 +967,26 @@ fn test_eight_pairs_determinism_and_performance_table() {
     );
 
     for p in pairs {
+        let contract = EIGHT_PAIR_CONTRACTS
+            .iter()
+            .find(|contract| contract.pair_id == p.id)
+            .unwrap_or_else(|| panic!("missing eight-pair contract for {}", p.id));
         let origin = edge_map[p.entry_to_anchor_edge_ids[0].as_str()]
             .from
             .clone();
-        let max_minutes = if p.id == "bp:c1-inner:shibakoen-shiodome" {
-            30
-        } else {
-            60
-        };
+        assert_eq!(origin, contract.origin_node_id, "pair {}", p.id);
+        assert_eq!(p.anchor_node_id, contract.anchor_node_id, "pair {}", p.id);
+        assert_eq!(
+            p.anchor_to_exit_edge_ids.last().map(String::as_str),
+            Some(contract.exit_edge_id),
+            "pair {}",
+            p.id
+        );
+        assert_eq!(
+            p.status == shutoko_routing_core::VerificationStatus::Verified,
+            contract.own_pair
+        );
+        let max_minutes = contract.max_minutes;
         let req = SearchRequest {
             request_id: format!("det-req-{}", p.id),
             release_id: g.release_id.clone(),
@@ -932,10 +1020,53 @@ fn test_eight_pairs_determinism_and_performance_table() {
         let res = search(&g, &req, &limits).unwrap();
         let elapsed = t0.elapsed();
 
+        let expected_status = if contract.own_pair {
+            "ok"
+        } else {
+            "no_candidates"
+        };
+        assert_eq!(res.status, expected_status, "pair {}", p.id);
+        assert_eq!(
+            res.candidates.len(),
+            if contract.own_pair { 1 } else { 0 },
+            "pair {} candidate count",
+            p.id
+        );
         let own = res
             .candidates
             .iter()
             .any(|c| legacy(c).toll.billing_pair_id == p.id);
+        assert_eq!(own, contract.own_pair, "pair {} own-pair", p.id);
+        if contract.own_pair {
+            let candidate = res
+                .candidates
+                .iter()
+                .find_map(|candidate| {
+                    legacy(candidate)
+                        .toll
+                        .billing_pair_id
+                        .eq(&p.id)
+                        .then(|| legacy(candidate))
+                })
+                .unwrap_or_else(|| panic!("pair {} candidate missing", p.id));
+            assert_eq!(candidate.toll.charged_section_count, 1, "pair {}", p.id);
+            assert_eq!(
+                candidate.r#loop.anchor_node_id, contract.anchor_node_id,
+                "pair {}",
+                p.id
+            );
+            assert_eq!(
+                candidate.exit.edge_id, contract.exit_edge_id,
+                "pair {}",
+                p.id
+            );
+            assert_eq!(
+                candidate.edge_ids.last().map(String::as_str),
+                Some(contract.exit_edge_id),
+                "pair {} First Exit",
+                p.id
+            );
+        }
         eprintln!(
             "{} | {} | {} | {} | {} | {} | {:.2}ms | 3x_byte_identical_PASS",
             p.id,

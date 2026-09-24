@@ -243,6 +243,8 @@ export interface LegacyRingBillingPairV2 {
   vehicleProfile: string;
   entryId: string;
   exitId: string;
+  entryRampId?: string | null;
+  exitRampId?: string | null;
   anchor: SameNodeAnchor;
   entryToAnchorEdgeIds: string[];
   anchorToExitEdgeIds: string[];

@@ -582,8 +582,8 @@ struct OwnedIndex {
     snap_grid: grid::OwnedSnapGrid,
     /// Maps ramp ID → index into `graph.ramps`.
     ramp_by_id: HashMap<String, usize>,
-    /// Maps edge ID → index into `graph.ramps`.
-    ramp_by_edge: HashMap<String, usize>,
+    /// Maps edge ID → all ramp indices into `graph.ramps`.
+    ramp_by_edge: HashMap<String, Vec<usize>>,
     /// Maps (entry_ramp_id, exit_ramp_id) → index into `graph.od_tariffs`.
     od_tariff_map: HashMap<(String, String), usize>,
     /// GeneralEntry ramp indices by access node ID, sorted by ramp ID.
@@ -602,6 +602,16 @@ struct OwnedIndex {
     /// Deterministic topology-derived representative anchors for every cyclic
     /// component (at most 32 per component, evenly spaced in node-ID order).
     cycle_catalog_anchors: Vec<usize>,
+}
+
+impl OwnedIndex {
+    fn unique_ramp_by_edge<'a>(&'a self, graph: &'a Graph, edge_id: &str) -> Option<&'a Ramp> {
+        let indices = self.ramp_by_edge.get(edge_id)?;
+        match indices.as_slice() {
+            [index] => Some(&graph.ramps[*index]),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -986,7 +996,7 @@ fn build_owned_index(
 
     // Validate and index ramps (if present)
     let mut ramp_by_id: HashMap<String, usize> = HashMap::with_capacity(g.ramps.len());
-    let mut ramp_by_edge: HashMap<String, usize> = HashMap::with_capacity(g.ramps.len());
+    let mut ramp_by_edge: HashMap<String, Vec<usize>> = HashMap::with_capacity(g.ramps.len());
     let mut general_entry_from_ids = BTreeSet::new();
     let mut general_entries_by_node: HashMap<String, Vec<usize>> = HashMap::new();
     let mut general_exits_by_facility: HashMap<String, Vec<usize>> = HashMap::new();
@@ -1030,7 +1040,10 @@ fn build_owned_index(
                 .or_default()
                 .push(i);
         }
-        ramp_by_edge.insert(r.edge_id.clone(), i);
+        ramp_by_edge.entry(r.edge_id.clone()).or_default().push(i);
+    }
+    for list in ramp_by_edge.values_mut() {
+        list.sort_by(|&left, &right| g.ramps[left].id.cmp(&g.ramps[right].id));
     }
     for list in general_entries_by_node.values_mut() {
         list.sort_by(|&a, &b| g.ramps[a].id.cmp(&g.ramps[b].id));
@@ -1046,6 +1059,8 @@ fn build_owned_index(
             let entry_ramp_id = p.entry_ramp_id.as_deref().or_else(|| {
                 ramp_by_edge
                     .get(&p.entry_id)
+                    .filter(|indices| indices.len() == 1)
+                    .and_then(|indices| indices.first())
                     .map(|&idx| g.ramps[idx].id.as_str())
             });
             if let Some(er_id) = entry_ramp_id {
@@ -1057,6 +1072,8 @@ fn build_owned_index(
             let exit_ramp_id = p.exit_ramp_id.as_deref().or_else(|| {
                 ramp_by_edge
                     .get(&p.exit_id)
+                    .filter(|indices| indices.len() == 1)
+                    .and_then(|indices| indices.first())
                     .map(|&idx| g.ramps[idx].id.as_str())
             });
             if let Some(xr_id) = exit_ramp_id {
@@ -2441,12 +2458,7 @@ fn coordinate_tier_search(
                         .ramp_by_id
                         .get(p.exit_ramp_id.as_deref().unwrap_or_default())
                         .map(|&idx| &pg.graph.ramps[idx])
-                        .or_else(|| {
-                            pg.index
-                                .ramp_by_edge
-                                .get(&p.exit_id)
-                                .map(|&idx| &pg.graph.ramps[idx])
-                        });
+                        .or_else(|| pg.index.unique_ramp_by_edge(&pg.graph, &p.exit_id));
                     let exit_ramp_info = RampInfo {
                         edge_id: p.exit_id.clone(),
                         name: p
@@ -3700,22 +3712,12 @@ pub fn search_prepared(
                 .entry_ramp_id
                 .as_deref()
                 .and_then(|id| pg.index.ramp_by_id.get(id).map(|&idx| &pg.graph.ramps[idx]))
-                .or_else(|| {
-                    pg.index
-                        .ramp_by_edge
-                        .get(&p.entry_id)
-                        .map(|&idx| &pg.graph.ramps[idx])
-                });
+                .or_else(|| pg.index.unique_ramp_by_edge(&pg.graph, &p.entry_id));
             let exit_ramp = p
                 .exit_ramp_id
                 .as_deref()
                 .and_then(|id| pg.index.ramp_by_id.get(id).map(|&idx| &pg.graph.ramps[idx]))
-                .or_else(|| {
-                    pg.index
-                        .ramp_by_edge
-                        .get(&p.exit_id)
-                        .map(|&idx| &pg.graph.ramps[idx])
-                });
+                .or_else(|| pg.index.unique_ramp_by_edge(&pg.graph, &p.exit_id));
 
             let entry_info = RampInfo {
                 edge_id: p.entry_id.clone(),

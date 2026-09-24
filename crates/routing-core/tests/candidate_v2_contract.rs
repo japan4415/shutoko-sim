@@ -390,6 +390,33 @@ fn schema4_legacy_pair_search_keeps_legacy_charge_contract() {
 }
 
 #[test]
+fn schema4_legacy_reverse_lookup_rejects_ambiguous_shared_edge_ramps() {
+    let mut graph = schema4_graph();
+    let mut duplicate = graph["ramps"][1].clone();
+    duplicate["id"] = Value::from("fixture:ramp:exit-duplicate");
+    graph["ramps"].as_array_mut().unwrap().push(duplicate);
+
+    let result = run(
+        &graph,
+        json!({
+            "requestId": "legacy-ambiguous-ramp",
+            "releaseId": "graph-v4-fixture-v1",
+            "originNodeId": "fixture:node:legacy:entry",
+            "minMinutes": 1,
+            "maxMinutes": 60,
+            "vehicleProfile": "passenger-car-etc",
+            "pricingAt": "2026-10-01T00:00:00Z"
+        }),
+    );
+    assert_eq!(result["status"], "ok");
+    let candidate = &result["candidates"][0];
+    assert_eq!(candidate["pairKind"], "legacyRing");
+    assert!(candidate["exit"]["rampId"].is_null());
+    assert!(candidate["exit"]["route"].is_null());
+    assert!(candidate["exit"]["direction"].is_null());
+}
+
+#[test]
 fn unverified_radial_pair_is_returned_outside_product_cohort() {
     let mut graph = schema4_graph();
     graph["billingPairs"][1]["pairEligibility"] = json!({

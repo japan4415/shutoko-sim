@@ -277,6 +277,10 @@ pub struct LegacyRingBillingPair {
     pub entry_id: String,
     pub exit_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_ramp_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_ramp_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entry_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_name: Option<String>,
@@ -447,6 +451,8 @@ impl LegacyRingBillingPair {
             vehicle_profile: pair.vehicle_profile.clone(),
             entry_id: pair.entry_id.clone(),
             exit_id: pair.exit_id.clone(),
+            entry_ramp_id: pair.entry_ramp_id.clone(),
+            exit_ramp_id: pair.exit_ramp_id.clone(),
             entry_name: pair.entry_name.clone(),
             exit_name: pair.exit_name.clone(),
             anchor: RouteAnchor::SameNode(SameNodeAnchor {
@@ -501,6 +507,8 @@ impl LegacyRingBillingPair {
             || self.vehicle_profile.is_empty()
             || self.entry_id.is_empty()
             || self.exit_id.is_empty()
+            || self.entry_ramp_id.as_deref().is_some_and(str::is_empty)
+            || self.exit_ramp_id.as_deref().is_some_and(str::is_empty)
             || anchor.node_id.is_empty()
             || anchor.route_id.is_empty()
             || anchor.direction.is_empty()
@@ -529,8 +537,8 @@ impl LegacyRingBillingPair {
             prices: self.tariff.prices.clone(),
             entry_name: self.entry_name.clone(),
             exit_name: self.exit_name.clone(),
-            entry_ramp_id: None,
-            exit_ramp_id: None,
+            entry_ramp_id: self.entry_ramp_id.clone(),
+            exit_ramp_id: self.exit_ramp_id.clone(),
             billing_distance_meters: self.tariff.billing_distance_meters,
         })
     }
@@ -541,20 +549,6 @@ fn infer_legacy_membership<'a>(
     graph: &Graph,
     memberships: &'a [RouteMembershipIndex],
 ) -> Result<&'a RouteMembershipIndex, RoutingError> {
-    let required = pair
-        .entry_to_anchor_edge_ids
-        .iter()
-        .skip(1)
-        .chain(
-            pair.anchor_to_exit_edge_ids
-                .iter()
-                .take(pair.anchor_to_exit_edge_ids.len().saturating_sub(1)),
-        )
-        .map(String::as_str)
-        .collect::<HashSet<_>>();
-    if required.is_empty() {
-        return Err(invalid("legacy billing pair has no mainline edge sequence"));
-    }
     let declared_entry = pair.entry_ramp_id.as_deref().and_then(|id| {
         graph
             .ramps
@@ -562,48 +556,167 @@ fn infer_legacy_membership<'a>(
             .find(|ramp| ramp.id == id)
             .map(|ramp| (ramp.route.as_str(), ramp.direction.as_str()))
     });
-    let scored = memberships
+    let resolved = resolve_legacy_membership(
+        graph,
+        memberships,
+        &pair.entry_to_anchor_edge_ids,
+        &pair.anchor_to_exit_edge_ids,
+        &pair.anchor_node_id,
+        declared_entry,
+        &pair.id,
+    )?;
+    Ok(resolved)
+}
+
+fn relation_segments_match_required(
+    segments: &[&RouteMembershipSegment],
+    required: &[&str],
+) -> bool {
+    let [segment] = segments else {
+        return false;
+    };
+    let positions = segment
+        .ordered_edge_ids
+        .iter()
+        .enumerate()
+        .map(|(index, edge_id)| (edge_id.as_str(), index))
+        .collect::<HashMap<_, _>>();
+    let matches = required
+        .iter()
+        .enumerate()
+        .filter_map(|(required_index, edge_id)| {
+            positions
+                .get(edge_id)
+                .copied()
+                .map(|position| (required_index, position))
+        })
+        .collect::<Vec<_>>();
+    let Some(&(first_required, first_position)) = matches.first() else {
+        return false;
+    };
+    let Some(&(last_required, _last_position)) = matches.last() else {
+        return false;
+    };
+    if required[first_required..=last_required]
+        .iter()
+        .enumerate()
+        .any(|(offset, edge_id)| positions.get(edge_id) != Some(&(first_position + offset)))
+    {
+        return false;
+    }
+    required.iter().enumerate().all(|(index, edge_id)| {
+        positions.contains_key(edge_id) || index < first_required || index > last_required
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_legacy_membership<'a>(
+    graph: &Graph,
+    memberships: &'a [RouteMembershipIndex],
+    entry_to_anchor_edge_ids: &[String],
+    anchor_to_exit_edge_ids: &[String],
+    anchor_node_id: &str,
+    declared_entry: Option<(&str, &str)>,
+    pair_id: &str,
+) -> Result<&'a RouteMembershipIndex, RoutingError> {
+    let edge_map = graph
+        .edges
+        .iter()
+        .map(|edge| (edge.id.as_str(), edge))
+        .collect::<HashMap<_, _>>();
+    let entry = validate_ordered_graph_edges(
+        &edge_map,
+        entry_to_anchor_edge_ids,
+        "legacy entry-to-anchor",
+        true,
+    )?;
+    let exit = validate_ordered_graph_edges(
+        &edge_map,
+        anchor_to_exit_edge_ids,
+        "legacy anchor-to-exit",
+        true,
+    )?;
+    if entry.first().map(|edge| edge.kind) != Some(EdgeKind::Entry)
+        || entry
+            .iter()
+            .skip(1)
+            .any(|edge| edge.kind != EdgeKind::Shutoko)
+        || exit.last().map(|edge| edge.kind) != Some(EdgeKind::Exit)
+        || exit
+            .iter()
+            .take(exit.len().saturating_sub(1))
+            .any(|edge| edge.kind != EdgeKind::Shutoko)
+        || entry.last().map(|edge| edge.to.as_str()) != Some(anchor_node_id)
+        || exit.first().map(|edge| edge.from.as_str()) != Some(anchor_node_id)
+    {
+        return Err(invalid(format!(
+            "legacy billing pair {pair_id} has invalid entry, anchor, or exit boundaries"
+        )));
+    }
+    let required = entry
+        .iter()
+        .skip(1)
+        .map(|edge| edge.id.as_str())
+        .chain(
+            exit.iter()
+                .take(exit.len().saturating_sub(1))
+                .map(|edge| edge.id.as_str()),
+        )
+        .collect::<Vec<_>>();
+    if required.is_empty()
+        || required.iter().copied().collect::<HashSet<_>>().len() != required.len()
+    {
+        return Err(invalid(format!(
+            "legacy billing pair {pair_id} has no unique mainline edge sequence"
+        )));
+    }
+    let matches = memberships
         .iter()
         .filter(|membership| {
             !declared_entry.is_some_and(|(route, direction)| {
                 membership.route_id != route || membership.direction != direction
             })
         })
-        .map(|membership| {
-            let available = membership
+        .filter(|membership| {
+            let relation_segments = membership
                 .segments
                 .iter()
                 .filter(|segment| {
                     segment.source_kind == RouteMembershipSourceKind::RelationMainline
                 })
-                .flat_map(|segment| segment.ordered_edge_ids.iter().map(String::as_str))
-                .collect::<HashSet<_>>();
-            let overlap = required
-                .iter()
-                .filter(|edge_id| available.contains(*edge_id))
-                .count();
-            (membership, overlap)
+                .collect::<Vec<_>>();
+            relation_segments_match_required(&relation_segments, &required)
         })
-        .filter(|(_, overlap)| *overlap > 0)
-        .collect::<Vec<_>>();
-    let best_overlap = scored
-        .iter()
-        .map(|(_, overlap)| *overlap)
-        .max()
-        .unwrap_or(0);
-    let matches = scored
-        .into_iter()
-        .filter(|(_, overlap)| *overlap == best_overlap)
-        .map(|(membership, _)| membership)
         .collect::<Vec<_>>();
     if matches.len() != 1 {
         return Err(invalid(format!(
-            "legacy billing pair {} must resolve to exactly one mainline membership (matches={})",
-            pair.id,
+            "legacy billing pair {pair_id} must resolve through an ordered mainline segment sequence (matches={})",
             matches.len()
         )));
     }
     Ok(matches[0])
+}
+
+fn validate_legacy_ramp_id(
+    graph: &Graph,
+    ramp_id: Option<&str>,
+    expected_edge_id: &str,
+    expected_kind: RampKind,
+) -> Result<(), RoutingError> {
+    let Some(ramp_id) = ramp_id else {
+        return Ok(());
+    };
+    let ramp = graph
+        .ramps
+        .iter()
+        .find(|ramp| ramp.id == ramp_id)
+        .ok_or_else(|| invalid("legacyRing references an unknown ramp"))?;
+    if ramp.kind != expected_kind || ramp.edge_id != expected_edge_id {
+        return Err(invalid(
+            "legacyRing ramp ID does not bind its endpoint edge",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_schema4_legacy_pair(
@@ -618,6 +731,8 @@ fn validate_schema4_legacy_pair(
     if wire.id != normalized.id
         || wire.entry_id != normalized.entry_id
         || wire.exit_id != normalized.exit_id
+        || wire.entry_ramp_id != normalized.entry_ramp_id
+        || wire.exit_ramp_id != normalized.exit_ramp_id
         || wire.entry_name != normalized.entry_name
         || wire.exit_name != normalized.exit_name
         || anchor.node_id != normalized.anchor_node_id
@@ -625,54 +740,27 @@ fn validate_schema4_legacy_pair(
     {
         return Err(invalid("legacyRing normalized identity mismatch"));
     }
-    let required = wire
-        .entry_to_anchor_edge_ids
-        .iter()
-        .skip(1)
-        .chain(
-            wire.anchor_to_exit_edge_ids
-                .iter()
-                .take(wire.anchor_to_exit_edge_ids.len().saturating_sub(1)),
-        )
-        .map(String::as_str)
-        .collect::<HashSet<_>>();
-    let scored = memberships
-        .iter()
-        .filter(|membership| {
-            membership.route_id == anchor.route_id && membership.direction == anchor.direction
-        })
-        .map(|membership| {
-            let available = membership
-                .segments
-                .iter()
-                .filter(|segment| {
-                    segment.source_kind == RouteMembershipSourceKind::RelationMainline
-                })
-                .flat_map(|segment| segment.ordered_edge_ids.iter().map(String::as_str))
-                .collect::<HashSet<_>>();
-            (
-                membership,
-                required
-                    .iter()
-                    .filter(|edge_id| available.contains(*edge_id))
-                    .count(),
-            )
-        })
-        .filter(|(_, overlap)| *overlap > 0)
-        .collect::<Vec<_>>();
-    let best = scored.iter().map(|(_, overlap)| *overlap).max();
-    if best.is_none()
-        || scored
-            .iter()
-            .filter(|(_, overlap)| Some(*overlap) == best)
-            .count()
-            != 1
-    {
-        return Err(invalid(format!(
-            "legacyRing {} anchor route/direction does not resolve uniquely",
-            wire.id
-        )));
-    }
+    validate_legacy_ramp_id(
+        graph,
+        wire.entry_ramp_id.as_deref(),
+        &wire.entry_id,
+        RampKind::GeneralEntry,
+    )?;
+    validate_legacy_ramp_id(
+        graph,
+        wire.exit_ramp_id.as_deref(),
+        &wire.exit_id,
+        RampKind::GeneralExit,
+    )?;
+    resolve_legacy_membership(
+        graph,
+        memberships,
+        &wire.entry_to_anchor_edge_ids,
+        &wire.anchor_to_exit_edge_ids,
+        &anchor.node_id,
+        Some((&anchor.route_id, &anchor.direction)),
+        &wire.id,
+    )?;
     Ok(())
 }
 
@@ -797,14 +885,14 @@ pub(crate) fn validate_radial_return_pair(
     {
         return Err(invalid("radialReturn tariff status is inconsistent"));
     }
-    validate_endpoint(
+    let entry_ramp = validate_endpoint(
         graph,
         &pair.entry_endpoint,
         &pair.entry_id,
         EdgeKind::Entry,
         RampKind::GeneralEntry,
     )?;
-    validate_endpoint(
+    let exit_ramp = validate_endpoint(
         graph,
         &pair.exit_endpoint,
         &pair.exit_id,
@@ -858,6 +946,10 @@ pub(crate) fn validate_radial_return_pair(
         .ok_or_else(|| invalid("unknown return corridor membership"))?;
     if lap_membership.route_id != anchor.route_id
         || lap_membership.direction != anchor.direction
+        || entry_membership.route_id != entry_ramp.route
+        || entry_membership.direction != entry_ramp.direction
+        || return_membership.route_id != exit_ramp.route
+        || return_membership.direction != exit_ramp.direction
         || pair.route_plan.mandatory_lap.lap_count != 1
         || pair.route_plan.return_corridor.first_general_exit.rule != "firstGeneralExit"
         || pair
@@ -985,8 +1077,26 @@ pub(crate) fn validate_radial_return_pair(
     {
         return Err(invalid("radialReturn resolved segment boundary mismatch"));
     }
-    validate_endpoint_membership_binding(memberships, &pair.entry_endpoint, entry)?;
-    validate_endpoint_membership_binding(memberships, &pair.exit_endpoint, exit)?;
+    validate_excluded_short_connector(
+        &edge_map,
+        &anchor.excluded_short_connector,
+        &lap.edge_ids,
+        &lap_edges,
+    )?;
+    validate_endpoint_membership_binding(
+        memberships,
+        &pair.entry_endpoint,
+        entry,
+        &entry_ramp.route,
+        &entry_ramp.direction,
+    )?;
+    validate_endpoint_membership_binding(
+        memberships,
+        &pair.exit_endpoint,
+        exit,
+        &exit_ramp.route,
+        &exit_ramp.direction,
+    )?;
     validate_ordered_graph_edges(&edge_map, &full_edge_ids, "radialReturn full route", false)?;
     Ok(())
 }
@@ -1069,11 +1179,18 @@ fn validate_endpoint_membership_binding(
     memberships: &[RouteMembershipIndex],
     endpoint: &BillingEndpoint,
     resolved: &ResolvedRouteSegment,
+    expected_route_id: &str,
+    expected_direction: &str,
 ) -> Result<(), RoutingError> {
     let membership = memberships
         .iter()
         .find(|membership| membership.membership_id == resolved.membership_id)
         .ok_or_else(|| invalid("resolved endpoint membership is missing"))?;
+    if membership.route_id != expected_route_id || membership.direction != expected_direction {
+        return Err(invalid(
+            "endpoint ramp route/direction does not match its membership",
+        ));
+    }
     for endpoint_segment in &endpoint.directed_segments {
         let membership_segments = membership
             .segments
@@ -1095,13 +1212,13 @@ fn validate_endpoint_membership_binding(
     Ok(())
 }
 
-fn validate_endpoint(
-    graph: &Graph,
+fn validate_endpoint<'a>(
+    graph: &'a Graph,
     endpoint: &BillingEndpoint,
     expected_edge_id: &str,
     expected_edge_kind: EdgeKind,
     expected_ramp_kind: RampKind,
-) -> Result<(), RoutingError> {
+) -> Result<&'a crate::Ramp, RoutingError> {
     valid_id(&endpoint.ramp_id, "endpoint rampId")?;
     if endpoint.name.is_empty()
         || endpoint.support_state != EndpointSupportState::VerifiedBound
@@ -1122,8 +1239,8 @@ fn validate_endpoint(
         .iter()
         .find(|ramp| ramp.id == endpoint.ramp_id)
         .ok_or_else(|| invalid("endpoint references unknown ramp"))?;
-    if ramp.kind != expected_ramp_kind {
-        return Err(invalid("endpoint ramp kind mismatch"));
+    if ramp.kind != expected_ramp_kind || ramp.route.is_empty() || ramp.direction.is_empty() {
+        return Err(invalid("endpoint ramp kind or route identity mismatch"));
     }
     let pair_edge = edge_map
         .get(expected_edge_id)
@@ -1208,6 +1325,104 @@ fn validate_endpoint(
         || expected_first_or_last != Some(expected_edge_id)
     {
         return Err(invalid("endpoint does not start or end at its ramp edge"));
+    }
+    Ok(ramp)
+}
+
+fn collect_short_connector_paths<'a>(
+    edge_map: &HashMap<&'a str, &'a crate::Edge>,
+    osm_way_id: i64,
+    current: &str,
+    target: &str,
+    path: &mut Vec<String>,
+    visited_nodes: &mut HashSet<String>,
+    paths: &mut Vec<Vec<String>>,
+) -> Result<(), RoutingError> {
+    if path.len() > 20_000 {
+        return Err(invalid("short connector search exceeded 20000 edges"));
+    }
+    let mut outgoing = edge_map
+        .values()
+        .copied()
+        .filter(|edge| {
+            edge.kind == EdgeKind::Shutoko
+                && edge_way_id(edge.id.as_str()) == Some(osm_way_id)
+                && edge.from == current
+        })
+        .collect::<Vec<_>>();
+    outgoing.sort_by(|left, right| left.id.cmp(&right.id));
+    for edge in outgoing {
+        if edge.to == target {
+            let mut candidate = path.clone();
+            candidate.push(edge.id.clone());
+            paths.push(candidate);
+            if paths.len() > 1 {
+                return Err(invalid("short connector has multiple directed paths"));
+            }
+            continue;
+        }
+        if !visited_nodes.insert(edge.to.clone()) {
+            continue;
+        }
+        path.push(edge.id.clone());
+        collect_short_connector_paths(
+            edge_map,
+            osm_way_id,
+            &edge.to,
+            target,
+            path,
+            visited_nodes,
+            paths,
+        )?;
+        path.pop();
+        visited_nodes.remove(&edge.to);
+    }
+    Ok(())
+}
+
+fn validate_excluded_short_connector(
+    edge_map: &HashMap<&str, &crate::Edge>,
+    connector: &ExcludedShortConnector,
+    lap_edge_ids: &[String],
+    lap_edges: &[&crate::Edge],
+) -> Result<(), RoutingError> {
+    if connector.from_node_id == connector.to_node_id
+        || connector.osm_way_id <= 0
+        || connector.edge_count == 0
+        || connector.distance_meters == 0
+        || lap_edges.first().map(|edge| edge.from.as_str()) != Some(connector.to_node_id.as_str())
+        || lap_edges.last().map(|edge| edge.to.as_str()) != Some(connector.from_node_id.as_str())
+    {
+        return Err(invalid("invalid short connector or lap boundary"));
+    }
+    let mut paths = Vec::new();
+    let mut path = Vec::new();
+    let mut visited_nodes = HashSet::from([connector.from_node_id.clone()]);
+    collect_short_connector_paths(
+        edge_map,
+        connector.osm_way_id,
+        &connector.from_node_id,
+        &connector.to_node_id,
+        &mut path,
+        &mut visited_nodes,
+        &mut paths,
+    )?;
+    let edge_ids = paths
+        .pop()
+        .ok_or_else(|| invalid("short connector has no directed graph path"))?;
+    let edges = validate_ordered_graph_edges(edge_map, &edge_ids, "short connector", true)?;
+    let distance = edges
+        .iter()
+        .try_fold(0_u64, |total, edge| total.checked_add(edge.distance_meters));
+    if edges.len() != connector.edge_count as usize
+        || distance != Some(connector.distance_meters)
+        || edge_ids
+            .iter()
+            .any(|edge_id| lap_edge_ids.contains(edge_id))
+    {
+        return Err(invalid(
+            "short connector evidence does not match the graph or mandatory lap",
+        ));
     }
     Ok(())
 }

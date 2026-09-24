@@ -239,6 +239,14 @@ pub fn ordered_edge_ids_sha256(edge_ids: &[String]) -> Result<String, serde_json
     Ok(compute_sha256(&encoded))
 }
 
+pub fn route_memberships_sha256(
+    route_memberships: &[RouteMembershipIndex],
+) -> Result<String, RouteMembershipError> {
+    let encoded = serde_json::to_vec(route_memberships)
+        .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
+    Ok(compute_sha256(&encoded))
+}
+
 fn validate_sha256(value: &str, field: &str) -> Result<(), RouteMembershipError> {
     if value.len() != 64
         || !value

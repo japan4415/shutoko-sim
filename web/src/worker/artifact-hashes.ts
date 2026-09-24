@@ -10,5 +10,6 @@ export const KNOWN_RELEASES: readonly string[] = [
   "c1-real-v2",
   "all-real-v1",
   "all-real-v2",
+  "all-real-v3",
 ];
-export const DEFAULT_RELEASE_ID = "all-real-v2";
+export const DEFAULT_RELEASE_ID = "all-real-v3";

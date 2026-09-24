@@ -13,7 +13,7 @@
 
 ## 2. OSM 実データ取得手順
 
-### 現行 `all-real-v2` の取得仕様
+### 現行 `all-real-v3` の取得仕様
 
 - **Overpass API エンドポイント**:
   - 主系: `https://overpass-api.de/api/interpreter`
@@ -24,7 +24,7 @@
 - **ファイル SHA-256**: `566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9`
 - **ファイルサイズ**: 4,203,540 bytes
 - **要素数**: 合計 26,847 要素（ノード 23,661 / way 3,125 / リレーション 61）
-- **生成 release**: `all-real-v2`（graph schema 2）
+- **生成 release**: `all-real-v3`（graph schema 4）
 
 ### C1限定スナップショット（歴史・回帰用）
 
@@ -68,7 +68,7 @@
 3. 一次シグナルが決定的ならそれを採用。二次と矛盾する場合は警告を記録
 4. どちらでも決まらない場合は `undecidable_ramp_edges` を加算し警告を出したうえで保守的に Shutoko に分類
 
-**現行 `all-real-v2` の結果**:
+**現行 `all-real-v3` の結果**:
 
 | 種別 | エッジ数 |
 |------|---------:|
@@ -523,11 +523,11 @@ generated graph の `billingPairs[]` も同じ判別 union とする。schema 2/
 
 `resolvedRouteSegments` の role は `entry_approach`, `mandatory_lap`, `return_corridor`, `exit_approach` の4種類だけにする。Candidate では各 role を `edgeRouteLegs` の `startEdgeIndex`（含む）から `endEdgeIndexExclusive`（含まない）へ写す。一般道の surface access / return は Edge を持たないため、graph segment にも Candidate の Edge index にも入れない。
 
-schema 4 の manifest は `billingPairsVersion=v2`、graph schema 4、route plan version、route membership hash を記録し、`graph.json`、`ramps.json`、tariff 成果物と release ID を結び付ける。旧 manifest の schema 1/2 record は上書きしない。公開 release の切替は、consumer reader と Web/Workers の検証が通った後に行う。
+schema 4 の manifest は `billingPairsVersion=v2`、`graphSchemaVersion=4`、`routePlanVersion=1`、決定論的な `routeMembershipsSha256` を記録し、`graph.json`、`ramps.json`、graph 内蔵の `odTariffs` と release ID を結び付ける。旧 manifest の schema 1/2 record は上書きしない。`all-real-v3` はこの契約で生成し、旧 `all-real-v2` は rollback 用に残す。公開 release の切替は、consumer reader と Web/Workers の検証、および R2 の read-back が通った後に行う。
 
 ### 3.3 `RouteMembershipIndex` は本線 relation と ramp binding を別々に証明する
 
-Issue #63 で graph-builder にこのデータ型と生成・検証処理を追加し、Issue #64 で `routePlanLapV1` の directed mandatory lap と return-corridor First Exit を同じ membership index 上で生成・検証する処理を追加した。`--graph-schema 4` を明示した場合だけ `graph.json` の top-level に `routeMemberships[]` を出力し、既定の schema 2 / `fixtures/generated/*` は変更しない。OSM relation の `relationMainline` と、正規ランプ台帳の exact directed binding に由来する `boundRamp` は同じ route/direction の membership 内でも別 segment として保持する。各 segment の `orderedEdgeIdsSha256`、source snapshot hash、way/node/Edge 連続性を builder が検証する。relation member は graph 上の端点連続性から directed path として再構成し、並び替えを無検証な断片にしない。`directionMappingVersion=osm-relation-role/v1` を記録し、route 2 の OSM `forward` / `backward` を `outbound` / `inbound` に正規化する。CLI の schema 4 opt-in は現在の実 snapshot に C1 relation `4256008` と route 2 relation `4256339` が揃う場合だけ relation ID を固定し、合成 snapshot では入力中の route relation を処理する。固定対象以外の relation は bound ramp evidence としてのみ保持する。schema 4 reader は #65 で実装済み。manifest への route membership hash 統合と公開 release の切替は #66 の範囲である。`find_first_exits_from_anchor` は C1 legacy のまま保存し、membership 制約付きの `find_first_exit_on_corridor` は B と return corridor の initial edge から relationMainline の順序どおりに一般 Exit を探す。declared candidate の exact binding が `unresolved` / `unsupported` の場合は次の supported Exit へ進まず、その状態を返す。
+Issue #63 で graph-builder にこのデータ型と生成・検証処理を追加し、Issue #64 で `routePlanLapV1` の directed mandatory lap と return-corridor First Exit を同じ membership index 上で生成・検証する処理を追加した。Issue #66 で graph-builder の既定を schema 4 に切り替え、`graph.json` の top-level `routeMemberships[]` と manifest の route membership hash を公開する。`--graph-schema 2` を明示した場合だけ legacy schema 2 を出力する。OSM relation の `relationMainline` と、正規ランプ台帳の exact directed binding に由来する `boundRamp` は同じ route/direction の membership 内でも別 segment として保持する。各 segment の `orderedEdgeIdsSha256`、source snapshot hash、way/node/Edge 連続性を builder が検証する。relation member は graph 上の端点連続性から directed path として再構成し、並び替えを無検証な断片にしない。`directionMappingVersion=osm-relation-role/v1` を記録し、route 2 の OSM `forward` / `backward` を `outbound` / `inbound` に正規化する。CLI の schema 4 は現在の実 snapshot に C1 relation `4256008` と route 2 relation `4256339` が揃う場合だけ relation ID を固定し、合成 snapshot では入力中の route relation を処理する。固定対象以外の relation は bound ramp evidence としてのみ保持する。schema 4 reader は #65 で実装済みで、#66 で release `all-real-v3` に接続した。`find_first_exits_from_anchor` は C1 legacy のまま保存し、membership 制約付きの `find_first_exit_on_corridor` は B と return corridor の initial edge から relationMainline の順序どおりに一般 Exit を探す。declared candidate の exact binding が `unresolved` / `unsupported` の場合は次の supported Exit へ進まず、その状態を返す。
 
 OSM route relation は mainline を列挙し、一般入口・出口の ramp way を含まない。目黒 entry way `207535708` や天現寺 exit candidate way `172358461` / `422023171` を mainline relation の member として扱い続けると、正しい ramp binding を relation の連続 Edge 列へ不正に対応させる。したがって、graph schema 4 の top-level `routeMemberships[]` は次の二層構造にする。
 
@@ -663,33 +663,36 @@ cargo run --bin shutoko-graph-builder --locked -- \
   --bindings data/osm-ramp-bindings.json \
   --tariffs data/od-tariffs.json \
   --out-dir fixtures/generated \
-  --release-id "all-real-v2" \
-  --built-at "2026-09-17T00:00:00Z" \
+  --release-id "all-real-v3" \
+  --built-at "2026-09-24T00:00:00Z" \
   --source-date "2026-09-16" \
   --vehicle-profile "passenger-car-etc" \
   --coverage-area "Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)" \
-  --graph-version "1.0.0"
+  --graph-version "1.0.0" \
+  --graph-schema 4
 ```
 検証済み課金ペアが1件以上生成されていることを強制したい場合は `--strict` を付ける。検証済みペアが0件の場合に非ゼロで終了する。
 
-### 現行 graph schema 2 が保持する情報
+### 現行 graph schema 4 が保持する情報
 
 issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次を加えた。
 
 - **Node の地理座標 (`lat`, `lon`)**: 全ノードに必須fieldとして出力する。WASMの空間snapとGeoJSON LineStringの合成で使う。
 - **Edge の日本語道路名 (`name`)**: OSMの`name`、なければ`name:ja`を`Edge.name: Option<String>`として伝播する。名前がないEdgeはJSON keyを省略する。
 - **課金ペアの公式ランプ名 (`entryName`, `exitName`)**: `data/billing-pairs-seed.json`の値を`graph.json`の`billingPairs[]`へ伝播する。
+- **RouteMembershipIndex**: `graph.json` の `routeMemberships[]` に relation mainline と bound ramp の順序付き Edge、source snapshot、binding evidence、各 hash を記録する。今回の `all-real-v3` は 46 memberships を出力する。
+- **schema 4 manifest**: `graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v2` と、決定論的な `routeMembershipsSha256` を `manifest.json` に記録する。
 
-現行 `all-real-v2` の生成済みファイルは次のとおりである。数値は `fixtures/generated/` の実測値であり、C1限定fixtureの数値ではない。
+現行 `all-real-v3` の生成済みファイルは次のとおりである。数値は `fixtures/generated/` の実測値であり、C1限定fixtureの数値ではない。
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
-| `graph.json` | 2 | 22,824 nodes / 22,987 edges（Shutoko 22,637、Entry 168、Exit 182）、billing pairs 8件、bound ramps 232件 | 7,089,932 bytes |
+| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,637、Entry 168、Exit 182）、billing pairs 8件、route memberships 46件、bound ramps 232件 | 7,282,325 bytes |
 | `ramps.json` | 1 | 正規台帳399件、うちbound 232件 | 277,569 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
-| `manifest.json` | 1 | release、hash、byte length、unverified sections、provenance | 41,578 bytes |
+| `manifest.json` | 1 | release、schema/route-plan/hash、artifact hash、byte length、unverified sections、provenance | 41,726 bytes |
 
-`graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は `graph.json`、`ramps.json`、`snap-index.json` のpath・SHA-256・byte lengthを固定し、manifest自身のサイズとschemaは別情報として扱う。
+`graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は `graph.json`、`ramps.json`、`snap-index.json` のpath・SHA-256・byte lengthを固定し、manifest自身のサイズとschemaは別情報として扱う。`all-real-v3` の `routeMembershipsSha256` は `239a847d575722493a342d03a682b5700a032eeb7ad0ea8feddfbb838344983b` であり、同一入力の2回の生成で一致する。
 
 ### `snap-index.json` の意味と `schemaVersion: 2`
 
@@ -698,17 +701,17 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
 ### 再現性・決定論的検証
 同一入力から2回実行し、`diff -r`で成果物がバイト単位で一致することを確認する。
 
-- `graph.json`: 禁止遷移とソート順を決定論的に出力する（`schemaVersion: 2`）。
+- `graph.json`: route memberships の hash と禁止遷移・BillingPair のソート順を決定論的に出力する（`schemaVersion: 4`）。
 - `snap-index.json`: Entryアクセス地点を安定順序で出力する（`schemaVersion: 2`、168件）。
 - `ramps.json`: 正規台帳とbinding結果を安定順序で出力する（`schemaVersion: 1`）。
-- `manifest.json`: 各公開成果物のSHA-256、byte length、unverified sections、verified pairのprovenanceを記録する。
+- `manifest.json`: `graphSchemaVersion=4`、`routePlanVersion=1`、`routeMembershipsSha256` と各公開成果物の SHA-256、byte length、unverified sections、verified pair の provenance を記録する。
 
 ## 5. 未検証区間（Unverified Sections）
 
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって`manifest.json`の`unverifiedSections[]`へ自動列挙する。
 - **自動列挙対象**: graph内のEntry / Exit Edgeのうち、verified billing pairのentry / exitへ採用されていないEdge。wayに`name`があれば「Edge ID（way name）」で記録する。
-- **通行規制のskip注記**: 現行`all-real-v2`はconditional 2件、via欠落2件、graph外要素16件を数える。`all` inputのため「C1以外の路線を除外した」という注記は出さない。
-- **現状**: `all-real-v2`は監査用課金ペア8件を保持し、端点と公式施設名を照合できた2件だけを`verified`とする。残る6件は`unverified`としてpair検索から除外する。active一般ランプ371件のうち232件をexact directed segmentへbindし、139件は根拠付き`unsupported`としてgraph外へ隔離する。
+- **通行規制のskip注記**: 現行`all-real-v3`はconditional 2件、via欠落2件、graph外要素16件を数える。`all` inputのため「C1以外の路線を除外した」という注記は出さない。
+- **現状**: `all-real-v3`は監査用課金ペア8件を保持し、端点と公式施設名を照合できた2件だけを`verified`とする。残る6件は`unverified`としてpair検索から除外する。active一般ランプ371件のうち232件をexact directed segmentへbindし、139件は根拠付き`unsupported`としてgraph外へ隔離する。
 
 ## 6. 全24路線・正規ランプ台帳（Canonical Ramp Inventory）
 

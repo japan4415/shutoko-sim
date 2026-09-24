@@ -8,11 +8,25 @@ const schema4Graph = await readFile(
   new URL('../fixtures/graph-v4/graph-radial-fixture.json', import.meta.url),
   'utf8',
 );
+const generatedGraph = await readFile(
+  new URL('../fixtures/generated/graph.json', import.meta.url),
+  'utf8',
+);
+const generatedManifest = JSON.parse(
+  await readFile(new URL('../fixtures/generated/manifest.json', import.meta.url), 'utf8'),
+);
 const request = await readFile(new URL('../fixtures/synthetic-request.json', import.meta.url), 'utf8');
 const bytes = await readFile(new URL('../dist/wasm/shutoko_routing_bg.wasm', import.meta.url));
 await init({ module_or_path: bytes });
 const schema4Pg = prepare(schema4Graph, '{}');
 schema4Pg.free();
+const generatedPg = prepare(generatedGraph, '{}');
+generatedPg.free();
+assert.equal(JSON.parse(generatedGraph).schemaVersion, 4);
+assert.equal(generatedManifest.graphSchemaVersion, 4);
+assert.equal(generatedManifest.billingPairsVersion, 'v2');
+assert.equal(generatedManifest.routePlanVersion, 1);
+assert.match(generatedManifest.routeMembershipsSha256, /^[0-9a-f]{64}$/);
 assert.throws(
   () => prepare(JSON.stringify({ ...JSON.parse(schema4Graph), schemaVersion: 5 }), '{}'),
   'unknown graph schema version must throw',

@@ -1,6 +1,6 @@
 # ルート探索設計
 
-本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は graph-builder、schema 4 reader、core/WASM/Web consumer まで実装済みとする。公開 release の atomic activation は Issue #66 で完了するまで行わない。
+本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は graph-builder、schema 4 reader、core/WASM/Web consumer、公開 release の atomic activation まで実装済みとする。公開 release は `all-real-v3` を次の候補として扱い、`all-real-v2` は rollback 用に残す。
 
 ## 探索問題
 
@@ -15,13 +15,13 @@
 課金対象: 入口 → 1区間先の出口（実走行の一周分を加算しない）
 ```
 
-「1区間先」は緯度経度の近さや出口番号の加算では決めない。方向・接続・課金条件を確認した `billingPair` で指定する。現行 schema 2/3 の C1 legacy は、そのペアに定義した本線の基準点へ、同じ進行方向で戻る非空の有向閉路を一周とする。単に道路名が環状線であることや、一般道で出発地へ戻ることを一周とは数えない。放射線を含む一般化は、後述する Directed Route-Plan Lap v1（builder・reader・consumer 実装済み、公開 release は #66）で定義する。
+「1区間先」は緯度経度の近さや出口番号の加算では決めない。方向・接続・課金条件を確認した `billingPair` で指定する。現行 schema 2/3 の C1 legacy は、そのペアに定義した本線の基準点へ、同じ進行方向で戻る非空の有向閉路を一周とする。単に道路名が環状線であることや、一般道で出発地へ戻ることを一周とは数えない。放射線を含む一般化は、後述する Directed Route-Plan Lap v1（builder・reader・consumer・release wiring 実装済み）で定義する。
 
 [首都高の料金距離説明](https://www.shutoko.jp/fee/fee-info/pay_etc/distance/)は、複数経路がある場合に入口出口間の首都高最短経路を料金距離とする原則を示している。具体的なペアの料金と利用条件は別途確認し、実走行距離へ単価を掛けて料金を計算しない。
 
 ## Issue #42: Directed Route-Plan Lap v1（route membership・mandatory lap・return First Exit 実装済み）
 
-本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路を設計したもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型を実装し、Issue #63 で graph-builder 内限定の `RouteMembershipIndex`、relation mainline / bound ramp の生成・検証を実装した。Issue #64 で `routePlanLapV1` の M→B 長弧生成、cyclic relation segment の wrap-around、short connector 除外、return corridor 制約付き `find_first_exit_on_corridor`、未解決 binding の保持、route-plan segment の反復規則を実装した。Issue #65 で schema 2 / 3 / 4 dispatch、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の fail-closed reader と WASM/Web consumer 契約を追加した。`--graph-schema 4` を明示した場合だけ `graph.json` の最上位に `routeMemberships[]` を含める。公開 release への反映は #66 の範囲であり、現行 C1 8 ペアの挙動は変えない。
+本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路を設計したもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型を実装し、Issue #63 で graph-builder 内限定の `RouteMembershipIndex`、relation mainline / bound ramp の生成・検証を実装した。Issue #64 で `routePlanLapV1` の M→B 長弧生成、cyclic relation segment の wrap-around、short connector 除外、return corridor 制約付き `find_first_exit_on_corridor`、未解決 binding の保持、route-plan segment の反復規則を実装した。Issue #65 で schema 2 / 3 / 4 dispatch、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の fail-closed reader と WASM/Web consumer 契約を追加した。Issue #66 で graph-builder の既定を schema 4 に切り替え、`graph.json` の最上位 `routeMemberships[]`、manifest の `graphSchemaVersion` / `routePlanVersion` / `routeMembershipsSha256`、Web/Workers の release allowlist を `all-real-v3` に接続した。`--graph-schema 2` を明示した場合だけ legacy 出力とする。現行 C1 8 ペアの挙動は変えない。
 
 ### 採用案は「指定 route の長弧を1周する」
 
@@ -107,7 +107,7 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 - excluded short connectorをmandatory lapとして選ぶ。
 - relationの並び替えや逆順を、端点連続性を確認しない無検証な断片として受理しない。
 
-### 2号目黒線の課金ペア形状（graph-builder の診断 route plan 実装済み・公開統合は未実装）
+### 2号目黒線の課金ペア形状（graph-builder の診断 route plan 実装済み・radial 公開統合は未実装）
 
 目黒入口から2号上り、一ノ橋 JCT で C1 に入る。entry Edge は `e:w207535708:0:f`、ramp ID は `ramp:2-inbound:meguro-entry` であり、現行 binding は `verified_bound` である。C1 を長弧で1通りした後、2号下りへ戻り、次の一般 Exit 候補を天現寺とする。
 
@@ -202,7 +202,7 @@ Issue #41で公式billing distanceと版管理済み料金規則を確定する�
 
 ### 実装 issue は単独で検証できる順に分ける
 
-graph schema 4 は reader/consumer まで実装したが、公開 release への atomic activation は未実施である。`--graph-schema 4` を明示した場合だけ top-level `routeMemberships[]` を生成し、既定の schema 2 出力・generated fixtures・manifest は変更しない。release wiring は #66 で整える。
+graph schema 4 は reader/consumer と `all-real-v3` の atomic activation まで実装した。builder の既定出力、generated fixtures、manifest、WASM contract、Web pipeline、Workers allowlist、versioned release ID を同時に整合させ、旧 `all-real-v2` は rollback 用に残す。`--graph-schema 2` を明示した場合だけ legacy schema 2 を生成する。
 
 | Issue | 実装範囲 | 主な受け入れ条件 | 依存 |
 | ---: | --- | --- | --- |
@@ -210,7 +210,7 @@ graph schema 4 は reader/consumer まで実装したが、公開 release への
 | 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance（#63実装済み） | `--graph-schema 4` の明示時だけ `relationMainline` と `boundRamp` を別 segment として生成し、way順、node接続、Edge順、hash、binding証拠を個別に検証する。逆方向、非所属mainline way、ramp証拠なし、short connector、relationの逆順を拒否する。#64のradial route plan生成・検証を同じindex上で実行する。 | 1 |
 | 3 | directed mandatory lap と return-corridor First Exit（#64実装済み） | synthetic radial fixtureと実 inner/outer snapshotでM→B長弧、return corridor、first general Exitを分解する。C1 legacyを完全維持し、segment内反復を拒否しつつ、route planが宣言したsegment間反復を許可する。 | 1, 2 |
 | 4 | graph schema 4 reader と consumer 契約（#65実装済み） | core、WASM型、Web Workerがschema 2 / 3 / 4を読む。`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`を判別し、wire fragmentとfield failure fixtureを追加する。未知kind / version、部分data、route legの重複・欠落を拒否する。 | 1, 3 |
-| 5 | graph schema 4 の atomic release activation | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
+| 5 | graph schema 4 の atomic release activation（#66実装済み） | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
 | 6 | 天現寺 exact directed binding | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。候補から一意な`directedSegments[]`だけ昇格し、way順・node接続・Edge順・hashを固定する。解決できなければ根拠付きunresolved / unsupportedのままにする。 | なし |
 | 7 | 2号 inner / outer radial pair 統合 | schema適合fixtureとC1 non-regressionが通る。exact binding未完ならdiagnostic planのみとする。完了時だけGraph radial pairとpublic eligibilityへ昇格し、#41までtariffは未算出とする。 | 3, 5, 6 |
 | 8 | Candidate route legs と product / tariff 状態 | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。pre-v2 dynamic ODのcharged section / reasonを撤去し、radialに`chargedSectionCount`と`ONE_SECTION_TOLL`を出さない。 | 4 |

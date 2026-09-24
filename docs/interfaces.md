@@ -4,7 +4,7 @@
 
 ## 公開成果物
 
-マニフェスト（`manifest.json`）は `schemaVersion`、`releaseId`、`engineVersion`、`graphVersion`、`builtAt`、`sourceDate`、`coverage`、`vehicleProfile`、`timeModelVersion`、`billingPairsVersion`、`attribution`（`© OpenStreetMap contributors`）、`odblLicenseUrl`、`unverifiedSections`、`provenance`、`artifacts` を持つ。`artifacts` は生成成果物（`graph.json`、`snap-index.json` 等）それぞれの相対パス、SHA-256、バイト数を持つ。`builtAt` は再現性を担保するため外部から与えられた固定値を用いる。`coverage` は対応領域（`area`）、検証済み課金端点（`verifiedEntries`、`verifiedExits`）、および全verified-boundランプの `endpointCapabilities` を持つ。後者は `routable` と `structuralNoLoop` の入口・出口ID一覧と件数を機械可読に公開する。
+マニフェスト（`manifest.json`）は `schemaVersion`、`releaseId`、`engineVersion`、`graphVersion`、`graphSchemaVersion`、`routePlanVersion`、`routeMembershipsSha256`、`builtAt`、`sourceDate`、`coverage`、`vehicleProfile`、`timeModelVersion`、`billingPairsVersion`、`attribution`（`© OpenStreetMap contributors`）、`odblLicenseUrl`、`unverifiedSections`、`provenance`、`artifacts` を持つ。schema 4 の `all-real-v3` では `graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v2` とし、`routeMembershipsSha256` は graph の `routeMemberships[]` を決定論的に直列化した SHA-256 とする。`artifacts` は生成成果物（`graph.json`、`snap-index.json` 等）それぞれの相対パス、SHA-256、バイト数を持つ。`builtAt` は再現性を担保するため外部から与えられた固定値を用いる。`coverage` は対応領域（`area`）、検証済み課金端点（`verifiedEntries`、`verifiedExits`）、および全verified-boundランプの `endpointCapabilities` を持つ。後者は `routable` と `structuralNoLoop` の入口・出口ID一覧と件数を機械可読に公開する。
 
 グラフにはノード座標、エッジ ID、始終点、距離、時間、道路種別、路線名、形状、車両制限、遷移制限、入口/出口区分、引き継ぎ検証済み経由地点を格納する。生成元 OSM スナップショット、追加の人手検証情報とその出典・日付を追跡できるようにする。
 
@@ -28,7 +28,7 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 
 `anchorNodeId` は入口の合流後から直接区間へ進む本線上の基準状態（ノード）。ここへ一周後に戻り、出口へ進む道路列を定義できるペアを登録する。料金規則の前提は原案に従い、個別ペアの登録ではその適用条件とデータ根拠を確認する。
 
-本節は現行 seed schema 1 / generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の opt-in schema 4 に `RouteMembershipIndex` を追加し、Issue #64 で `routePlanLapV1` と return-corridor First Exit の builder 側解決を追加した。Issue #65 で schema 2 / 3 / 4 reader、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の検証と、WASM/Web consumer 型を実装した。diagnostic plan から公開 BillingPair への昇移と公開 release の atomic activation は #66/#67 の範囲で、既存 C1 8要素の raw seed は変更しない。
+本節は legacy seed schema 1 と、明示指定時の generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の schema 4 に `RouteMembershipIndex` を追加し、Issue #64 で `routePlanLapV1` と return-corridor First Exit の builder 側解決を追加した。Issue #65 で schema 2 / 3 / 4 reader、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の検証と、WASM/Web consumer 型を実装した。Issue #66 で builder の既定 output、manifest、Web pipeline、Workers allowlist、versioned release ID を `all-real-v3` に接続した。diagnostic plan から公開 radial BillingPair への昇移は #67/#68 の範囲で、既存 C1 8要素の raw seed は変更しない。
 
 ## Workers の HTTP 境界
 
@@ -93,7 +93,7 @@ UI → Web Worker のリクエスト例（値は形式を示す架空例）:
 }
 ```
 
-Web Worker は `ready`、`result`、`error` を返し、各探索応答に request ID を付ける。`ready` の payload は `{ "type": "ready", "releaseId": "all-real-v2" }` で、初期化（取得・照合・WASM init）完了時に 1 度だけ送る。`error` の `code` 一覧は次のとおり。
+Web Worker は `ready`、`result`、`error` を返し、各探索応答に request ID を付ける。`ready` の payload は `{ "type": "ready", "releaseId": "all-real-v3" }` で、初期化（取得・照合・WASM init）完了時に 1 度だけ送る。`error` の `code` 一覧は次のとおり。
 
 | `error.code` | 発生箇所 | 意味 |
 | --- | --- | --- |
@@ -368,7 +368,7 @@ graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy output�
 
 `edgeIdsSha256`は順序を保ったEdge IDの空白なしJSON arrayをSHA-256化した値で、generated graphの`resolvedRouteSegments`とCandidateの`routePlan`で同じ値を使う。core reader / Candidate validator は hash を再計算し、membership / binding 参照、role、index 範囲、各 status、不正または欠落した `chargedSectionCount` を検証する。Web Worker は受信した Candidate の判別、hash 形式、4 leg の完全分割、reference、status を再検証してから UI へ返す。
 
-core、WASM型、Web Workerはgraph schema 2 / 3 / 4を読む。schema 2 / 3の`pairKind`なしは`legacyRing`、schema 4のbuilder出力は`pairKind`を必須とし、未知のkind / versionは部分データを返さず停止する。readerとconsumer契約はIssue #65で実装済みだが、builderの既定schema 4への切替は、WASM contract、Web pipeline、Workers allowlist、release ID、manifest hashを同時に更新するIssue #66で行う。
+core、WASM型、Web Workerはgraph schema 2 / 3 / 4を読む。schema 2 / 3の`pairKind`なしは`legacyRing`、schema 4のbuilder出力は`pairKind`を必須とし、未知のkind / versionは部分データを返さず停止する。readerとconsumer契約はIssue #65で実装し、builderの既定schema 4への切替と `all-real-v3` の release wiring はIssue #66で完了した。
 
 ## Google マップへの引き継ぎ
 

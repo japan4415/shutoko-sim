@@ -8,11 +8,11 @@ use shutoko_graph_builder::{
     build_manifest, build_route_membership_indices, build_topology_with_report,
     generate_and_validate_parsed_billing_pairs, graph_schema_v4_to_deterministic_json,
     manifest_to_deterministic_json, parse_billing_pairs_seed, ramps_artifact_to_deterministic_json,
-    snap_index_to_deterministic_json, to_deterministic_json, validate_od_tariffs,
-    validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm, validate_ramp_inventory,
-    BillingPairProvenance, EdgeKind, ManifestConfig, OdTariffsFile, OsmRampBindingsFile,
-    OverpassResponse, RampInventoryFile, RampKind, RampsArtifact, RouteMembershipBuildOptions,
-    TopologyConfig, VerificationStatus,
+    route_memberships_sha256, snap_index_to_deterministic_json, to_deterministic_json,
+    validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
+    validate_ramp_inventory, BillingPairProvenance, EdgeKind, ManifestConfig, OdTariffsFile,
+    OsmRampBindingsFile, OverpassResponse, RampInventoryFile, RampKind, RampsArtifact,
+    RouteMembershipBuildOptions, TopologyConfig, VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -42,7 +42,7 @@ OPTIONS:
     --source-date <DATE>    Data capture date (YYYY-MM-DD) [default: "2026-09-10"]
     --coverage-area <STR>   Textual coverage scope description [default: "Tokyo Inner Circular Route (C1) and Metropolitan Expressway"]
     --graph-version <VER>   Graph dataset version [default: "1.0.0"]
-    --graph-schema <2|4>     Graph JSON schema [default: 2]
+    --graph-schema <2|4>     Graph JSON schema [default: 4]
     --unverified-section <S> Unverified section to record in manifest (can be specified multiple times)
     --strict                Fail with non-zero exit code if no verified billing pairs are generated
     -h, --help              Print help information
@@ -103,7 +103,7 @@ fn parse_args() -> Result<CliArgs, String> {
     let mut coverage_area =
         "Tokyo Inner Circular Route (C1) and Metropolitan Expressway".to_string();
     let mut graph_version = "1.0.0".to_string();
-    let mut graph_schema = 2u32;
+    let mut graph_schema = 4u32;
     let mut unverified_sections: Vec<String> = Vec::new();
     let mut strict = false;
 
@@ -530,6 +530,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Vec::new()
     };
+    let route_memberships_digest = if args.graph_schema == 4 {
+        Some(
+            route_memberships_sha256(&route_memberships)
+                .map_err(|error| format!("route membership manifest hash failed: {}", error))?,
+        )
+    } else {
+        None
+    };
     let graph_json = if args.graph_schema == 4 {
         graph_schema_v4_to_deterministic_json(&graph, &route_memberships)
             .map_err(|e| format!("graph schema 4 serialization failed: {}", e))?
@@ -697,12 +705,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         release_id: args.release_id.clone(),
         engine_version: shutoko_routing_core::VERSION.into(),
         graph_version: args.graph_version,
+        graph_schema_version: args.graph_schema,
+        route_plan_version: (args.graph_schema == 4).then_some(1),
+        route_memberships_sha256: route_memberships_digest,
         built_at: args.built_at,
         source_date: args.source_date,
         coverage_area: args.coverage_area,
         vehicle_profile: args.vehicle_profile,
         time_model_version: "v1-static-speeds".into(),
-        billing_pairs_version: "v1".into(),
+        billing_pairs_version: if args.graph_schema == 4 { "v2" } else { "v1" }.into(),
         unverified_sections: all_unverified,
         provenance: billing_provenances,
         routable_entry_ramp_ids: capability_ids(RampKind::GeneralEntry, "routable"),

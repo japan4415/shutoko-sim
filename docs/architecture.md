@@ -82,7 +82,7 @@ Git 連携ビルドは Root directory `/`、Build command `bash scripts/cloudfla
 
 Workers Builds は Rust/WASM を生成せず、本番 R2 へ seed しない。R2 の更新は CI/CD と分離し、新しい versioned release ID の配下へ WASM・graph・manifest・engine の全成果物を先に投入・検証してから、Worker と Web が参照する release を切り替える。CI/CD は既存 release を上書きしない。
 
-release ID はリリースごとに新しく発行し、公開済み ID を再利用しない。同じ ID に seed するとオブジェクトを1件ずつ上書きする非原子的な更新となり、投入中に `manifest.json`、`engine.json`、graph、WASM の新旧が一時的に混在しうる。このため、同じ ID への remote seed を自動デプロイへ組み込まず、remote seed は単一の Manager プロセスだけで実行する。`all-real-v1` と C1 旧版は旧クライアント向けに保持し、現在の参照先は `all-real-v2` とする。
+release ID はリリースごとに新しく発行し、公開済み ID を再利用しない。同じ ID に seed するとオブジェクトを1件ずつ上書きする非原子的な更新となり、投入中に `manifest.json`、`engine.json`、graph、WASM の新旧が一時的に混在しうる。このため、同じ ID への remote seed を自動デプロイへ組み込まず、remote seed は単一の Manager プロセスだけで実行する。`all-real-v1` / `all-real-v2` と C1 旧版は旧クライアント向けに保持し、次の versioned release は `all-real-v3` とする。
 
 R2 は非公開バケットとし、Workers が配信用の許可パスだけ公開する。データはクライアントが取得できる公開情報として扱い、秘密を格納しない。WASM は `application/wasm`、JSON は `application/json; charset=utf-8`、JS は `text/javascript; charset=utf-8`、型定義は `text/plain; charset=utf-8` で返す。Cache-Control は `manifest.json` と `engine.json` に `public, max-age=300, stale-while-revalidate=60`、その他成果物に `public, max-age=31536000, immutable` を設定し、`ETag` および `If-None-Match`（304 Not Modified）に対応する。失敗時はアプリの参照 release を直前の正常版に戻す。キャッシュ済み旧クライアント向けに旧成果物を最低30日保持する。
 

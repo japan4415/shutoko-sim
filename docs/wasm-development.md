@@ -2,7 +2,7 @@
 
 ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、schema 2 / 3 / 4 の対応表、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。schema 4 では `routeMemberships` と `billingPairs[].pairKind` / anchor kind も必須にする。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
 
-ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65 で WASM 境界が schema 4 pair union と Candidate v2 契約を受け付けるため `contractVersion=2`、`graphSchemaVersion=4`、`supportedGraphSchemaVersions=[2,3,4]` に更新した。engine package version は C1 release との互換性維持のため `0.1.0` のままにする。公開 graph の既定 schema は #66 まで 2 のままである。
+ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65 で WASM 境界が schema 4 pair union と Candidate v2 契約を受け付けるため `contractVersion=2`、`graphSchemaVersion=4`、`supportedGraphSchemaVersions=[2,3,4]` に更新した。engine package version は C1 release との互換性維持のため `0.1.0` のままにする。Issue #66 で公開 graph の既定 schema を 4 に切り替え、release `all-real-v3` の manifest に `graphSchemaVersion=4`、`routePlanVersion=1`、`routeMembershipsSha256` を記録する。Web Worker は manifest の graph schema、billing pair version、route plan version、route membership hash を graph artifact と照合してから WASM prepare を実行する。
 
 ## 今回の実装範囲
 
@@ -64,7 +64,7 @@ Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `sear
 
 ## 初期データ契約
 
-公開中・生成 fixture の現行 graph は `schemaVersion: 2`、`releaseId`、`vehicleProfile`、ノード、エッジ、legacy 課金ペア、禁止エッジ列を格納する。reader は schema 2 / 3 の legacy pair と schema 4 の `legacyRing` / `radialReturn` union を受理する。エッジ種別は `local` / `entry` / `shutoko` / `exit`。上下線は異なるノード・エッジで表す。legacy 料金ペアは入口から基準点への経路、基準点から出口への経路を明示し、間に非空の一周を挿入する。`entryId` / `exitId` は実際の入退出エッジ ID と一致させる。二つの接続路を結んだ直接経路は単純路とし、そこに追加の周回を埋め込めない。一方、挿入する一周と接続路のエッジ共有は許す。
+公開中・生成 fixture の現行 graph は `schemaVersion: 4`、`releaseId`、`vehicleProfile`、ノード、エッジ、legacy 課金ペア、route memberships、禁止エッジ列を格納する。reader は schema 2 / 3 の legacy pair と schema 4 の `legacyRing` / `radialReturn` union を受理する。エッジ種別は `local` / `entry` / `shutoko` / `exit`。上下線は異なるノード・エッジで表す。legacy 料金ペアは入口から基準点への経路、基準点から出口への経路を明示し、間に非空の一周を挿入する。`entryId` / `exitId` は実際の入退出エッジ ID と一致させる。二つの接続路を結んだ直接経路は単純路とし、そこに追加の周回を埋め込めない。一方、挿入する一周と接続路のエッジ共有は許す。
 
 時間と距離は正の整数で秒・mを用いる。料金は実走行距離から計算せず、ペアに登録された有効期間の金額を使う。期間は開始を含み終了を含まない。検索入力の `pricingAt` に固定して判定する。入力検証はデータの構造を検証するもので、実際の道路や課金関係を認定しない。
 
@@ -97,7 +97,7 @@ Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `sear
 - 照合は 2 段階。`graph.json` は manifest の `artifacts`（sha256・byteLength）と照合し、`wasm` / glue は配信側 `engine.json` の `artifacts`（sha256・byteLength）と照合する。不一致は `ARTIFACT_MISMATCH`、取得失敗は `FETCH_FAILED` で停止し、以降の取得は行わない。
   - **期待値をソースに固定値で持たない理由**: wasm のビルドは環境をまたいでバイト一致しない（ローカル macOS と CI の ubuntu で sha256 が変わる）。固定定数だと CI だけが落ちるため、`engine.json` は `workers/scripts/seed-local-r2.mjs` が投入時に実ファイルから計算する。
   - `engine.json` の形式不正（JSON デコード失敗、`schemaVersion` が 1 以外、`releaseId` 不一致、`artifacts` に `shutoko_routing_bg.wasm` / `shutoko_routing.js` の有効なエントリが無い）も `ARTIFACT_MISMATCH` として停止する。
-  - `web/src/worker/artifact-hashes.ts` は wasm/glue のハッシュを持たず、releaseId allowlist だけを持つ。新規探索は `all-real-v2` を使い、`all-real-v1` と C1 旧版はキャッシュ済み旧クライアント向けに保持する。
+  - `web/src/worker/artifact-hashes.ts` は wasm/glue のハッシュを持たず、releaseId allowlist だけを持つ。新規探索は `all-real-v3` を使い、`all-real-v1` / `all-real-v2` と C1 旧版はキャッシュ済み旧クライアント向けに保持する。
 - glue はテキスト取得・照合後に同一 URL を `import()` し、`init({ module_or_path: wasmBytes })` で初期化する。`graph.json` は文字列のまま Worker のモジュール変数に保持し、検索ごとに `search(graphJson, requestJson, "{}")` へ渡す。
 - メッセージ契約は [インターフェース設計](interfaces.md) の「ブラウザの探索境界」のとおり。初期化完了で `ready`、検索応答は `requestId` 付きの `result` / `error` を返す。
 - 10 秒タイムアウトと `terminate()` は UI 側の実装。押下時に `setTimeout(10000)` を開始し、超過で Worker を terminate して `TIMEOUT` 文言を表示、次回検索時に Worker を再生成して `ready` を待ってから送信する。古い `requestId` の応答は無視する。

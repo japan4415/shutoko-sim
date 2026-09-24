@@ -2,10 +2,71 @@ use serde_json::json;
 use shutoko_graph_builder::{
     bound_ramp_evidence_from_inventory, build_route_membership_indices, build_topology,
     build_topology_with_report, generate_route_plan_lap_v1, haversine_distance_meters,
-    ordered_edge_ids_sha256, to_deterministic_json, EdgeKind, OverpassResponse,
-    RouteMembershipBuildOptions, TopologyConfig, LOCAL_SPEED_KMH, RAMP_SPEED_KMH,
-    SHUTOKO_SPEED_KMH,
+    ordered_edge_ids_sha256, route_memberships_sha256, to_deterministic_json, EdgeKind, Graph,
+    OverpassResponse, RouteMembershipBuildOptions, RouteMembershipIndex, TopologyConfig,
+    LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
 };
+use std::collections::HashMap;
+
+fn generated_legacy_graph() -> Graph {
+    let graph_json = include_str!("../../../fixtures/generated/graph.json");
+    let mut wire: serde_json::Value = serde_json::from_str(graph_json).unwrap();
+    assert_eq!(wire["schemaVersion"], 4);
+    wire["schemaVersion"] = json!(2);
+    wire.as_object_mut().unwrap().remove("routeMemberships");
+    let ramp_data = wire["ramps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|ramp| {
+            (
+                ramp["edgeId"].as_str().unwrap().to_owned(),
+                (
+                    ramp["id"].as_str().unwrap().to_owned(),
+                    ramp["name"].as_str().unwrap_or_default().to_owned(),
+                ),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    for pair in wire["billingPairs"].as_array_mut().unwrap() {
+        let status = if pair["pairEligibility"]["status"] == json!("verified_one_section_ahead") {
+            "verified"
+        } else {
+            "unverified"
+        };
+        let entry_id = pair["entryId"].as_str().unwrap().to_owned();
+        let exit_id = pair["exitId"].as_str().unwrap().to_owned();
+        let entry_ramp = ramp_data.get(&entry_id);
+        let exit_ramp = ramp_data.get(&exit_id);
+        let entry_name = pair
+            .get("entryName")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+            .or_else(|| entry_ramp.map(|(_, name)| name.clone()));
+        let exit_name = pair
+            .get("exitName")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+            .or_else(|| exit_ramp.map(|(_, name)| name.clone()));
+        *pair = json!({
+            "id": pair["id"],
+            "entryId": entry_id,
+            "exitId": exit_id,
+            "anchorNodeId": pair["anchor"]["nodeId"],
+            "entryToAnchorEdgeIds": pair["entryToAnchorEdgeIds"],
+            "anchorToExitEdgeIds": pair["anchorToExitEdgeIds"],
+            "status": status,
+            "vehicleProfile": pair["vehicleProfile"],
+            "prices": pair["tariff"]["prices"],
+            "entryName": entry_name,
+            "exitName": exit_name,
+            "entryRampId": entry_ramp.map(|(id, _)| id.as_str()),
+            "exitRampId": exit_ramp.map(|(id, _)| id.as_str()),
+            "billingDistanceMeters": pair["tariff"]["billingDistanceMeters"],
+        });
+    }
+    serde_json::from_value(wire).unwrap()
+}
 
 #[test]
 fn test_haversine_and_speed_constants() {
@@ -1031,6 +1092,9 @@ fn test_manifest_generation_and_checksum_verification() {
         release_id: "rel-manifest-test".into(),
         engine_version: "0.1.0".into(),
         graph_version: "1.0.0".into(),
+        graph_schema_version: 2,
+        route_plan_version: None,
+        route_memberships_sha256: None,
         built_at: "2026-09-10T00:00:00Z".into(),
         source_date: "2026-09-10".into(),
         coverage_area: "Tokyo C1 Inner Circular".into(),
@@ -1113,6 +1177,9 @@ fn test_deterministic_byte_identical_output_two_runs() {
         release_id: "fixed-release-id".into(),
         engine_version: "0.1.0".into(),
         graph_version: "1.0.0".into(),
+        graph_schema_version: 2,
+        route_plan_version: None,
+        route_memberships_sha256: None,
         built_at: "2026-09-10T12:00:00Z".into(),
         source_date: "2026-09-10".into(),
         coverage_area: "Deterministic Area".into(),
@@ -1235,6 +1302,8 @@ fn test_cli_full_end_to_end_execution() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
         ])
         .status()
         .expect("failed to execute binary (run 1)");
@@ -1255,6 +1324,8 @@ fn test_cli_full_end_to_end_execution() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
         ])
         .status()
         .expect("failed to execute binary (run 2)");
@@ -2003,6 +2074,8 @@ fn test_cli_strict_mode() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
             "--strict",
         ])
         .status()
@@ -2027,6 +2100,8 @@ fn test_cli_strict_mode() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
         ])
         .status()
         .expect("failed to execute binary (case 2)");
@@ -2050,6 +2125,8 @@ fn test_cli_strict_mode() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
             "--strict",
         ])
         .status()
@@ -3383,7 +3460,7 @@ fn test_issue6_item4_invalid_dates_and_engine_version() {
 #[test]
 fn test_billing_pair_seed_status_and_output_match_full_network() {
     use shutoko_graph_builder::{
-        parse_billing_pairs_seed, Graph, ParsedBillingPairsSeed, VerificationStatus,
+        parse_billing_pairs_seed, ParsedBillingPairsSeed, VerificationStatus,
     };
 
     // 1. Verify that the declarative seed keeps all 8 audited billing pairs.
@@ -3451,9 +3528,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     // 2. The full-network graph retains all audited pairs, but the two
     // FIRST_EXIT_MISMATCH pairs must remain explicitly unverified so
     // routing-core will not make them searchable.
-    let graph_str = include_str!("../../../fixtures/generated/graph.json");
-    let graph: Graph =
-        serde_json::from_str(graph_str).expect("fixtures/generated/graph.json must deserialize");
+    let graph = generated_legacy_graph();
     assert_eq!(
         graph.billing_pairs.len(),
         8,
@@ -3496,11 +3571,9 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
 
 #[test]
 fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
-    use shutoko_graph_builder::{parse_billing_pairs_seed, Graph, ParsedBillingPairsSeed};
+    use shutoko_graph_builder::{parse_billing_pairs_seed, ParsedBillingPairsSeed};
 
-    let graph_str = include_str!("../../../fixtures/generated/graph.json");
-    let graph: Graph =
-        serde_json::from_str(graph_str).expect("fixtures/generated/graph.json must deserialize");
+    let graph = generated_legacy_graph();
     let seed_str = include_str!("../../../data/billing-pairs-seed.json");
     let parsed_seed = parse_billing_pairs_seed(seed_str)
         .expect("data/billing-pairs-seed.json must use the supported seed parser");
@@ -4021,6 +4094,8 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
         ])
         .status()
         .expect("failed to execute binary (run 1)");
@@ -4047,6 +4122,8 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
         ])
         .status()
         .expect("failed to execute binary (run 2)");
@@ -4155,6 +4232,21 @@ fn test_cli_with_full_fixtures() {
         .status()
         .expect("failed to execute binary with full fixtures");
     assert!(status.success(), "CLI run with full fixtures failed");
+
+    let graph_raw = std::fs::read_to_string(out_dir.join("graph.json")).unwrap();
+    let graph_json: serde_json::Value = serde_json::from_str(&graph_raw).unwrap();
+    let manifest_raw = std::fs::read_to_string(out_dir.join("manifest.json")).unwrap();
+    let manifest_json: serde_json::Value = serde_json::from_str(&manifest_raw).unwrap();
+    assert_eq!(graph_json["schemaVersion"], 4);
+    assert_eq!(manifest_json["graphSchemaVersion"], 4);
+    assert_eq!(manifest_json["routePlanVersion"], 1);
+    assert_eq!(manifest_json["billingPairsVersion"], "v2");
+    let route_memberships: Vec<RouteMembershipIndex> =
+        serde_json::from_value(graph_json["routeMemberships"].clone()).unwrap();
+    assert_eq!(
+        manifest_json["routeMembershipsSha256"],
+        route_memberships_sha256(&route_memberships).unwrap()
+    );
 
     let ramps_raw = std::fs::read_to_string(out_dir.join("ramps.json")).unwrap();
     let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();

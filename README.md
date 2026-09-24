@@ -16,7 +16,7 @@
 
 ## 実データ生成パイプラインと graph-builder
 
-`crates/graph-builder`（`shutoko-graph-builder`）は、OpenStreetMap（OSM）実データと宣言的課金シードから、方向付きの探索用道路グラフ（`graph.json`）、一般道スナップインデックス（`snap-index.json`）、および各成果物の SHA-256 チェックサムを含むマニフェスト（`manifest.json`）を決定論的に生成するオフライン CLI ツールです。通行規制（`no_*`、`only_*`、`via=way`）の抽出、本線からの最初の出口（First Exit）検証、および出典情報（`provenance`）の記録をビルド時に自動検証します。
+`crates/graph-builder`（`shutoko-graph-builder`）は、OpenStreetMap（OSM）実データと宣言的課金シードから、方向付きの探索用道路グラフ（`graph.json`）、一般道スナップインデックス（`snap-index.json`）、および各成果物の SHA-256 チェックサムを含むマニフェスト（`manifest.json`）を決定論的に生成するオフライン CLI ツールです。通行規制（`no_*`、`only_*`、`via=way`）の抽出、本線からの最初の出口（First Exit）検証、route membership の hash、出典情報（`provenance`）の記録をビルド時に自動検証します。公開既定は graph schema 4、release ID は `all-real-v3` です。
 
 ### 再現手順
 
@@ -78,10 +78,11 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
    ```
 2. **新しい versioned release のビルドと本番 R2 への投入**（`sha256`・`byteLength` を `manifest.json` と照合してからアップロード）:
    ```bash
-   bash scripts/build-wasm.sh                # dist/wasm/ を生成
-   cd workers && node scripts/seed-local-r2.mjs --remote
+   bash scripts/generate-fixtures.sh
+   bash scripts/build-wasm.sh
+   node workers/scripts/seed-local-r2.mjs --remote
    ```
-   先に manifest とクライアント側 allowlist を未使用の release ID へ更新する。このスクリプトは release ID と成果物を検証し、既存の本番 release ID があれば上書きを拒否する。payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。
+   詳細手順と manifest を最後に置く atomic release の runbook は [`docs/delivery.md`](docs/delivery.md#all-real-v3-の-atomic-release-runbook) を参照する。先に未使用の `all-real-v3` へ client allowlist を更新し、payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。既存の本番 release ID があれば上書きを拒否する。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。このリポジトリの変更作業では R2 upload / Wrangler deploy / Cloudflare 書き込みを実行しない。
 3. **デプロイ**:
    ```bash
    cd workers && npx wrangler deploy
@@ -89,7 +90,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
    デプロイ完了時に表示される `https://<worker>.<subdomain>.workers.dev` が配信 URL です。
 4. **疎通確認**: `GET /releases/{releaseId}/manifest.json` と `GET /releases/{releaseId}/engine.json` が `200`・`application/json`・`Cache-Control: max-age=300` で返ること、`GET /releases/{releaseId}/graph.json` が `immutable` キャッシュと `ETag` 付きで返り本文の `sha256` が `manifest.json` と一致すること、存在しない release / 二重スラッシュが `404` になること、`POST /api/geocode` が正常クエリで `200`、空クエリで `400 INVALID_QUERY` を返すことを確認する。
 
-現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-17 `all-real-v2` デプロイ, wrangler 4.131.0）。
+現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-17 `all-real-v2` デプロイ, wrangler 4.131.0）。`all-real-v3` は本次の atomic activation 候補であり、runbook の read-back 確認と本番デプロイが完了するまで本番参照には切り替えない。
 
 > **レート制限の本番挙動に関する注記**: `wrangler.toml` の `[[ratelimits]]`（IP: 10 req/60s、Global: 600 req/60s）は Cloudflare Workers Rate Limiting binding のベストエフォート仕様であり、`wrangler dev --local` の決定論的シミュレーションと異なり本番環境では正確な即時遮断を保証しない（同一 IP から短時間に 15 リクエストを送っても `429` が発生しない場合がある）。アプリケーション側の防御としては機能するが、厳密なレート保証が必要な用途には追加の対策を検討すること。
 

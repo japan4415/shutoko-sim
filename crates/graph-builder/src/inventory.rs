@@ -1464,7 +1464,11 @@ mod tests {
 
         // Every verified binding names the exact directed graph edge and kind.
         let graph_path = find_data_file("fixtures/generated/graph.json");
-        let graph: Graph = serde_json::from_str(&fs::read_to_string(graph_path).unwrap()).unwrap();
+        let graph: Graph =
+            shutoko_routing_core::prepare_json(&fs::read_to_string(graph_path).unwrap(), "{}")
+                .expect("generated graph must pass the schema-aware reader")
+                .graph()
+                .clone();
         assert_eq!(
             classify_endpoint_capabilities(&graph)
                 .values()

@@ -43,7 +43,7 @@ pub use route_membership::{
     find_first_exit_on_corridor_with_binding, find_first_exit_on_corridor_with_binding_budget,
     find_first_exit_on_corridor_with_budget, generate_directed_mandatory_lap,
     generate_route_plan_lap_v1, graph_schema_v4_to_deterministic_json, ordered_edge_ids_sha256,
-    resolve_diagnostic_radial_route_plan, resolve_directed_route_plan,
+    resolve_diagnostic_radial_route_plan, resolve_directed_route_plan, route_memberships_sha256,
     validate_directed_junction_mandatory_lap, validate_mandatory_lap, validate_resolved_route_plan,
     validate_resolved_route_plan_segments, validate_route_membership_structure,
     validate_route_memberships, validate_route_plan_segments, BoundRampEvidence, CorridorExit,

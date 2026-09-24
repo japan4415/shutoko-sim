@@ -64,6 +64,15 @@ describe("Releases delivery", () => {
       "releases/all-real-v1/ramps.json",
       JSON.stringify({ schemaVersion: 1, releaseId: "all-real-v1", ramps: [] })
     );
+
+    await env.ARTIFACTS_BUCKET.put(
+      "releases/all-real-v3/manifest.json",
+      JSON.stringify({ schemaVersion: 1, releaseId: "all-real-v3" })
+    );
+    await env.ARTIFACTS_BUCKET.put(
+      "releases/all-real-v3/ramps.json",
+      JSON.stringify({ schemaVersion: 1, releaseId: "all-real-v3", ramps: [] })
+    );
   });
 
   it("all-real-v1 の ramps.json を allowlist 経由で配信する", async () => {
@@ -75,6 +84,17 @@ describe("Releases delivery", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
     expect(await res.json()).toMatchObject({ releaseId: "all-real-v1" });
+  });
+
+  it("all-real-v3 の ramps.json を allowlist 経由で配信する", async () => {
+    const ctx = createExecutionContext();
+    const req = new Request("http://localhost/releases/all-real-v3/ramps.json");
+    const res = await worker.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+    expect(await res.json()).toMatchObject({ releaseId: "all-real-v3" });
   });
 
   it("gets allowed manifest.json with 200, Content-Type, Cache-Control, and ETag", async () => {

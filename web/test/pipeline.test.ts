@@ -11,6 +11,7 @@ import {
   parseGraphDocument,
   parseWasmError,
   PipelineError,
+  routeMembershipsSha256,
   ReleaseStore,
   SEARCH_LIMITS_JSON,
   verifyArtifact,
@@ -152,9 +153,20 @@ describe("parseGraphDocument", () => {
     const graphExpected = await expectationOf(graphBytes);
     const wasmExpected = await expectationOf(wasmBytes);
     const glueExpected = await expectationOf(glueBytes);
+    const routeHash = await routeMembershipsSha256(
+      (JSON.parse(schema4Graph) as { routeMemberships: unknown }).routeMemberships,
+    );
     const files = {
       [`/releases/${releaseId}/manifest.json`]: encoder.encode(
-        JSON.stringify({ releaseId, artifacts: [{ path: "graph.json", ...graphExpected }] }),
+        JSON.stringify({
+          schemaVersion: 1,
+          releaseId,
+          graphSchemaVersion: 4,
+          routePlanVersion: 1,
+          billingPairsVersion: "v2",
+          routeMembershipsSha256: routeHash,
+          artifacts: [{ path: "graph.json", ...graphExpected }],
+        }),
       ),
       [`/releases/${releaseId}/engine.json`]: encoder.encode(
         JSON.stringify({
@@ -739,10 +751,20 @@ describe("loadRelease（モック fetch）", () => {
     for (const [key, val] of Object.entries(files1)) {
       files2[key.replace("c1-real-v1", "c1-real-v2")] = val;
     }
-    // engine.json の releaseId を更新
+    // engine.json と manifest.json の releaseId を更新
+    const graph2 = JSON.parse(new TextDecoder().decode(files2["/releases/c1-real-v2/graph.json"]));
+    graph2.releaseId = "c1-real-v2";
+    files2["/releases/c1-real-v2/graph.json"] = encoder.encode(JSON.stringify(graph2));
     const engine2 = JSON.parse(new TextDecoder().decode(files2["/releases/c1-real-v2/engine.json"]));
     engine2.releaseId = "c1-real-v2";
     files2["/releases/c1-real-v2/engine.json"] = encoder.encode(JSON.stringify(engine2));
+    const manifest2 = JSON.parse(new TextDecoder().decode(files2["/releases/c1-real-v2/manifest.json"]));
+    manifest2.releaseId = "c1-real-v2";
+    manifest2.artifacts[0] = {
+      ...manifest2.artifacts[0],
+      ...(await expectationOf(files2["/releases/c1-real-v2/graph.json"])),
+    };
+    files2["/releases/c1-real-v2/manifest.json"] = encoder.encode(JSON.stringify(manifest2));
 
     const allFiles = { ...files1, ...files2 };
     const { fetch } = mockFetch(allFiles);

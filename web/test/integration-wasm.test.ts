@@ -10,6 +10,7 @@ import {
   hexDigest,
   loadRelease,
   parseSearchResult,
+  routeMembershipsSha256,
   SEARCH_LIMITS_JSON,
   type ArtifactExpectation,
   type FetchLike,
@@ -50,6 +51,8 @@ export function isWasmContractCompatible(
   }
   if (
     !current.supportedGraphSchemaVersions.includes(Number(graph.schemaVersion)) ||
+    manifest.schemaVersion !== 1 ||
+    manifest.releaseId !== graph.releaseId ||
     manifest.engineVersion !== current.engineVersion ||
     !Array.isArray(graph.odTariffs) ||
     !Array.isArray(graph.ramps)
@@ -58,7 +61,12 @@ export function isWasmContractCompatible(
   }
   if (
     graph.schemaVersion === 4 &&
-    (!Array.isArray(graph.routeMemberships) || !Array.isArray(graph.billingPairs))
+    (!Array.isArray(graph.routeMemberships) ||
+      !Array.isArray(graph.billingPairs) ||
+      manifest.graphSchemaVersion !== 4 ||
+      manifest.routePlanVersion !== 1 ||
+      manifest.billingPairsVersion !== "v2" ||
+      typeof manifest.routeMembershipsSha256 !== "string")
   ) {
     return false;
   }
@@ -111,12 +119,18 @@ async function wasmBuildIsCurrent(): Promise<boolean> {
     readFile(new URL("fixtures/generated/graph.json", root), "utf8"),
     readFile(new URL("fixtures/generated/manifest.json", root), "utf8"),
   ]);
-  return isWasmContractCompatible(
+  const parsedGraph = JSON.parse(graph) as Record<string, unknown>;
+  const parsedManifest = JSON.parse(manifest) as Record<string, unknown>;
+  if (!isWasmContractCompatible(
     JSON.parse(current) as WasmBuildContract,
     JSON.parse(built) as WasmBuildContract,
-    JSON.parse(graph) as Record<string, unknown>,
-    JSON.parse(manifest) as Record<string, unknown>,
-  );
+    parsedGraph,
+    parsedManifest,
+  )) {
+    return false;
+  }
+  if (parsedGraph.schemaVersion !== 4) return true;
+  return (await routeMembershipsSha256(parsedGraph.routeMemberships)) === parsedManifest.routeMembershipsSha256;
 }
 
 beforeAll(async () => {

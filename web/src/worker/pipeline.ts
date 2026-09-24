@@ -171,6 +171,80 @@ export async function hexDigest(buf: ArrayBuffer): Promise<string> {
     .join("");
 }
 
+function requiredString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw graphContractMismatch(`${label} が非空文字列ではありません`);
+  }
+  return value;
+}
+
+function requiredStringArray(value: unknown, label: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw graphContractMismatch(`${label} が非空文字列配列ではありません`);
+  }
+  return value;
+}
+
+function canonicalRouteMemberships(value: unknown): string {
+  if (!Array.isArray(value)) {
+    throw graphContractMismatch("graph.json: routeMemberships が配列ではありません");
+  }
+  const memberships = value.map((membership, membershipIndex) => {
+    if (!isRecord(membership)) {
+      throw graphContractMismatch(`routeMemberships[${String(membershipIndex)}] がオブジェクトではありません`);
+    }
+    if (!Array.isArray(membership.segments)) {
+      throw graphContractMismatch(`routeMemberships[${String(membershipIndex)}].segments が配列ではありません`);
+    }
+    const segments = membership.segments.map((segment, segmentIndex) => {
+      if (!isRecord(segment)) {
+        throw graphContractMismatch(
+          `routeMemberships[${String(membershipIndex)}].segments[${String(segmentIndex)}] がオブジェクトではありません`,
+        );
+      }
+      const optionalString = (field: string): string | null => {
+        const fieldValue = segment[field];
+        if (fieldValue === undefined || fieldValue === null) return null;
+        return requiredString(fieldValue, `routeMemberships segment ${field}`);
+      };
+      return {
+        segmentId: requiredString(segment.segmentId, "routeMemberships segmentId"),
+        sourceKind: requiredString(segment.sourceKind, "routeMemberships sourceKind"),
+        sourceRelationId: optionalString("sourceRelationId"),
+        sourceSnapshotSha256: requiredString(
+          segment.sourceSnapshotSha256,
+          "routeMemberships sourceSnapshotSha256",
+        ),
+        bindingEvidenceId: optionalString("bindingEvidenceId"),
+        orderedEdgeIds: requiredStringArray(
+          segment.orderedEdgeIds,
+          "routeMemberships orderedEdgeIds",
+        ),
+        orderedEdgeIdsSha256: requiredString(
+          segment.orderedEdgeIdsSha256,
+          "routeMemberships orderedEdgeIdsSha256",
+        ),
+      };
+    });
+    return {
+      membershipId: requiredString(membership.membershipId, "routeMemberships membershipId"),
+      routeId: requiredString(membership.routeId, "routeMemberships routeId"),
+      direction: requiredString(membership.direction, "routeMemberships direction"),
+      directionMappingVersion: requiredString(
+        membership.directionMappingVersion,
+        "routeMemberships directionMappingVersion",
+      ),
+      segments,
+    };
+  });
+  return JSON.stringify(memberships);
+}
+
+export async function routeMembershipsSha256(value: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(canonicalRouteMemberships(value));
+  return hexDigest(bytes.buffer as ArrayBuffer);
+}
+
 /** バイト長と SHA-256 の両方が一致するか。 */
 export async function verifyArtifact(
   bytes: Uint8Array,
@@ -261,6 +335,12 @@ async function verifyOrStop(name: string, bytes: Uint8Array, expected: ArtifactE
 }
 
 interface ManifestLike {
+  schemaVersion?: unknown;
+  releaseId?: unknown;
+  graphSchemaVersion?: unknown;
+  routePlanVersion?: unknown;
+  billingPairsVersion?: unknown;
+  routeMembershipsSha256?: unknown;
   artifacts?: { path: string; sha256: string; byteLength: number }[];
 }
 
@@ -288,6 +368,65 @@ function engineExpectation(engine: EngineLike, path: string, engineUrl: string):
     );
   }
   return { sha256: entry.sha256, byteLength: entry.byteLength };
+}
+
+function validateManifestEnvelope(manifest: ManifestLike, releaseId: string): void {
+  if (manifest.schemaVersion !== undefined && manifest.schemaVersion !== 1) {
+    throw graphContractMismatch("manifest.json: schemaVersion が 1 以外です");
+  }
+  if (manifest.releaseId !== undefined && manifest.releaseId !== releaseId) {
+    throw graphContractMismatch(
+      `manifest.json: releaseId が不正です（expected ${releaseId}）`,
+    );
+  }
+}
+
+async function validateGraphManifestContract(
+  manifest: ManifestLike,
+  graph: GraphDocument,
+  releaseId: string,
+): Promise<void> {
+  if (graph.releaseId !== releaseId) {
+    throw graphContractMismatch("graph.json: releaseId が要求された releaseId と一致しません");
+  }
+  const graphSchemaVersion = graph.schemaVersion;
+  if (
+    manifest.graphSchemaVersion !== undefined &&
+    manifest.graphSchemaVersion !== graphSchemaVersion
+  ) {
+    throw graphContractMismatch(
+      `manifest.json: graphSchemaVersion が graph.json と一致しません（expected ${String(graphSchemaVersion)}）`,
+    );
+  }
+  if (graphSchemaVersion !== 4) return;
+  if (manifest.schemaVersion !== 1) {
+    throw graphContractMismatch("manifest.json: schemaVersion=1 の記録が必要です");
+  }
+  if (manifest.releaseId !== releaseId) {
+    throw graphContractMismatch(
+      `manifest.json: releaseId が要求された releaseId と一致しません（expected ${releaseId}）`,
+    );
+  }
+  if (manifest.graphSchemaVersion !== 4) {
+    throw graphContractMismatch("manifest.json: graphSchemaVersion=4 の記録が必要です");
+  }
+  if (manifest.billingPairsVersion !== "v2") {
+    throw graphContractMismatch("manifest.json: billingPairsVersion=v2 の記録が必要です");
+  }
+  if (manifest.routePlanVersion !== 1) {
+    throw graphContractMismatch("manifest.json: routePlanVersion=1 の記録が必要です");
+  }
+  const expectedHash = requiredString(
+    manifest.routeMembershipsSha256,
+    "manifest.json: routeMembershipsSha256",
+  );
+  if (!/^[0-9a-f]{64}$/.test(expectedHash)) {
+    throw graphContractMismatch("manifest.json: routeMembershipsSha256 が lowercase SHA-256 ではありません");
+  }
+  const actualHash = await routeMembershipsSha256(graph.routeMemberships);
+  if (actualHash !== expectedHash) {
+    throw graphContractMismatch("manifest.json: routeMembershipsSha256 が graph.json と一致しません");
+  }
 }
 
 /** loadRelease の任意オプション（計測ページ専用。通常 UI は指定しない）。 */
@@ -336,9 +475,16 @@ export async function loadRelease(
   } catch {
     throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: JSON デコード失敗`);
   }
+  validateManifestEnvelope(manifest, releaseId);
   const graphEntry = (manifest.artifacts ?? []).find((a) => a.path === "graph.json");
-  if (!graphEntry) {
-    throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: artifacts に graph.json 無し`);
+  if (
+    graphEntry === undefined ||
+    typeof graphEntry.sha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(graphEntry.sha256) ||
+    !Number.isSafeInteger(graphEntry.byteLength) ||
+    graphEntry.byteLength < 0
+  ) {
+    throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: graph.json の有効な descriptor が無い`);
   }
 
   const engineUrl = `${base}/engine.json${query}`;
@@ -367,7 +513,8 @@ export async function loadRelease(
   const graphBytes = await fetchBytes(fetchImpl, graphUrl, signal);
   await verifyOrStop(graphUrl, graphBytes, graphEntry);
   const graphJson = new TextDecoder().decode(graphBytes);
-  parseGraphDocument(graphJson);
+  const graph = parseGraphDocument(graphJson);
+  await validateGraphManifestContract(manifest, graph, releaseId);
 
   const wasmUrl = `${base}/${WASM_ARTIFACT_PATH}${query}`;
   const wasmBytes = await fetchBytes(fetchImpl, wasmUrl, signal);

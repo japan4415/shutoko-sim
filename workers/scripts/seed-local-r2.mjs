@@ -56,10 +56,141 @@ function parseManifest(manifestPath) {
       "manifest.releaseId is required and must match /^[a-z0-9][a-z0-9.-]{0,63}$/"
     );
   }
+  if (manifest.schemaVersion !== 1) {
+    throw new Error("manifest.schemaVersion must be 1");
+  }
   if (!Array.isArray(manifest.artifacts)) {
     throw new Error("manifest.artifacts must be an array");
   }
   return { manifest, content };
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function requiredString(value, label) {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function requiredStringArray(value, label) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw new Error(`${label} must be a non-empty string array`);
+  }
+  return value;
+}
+
+function optionalString(value, label) {
+  if (value === undefined || value === null) return null;
+  return requiredString(value, label);
+}
+
+export function canonicalRouteMemberships(value) {
+  if (!Array.isArray(value)) {
+    throw new Error("graph.routeMemberships must be an array");
+  }
+  return value.map((membership, membershipIndex) => {
+    if (!isRecord(membership) || !Array.isArray(membership.segments)) {
+      throw new Error(`graph.routeMemberships[${membershipIndex}] is invalid`);
+    }
+    return {
+      membershipId: requiredString(membership.membershipId, "routeMemberships.membershipId"),
+      routeId: requiredString(membership.routeId, "routeMemberships.routeId"),
+      direction: requiredString(membership.direction, "routeMemberships.direction"),
+      directionMappingVersion: requiredString(
+        membership.directionMappingVersion,
+        "routeMemberships.directionMappingVersion",
+      ),
+      segments: membership.segments.map((segment, segmentIndex) => {
+        if (!isRecord(segment)) {
+          throw new Error(
+            `graph.routeMemberships[${membershipIndex}].segments[${segmentIndex}] is invalid`,
+          );
+        }
+        return {
+          segmentId: requiredString(segment.segmentId, "routeMemberships.segmentId"),
+          sourceKind: requiredString(segment.sourceKind, "routeMemberships.sourceKind"),
+          sourceRelationId: optionalString(
+            segment.sourceRelationId,
+            "routeMemberships.sourceRelationId",
+          ),
+          sourceSnapshotSha256: requiredString(
+            segment.sourceSnapshotSha256,
+            "routeMemberships.sourceSnapshotSha256",
+          ),
+          bindingEvidenceId: optionalString(
+            segment.bindingEvidenceId,
+            "routeMemberships.bindingEvidenceId",
+          ),
+          orderedEdgeIds: requiredStringArray(
+            segment.orderedEdgeIds,
+            "routeMemberships.orderedEdgeIds",
+          ),
+          orderedEdgeIdsSha256: requiredString(
+            segment.orderedEdgeIdsSha256,
+            "routeMemberships.orderedEdgeIdsSha256",
+          ),
+        };
+      }),
+    };
+  });
+}
+
+export function routeMembershipsSha256(value) {
+  return sha256(Buffer.from(JSON.stringify(canonicalRouteMemberships(value)), "utf8"));
+}
+
+function validateSchema4Contract(manifest, fixtureFiles) {
+  if (manifest.graphSchemaVersion !== 4 && manifest.releaseId !== "all-real-v3") return;
+  if (manifest.graphSchemaVersion !== 4) {
+    throw new Error("manifest.graphSchemaVersion=4 is required for all-real-v3");
+  }
+  if (manifest.billingPairsVersion !== "v2") {
+    throw new Error("manifest.billingPairsVersion=v2 is required for graph schema 4");
+  }
+  if (manifest.routePlanVersion !== 1) {
+    throw new Error("manifest.routePlanVersion=1 is required for graph schema 4");
+  }
+  const expectedHash = requiredString(
+    manifest.routeMembershipsSha256,
+    "manifest.routeMembershipsSha256",
+  );
+  if (!/^[0-9a-f]{64}$/.test(expectedHash)) {
+    throw new Error("manifest.routeMembershipsSha256 must be a lowercase SHA-256 value");
+  }
+  const graphFile = fixtureFiles.find((file) => file.name === "graph.json");
+  if (graphFile === undefined) {
+    throw new Error("graph.json is required for schema 4 contract validation");
+  }
+  let graph;
+  try {
+    graph = JSON.parse(graphFile.content.toString("utf8"));
+  } catch (error) {
+    throw new Error(`graph.json is not valid JSON: ${error.message}`);
+  }
+  if (!isRecord(graph) || graph.releaseId !== manifest.releaseId || graph.schemaVersion !== 4) {
+    throw new Error("graph.json releaseId/schemaVersion does not match schema 4 manifest");
+  }
+  if (!Array.isArray(graph.billingPairs) || !Array.isArray(graph.routeMemberships)) {
+    throw new Error("schema 4 graph requires billingPairs and routeMemberships arrays");
+  }
+  for (const [index, pair] of graph.billingPairs.entries()) {
+    if (!isRecord(pair) || !["legacyRing", "radialReturn"].includes(pair.pairKind)) {
+      throw new Error(`graph.billingPairs[${index}].pairKind is invalid`);
+    }
+    if (pair.pairKind === "radialReturn" && pair.routePlanVersion !== 1) {
+      throw new Error(`graph.billingPairs[${index}].routePlanVersion must be 1`);
+    }
+  }
+  const actualHash = routeMembershipsSha256(graph.routeMemberships);
+  if (actualHash !== expectedHash) {
+    throw new Error(
+      `manifest.routeMembershipsSha256 mismatch: expected ${expectedHash}, got ${actualHash}`,
+    );
+  }
 }
 
 function validateManifestArtifacts(manifest, fixturesDir, log) {
@@ -253,6 +384,7 @@ export function seedR2({
 
   log(`Verifying artifacts for release: ${releaseId}`);
   const fixtureFiles = validateManifestArtifacts(manifest, fixturesDir, log);
+  validateSchema4Contract(manifest, fixtureFiles);
   const engineEntries = buildEngineArtifacts(wasmDir);
   const engineArtifacts = engineEntries.map((entry) => entry.descriptor);
   const engineJsonPath = path.join(wasmDir, "engine.json");

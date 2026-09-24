@@ -275,6 +275,10 @@ pub struct LegacyRingBillingPair {
     pub vehicle_profile: String,
     pub entry_id: String,
     pub exit_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_name: Option<String>,
     pub anchor: RouteAnchor,
     pub entry_to_anchor_edge_ids: Vec<String>,
     pub anchor_to_exit_edge_ids: Vec<String>,
@@ -442,6 +446,8 @@ impl LegacyRingBillingPair {
             vehicle_profile: pair.vehicle_profile.clone(),
             entry_id: pair.entry_id.clone(),
             exit_id: pair.exit_id.clone(),
+            entry_name: pair.entry_name.clone(),
+            exit_name: pair.exit_name.clone(),
             anchor: RouteAnchor::SameNode(SameNodeAnchor {
                 node_id: pair.anchor_node_id.clone(),
                 route_id: membership.route_id.clone(),
@@ -520,8 +526,8 @@ impl LegacyRingBillingPair {
             },
             vehicle_profile: self.vehicle_profile.clone(),
             prices: self.tariff.prices.clone(),
-            entry_name: None,
-            exit_name: None,
+            entry_name: self.entry_name.clone(),
+            exit_name: self.exit_name.clone(),
             entry_ramp_id: None,
             exit_ramp_id: None,
             billing_distance_meters: self.tariff.billing_distance_meters,
@@ -611,6 +617,8 @@ fn validate_schema4_legacy_pair(
     if wire.id != normalized.id
         || wire.entry_id != normalized.entry_id
         || wire.exit_id != normalized.exit_id
+        || wire.entry_name != normalized.entry_name
+        || wire.exit_name != normalized.exit_name
         || anchor.node_id != normalized.anchor_node_id
         || wire.vehicle_profile != graph.vehicle_profile
     {

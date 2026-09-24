@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "vitest";
-import { seedR2 } from "../scripts/seed-local-r2.mjs";
+import { routeMembershipsSha256, seedR2 } from "../scripts/seed-local-r2.mjs";
 
 const FIXTURE_NAMES = ["graph.json", "snap-index.json"];
 const ENGINE_NAMES = [
@@ -39,6 +39,82 @@ function createRepo(t, { releaseId = "c1-real-v2", manifestTransform } = {}) {
 
   let manifest = { schemaVersion: 1, releaseId, artifacts };
   if (manifestTransform) manifest = manifestTransform(manifest);
+  fs.writeFileSync(path.join(fixturesDir, "manifest.json"), `${JSON.stringify(manifest)}\n`);
+  return repoRoot;
+}
+
+function createSchema4Repo(t) {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "seed-r2-schema4-test-"));
+  t.onTestFinished(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+  const fixturesDir = path.join(repoRoot, "fixtures/generated");
+  const wasmDir = path.join(repoRoot, "dist/wasm");
+  fs.mkdirSync(fixturesDir, { recursive: true });
+  fs.mkdirSync(wasmDir, { recursive: true });
+  fs.mkdirSync(path.join(repoRoot, "workers"), { recursive: true });
+
+  const edgeIds = ["edge:main"];
+  const graph = {
+    schemaVersion: 4,
+    releaseId: "all-real-v3",
+    vehicleProfile: "passenger-car-etc",
+    nodes: [
+      { id: "n:1", lat: 35.0, lon: 139.0 },
+      { id: "n:2", lat: 35.1, lon: 139.1 },
+    ],
+    edges: [
+      {
+        id: edgeIds[0],
+        from: "n:1",
+        to: "n:2",
+        kind: "shutoko",
+        durationSeconds: 60,
+        distanceMeters: 1000,
+      },
+    ],
+    billingPairs: [],
+    routeMemberships: [
+      {
+        membershipId: "route:C1:inner",
+        routeId: "C1",
+        direction: "inner",
+        directionMappingVersion: "osm-relation-role/v1",
+        segments: [
+          {
+            segmentId: "relation:1:inner:0",
+            sourceKind: "relationMainline",
+            sourceRelationId: "1",
+            sourceSnapshotSha256: "a".repeat(64),
+            bindingEvidenceId: null,
+            orderedEdgeIds: edgeIds,
+            orderedEdgeIdsSha256: sha256(Buffer.from(JSON.stringify(edgeIds))),
+          },
+        ],
+      },
+    ],
+  };
+  const graphContent = Buffer.from(`${JSON.stringify(graph)}\n`);
+  const snapContent = Buffer.from('{"schemaVersion":2,"releaseId":"all-real-v3","nodes":[]}\n');
+  const rampsContent = Buffer.from('{"schemaVersion":1,"releaseId":"all-real-v3","ramps":[]}\n');
+  fs.writeFileSync(path.join(fixturesDir, "graph.json"), graphContent);
+  fs.writeFileSync(path.join(fixturesDir, "snap-index.json"), snapContent);
+  fs.writeFileSync(path.join(fixturesDir, "ramps.json"), rampsContent);
+  for (const name of ENGINE_NAMES) {
+    fs.writeFileSync(path.join(wasmDir, name), Buffer.from(`${name}-content`));
+  }
+  const artifacts = [
+    { name: "graph.json", content: graphContent },
+    { name: "snap-index.json", content: snapContent },
+    { name: "ramps.json", content: rampsContent },
+  ].map(({ name, content }) => ({ path: name, sha256: sha256(content), byteLength: content.length }));
+  const manifest = {
+    schemaVersion: 1,
+    releaseId: "all-real-v3",
+    graphSchemaVersion: 4,
+    routePlanVersion: 1,
+    billingPairsVersion: "v2",
+    routeMembershipsSha256: routeMembershipsSha256(graph.routeMemberships),
+    artifacts,
+  };
   fs.writeFileSync(path.join(fixturesDir, "manifest.json"), `${JSON.stringify(manifest)}\n`);
   return repoRoot;
 }
@@ -101,6 +177,22 @@ test("all-real releases require ramps.json while c1-real-v1/v2 remain backward c
       /missing required artifact ramps\.json/
     );
   }
+});
+
+test("schema 4 release metadata and route membership hash are verified before seeding", (t) => {
+  const repoRoot = createSchema4Repo(t);
+  let calls = 0;
+  assert.doesNotThrow(() => seedR2({ repoRoot, runCommand: () => calls++, log: quiet }));
+  assert.equal(calls, 9);
+
+  const manifestPath = path.join(repoRoot, "fixtures/generated/manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest.routeMembershipsSha256 = "b".repeat(64);
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
+  assert.throws(
+    () => seedR2({ repoRoot, runCommand: () => assert.fail("must not publish"), log: quiet }),
+    /routeMembershipsSha256 mismatch/,
+  );
 });
 
 test("all four engine artifacts are required in local and remote modes", (t) => {

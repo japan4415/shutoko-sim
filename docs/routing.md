@@ -183,13 +183,15 @@ Issue #71でleg単位のsplit handoff builderを実装した。生成順と意�
 
 各legは`role`、`origin`、`destination`、`waypoints`、`mapsUrl`を持つ。waypointは3点以下、完成長2,048文字以下、座標は小数6桁、waypoint区切りは`%7C`とし、`nav=1`などのGoogle自動ナビ指定を含めない。URLは経路確認画面用であり、legごとに利用者が確認して手動で次のlegへ継続する。ただし、この分割化だけでは道路・向きを保証できない。
 
-builder versionは`google-maps-split/v1`、leg URLのSHA-256はURL bytesの小文字hexで算出する。将来gateが開いたとき`legUrls`へ入れるwire型は`role`、`mapsUrl`、`urlSha256`の3項目だけを持つ。実機検証とrelease gateが開くまで公開Candidateを`enabled=false`、`legUrls=[]`、`disabledReason=device_verification_pending`へ固定し、WebはGoogleマップのボタンではなく実機検証待ちの理由を表示する。C1 legacyの単一URLとwarningは現行互換のまま維持する。
+builder versionは`google-maps-split/v1`、leg URLのSHA-256はURL bytesの小文字hexで算出する。gateが開いたとき`legUrls`へ入れるwire型は`role`、`mapsUrl`、`urlSha256`の3項目だけを持つ。実機検証とrelease gateが開くまで公開Candidateを`enabled=false`、`legUrls=[]`、`disabledReason=device_verification_pending`へ固定し、WebはGoogleマップのボタンではなく実機検証待ちの理由を表示する。C1 legacyの単一URLとwarningは現行互換のまま維持する。
 
-Issue #71でdevice verification manifestの形式を確定する。正式なJSON Schemaは`fixtures/device-verification/device-verification-manifest.schema.json`、Rust / TypeScript型はそれぞれ`DeviceVerificationManifest`と`DeviceVerificationManifest`とする。同ディレクトリのvalid / invalid fixtureはcontract test用であり、実機検証の証拠やrelease gateの入力には使わない。manifestの必須fieldは`schemaVersion`、`routePlanId`、`releaseId`、`urlBuilderVersion`、3要素の`legs`、4要素の`verifications`である。
+Issue #71でdevice verification manifestの形式を確定した。正式なJSON Schemaは`fixtures/device-verification/device-verification-manifest.schema.json`、Rust / TypeScript型の`DeviceVerificationManifest`も同形にする。`fixtures/device-verification/valid.json`とinvalid fixtureはcontract test専用で、実機検証の証拠にはしない。リポジトリ内の未検証記録は`data/device-verification-manifest.json`に置き、現在はschema 4 fixtureのroute plan、release、3 leg hashへ対応付けたうえで4環境とも`result=missing`とする。これは実測結果ではなく、fixtureに対するgateの閉鎖状態を固定する記録である。manifestの必須fieldは`schemaVersion`、`routePlanId`、`releaseId`、`urlBuilderVersion`、3要素の`legs`、4要素の`verifications`である。
 
 `legs`は`surface_access`、`loop_transfer`、`surface_return`の固定順で、各legの`urlSha256`、検証時点で期待する`expectedRoad`と`expectedDirection`を記録する。`verifications`はAndroid / iOS × Web / appの4組み合わせを重複なく持ち、各recordに`os`、OS version、client、Webならbrowser名・version、appならapp名・versionとなる`clientName` / `clientVersion`、`verifiedAt`、`result`、`expiresAt`を記録する。`result`は`passed`、`failed`、`missing`、`expired`のみ許可し、`missing`だけは`verifiedAt`と`expiresAt`を`null`にする。ほかの値はUTC RFC3339で、`verifiedAt < expiresAt`であることを必須とする。
 
-Rust validatorは型の未知fieldを拒否し、3 legのrole順とSHA-256形式、4環境の一意な完全matrix、時刻、builder versionを検証する。`validate_binding(routePlanId, releaseId, handoff)`はmanifestのroute plan ID、release ID、URL builder version、3 legのURL SHA-256を実際のsplit handoffと照合する。実機4系列の記録、最新版への更新、必要条件の1件でも`missing`、`failed`、`expired`の場合にradial public departureを無効にするrelease gate実装はIssue #72に残す。
+Rust validatorは型の未知fieldを拒否し、3 legのrole順とSHA-256形式、4環境の一意な完全matrix、時刻、builder versionを検証する。`validate_binding(routePlanId, releaseId, handoff)`はmanifestのroute plan ID、release ID、URL builder version、3 legのURL SHA-256を実際のsplit handoffと照合する。現在のradial探索ではbilling pair IDを`routePlanId`として判定し、manifestを渡さないため常にgateを閉じる。
+
+Issue #72で`evaluate_device_verification_gate(manifest, routePlanId, releaseId, handoff, evaluatedAt)`を実装した。判定はmanifestのparse / schema検証、route plan・release・builder・3 leg hashの完全binding、4 recordの`passed`、および`verifiedAt <= evaluatedAt < expiresAt`をすべて満たす場合だけ公開を許可する。manifest欠落、schema不正、binding不一致、時刻不正、`missing`、`failed`、未開始、`expired`はいずれもfail-closedで、`CandidateV2Handoff`は`enabled=false`、`legUrls=[]`を返す。gate判定をwebへ渡すWASM / `SearchResult`契約は追加しておらず、現行の既定出力も変更しない。
 
 ### Issue #41 までは1区間の商品状態と金額を分離する
 
@@ -223,7 +225,7 @@ graph schema 4 は reader/consumer まで実装したが、公開 release への
 | 8 | Candidate route legs と商品・tariff状態（#69実装済み） | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。dynamic ODは`TopologyOnlyCandidate`として`chargedSectionCount` / `ONE_SECTION_TOLL`を撤去し、radialにも同じ項目を出さない。 | 4 |
 | 9 | Web の順序表示 | entry / lap / return / exitを番号・線種・テキストで提示し、surface概算とhighway経路を混同しない。総距離とhighway距離を同じ定義で表示し、unpriced / topology_onlyへ「1区間料金」を出さない。C1 UI regressionを維持する。 | 5, 8 |
 | 10 | split Maps URL 生成（#71実装済み） | 3 waypoint / 2,048文字制限、legごとの手動継続、URL builder unit / E2Eを実装する。device verification manifestの型、JSON Schema、fixture、validator、handoff bindingを確定し、道路・向きを強制できないため実機gate通過までpublic handoffを無効にする。 | 8 |
-| 11 | Maps 実機検証と release gate | Issue #71で確定したmanifestへAndroid / iOS × Web / appの実matrixを記録する。失敗・期限切れでradial public departureを無効にし、C1への副作用がないことを確認する。device未接続でもcode issue 10は完了可能とする。 | 10 |
+| 11 | Maps 実機検証と release gate（#72コード実装済み、実機検証待ち） | Issue #71で確定したmanifestを`data/device-verification-manifest.json`へ未検証状態で置く。gateはmanifest欠落・失敗・期限切れ・binding不一致でradial public departureを無効にし、C1への副作用がないことを確認する。Android / iOS × Web / appの実測完了までは公開handoffを閉じ続ける。 | 10 |
 | 12 | Issue #41 後の tariff 統合 | 公式billing distance、車種、税率、単価、最低・上限、丸め、effective intervalを版管理し、C1 8件と2号代表pairを再検証する。OSM distance fallbackとradialの`time_per_yen`無効状態を維持しない。 | #41, 7, 8 |
 
 Issue #42 の設計完了は、この節と seed / graph の wire-level schema により2号課金ペア形状を確定することとする。実装済み verified public pair を Issue #42 の design 完了条件には含めない。天現寺 binding、schema 実装、device gate はそれぞれ実装上の公開を止める条件として残す。

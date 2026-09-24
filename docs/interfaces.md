@@ -378,11 +378,13 @@ C1 legacyは互換URLとして公式 Maps URLsを使い、`https://www.google.co
 
 radial用のsplit builderは`surface_access` → `loop_transfer` → `surface_return`の順に3 legを生成する。内部の`MapsHandoffLeg`は`role`、`origin`、`destination`、`waypoints`、`mapsUrl`を持ち、各waypointは3点以下、URLは2,048文字以下、座標は小数6桁、区切りは`%7C`とする。自動ナビ用パラメータは付けず、legごとの確認と手動継続を前提にする。
 
-`URL_BUILDER_VERSION`は`google-maps-split/v1`で固定する。`mapsUrl`のSHA-256はURL bytesを小文字hexで表し、`urlSha256`とする。将来gateが開いた時の`legUrls`要素は`MapsHandoffLegWire = { role, mapsUrl, urlSha256 }`だけとし、Rust・WASM/TypeScriptの型を一致させる。gateが開く前の公開Candidateでは`enabled=false`、`legUrls=[]`、`disabledReason="device_verification_pending"`を返し、WebにMaps遷移ボタンを出さない。
+`URL_BUILDER_VERSION`は`google-maps-split/v1`で固定する。`mapsUrl`のSHA-256はURL bytesを小文字hexで表し、`urlSha256`とする。gateが開いた時の`legUrls`要素は`MapsHandoffLegWire = { role, mapsUrl, urlSha256 }`だけとする。実機検証が未完了の現行公開Candidateでは`enabled=false`、`legUrls=[]`、`disabledReason="device_verification_pending"`を返し、WebにMaps遷移ボタンを出さない。
 
-Google Maps URLはwaypointの順序を示しても、近接JCTの正しいarm、首都高の道路、radialの往路・復路を強制できない。Issue #71では独立したdevice verification manifestを`schemaVersion=1`で定義する。正本は`fixtures/device-verification/device-verification-manifest.schema.json`とし、Rust / TypeScript型の`DeviceVerificationManifest`も同形にする。manifestは`routePlanId`、`releaseId`、`urlBuilderVersion`、固定順3 legの`urlSha256` / `expectedRoad` / `expectedDirection`、Android / iOS × Web / appの4要素の`verifications`を必須とする。
+Google Maps URLはwaypointの順序を示しても、近接JCTの正しいarm、首都高の道路、radialの往路・復路を強制できない。Issue #71では独立したdevice verification manifestを`schemaVersion=1`で定義する。JSON Schemaの正本は`fixtures/device-verification/device-verification-manifest.schema.json`、リポジトリ内の未検証記録は`data/device-verification-manifest.json`、Rust / TypeScript型の`DeviceVerificationManifest`は両者に一致させる。manifestは`routePlanId`、`releaseId`、`urlBuilderVersion`、固定順3 legの`urlSha256` / `expectedRoad` / `expectedDirection`、Android / iOS × Web / appの4要素の`verifications`を必須とする。
 
-各verification recordはOS version、`client=web`ならbrowser、`client=app`ならappの名称・versionを表す`clientName` / `clientVersion`、`verifiedAt`、`result`、`expiresAt`を持つ。`result`は`passed`、`failed`、`missing`、`expired`だけで、`missing`では2つの時刻を`null`にする。Rust validatorは未知field、3 legの順序とSHA-256、4環境の一意な完全matrix、UTC RFC3339と`verifiedAt < expiresAt`、URL builder versionを検証し、`validate_binding`でroute plan ID、release ID、builder version、実際の3 leg URL hashとの一致を検証する。manifestは公開Candidateや既定出力schemaには追加しない。実機4系列の記録と、必要条件が1件でも`missing`、`failed`、`expired`ならpublic departureを無効にするrelease gateはIssue #72で実装する。詳細は[ルート探索設計](routing.md)を正本とする。
+各verification recordはOS version、`client=web`ならbrowser、`client=app`ならappの名称・versionを表す`clientName` / `clientVersion`、`verifiedAt`、`result`、`expiresAt`を持つ。`result`は`passed`、`failed`、`missing`、`expired`だけで、`missing`では2つの時刻を`null`にする。Rust validatorは未知field、3 legの順序とSHA-256、4環境の一意な完全matrix、UTC RFC3339と`verifiedAt < expiresAt`、URL builder versionを検証し、`validate_binding`でroute plan ID、release ID、builder version、実際の3 leg URL hashとの一致を検証する。
+
+Issue #72のrelease gateは上記bindingと4 recordがすべて`passed`で、判定時刻が各`[verifiedAt, expiresAt)`にある場合だけ公開を許可する。manifest欠落・不正、binding不一致、判定時刻不正、`missing`、`failed`、未開始、`expired`のいずれか1件でも`enabled=false`と空`legUrls`へ閉じる。現在のリポジトリ内manifestは4系列とも`missing`で、実機検証と公開handoffの有効化は未実施である。manifestは`SearchResult`の既定出力schemaへ追加しない。C1 legacyのURL、handoff、`HANDOFF_WAYPOINTS_UNVERIFIED`はgate処理の前後で変更しない。詳細は[ルート探索設計](routing.md)を正本とする。
 
 ## 地図・住所検索のデータ利用
 

@@ -10,7 +10,7 @@
 
 `crates/routing-core` は Rust の純粋な探索処理、`crates/routing-wasm` は JSON 文字列を受け渡す JavaScript 向け境界。ネットワーク、DOM、住所検索には依存しない。`fixtures` は架空の道路・料金データで、実走行案内には使わない。
 
-出発地点は `origin: { lat, lon }` または `originNodeId` のどちらかで指定する（排他）。座標指定時は WASM 内部で 200m 以内の一般道ノードへ空間スナップされる。OSM 実データからのグラフ生成、幾何データ合成、Google マップ引き継ぎ URL 生成に対応している。ブラウザ Web Worker の制御や実機検証（#8）は後続とする。[インターフェース設計](interfaces.md)に詳細な契約表を記載している。
+出発地点は `origin: { lat, lon }` または `originNodeId` のどちらかで指定する（排他）。座標指定時は WASM 内部の空間グリッドから構造的に利用できる一般道Entryを距離順に選択し、固定の200m半径では切り捨てない。Entryノードが存在しない場合だけ `NO_CONNECTION` になる。OSM 実データからのグラフ生成、幾何データ合成、Google マップ引き継ぎ URL 生成に対応している。ブラウザ Web Worker はdevice manifestをbuild時にbundleしてgateへ渡す。実機検証の完了と公開handoffの有効化はユーザー作業待ちである。[インターフェース設計](interfaces.md)に詳細な契約表を記載している。
 
 ## 準備
 
@@ -46,7 +46,7 @@ node scripts/test-wasm.mjs
 4. 候補の新フィールド構造（GeoJSON `LineString` 幾何、`mapsUrl` 形式および長さ ≤ 2,048、`snappedOrigin`、`warnings` への `HANDOFF_WAYPOINTS_UNVERIFIED` の包含）
 5. schema 4のsynthetic radial pairから4 highway leg / 2 surface leg / 距離式を持つ`RadialCandidate`と、`chargedSectionCount`を持たない`TopologyOnlyCandidate`の生成。device verification設定なしではradial handoffを`enabled=false`、`legUrls=[]`、`disabledReason=device_verification_pending`に固定し、明示したtest manifestでは固定順3 legとURL hashを検証して`enabled=true`にする
 6. 座標入力（`origin: { lat, lon }`）による空間スナップ探索
-7. 200m 超過座標における接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
+7. Entryノードが空のグラフにおける接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
 8. 異常入力の拒否と JavaScript Error（Error の `message` に `RoutingErrorPayload { code: "INVALID_INPUT", message }` の JSON 文字列）のスロー検証
 
 ## 呼び出し
@@ -59,7 +59,7 @@ await init();
 const result = JSON.parse(search(graphJson, requestJson, '{}'));
 ```
 
-引数は順にグラフ JSON、検索条件 JSON、探索上限兼release設定 JSON の文字列。`{}` は既定の探索上限を選び、device verification gateも閉じる。リリースで検証済みmanifestを使う場合だけ、このJSONへ`{"deviceVerification":{"manifestJson":"...","evaluatedAt":"..."}}`を含める。`evaluatedAt`はリリース時刻のUTC値であり、検索条件の`pricingAt`から補わない。入力不備は JavaScript `Error`（`message` に `RoutingErrorPayload` JSON 文字列）としてスローされるため、呼び出し元で捕捉する。戻り値も JSON 文字列で、候補なしや探索打ち切りは正常な探索結果として扱う。
+引数は順にグラフ JSON、検索条件 JSON、探索上限兼release設定 JSON の文字列。`{}` は既定の探索上限を選び、device verification gateも閉じる。Web Workerは`data/device-verification-manifest.json`をbuild時にbundleし、リリースで検証済みmanifestを使う場合だけ、このJSONへ`{"deviceVerification":{"manifestJson":"...","evaluatedAt":"..."}}`を含める。`evaluatedAt`はリリース時刻のUTC値であり、検索条件の`pricingAt`から補わない。入力不備は JavaScript `Error`（`message` に `RoutingErrorPayload` JSON 文字列）としてスローされるため、呼び出し元で捕捉する。戻り値も JSON 文字列で、候補なしや探索打ち切りは正常な探索結果として扱う。
 
 Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `search_json` を利用できる。動作する入力例は [人工グラフ](../fixtures/synthetic-graph.json) と [検索条件](../fixtures/synthetic-request.json) を参照する。
 

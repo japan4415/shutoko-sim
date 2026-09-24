@@ -1,13 +1,14 @@
 // 地図セグメント導出（src/map/segments.ts）のユニットテスト。
 import { describe, expect, it } from "vitest";
+import radialCandidateJson from "../../fixtures/candidate-v2/radial-valid.json?raw";
 import { boundsOf, deriveSegments } from "../src/map/segments";
-import type { Candidate } from "../src/worker/types";
+import type { LegacyCandidate, RadialCandidate } from "../src/worker/types";
 
 /**
  * 4 エッジ・5 座標のサンプル。edgeIds は access(e:acc) → loop(e:L1,e:L2) → return(e:ret)。
  * loop の連続部分列は index 1..2。entry/exit は loop 内の e:L1 / e:L2。
  */
-function sampleCandidate(overrides: Partial<Candidate> = {}): Candidate {
+function sampleCandidate(overrides: Partial<LegacyCandidate> = {}): LegacyCandidate {
   return {
     id: "cand-1",
     releaseId: "c1-real-v1",
@@ -92,6 +93,23 @@ describe("deriveSegments", () => {
     ]);
     // main はセグメントに依らず全経路。
     expect(segments.main).toEqual(sampleCandidate().geometry.coordinates);
+  });
+
+  it("radialReturn は mandatory_lap leg を loop として扱う", () => {
+    const candidate = JSON.parse(radialCandidateJson) as RadialCandidate;
+    const segments = deriveSegments(candidate);
+    expect(segments.access).toHaveLength(4);
+    expect(segments.loop).toEqual([
+      [139.103, 35.103],
+      [139.104, 35.104],
+      [139.105, 35.105],
+    ]);
+    expect(segments.return).toEqual([
+      [139.105, 35.105],
+      [139.106, 35.106],
+      [139.107, 35.107],
+    ]);
+    expect(segments.charged).toHaveLength(8);
   });
 
   it("loop が先頭・末尾でも境界が成立する", () => {

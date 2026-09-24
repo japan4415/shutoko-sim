@@ -310,7 +310,10 @@ export function createMapView(
         const chargedLatLngs = toLatLngs(segments.charged);
         charged = L.polyline(chargedLatLngs, CHARGED_STYLE);
         charged.addTo(map);
-        charged.bindTooltip("課金対象 1区間", { sticky: true });
+        charged.bindTooltip(
+          candidate.pairKind === "radialReturn" ? "首都高区間" : "課金対象 1区間",
+          { sticky: true },
+        );
         extendBounds(bounds, chargedLatLngs);
       }
 

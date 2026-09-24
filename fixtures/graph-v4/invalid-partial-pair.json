@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 4,
+  "billingPairs": [
+    {
+      "id": "fixture:partial-radial",
+      "pairKind": "radialReturn",
+      "routePlanVersion": 1
+    }
+  ]
+}

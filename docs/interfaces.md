@@ -28,7 +28,7 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 
 `anchorNodeId` は入口の合流後から直接区間へ進む本線上の基準状態（ノード）。ここへ一周後に戻り、出口へ進む道路列を定義できるペアを登録する。料金規則の前提は原案に従い、個別ペアの登録ではその適用条件とデータ根拠を確認する。
 
-本節は現行 seed schema 1 / generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の opt-in schema 4 に `RouteMembershipIndex` を追加し、Issue #64 で `routePlanLapV1` と return-corridor First Exit の builder 側解決を追加した。schema 4 の membership は `directionMappingVersion` を持ち、relation mainline と bound ramp の endpoint・順序・hash を個別に検証する。`legacyRing` / `radialReturn` の graph reader、diagnostic plan から公開 BillingPair への昇移、core/WASM/Web の schema 4 consumer は #65/#66 の範囲で未実装である。仕様の正本は[実データ生成パイプライン](data-pipeline.md)とし、既存 C1 8要素の raw seed は変更しない。
+本節は現行 seed schema 1 / generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の opt-in schema 4 に `RouteMembershipIndex` を追加し、Issue #64 で `routePlanLapV1` と return-corridor First Exit の builder 側解決を追加した。Issue #65 で schema 2 / 3 / 4 reader、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の検証と、WASM/Web consumer 型を実装した。diagnostic plan から公開 BillingPair への昇移と公開 release の atomic activation は #66/#67 の範囲で、既存 C1 8要素の raw seed は変更しない。
 
 ## Workers の HTTP 境界
 
@@ -181,7 +181,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 - `HANDOFF_WAYPOINTS_UNVERIFIED`: Google Maps 引き継ぎ経由地選定ルールが暫定であり実機検証未了であることを示す（#8 完了まで常時付与）。2026-09 に Android Chrome + Google マップアプリ「あり」で代表1系列の周回維持を確認したが、アプリ「なし」・iOS Safari・経由地点0〜3点の系列網羅・URL 長上限は未検証のため引き続き付与する（[検証記録](delivery.md) 参照）
 - `STATIC_TRAVEL_TIME`: 渋滞・規制を含まない静的制限速度に基づく推定時間であることを示す
 
-### Issue #42 後の Candidate v2（builder 側 route-plan 解決は実装済み・reader / consumer は未実装）
+### Issue #42 後の Candidate v2（reader / consumer 契約実装済み・radial 探索統合は未実装）
 
 graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy outputと区別する。
 
@@ -366,9 +366,9 @@ graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy output�
 }
 ```
 
-`edgeIdsSha256`は順序を保ったEdge IDの空白なしJSON arrayをSHA-256化した値で、generated graphの`resolvedRouteSegments`とCandidateの`routePlan`で同じ値を使う。reader / Workerは全hash、membership / binding参照、role、index範囲、各status、不正または欠落した`chargedSectionCount`を検証してからCandidateを返す。
+`edgeIdsSha256`は順序を保ったEdge IDの空白なしJSON arrayをSHA-256化した値で、generated graphの`resolvedRouteSegments`とCandidateの`routePlan`で同じ値を使う。core reader / Candidate validator は hash を再計算し、membership / binding 参照、role、index 範囲、各 status、不正または欠落した `chargedSectionCount` を検証する。Web Worker は受信した Candidate の判別、hash 形式、4 leg の完全分割、reference、status を再検証してから UI へ返す。
 
-core、WASM型、Web Workerはgraph schema 2 / 3 / 4を読む。schema 2 / 3の`pairKind`なしは`legacyRing`、schema 4のbuilder出力は`pairKind`を必須とし、未知のkind / versionは部分データを返さず停止する。builderの既定schema 4への切替は、reader、WASM、Web pipeline、Workers allowlist、release ID、manifest hashを同時に更新する独立issueで行う。
+core、WASM型、Web Workerはgraph schema 2 / 3 / 4を読む。schema 2 / 3の`pairKind`なしは`legacyRing`、schema 4のbuilder出力は`pairKind`を必須とし、未知のkind / versionは部分データを返さず停止する。readerとconsumer契約はIssue #65で実装済みだが、builderの既定schema 4への切替は、WASM contract、Web pipeline、Workers allowlist、release ID、manifest hashを同時に更新するIssue #66で行う。
 
 ## Google マップへの引き継ぎ
 

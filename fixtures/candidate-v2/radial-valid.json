@@ -1,0 +1,174 @@
+{
+  "id": "fixture:candidate:radial",
+  "releaseId": "graph-v4-fixture-v1",
+  "pairKind": "radialReturn",
+  "routePlanVersion": 1,
+  "origin": null,
+  "originNodeId": "fixture:node:entry:ground",
+  "snappedOrigin": {
+    "nodeId": "fixture:node:entry:ground",
+    "lat": 35.1,
+    "lon": 139.1,
+    "distanceMeters": 0
+  },
+  "entry": {
+    "edgeId": "fixture:edge:entry:ramp",
+    "rampId": "fixture:ramp:entry",
+    "name": "fixture entry",
+    "route": "fixture:R1",
+    "direction": "inbound"
+  },
+  "exit": {
+    "edgeId": "fixture:edge:exit:ramp",
+    "rampId": "fixture:ramp:exit",
+    "name": "fixture exit",
+    "route": "fixture:R1",
+    "direction": "outbound"
+  },
+  "entryId": "fixture:edge:entry:ramp",
+  "exitId": "fixture:edge:exit:ramp",
+  "roadNames": [],
+  "edgeIds": [
+    "fixture:edge:entry:ramp",
+    "fixture:edge:entry:mainline",
+    "fixture:edge:merge:mainline",
+    "fixture:edge:lap:1",
+    "fixture:edge:lap:2",
+    "fixture:edge:return:mainline",
+    "fixture:edge:exit:ramp"
+  ],
+  "geometry": {
+    "type": "LineString",
+    "coordinates": [
+      [139.1, 35.1],
+      [139.101, 35.101],
+      [139.102, 35.102],
+      [139.103, 35.103],
+      [139.104, 35.104],
+      [139.105, 35.105],
+      [139.106, 35.106],
+      [139.107, 35.107]
+    ]
+  },
+  "anchor": {
+    "anchorKind": "directedJunction",
+    "mergeNodeId": "fixture:node:merge",
+    "branchNodeId": "fixture:node:branch",
+    "mergeTerminalEdgeId": "fixture:edge:merge:mainline",
+    "branchInitialEdgeId": "fixture:edge:return:mainline",
+    "routeId": "fixture:loop",
+    "direction": "forward",
+    "arcPolicy": "ordinaryLongArc",
+    "excludedShortConnector": {
+      "fromNodeId": "fixture:node:branch",
+      "toNodeId": "fixture:node:merge",
+      "osmWayId": 3001,
+      "edgeCount": 1,
+      "distanceMeters": 100
+    }
+  },
+  "routePlan": {
+    "membershipIds": [
+      "route:fixture:R1:inbound",
+      "route:fixture:loop:forward",
+      "route:fixture:R1:outbound"
+    ],
+    "resolvedRouteSegments": [
+      {
+        "resolvedSegmentId": "fixture:resolved:entry",
+        "role": "entry_approach",
+        "membershipId": "route:fixture:R1:inbound",
+        "sourceSegmentIds": ["fixture:binding:entry:0", "fixture:relation:r1:inbound:main"],
+        "edgeIdsSha256": "fde104d1bdae3d3673e5285509c3223c53765d876c6a4174e50a3126412f32a2"
+      },
+      {
+        "resolvedSegmentId": "fixture:resolved:lap",
+        "role": "mandatory_lap",
+        "membershipId": "route:fixture:loop:forward",
+        "sourceSegmentIds": ["fixture:relation:loop:forward:main"],
+        "edgeIdsSha256": "99ddf4b7771edc3fe3c04034d2465719932ca1c2d2104c0d05bab41d6e462a43"
+      },
+      {
+        "resolvedSegmentId": "fixture:resolved:return",
+        "role": "return_corridor",
+        "membershipId": "route:fixture:R1:outbound",
+        "sourceSegmentIds": ["fixture:relation:r1:outbound:main"],
+        "edgeIdsSha256": "ba825c8c0f6236ca476824f7553aefe8bf09a94a5343c2470cde33b1bb443e1b"
+      },
+      {
+        "resolvedSegmentId": "fixture:resolved:exit",
+        "role": "exit_approach",
+        "membershipId": "route:fixture:R1:outbound",
+        "sourceSegmentIds": ["fixture:binding:exit:0"],
+        "edgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+      }
+    ]
+  },
+  "edgeRouteLegs": [
+    {
+      "role": "entry_approach",
+      "resolvedSegmentId": "fixture:resolved:entry",
+      "startEdgeIndex": 0,
+      "endEdgeIndexExclusive": 3
+    },
+    {
+      "role": "mandatory_lap",
+      "resolvedSegmentId": "fixture:resolved:lap",
+      "startEdgeIndex": 3,
+      "endEdgeIndexExclusive": 5
+    },
+    {
+      "role": "return_corridor",
+      "resolvedSegmentId": "fixture:resolved:return",
+      "startEdgeIndex": 5,
+      "endEdgeIndexExclusive": 6
+    },
+    {
+      "role": "exit_approach",
+      "resolvedSegmentId": "fixture:resolved:exit",
+      "startEdgeIndex": 6,
+      "endEdgeIndexExclusive": 7
+    }
+  ],
+  "estimatedLegs": [
+    {
+      "role": "surface_access",
+      "estimated": true,
+      "distanceMeters": 1200,
+      "durationSeconds": 240
+    },
+    {
+      "role": "surface_return",
+      "estimated": true,
+      "distanceMeters": 800,
+      "durationSeconds": 160
+    }
+  ],
+  "duration": {
+    "accessSeconds": 240,
+    "shutokoSeconds": 1440,
+    "returnSeconds": 160,
+    "baseSeconds": 1840,
+    "bufferSeconds": 368,
+    "planSeconds": 2208
+  },
+  "distanceMeters": 25400,
+  "shutokoDistanceMeters": 23400,
+  "eligibilityStatus": "verified_one_section_ahead",
+  "loopValidationStatus": "declared_route_validated",
+  "tariffStatus": "unpriced",
+  "toll": {
+    "billingPairId": "fixture:radial",
+    "amountYen": null,
+    "pricingAt": "2026-09-16T00:00:00Z",
+    "effectiveFrom": null,
+    "effectiveTo": null,
+    "billingDistanceMeters": null
+  },
+  "reasons": [],
+  "warnings": ["STATIC_TRAVEL_TIME", "HANDOFF_WAYPOINTS_UNVERIFIED"],
+  "handoff": {
+    "enabled": false,
+    "legUrls": []
+  }
+}

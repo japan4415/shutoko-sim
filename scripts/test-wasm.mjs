@@ -4,9 +4,19 @@ import { readFile } from 'node:fs/promises';
 import init, { search, prepare, searchPrepared } from '../dist/wasm/shutoko_routing.js';
 
 const graph = await readFile(new URL('../fixtures/synthetic-graph.json', import.meta.url), 'utf8');
+const schema4Graph = await readFile(
+  new URL('../fixtures/graph-v4/graph-radial-fixture.json', import.meta.url),
+  'utf8',
+);
 const request = await readFile(new URL('../fixtures/synthetic-request.json', import.meta.url), 'utf8');
 const bytes = await readFile(new URL('../dist/wasm/shutoko_routing_bg.wasm', import.meta.url));
 await init({ module_or_path: bytes });
+const schema4Pg = prepare(schema4Graph, '{}');
+schema4Pg.free();
+assert.throws(
+  () => prepare(JSON.stringify({ ...JSON.parse(schema4Graph), schemaVersion: 5 }), '{}'),
+  'unknown graph schema version must throw',
+);
 const first = search(graph, request, '{}');
 const result = JSON.parse(first);
 assert.equal(result.status, 'ok');
@@ -122,5 +132,5 @@ pg.free();
 assert.throws(() => searchPrepared(pg, request), 'use-after-free on WasmPreparedGraph must throw');
 
 console.log(`[bench] prepare=${avgPrepareMs.toFixed(2)}ms / search=${avgSearchMs.toFixed(2)}ms / searchPrepared=${avgSearchPreparedMs.toFixed(2)}ms`);
-console.log('Web-target WASM loaded; synthetic loop search, new fields, coordinate snap, NO_CONNECTION, determinism, PreparedGraph and errors passed.');
+console.log('Web-target WASM loaded; schema 2/4 readers, synthetic search, coordinate snap, determinism, PreparedGraph and errors passed.');
 

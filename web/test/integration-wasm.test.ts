@@ -26,7 +26,9 @@ interface WasmBuildContract {
   contractVersion: number;
   engineVersion: string;
   graphSchemaVersion: number;
+  supportedGraphSchemaVersions: number[];
   requiredGraphFields: string[];
+  requiredGraphSchema4Fields: string[];
 }
 
 function toBytes(text: string): Uint8Array {
@@ -47,10 +49,43 @@ export function isWasmContractCompatible(
     return false;
   }
   if (
-    graph.schemaVersion !== current.graphSchemaVersion ||
+    !current.supportedGraphSchemaVersions.includes(Number(graph.schemaVersion)) ||
     manifest.engineVersion !== current.engineVersion ||
     !Array.isArray(graph.odTariffs) ||
     !Array.isArray(graph.ramps)
+  ) {
+    return false;
+  }
+  if (
+    graph.schemaVersion === 4 &&
+    (!Array.isArray(graph.routeMemberships) || !Array.isArray(graph.billingPairs))
+  ) {
+    return false;
+  }
+  if (
+    graph.schemaVersion === 4 &&
+    !(graph.billingPairs as unknown[]).every((value) => {
+      if (typeof value !== "object" || value === null) return false;
+      const pair = value as Record<string, unknown>;
+      if (typeof pair.pairKind !== "string") return false;
+      if (pair.pairKind === "legacyRing") {
+        return (
+          typeof pair.anchor === "object" &&
+          pair.anchor !== null &&
+          (pair.anchor as Record<string, unknown>).anchorKind === "sameNode"
+        );
+      }
+      if (pair.pairKind !== "radialReturn") return false;
+      const routePlan = pair.routePlan;
+      return (
+        typeof routePlan === "object" &&
+        routePlan !== null &&
+        typeof (routePlan as Record<string, unknown>).anchor === "object" &&
+        (routePlan as Record<string, unknown>).anchor !== null &&
+        ((routePlan as Record<string, unknown>).anchor as Record<string, unknown>).anchorKind ===
+          "directedJunction"
+      );
+    })
   ) {
     return false;
   }
@@ -101,10 +136,17 @@ function fileURLToPathSafe(url: URL): string {
 describe("実 WASM 統合（fetch モック → loadRelease → search）", () => {
   it("旧graph契約のbuild metadataをstaleとして判定する", () => {
     const current: WasmBuildContract = {
-      contractVersion: 1,
+      contractVersion: 2,
       engineVersion: "0.1.0",
-      graphSchemaVersion: 2,
+      graphSchemaVersion: 4,
+      supportedGraphSchemaVersions: [2, 3, 4],
       requiredGraphFields: ["odTariffs", "ramps[].id", "ramps[].mainlineNodeId"],
+      requiredGraphSchema4Fields: [
+        "routeMemberships",
+        "billingPairs[].pairKind",
+        "billingPairs[].anchor.anchorKind",
+        "billingPairs[].routePlan.anchor.anchorKind",
+      ],
     };
     const stale = { ...current, graphSchemaVersion: 1 };
     const graph = {
@@ -211,7 +253,12 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
 
     expect(result.status).toBe("ok");
     expect(result.candidates.length).toBeGreaterThan(0);
-    expect(result.candidates[0]?.handoff.mapsUrl.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);
+    const firstCandidate = result.candidates[0];
+    expect(firstCandidate).toBeDefined();
+    expect(firstCandidate?.pairKind).not.toBe("radialReturn");
+    if (firstCandidate !== undefined && firstCandidate.pairKind !== "radialReturn") {
+      expect(firstCandidate.handoff.mapsUrl.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);
+    }
     console.info(
       `[integration-wasm] candidates=${String(result.candidates.length)} elapsed=${elapsedMs.toFixed(1)}ms`,
     );
@@ -319,7 +366,11 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       expect(result.expandedStates).toBeLessThan(100_000);
       expect(result.candidates[0]?.entry.rampId).toBe(msg.entryRampId);
       expect(result.candidates[0]?.exit.rampId).toBe(msg.exitRampId);
-      expect(result.candidates[0]?.loop.distanceMeters).toBeGreaterThanOrEqual(5_000);
+      const candidate = result.candidates[0];
+      expect(candidate).toBeDefined();
+      if (candidate !== undefined && candidate.pairKind !== "radialReturn") {
+        expect(candidate.loop.distanceMeters).toBeGreaterThanOrEqual(5_000);
+      }
       expect(result.candidates[0]?.toll.amountYen).toBeNull();
     } finally {
       pg.free();

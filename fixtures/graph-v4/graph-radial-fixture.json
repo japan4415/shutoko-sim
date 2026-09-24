@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 4,
+  "releaseId": "graph-v4-fixture-v1",
+  "vehicleProfile": "passenger-car-etc",
+  "nodes": [
+    { "id": "fixture:node:legacy:entry", "lat": 35.0, "lon": 139.0 },
+    { "id": "fixture:node:legacy:pre-anchor", "lat": 35.0005, "lon": 139.0005 },
+    { "id": "fixture:node:legacy:anchor", "lat": 35.001, "lon": 139.001 },
+    { "id": "fixture:node:legacy:exit", "lat": 35.002, "lon": 139.002 },
+    { "id": "fixture:node:entry:ground", "lat": 35.1, "lon": 139.1 },
+    { "id": "fixture:node:entry:ramp-end", "lat": 35.101, "lon": 139.101 },
+    { "id": "fixture:node:entry:mainline-end", "lat": 35.102, "lon": 139.102 },
+    { "id": "fixture:node:merge", "lat": 35.103, "lon": 139.103 },
+    { "id": "fixture:node:lap:mid", "lat": 35.104, "lon": 139.104 },
+    { "id": "fixture:node:branch", "lat": 35.105, "lon": 139.105 },
+    { "id": "fixture:node:exit:connector", "lat": 35.106, "lon": 139.106 },
+    { "id": "fixture:node:exit:ground", "lat": 35.107, "lon": 139.107 }
+  ],
+  "edges": [
+    { "id": "fixture:edge:legacy:entry", "from": "fixture:node:legacy:entry", "to": "fixture:node:legacy:pre-anchor", "kind": "entry", "durationSeconds": 30, "distanceMeters": 200 },
+    { "id": "fixture:edge:legacy:mainline", "from": "fixture:node:legacy:pre-anchor", "to": "fixture:node:legacy:anchor", "kind": "shutoko", "durationSeconds": 60, "distanceMeters": 1000 },
+    { "id": "fixture:edge:legacy:loop", "from": "fixture:node:legacy:anchor", "to": "fixture:node:legacy:anchor", "kind": "shutoko", "durationSeconds": 600, "distanceMeters": 10000 },
+    { "id": "fixture:edge:legacy:exit", "from": "fixture:node:legacy:anchor", "to": "fixture:node:legacy:exit", "kind": "exit", "durationSeconds": 30, "distanceMeters": 200 },
+    { "id": "fixture:edge:entry:ramp", "from": "fixture:node:entry:ground", "to": "fixture:node:entry:ramp-end", "kind": "entry", "durationSeconds": 30, "distanceMeters": 200 },
+    { "id": "fixture:edge:entry:mainline", "from": "fixture:node:entry:ramp-end", "to": "fixture:node:entry:mainline-end", "kind": "shutoko", "durationSeconds": 60, "distanceMeters": 1000 },
+    { "id": "fixture:edge:merge:mainline", "from": "fixture:node:entry:mainline-end", "to": "fixture:node:merge", "kind": "shutoko", "durationSeconds": 60, "distanceMeters": 1000 },
+    { "id": "fixture:edge:lap:1", "from": "fixture:node:merge", "to": "fixture:node:lap:mid", "kind": "shutoko", "durationSeconds": 600, "distanceMeters": 10000 },
+    { "id": "fixture:edge:lap:2", "from": "fixture:node:lap:mid", "to": "fixture:node:branch", "kind": "shutoko", "durationSeconds": 600, "distanceMeters": 10000 },
+    { "id": "fixture:edge:return:mainline", "from": "fixture:node:branch", "to": "fixture:node:exit:connector", "kind": "shutoko", "durationSeconds": 60, "distanceMeters": 1000 },
+    { "id": "fixture:edge:exit:ramp", "from": "fixture:node:exit:connector", "to": "fixture:node:exit:ground", "kind": "exit", "durationSeconds": 30, "distanceMeters": 200 }
+  ],
+  "billingPairs": [
+    {
+      "id": "fixture:legacy:c1",
+      "pairKind": "legacyRing",
+      "vehicleProfile": "passenger-car-etc",
+      "entryId": "fixture:edge:legacy:entry",
+      "exitId": "fixture:edge:legacy:exit",
+      "anchor": {
+        "anchorKind": "sameNode",
+        "nodeId": "fixture:node:legacy:anchor",
+        "routeId": "C1",
+        "direction": "inner",
+        "arcPolicy": "sameNodeLoop"
+      },
+      "entryToAnchorEdgeIds": ["fixture:edge:legacy:entry", "fixture:edge:legacy:mainline"],
+      "anchorToExitEdgeIds": ["fixture:edge:legacy:exit"],
+      "pairEligibility": {
+        "status": "verified_one_section_ahead",
+        "oneSectionAheadVerified": true
+      },
+      "loopValidation": { "status": "declared_route_validated" },
+      "tariff": {
+        "status": "priced",
+        "amountYen": 300,
+        "billingDistanceMeters": 1700,
+        "prices": [
+          { "amountYen": 300, "effectiveFrom": "2026-09-30T15:00:00Z", "effectiveTo": null }
+        ]
+      }
+    },
+    {
+      "id": "fixture:radial",
+      "pairKind": "radialReturn",
+      "routePlanVersion": 1,
+      "vehicleProfile": "passenger-car-etc",
+      "entryId": "fixture:edge:entry:ramp",
+      "exitId": "fixture:edge:exit:ramp",
+      "entryEndpoint": {
+        "rampId": "fixture:ramp:entry",
+        "name": "fixture entry",
+        "supportState": "verified_bound",
+        "directedSegments": [
+          {
+            "segmentId": "fixture:binding:entry:0",
+            "osmWayIds": [1001],
+            "edgeIds": ["fixture:edge:entry:ramp"],
+            "fromNodeId": "fixture:node:entry:ground",
+            "toNodeId": "fixture:node:entry:ramp-end",
+            "edgeIdsSha256": "1846afd5803d03982b1641d3f1c4c9816379eeede1e100a4c3e0a6c130248e97"
+          }
+        ]
+      },
+      "exitEndpoint": {
+        "rampId": "fixture:ramp:exit",
+        "name": "fixture exit",
+        "supportState": "verified_bound",
+        "directedSegments": [
+          {
+            "segmentId": "fixture:binding:exit:0",
+            "osmWayIds": [2001],
+            "edgeIds": ["fixture:edge:exit:ramp"],
+            "fromNodeId": "fixture:node:exit:connector",
+            "toNodeId": "fixture:node:exit:ground",
+            "edgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+          }
+        ]
+      },
+      "routePlan": {
+        "entryCorridor": {
+          "membershipId": "route:fixture:R1:inbound",
+          "terminalEdgeId": "fixture:edge:merge:mainline",
+          "mergeNodeId": "fixture:node:merge"
+        },
+        "anchor": {
+          "anchorKind": "directedJunction",
+          "routeId": "fixture:loop",
+          "direction": "forward",
+          "mergeNodeId": "fixture:node:merge",
+          "branchNodeId": "fixture:node:branch",
+          "mergeTerminalEdgeId": "fixture:edge:merge:mainline",
+          "branchInitialEdgeId": "fixture:edge:return:mainline",
+          "arcPolicy": "ordinaryLongArc",
+          "excludedShortConnector": {
+            "fromNodeId": "fixture:node:branch",
+            "toNodeId": "fixture:node:merge",
+            "osmWayId": 3001,
+            "edgeCount": 1,
+            "distanceMeters": 100
+          }
+        },
+        "mandatoryLap": {
+          "membershipId": "route:fixture:loop:forward",
+          "firstEdgeId": "fixture:edge:lap:1",
+          "lastEdgeId": "fixture:edge:lap:2",
+          "lapCount": 1
+        },
+        "returnCorridor": {
+          "membershipId": "route:fixture:R1:outbound",
+          "startNodeId": "fixture:node:branch",
+          "initialEdgeId": "fixture:edge:return:mainline",
+          "firstGeneralExit": {
+            "rule": "firstGeneralExit",
+            "expectedRampId": "fixture:ramp:exit",
+            "exactDirectedBinding": "verified_bound"
+          }
+        }
+      },
+      "resolvedRouteSegments": [
+        {
+          "resolvedSegmentId": "fixture:resolved:entry",
+          "role": "entry_approach",
+          "membershipId": "route:fixture:R1:inbound",
+          "sourceSegmentIds": ["fixture:binding:entry:0", "fixture:relation:r1:inbound:main"],
+          "edgeIds": ["fixture:edge:entry:ramp", "fixture:edge:entry:mainline", "fixture:edge:merge:mainline"],
+          "edgeIdsSha256": "fde104d1bdae3d3673e5285509c3223c53765d876c6a4174e50a3126412f32a2"
+        },
+        {
+          "resolvedSegmentId": "fixture:resolved:lap",
+          "role": "mandatory_lap",
+          "membershipId": "route:fixture:loop:forward",
+          "sourceSegmentIds": ["fixture:relation:loop:forward:main"],
+          "edgeIds": ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+          "edgeIdsSha256": "99ddf4b7771edc3fe3c04034d2465719932ca1c2d2104c0d05bab41d6e462a43"
+        },
+        {
+          "resolvedSegmentId": "fixture:resolved:return",
+          "role": "return_corridor",
+          "membershipId": "route:fixture:R1:outbound",
+          "sourceSegmentIds": ["fixture:relation:r1:outbound:main"],
+          "edgeIds": ["fixture:edge:return:mainline"],
+          "edgeIdsSha256": "ba825c8c0f6236ca476824f7553aefe8bf09a94a5343c2470cde33b1bb443e1b"
+        },
+        {
+          "resolvedSegmentId": "fixture:resolved:exit",
+          "role": "exit_approach",
+          "membershipId": "route:fixture:R1:outbound",
+          "sourceSegmentIds": ["fixture:binding:exit:0"],
+          "edgeIds": ["fixture:edge:exit:ramp"],
+          "edgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+        }
+      ],
+      "routingCapability": "routable",
+      "pairEligibility": {
+        "status": "verified_one_section_ahead",
+        "oneSectionAheadVerified": true
+      },
+      "loopValidation": { "status": "declared_route_validated" },
+      "tariff": {
+        "status": "unpriced",
+        "amountYen": null,
+        "billingDistanceMeters": null,
+        "prices": []
+      }
+    }
+  ],
+  "forbiddenTransitions": [],
+  "ramps": [
+    {
+      "id": "fixture:ramp:entry",
+      "facilityId": "fixture:entry",
+      "name": "fixture entry",
+      "route": "fixture:R1",
+      "direction": "inbound",
+      "kind": "general_entry",
+      "edgeId": "fixture:edge:entry:ramp",
+      "nodeId": "fixture:node:entry:ground",
+      "mainlineNodeId": "fixture:node:entry:ramp-end"
+    },
+    {
+      "id": "fixture:ramp:exit",
+      "facilityId": "fixture:exit",
+      "name": "fixture exit",
+      "route": "fixture:R1",
+      "direction": "outbound",
+      "kind": "general_exit",
+      "edgeId": "fixture:edge:exit:ramp",
+      "nodeId": "fixture:node:exit:ground",
+      "mainlineNodeId": "fixture:node:exit:connector"
+    }
+  ],
+  "odTariffs": [],
+  "routeMemberships": [
+    {
+      "membershipId": "route:C1:inner",
+      "routeId": "C1",
+      "direction": "inner",
+      "directionMappingVersion": "osm-relation-role/v1",
+      "segments": [
+        {
+          "segmentId": "relation:C1:inner:0",
+          "sourceKind": "relationMainline",
+          "sourceRelationId": "fixture:relation:C1",
+          "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+          "bindingEvidenceId": null,
+          "orderedEdgeIds": ["fixture:edge:legacy:mainline"],
+          "orderedEdgeIdsSha256": "6880db1db7028bb4dfb1fbeebbbc2312acda99d6ec5791128d3eb53d2899fd48"
+        }
+      ]
+    },
+    {
+      "membershipId": "route:fixture:R1:inbound",
+      "routeId": "fixture:R1",
+      "direction": "inbound",
+      "directionMappingVersion": "osm-relation-role/v1",
+      "segments": [
+        {
+          "segmentId": "fixture:binding:entry:0",
+          "sourceKind": "boundRamp",
+          "sourceRelationId": null,
+          "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+          "bindingEvidenceId": "fixture:binding:entry",
+          "orderedEdgeIds": ["fixture:edge:entry:ramp"],
+          "orderedEdgeIdsSha256": "1846afd5803d03982b1641d3f1c4c9816379eeede1e100a4c3e0a6c130248e97"
+        },
+        {
+          "segmentId": "fixture:relation:r1:inbound:main",
+          "sourceKind": "relationMainline",
+          "sourceRelationId": "fixture:relation:r1",
+          "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+          "bindingEvidenceId": null,
+          "orderedEdgeIds": ["fixture:edge:entry:mainline", "fixture:edge:merge:mainline"],
+          "orderedEdgeIdsSha256": "45c3fbfdecb5078f58f2dc42d81d60b68c517378494900e466b6e1ab9f521061"
+        }
+      ]
+    },
+    {
+      "membershipId": "route:fixture:loop:forward",
+      "routeId": "fixture:loop",
+      "direction": "forward",
+      "directionMappingVersion": "osm-relation-role/v1",
+      "segments": [
+        {
+          "segmentId": "fixture:relation:loop:forward:main",
+          "sourceKind": "relationMainline",
+          "sourceRelationId": "fixture:relation:loop",
+          "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+          "bindingEvidenceId": null,
+          "orderedEdgeIds": ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+          "orderedEdgeIdsSha256": "99ddf4b7771edc3fe3c04034d2465719932ca1c2d2104c0d05bab41d6e462a43"
+        }
+      ]
+    },
+    {
+      "membershipId": "route:fixture:R1:outbound",
+      "routeId": "fixture:R1",
+      "direction": "outbound",
+      "directionMappingVersion": "osm-relation-role/v1",
+      "segments": [
+        {
+          "segmentId": "fixture:relation:r1:outbound:main",
+          "sourceKind": "relationMainline",
+          "sourceRelationId": "fixture:relation:r1",
+          "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+          "bindingEvidenceId": null,
+          "orderedEdgeIds": ["fixture:edge:return:mainline"],
+          "orderedEdgeIdsSha256": "ba825c8c0f6236ca476824f7553aefe8bf09a94a5343c2470cde33b1bb443e1b"
+        },
+        {
+          "segmentId": "fixture:binding:exit:0",
+          "sourceKind": "boundRamp",
+          "sourceRelationId": null,
+          "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+          "bindingEvidenceId": "fixture:binding:exit",
+          "orderedEdgeIds": ["fixture:edge:exit:ramp"],
+          "orderedEdgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+        }
+      ]
+    }
+  ]
+}

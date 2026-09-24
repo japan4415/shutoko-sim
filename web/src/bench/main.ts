@@ -239,9 +239,11 @@ function renderCard(model: ReturnType<typeof toCardModel>): HTMLElement {
     p.textContent = text;
     card.appendChild(p);
   }
-  const button = document.createElement("button");
-  button.textContent = "出発する（Google マップを開く）";
-  card.appendChild(button);
+  if (model.mapsUrl !== "") {
+    const button = document.createElement("button");
+    button.textContent = "出発する（Google マップを開く）";
+    card.appendChild(button);
+  }
   return card;
 }
 

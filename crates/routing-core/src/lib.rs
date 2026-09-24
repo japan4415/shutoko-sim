@@ -44,8 +44,26 @@ fn estimated_access_seconds(dist_m: f64) -> u64 {
     ((dist_m * DETOUR_FACTOR) / ACCESS_SPEED_MPS).ceil() as u64
 }
 
+mod candidate_v2;
+mod graph_v4;
 pub mod grid;
 pub mod handoff;
+
+pub use candidate_v2::{
+    validate_radial_return_candidate, CandidateResolvedRouteSegment, CandidateRoutePlan,
+    CandidateV2Handoff, CandidateV2Toll, EdgeRouteLeg, EstimatedLeg, EstimatedLegRole,
+    RadialReturnCandidate,
+};
+
+pub use graph_v4::{
+    AnchorKind, ArcPolicy, BillingEndpoint, BindingCandidate, DirectedEndpointSegment,
+    DirectedJunctionAnchor, EndpointSupportState, EntryCorridor, ExcludedShortConnector,
+    FirstGeneralExit, LegacyRingBillingPair, LoopValidation, LoopValidationStatus, MandatoryLap,
+    PairEligibility, PairEligibilityStatus, PairKind, RadialReturnBillingPair,
+    ResolvedRouteSegment, ReturnCorridor, RouteAnchor, RouteMembershipIndex,
+    RouteMembershipSegment, RouteMembershipSourceKind, RoutePlanSegmentRole, RoutePlanV1,
+    RoutingCapability, SameNodeAnchor, Tariff, TariffStatus,
+};
 
 /// Google Maps handoff payload for a candidate route.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -172,7 +190,7 @@ pub struct BillingPair {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub billing_distance_meters: Option<u64>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Price {
     pub amount_yen: u64,
@@ -260,7 +278,7 @@ impl Default for SearchLimits {
         }
     }
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Duration {
     pub access_seconds: u64,
@@ -293,7 +311,7 @@ pub struct Loop {
     pub distance_meters: u64,
     pub validated: bool,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SnappedOrigin {
     /// Node ID of the Entry access point used for this candidate.
@@ -304,7 +322,7 @@ pub struct SnappedOrigin {
     /// Straight-line distance (metres) from the user's origin to this access point.
     pub distance_meters: f64,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RampInfo {
     pub edge_id: String,
@@ -316,7 +334,7 @@ pub struct RampInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub direction: Option<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeoJsonLineString {
     pub r#type: String,
@@ -403,13 +421,13 @@ impl fmt::Display for RoutingError {
     }
 }
 impl std::error::Error for RoutingError {}
-fn invalid(message: &str) -> RoutingError {
+pub(crate) fn invalid(message: impl Into<String>) -> RoutingError {
     RoutingError {
         code: "INVALID_INPUT".into(),
         message: message.into(),
     }
 }
-fn utc(s: &str) -> Result<OffsetDateTime, RoutingError> {
+pub(crate) fn utc(s: &str) -> Result<OffsetDateTime, RoutingError> {
     if s.len() > 40 {
         return Err(invalid("timestamp too long"));
     }
@@ -510,6 +528,8 @@ pub struct PreparedGraph {
     /// `graph.nodes` / `graph.edges`, any external push/remove would silently
     /// corrupt lookups and the reachable cache.
     pub(crate) graph: Graph,
+    pub(crate) radial_billing_pairs: Vec<RadialReturnBillingPair>,
+    pub(crate) route_memberships: Vec<RouteMembershipIndex>,
     /// Search limits used during preparation (re-validated on each search).
     ///
     /// `pub(crate)` to keep `PreparedGraph` opaque outside the crate.
@@ -538,6 +558,14 @@ impl PreparedGraph {
     /// Read-only access to the search limits stored at prepare time.
     pub fn limits(&self) -> &SearchLimits {
         &self.limits
+    }
+
+    pub fn radial_billing_pairs(&self) -> &[RadialReturnBillingPair] {
+        &self.radial_billing_pairs
+    }
+
+    pub fn route_memberships(&self) -> &[RouteMembershipIndex] {
+        &self.route_memberships
     }
 
     #[inline]
@@ -651,8 +679,13 @@ fn shutoko_components(
 
 /// Validate the graph structure and limits, then build the [`OwnedIndex`].
 /// This is the expensive O(n log n + m log m) step; it happens once in [`prepare`].
-fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingError> {
-    if (g.schema_version != 2 && g.schema_version != 3)
+fn build_owned_index(
+    g: &Graph,
+    radial_billing_pairs: &[RadialReturnBillingPair],
+    route_memberships: &[RouteMembershipIndex],
+    l: &SearchLimits,
+) -> Result<OwnedIndex, RoutingError> {
+    if (g.schema_version != 2 && g.schema_version != 3 && g.schema_version != 4)
         || g.release_id.is_empty()
         || g.release_id.len() > 256
         || g.vehicle_profile.is_empty()
@@ -686,6 +719,8 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
     if g.nodes.len() > l.max_graph_nodes
         || g.edges.len() > l.max_graph_edges
         || g.billing_pairs.len() > 10_000
+        || radial_billing_pairs.len() > 10_000
+        || route_memberships.len() > 20_000
         || g.forbidden_transitions.len() > 10_000
     {
         return Err(invalid("graph exceeds prototype size limits"));
@@ -963,6 +998,11 @@ fn build_owned_index(g: &Graph, l: &SearchLimits) -> Result<OwnedIndex, RoutingE
         }
         let key = (t.entry_ramp_id.clone(), t.exit_ramp_id.clone());
         od_tariff_map.insert(key, i);
+    }
+
+    graph_v4::validate_route_memberships(g, route_memberships)?;
+    for pair in radial_billing_pairs {
+        graph_v4::validate_radial_return_pair(g, route_memberships, pair)?;
     }
 
     Ok(OwnedIndex {
@@ -1547,9 +1587,25 @@ fn edge_ids(edges: &[&Edge]) -> Vec<String> {
 /// the search index.  This is the expensive step (O(n log n + m log m));
 /// call it once and reuse the result across many [`search_prepared`] calls.
 pub fn prepare(g: Graph, l: &SearchLimits) -> Result<PreparedGraph, RoutingError> {
-    let index = build_owned_index(&g, l)?;
+    if g.schema_version == 4 {
+        return Err(invalid(
+            "graph schema 4 must be prepared through the version-aware JSON reader",
+        ));
+    }
+    prepare_parts(g, Vec::new(), Vec::new(), l)
+}
+
+fn prepare_parts(
+    g: Graph,
+    radial_billing_pairs: Vec<RadialReturnBillingPair>,
+    route_memberships: Vec<RouteMembershipIndex>,
+    l: &SearchLimits,
+) -> Result<PreparedGraph, RoutingError> {
+    let index = build_owned_index(&g, &radial_billing_pairs, &route_memberships, l)?;
     let pg = PreparedGraph {
         graph: g,
+        radial_billing_pairs,
+        route_memberships,
         limits: l.clone(),
         index,
         reachable_cache: RefCell::new(HashMap::new()),
@@ -3455,13 +3511,17 @@ pub fn search_json(
     {
         return Err(invalid("JSON payload exceeds prototype size limit"));
     }
-    let g: Graph = serde_json::from_str(graph_json).map_err(|_| invalid("invalid graph JSON"))?;
+    let parsed_graph = graph_v4::read_graph_json(graph_json)?;
     let r: SearchRequest =
         serde_json::from_str(request_json).map_err(|_| invalid("invalid request JSON"))?;
     let l: SearchLimits =
         serde_json::from_str(limits_json).map_err(|_| invalid("invalid limits JSON"))?;
-    // g is moved into prepare() — no extra clone compared with the old path.
-    let pg = prepare(g, &l)?;
+    let pg = prepare_parts(
+        parsed_graph.graph,
+        parsed_graph.radial_billing_pairs,
+        parsed_graph.route_memberships,
+        &l,
+    )?;
     serde_json::to_string(&search_prepared(&pg, &r)?)
         .map_err(|_| invalid("result serialization failed"))
 }
@@ -3476,10 +3536,15 @@ pub fn prepare_json(graph_json: &str, limits_json: &str) -> Result<PreparedGraph
     if graph_json.len() > MAX_GRAPH_JSON_BYTES || limits_json.len() > 4096 {
         return Err(invalid("JSON payload exceeds prototype size limit"));
     }
-    let g: Graph = serde_json::from_str(graph_json).map_err(|_| invalid("invalid graph JSON"))?;
+    let parsed_graph = graph_v4::read_graph_json(graph_json)?;
     let l: SearchLimits =
         serde_json::from_str(limits_json).map_err(|_| invalid("invalid limits JSON"))?;
-    prepare(g, &l)
+    prepare_parts(
+        parsed_graph.graph,
+        parsed_graph.radial_billing_pairs,
+        parsed_graph.route_memberships,
+        &l,
+    )
 }
 
 /// Execute a search on a [`PreparedGraph`] using a JSON request string.

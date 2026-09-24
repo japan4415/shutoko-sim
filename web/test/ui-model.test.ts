@@ -1,5 +1,6 @@
 // UI 純粋関数（src/ui/model.ts）のユニットテスト。
 import { describe, expect, it } from "vitest";
+import radialCandidateJson from "../../fixtures/candidate-v2/radial-valid.json?raw";
 import {
   MAX_ACCESS_DISTANCE_METERS,
   MAX_PRODUCT_MINUTES,
@@ -38,9 +39,9 @@ import {
   warningText,
 } from "../src/ui/model";
 import { MAX_ACCESS_DISTANCE_METERS as PIPELINE_MAX_ACCESS_DISTANCE_METERS } from "../src/worker/pipeline";
-import type { Candidate, SearchResult, SnappedOrigin } from "../src/worker/types";
+import type { LegacyCandidate, RadialCandidate, SearchResult, SnappedOrigin } from "../src/worker/types";
 
-function sampleCandidate(overrides: Partial<Candidate> = {}): Candidate {
+function sampleCandidate(overrides: Partial<LegacyCandidate> = {}): LegacyCandidate {
   return {
     id: "cand-1",
     releaseId: "c1-real-v1",
@@ -516,6 +517,15 @@ describe("toCardModel", () => {
     expect(model.toll).toBe("料金額: 未算出");
   });
 
+  it("radialReturn は handoff 無効、1区間表現と lap edge を使う", () => {
+    const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
+    const model = toCardModel(radial);
+    expect(model.mapsUrl).toBe("");
+    expect(model.chargedSection).toBe("首都高区間: 入口 → 周回 → 戻り");
+    expect(model.loopEdgeIds).toEqual(["fixture:edge:lap:1", "fixture:edge:lap:2"]);
+    expect(model.tollShort).toBe("未算出");
+  });
+
   it("warningText と minutesFromSeconds の境界", () => {
     expect(warningText("UNKNOWN_CODE")).toBe("UNKNOWN_CODE");
     expect(minutesFromSeconds(0)).toBe(0);
@@ -655,7 +665,7 @@ describe("selectCandidate", () => {
 });
 
 describe("timePerYen の料金ゲーティング", () => {
-  function withAmount(amountYen: number | null): Candidate {
+  function withAmount(amountYen: number | null): LegacyCandidate {
     return sampleCandidate({
       toll: {
         billingPairId: "bp:x",

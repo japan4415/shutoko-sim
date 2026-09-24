@@ -1405,15 +1405,17 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
     card.appendChild(ul);
   }
 
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "depart";
-  button.textContent = "出発する（Google マップを開く）";
-  button.addEventListener("click", (event) => {
-    event.stopPropagation(); // カード選択と出発のクリックを分離する
-    window.open(model.mapsUrl, "_blank", "noopener");
-  });
-  card.appendChild(button);
+  if (model.mapsUrl !== "") {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "depart";
+    button.textContent = "出発する（Google マップを開く）";
+    button.addEventListener("click", (event) => {
+      event.stopPropagation(); // カード選択と出発のクリックを分離する
+      window.open(model.mapsUrl, "_blank", "noopener");
+    });
+    card.appendChild(button);
+  }
 
   card.addEventListener("click", () => {
     selectCard(model.id, true);

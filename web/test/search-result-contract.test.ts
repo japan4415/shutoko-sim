@@ -2,6 +2,9 @@
 // 欠落した undefined を null と誤判定すると UI が「約 NaN 分」や実行時例外に至るため、
 // 明確な契約不一致エラー（RESULT_CONTRACT_MISMATCH）として停止することを固定する。
 import { describe, expect, it } from "vitest";
+import radialCandidate from "../../fixtures/candidate-v2/radial-valid.json?raw";
+import duplicateLegs from "../../fixtures/candidate-v2/invalid-edge-route-legs-duplicate.json?raw";
+import missingLegs from "../../fixtures/candidate-v2/invalid-edge-route-legs-missing.json?raw";
 import {
   parseSearchResult,
   PipelineError,
@@ -119,5 +122,43 @@ describe("parseSearchResult の実行時検証", () => {
     const text = errorMessage(RESULT_CONTRACT_MISMATCH);
     expect(text).toContain("RESULT_CONTRACT_MISMATCH");
     expect(text).toContain("再読み込み");
+  });
+
+  it("radialReturn Candidate v2 を受け入れる", () => {
+    const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
+    const result = parseSearchResult(
+      JSON.stringify(validResult({ status: "ok", reason: null, candidates: [candidate] })),
+    );
+    expect(result.candidates[0]?.pairKind).toBe("radialReturn");
+  });
+
+  it("edgeRouteLegs の重複・欠落と legacy 残存フィールドを拒否する", () => {
+    const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
+    for (const fragment of [duplicateLegs, missingLegs]) {
+      const invalid = { ...candidate, edgeRouteLegs: JSON.parse(fragment).edgeRouteLegs };
+      expect(() =>
+        parseSearchResult(
+          JSON.stringify(validResult({ status: "ok", reason: null, candidates: [invalid] })),
+        ),
+      ).toThrowError(/edgeRouteLegs/);
+    }
+    const charged = {
+      ...candidate,
+      toll: { ...(candidate.toll as Record<string, unknown>), chargedSectionCount: 1 },
+    };
+    expect(() =>
+      parseSearchResult(
+        JSON.stringify(validResult({ status: "ok", reason: null, candidates: [charged] })),
+      ),
+    ).toThrowError(/chargedSectionCount/);
+  });
+
+  it("未知の pairKind を拒否する", () => {
+    const candidate = { ...(JSON.parse(radialCandidate) as Record<string, unknown>), pairKind: "futurePair" };
+    expect(() =>
+      parseSearchResult(
+        JSON.stringify(validResult({ status: "ok", reason: null, candidates: [candidate] })),
+      ),
+    ).toThrowError(/pairKind/);
   });
 });

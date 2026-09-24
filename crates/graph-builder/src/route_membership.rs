@@ -1,7 +1,7 @@
 use crate::inventory::{
     CanonicalRampInventoryItem, OsmRampBinding, OsmRampBindingsFile, RampInventoryFile,
 };
-use crate::model::{BillingPair, Edge, EdgeKind, Graph, Node, OdTariff, Ramp, RampKind};
+use crate::model::{Edge, EdgeKind, Graph, Node, OdTariff, Ramp, RampKind};
 use crate::osm::{OsmElement, OsmMember, OverpassResponse};
 use crate::seed::{
     DiagnosticEndpoint, DiagnosticRoutePlan, DirectedEndpointSegment, DirectedJunctionAnchor,
@@ -55,34 +55,9 @@ impl fmt::Display for RouteMembershipError {
 
 impl std::error::Error for RouteMembershipError {}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum RouteMembershipSourceKind {
-    RelationMainline,
-    BoundRamp,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RouteMembershipIndex {
-    pub membership_id: String,
-    pub route_id: String,
-    pub direction: String,
-    pub direction_mapping_version: String,
-    pub segments: Vec<RouteMembershipSegment>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RouteMembershipSegment {
-    pub segment_id: String,
-    pub source_kind: RouteMembershipSourceKind,
-    pub source_relation_id: Option<String>,
-    pub source_snapshot_sha256: String,
-    pub binding_evidence_id: Option<String>,
-    pub ordered_edge_ids: Vec<String>,
-    pub ordered_edge_ids_sha256: String,
-}
+pub use shutoko_routing_core::{
+    RouteMembershipIndex, RouteMembershipSegment, RouteMembershipSourceKind,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -135,7 +110,7 @@ pub struct GraphSchemaV4 {
     pub vehicle_profile: String,
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
-    pub billing_pairs: Vec<BillingPair>,
+    pub billing_pairs: Vec<shutoko_routing_core::LegacyRingBillingPair>,
     #[serde(default)]
     pub forbidden_transitions: Vec<Vec<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -147,18 +122,38 @@ pub struct GraphSchemaV4 {
 
 impl GraphSchemaV4 {
     pub fn from_graph(graph: &Graph, route_memberships: Vec<RouteMembershipIndex>) -> Self {
-        Self {
+        Self::try_from_graph(graph, route_memberships)
+            .expect("schema 4 graph must resolve every legacy billing pair")
+    }
+
+    pub fn try_from_graph(
+        graph: &Graph,
+        route_memberships: Vec<RouteMembershipIndex>,
+    ) -> Result<Self, RouteMembershipError> {
+        let billing_pairs = graph
+            .billing_pairs
+            .iter()
+            .map(|pair| {
+                shutoko_routing_core::LegacyRingBillingPair::from_legacy(
+                    pair,
+                    graph,
+                    &route_memberships,
+                )
+                .map_err(|error| RouteMembershipError::InvalidInput(error.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
             schema_version: 4,
             release_id: graph.release_id.clone(),
             vehicle_profile: graph.vehicle_profile.clone(),
             nodes: graph.nodes.clone(),
             edges: graph.edges.clone(),
-            billing_pairs: graph.billing_pairs.clone(),
+            billing_pairs,
             forbidden_transitions: graph.forbidden_transitions.clone(),
             ramps: graph.ramps.clone(),
             od_tariffs: graph.od_tariffs.clone(),
             route_memberships,
-        }
+        })
     }
 }
 
@@ -166,7 +161,8 @@ pub fn graph_schema_v4_to_deterministic_json(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
 ) -> Result<String, serde_json::Error> {
-    let document = GraphSchemaV4::from_graph(graph, route_memberships.to_vec());
+    let document = GraphSchemaV4::try_from_graph(graph, route_memberships.to_vec())
+        .map_err(|error| serde_json::Error::io(std::io::Error::other(error.to_string())))?;
     let mut output = serde_json::to_string_pretty(&document)?;
     output.push('\n');
     Ok(output)

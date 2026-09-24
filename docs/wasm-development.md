@@ -1,8 +1,8 @@
 # Rust / WASM 開発
 
-ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
+ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、schema 2 / 3 / 4 の対応表、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。schema 4 では `routeMemberships` と `billingPairs[].pairKind` / anchor kind も必須にする。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
 
-ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。これらを変えない純粋なエンジン内部の挙動変更はstaleとして検出できないため、探索結果やWASM境界の挙動を変える変更では、実装者が該当versionを明示的にbumpしてcontractを更新しなければならない。現状を自動hash追跡済みとは表現しない。
+ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65 で WASM 境界が schema 4 pair union と Candidate v2 契約を受け付けるため `contractVersion=2`、`graphSchemaVersion=4`、`supportedGraphSchemaVersions=[2,3,4]` に更新した。engine package version は C1 release との互換性維持のため `0.1.0` のままにする。公開 graph の既定 schema は #66 まで 2 のままである。
 
 ## 今回の実装範囲
 
@@ -37,15 +37,16 @@ node scripts/test-wasm.mjs
 `dist/wasm/` に `.wasm`、ES module の JS glue、および TypeScript 型定義を生成する。
 - TypeScript 正典型定義: `crates/routing-wasm/types/index.d.ts`
 - ビルドスクリプト（`scripts/build-wasm.sh`）がビルド完了時に `dist/wasm/index.d.ts` へコピーし、npm パッケージ / Web Worker から直接型参照可能にする。
-- 定義される主要型: `SearchRequest`, `SearchLimits`, `SearchResult`, `Candidate`, `Handoff`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
+- 定義される主要型: `SearchRequest`, `SearchLimits`, `SearchResult`, `LegacyCandidate`, `RadialCandidate`, `Candidate`, `GraphBillingPairV2`, `RouteMembershipIndex`, `EdgeRouteLeg`, `Handoff`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
 
 `test-wasm.mjs` は配信用と同じ `--target web` の glue と WASM を Node.js でロードし、以下を自動検証する:
-1. 合成グラフに対する `originNodeId` 探索および期待されるエッジ列・時間・料金の算出
-2. 決定論性（同一入力による連続実行でバイト完全一致）
-3. 候補の新フィールド構造（GeoJSON `LineString` 幾何、`mapsUrl` 形式および長さ ≤ 2,048、`snappedOrigin`、`warnings` への `HANDOFF_WAYPOINTS_UNVERIFIED` の包含）
-4. 座標入力（`origin: { lat, lon }`）による空間スナップ探索
-5. 200m 超過座標における接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
-6. 異常入力の拒否と JavaScript Error（Error の `message` に `RoutingErrorPayload { code: "INVALID_INPUT", message }` の JSON 文字列）のスロー検証
+1. graph schema 2 / 4 の prepare、schema 4 `legacyRing` / `radialReturn` と `sameNode` / `directedJunction` の reader 契約
+2. 合成グラフに対する `originNodeId` 探索および期待されるエッジ列・時間・料金の算出
+3. 決定論性（同一入力による連続実行でバイト完全一致）
+4. 候補の新フィールド構造（GeoJSON `LineString` 幾何、`mapsUrl` 形式および長さ ≤ 2,048、`snappedOrigin`、`warnings` への `HANDOFF_WAYPOINTS_UNVERIFIED` の包含）
+5. 座標入力（`origin: { lat, lon }`）による空間スナップ探索
+6. 200m 超過座標における接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
+7. 異常入力の拒否と JavaScript Error（Error の `message` に `RoutingErrorPayload { code: "INVALID_INPUT", message }` の JSON 文字列）のスロー検証
 
 ## 呼び出し
 
@@ -63,7 +64,7 @@ Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `sear
 
 ## 初期データ契約
 
-グラフには `schemaVersion: 2`、`releaseId`、`vehicleProfile`、ノード、エッジ、課金ペア、禁止エッジ列を格納する。エッジ種別は `local` / `entry` / `shutoko` / `exit`。上下線は異なるノード・エッジで表す。料金ペアは入口から基準点への経路、基準点から出口への経路を明示し、間に非空の一周を挿入する。`entryId` / `exitId` はこの初期契約では実際の入退出エッジ ID と一致させる。二つの接続路を結んだ直接経路は単純路とし、そこに追加の周回を埋め込めない。一方、挿入する一周と接続路のエッジ共有は許す。
+公開中・生成 fixture の現行 graph は `schemaVersion: 2`、`releaseId`、`vehicleProfile`、ノード、エッジ、legacy 課金ペア、禁止エッジ列を格納する。reader は schema 2 / 3 の legacy pair と schema 4 の `legacyRing` / `radialReturn` union を受理する。エッジ種別は `local` / `entry` / `shutoko` / `exit`。上下線は異なるノード・エッジで表す。legacy 料金ペアは入口から基準点への経路、基準点から出口への経路を明示し、間に非空の一周を挿入する。`entryId` / `exitId` は実際の入退出エッジ ID と一致させる。二つの接続路を結んだ直接経路は単純路とし、そこに追加の周回を埋め込めない。一方、挿入する一周と接続路のエッジ共有は許す。
 
 時間と距離は正の整数で秒・mを用いる。料金は実走行距離から計算せず、ペアに登録された有効期間の金額を使う。期間は開始を含み終了を含まない。検索入力の `pricingAt` に固定して判定する。入力検証はデータの構造を検証するもので、実際の道路や課金関係を認定しない。
 

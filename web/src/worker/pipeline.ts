@@ -4,6 +4,8 @@
 import { KNOWN_RELEASES } from "./artifact-hashes";
 import type {
   BenchPayload,
+  GraphDocument,
+  RoutePlanSegmentRole,
   SearchResult,
   SearchRequest,
   UiSearchMessage,
@@ -48,6 +50,85 @@ export class PipelineError extends Error {
     super(message);
     this.code = code;
   }
+}
+
+export const SUPPORTED_GRAPH_SCHEMA_VERSIONS = [2, 3, 4] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function graphContractMismatch(message: string): PipelineError {
+  return new PipelineError("ARTIFACT_MISMATCH", message);
+}
+
+function validateSchema4BillingPair(value: unknown, index: number): void {
+  if (!isRecord(value) || (value.pairKind !== "legacyRing" && value.pairKind !== "radialReturn")) {
+    throw graphContractMismatch(`graph.json: billingPairs[${String(index)}] の pairKind が不正`);
+  }
+  if (value.pairKind === "legacyRing") {
+    if (
+      !isRecord(value.anchor) ||
+      value.anchor.anchorKind !== "sameNode" ||
+      !Array.isArray(value.entryToAnchorEdgeIds) ||
+      !Array.isArray(value.anchorToExitEdgeIds)
+    ) {
+      throw graphContractMismatch(`graph.json: billingPairs[${String(index)}] の legacyRing contract が不正`);
+    }
+  } else if (
+    value.routePlanVersion !== 1 ||
+    !isRecord(value.routePlan) ||
+    !isRecord(value.routePlan.anchor) ||
+    value.routePlan.anchor.anchorKind !== "directedJunction" ||
+    !Array.isArray(value.resolvedRouteSegments)
+  ) {
+    throw graphContractMismatch(`graph.json: billingPairs[${String(index)}] の radialReturn contract が不正`);
+  }
+}
+
+export function parseGraphDocument(graphJson: string): GraphDocument {
+  let value: unknown;
+  try {
+    value = JSON.parse(graphJson);
+  } catch {
+    throw graphContractMismatch("graph.json: JSON デコード失敗");
+  }
+  if (!isRecord(value)) {
+    throw graphContractMismatch("graph.json: top-level がオブジェクトではありません");
+  }
+  const schemaVersion = value.schemaVersion;
+  if (
+    typeof schemaVersion !== "number" ||
+    !SUPPORTED_GRAPH_SCHEMA_VERSIONS.includes(schemaVersion as 2 | 3 | 4)
+  ) {
+    throw graphContractMismatch("graph.json: schemaVersion が 2 / 3 / 4 以外です");
+  }
+  if (
+    typeof value.releaseId !== "string" ||
+    typeof value.vehicleProfile !== "string" ||
+    !Array.isArray(value.nodes) ||
+    !Array.isArray(value.edges) ||
+    !Array.isArray(value.billingPairs)
+  ) {
+    throw graphContractMismatch("graph.json: 必須 field が欠落または型違いです");
+  }
+  if (schemaVersion === 4) {
+    if (!Array.isArray(value.routeMemberships)) {
+      throw graphContractMismatch("graph.json: schema 4 の routeMemberships がありません");
+    }
+    value.billingPairs.forEach(validateSchema4BillingPair);
+  } else if (value.routeMemberships !== undefined) {
+    throw graphContractMismatch("graph.json: schema 2 / 3 は routeMemberships を持ちません");
+  } else {
+    value.billingPairs.forEach((pair, index) => {
+      if (isRecord(pair) && pair.pairKind !== undefined) {
+        throw graphContractMismatch(
+          `graph.json: billingPairs[${String(index)}] の pairKind は schema 4 専用です`,
+        );
+      }
+    });
+  }
+  return value as unknown as GraphDocument;
 }
 
 /** fetch の最小互換（テストでは同一形状のモックを注入する）。 */
@@ -286,6 +367,7 @@ export async function loadRelease(
   const graphBytes = await fetchBytes(fetchImpl, graphUrl, signal);
   await verifyOrStop(graphUrl, graphBytes, graphEntry);
   const graphJson = new TextDecoder().decode(graphBytes);
+  parseGraphDocument(graphJson);
 
   const wasmUrl = `${base}/${WASM_ARTIFACT_PATH}${query}`;
   const wasmBytes = await fetchBytes(fetchImpl, wasmUrl, signal);
@@ -390,6 +472,100 @@ function assertDiagnostics(result: Record<string, unknown>): void {
   }
 }
 
+const ROUTE_ROLES: RoutePlanSegmentRole[] = [
+  "entry_approach",
+  "mandatory_lap",
+  "return_corridor",
+  "exit_approach",
+];
+
+function assertStringArray(value: unknown, label: string): asserts value is string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw contractMismatch(`${label} が非空文字列配列ではありません`);
+  }
+}
+
+function assertSha256(value: unknown, label: string): asserts value is string {
+  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) {
+    throw contractMismatch(`${label} が lowercase SHA-256 ではありません`);
+  }
+}
+
+function validateRadialCandidate(candidate: unknown): void {
+  if (
+    !isRecord(candidate) ||
+    candidate.routePlanVersion !== 1 ||
+    !isRecord(candidate.anchor) ||
+    candidate.anchor.anchorKind !== "directedJunction" ||
+    !isRecord(candidate.routePlan) ||
+    !Array.isArray(candidate.edgeRouteLegs) ||
+    candidate.edgeRouteLegs.length !== ROUTE_ROLES.length
+  ) {
+    throw contractMismatch("radialReturn candidate の anchor / routePlan / edgeRouteLegs が不正です");
+  }
+  assertStringArray(candidate.edgeIds, "radialReturn candidate.edgeIds");
+  assertStringArray(candidate.routePlan.membershipIds, "radialReturn routePlan.membershipIds");
+  const resolved = candidate.routePlan.resolvedRouteSegments;
+  if (!Array.isArray(resolved) || resolved.length !== ROUTE_ROLES.length) {
+    throw contractMismatch("radialReturn resolvedRouteSegments は 4 件である必要があります");
+  }
+  const resolvedById = new Map<string, Record<string, unknown>>();
+  for (let index = 0; index < resolved.length; index += 1) {
+    const segment = resolved[index];
+    if (
+      !isRecord(segment) ||
+      segment.role !== ROUTE_ROLES[index] ||
+      typeof segment.resolvedSegmentId !== "string" ||
+      resolvedById.has(segment.resolvedSegmentId) ||
+      typeof segment.membershipId !== "string" ||
+      !candidate.routePlan.membershipIds.includes(segment.membershipId)
+    ) {
+      throw contractMismatch("radialReturn resolvedRouteSegments の role / 参照が不正です");
+    }
+    assertStringArray(segment.sourceSegmentIds, "resolvedRouteSegment.sourceSegmentIds");
+    assertSha256(segment.edgeIdsSha256, "resolvedRouteSegment.edgeIdsSha256");
+    resolvedById.set(segment.resolvedSegmentId, segment);
+  }
+  let nextIndex = 0;
+  const covered = new Set<number>();
+  for (let index = 0; index < candidate.edgeRouteLegs.length; index += 1) {
+    const leg = candidate.edgeRouteLegs[index];
+    if (!isRecord(leg) || leg.role !== ROUTE_ROLES[index]) {
+      throw contractMismatch("edgeRouteLegs の role が不正です");
+    }
+    const segment = resolvedById.get(String(leg.resolvedSegmentId));
+    if (
+      segment === undefined ||
+      segment.role !== leg.role ||
+      !Number.isInteger(leg.startEdgeIndex) ||
+      typeof leg.startEdgeIndex !== "number" ||
+      leg.startEdgeIndex !== nextIndex ||
+      !Number.isInteger(leg.endEdgeIndexExclusive) ||
+      typeof leg.endEdgeIndexExclusive !== "number" ||
+      leg.endEdgeIndexExclusive <= leg.startEdgeIndex ||
+      leg.endEdgeIndexExclusive > candidate.edgeIds.length
+    ) {
+      throw contractMismatch("edgeRouteLegs に重複・欠落があります");
+    }
+    for (let edgeIndex = leg.startEdgeIndex; edgeIndex < leg.endEdgeIndexExclusive; edgeIndex += 1) {
+      if (covered.has(edgeIndex)) {
+        throw contractMismatch("edgeRouteLegs に重複があります");
+      }
+      covered.add(edgeIndex);
+    }
+    nextIndex = leg.endEdgeIndexExclusive;
+  }
+  if (nextIndex !== candidate.edgeIds.length || covered.size !== candidate.edgeIds.length) {
+    throw contractMismatch("edgeRouteLegs が edgeIds を完全分割していません");
+  }
+  if (!isRecord(candidate.toll) || "chargedSectionCount" in candidate.toll) {
+    throw contractMismatch("radialReturn toll に chargedSectionCount があります");
+  }
+  if (!isRecord(candidate.handoff) || candidate.handoff.enabled !== false) {
+    throw contractMismatch("radialReturn handoff が無効ではありません");
+  }
+}
+
 /**
  * search() の戻り値 JSON 文字列を SearchResult に展開する。
  * 必須診断フィールドを実行時検証し、欠落・型違いは RESULT_CONTRACT_MISMATCH で停止する
@@ -416,6 +592,16 @@ export function parseSearchResult(resultJson: string): SearchResult {
     throw contractMismatch("reason が文字列でも null でもありません");
   }
   assertDiagnostics(result);
+  for (const value of result.candidates) {
+    if (!isRecord(value)) {
+      throw contractMismatch("candidate がオブジェクトではありません");
+    }
+    if (value.pairKind === "radialReturn") {
+      validateRadialCandidate(value);
+    } else if (value.pairKind !== undefined && value.pairKind !== "legacyRing") {
+      throw contractMismatch("candidate.pairKind が未知です");
+    }
+  }
   return parsed as SearchResult;
 }
 

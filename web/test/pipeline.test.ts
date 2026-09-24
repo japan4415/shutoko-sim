@@ -1,12 +1,14 @@
 // パイプライン純粋関数のユニットテスト（node 環境、fetch/import はモック注入）。
 import inspector from "node:inspector";
 import { describe, expect, it } from "vitest";
+import schema4Graph from "../../fixtures/graph-v4/graph-radial-fixture.json?raw";
 import {
   buildResultResponse,
   buildSearchRequest,
   hexDigest,
   loadRelease,
   MAX_ACCESS_DISTANCE_METERS,
+  parseGraphDocument,
   parseWasmError,
   PipelineError,
   ReleaseStore,
@@ -116,6 +118,75 @@ describe("hexDigest / verifyArtifact", () => {
   });
 });
 
+describe("parseGraphDocument", () => {
+  it("schema 4 の legacyRing / radialReturn billingPairs を受け取る", () => {
+    const graph = parseGraphDocument(schema4Graph);
+    expect(graph.schemaVersion).toBe(4);
+    expect(graph.billingPairs).toHaveLength(2);
+    expect(graph.routeMemberships).toHaveLength(4);
+  });
+
+  it("未知 version、未知 pairKind、routeMemberships 欠落を拒否する", () => {
+    const graph = JSON.parse(schema4Graph) as Record<string, unknown>;
+    expect(() => parseGraphDocument(JSON.stringify({ ...graph, schemaVersion: 5 }))).toThrowError(
+      /schemaVersion/,
+    );
+    const billingPairs = graph.billingPairs as Record<string, unknown>[];
+    expect(() =>
+      parseGraphDocument(
+        JSON.stringify({
+          ...graph,
+          billingPairs: [{ ...billingPairs[0], pairKind: "futurePair" }],
+        }),
+      ),
+    ).toThrowError(/pairKind/);
+    const { routeMemberships: _routeMemberships, ...partial } = graph;
+    expect(() => parseGraphDocument(JSON.stringify(partial))).toThrowError(/routeMemberships/);
+  });
+
+  it("loadRelease が schema 4 graph を WASM prepare へ渡せる", async () => {
+    const releaseId = "graph-v4-fixture-v1";
+    const graphBytes = encoder.encode(schema4Graph);
+    const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
+    const glueBytes = encoder.encode("export default function(){}");
+    const graphExpected = await expectationOf(graphBytes);
+    const wasmExpected = await expectationOf(wasmBytes);
+    const glueExpected = await expectationOf(glueBytes);
+    const files = {
+      [`/releases/${releaseId}/manifest.json`]: encoder.encode(
+        JSON.stringify({ releaseId, artifacts: [{ path: "graph.json", ...graphExpected }] }),
+      ),
+      [`/releases/${releaseId}/engine.json`]: encoder.encode(
+        JSON.stringify({
+          schemaVersion: 1,
+          releaseId,
+          artifacts: [
+            { path: "shutoko_routing_bg.wasm", ...wasmExpected },
+            { path: "shutoko_routing.js", ...glueExpected },
+          ],
+        }),
+      ),
+      [`/releases/${releaseId}/graph.json`]: graphBytes,
+      [`/releases/${releaseId}/shutoko_routing_bg.wasm`]: wasmBytes,
+      [`/releases/${releaseId}/shutoko_routing.js`]: glueBytes,
+    };
+    const { fetch } = mockFetch(files);
+    let preparedGraphJson = "";
+    const glue: WasmGlueModule = {
+      default: async () => {},
+      prepare: (graphJson: string) => {
+        preparedGraphJson = graphJson;
+        return { free() {} };
+      },
+      searchPrepared: () => "{}",
+    };
+    const loaded = await loadRelease(fetch, releaseId, async () => glue);
+    expect(JSON.parse(preparedGraphJson).schemaVersion).toBe(4);
+    expect(JSON.parse(preparedGraphJson).billingPairs).toHaveLength(2);
+    loaded.free();
+  });
+});
+
 describe("buildSearchRequest", () => {
   it("index.d.ts の 8 フィールドのみ、type を含まない", () => {
     const msg: UiSearchMessage = {
@@ -205,7 +276,7 @@ describe("parseWasmError", () => {
 });
 
 describe("loadRelease の cacheBust（bench 計測フック）", () => {
-  const graphBytes = encoder.encode('{"nodes":[],"edges":[]}');
+  const graphBytes = encoder.encode(JSON.stringify({ schemaVersion: 2, releaseId: "c1-real-v1", vehicleProfile: "passenger-car-etc", nodes: [], edges: [], billingPairs: [] }));
   const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
   const glueText = "export default function(){};export function search(){return '{}'}";
   const glueBytes = encoder.encode(glueText);
@@ -317,7 +388,7 @@ describe("buildResultResponse", () => {
 });
 
 describe("loadRelease（モック fetch）", () => {
-  const graphBytes = encoder.encode('{"nodes":[],"edges":[]}');
+  const graphBytes = encoder.encode(JSON.stringify({ schemaVersion: 2, releaseId: "c1-real-v1", vehicleProfile: "passenger-car-etc", nodes: [], edges: [], billingPairs: [] }));
   const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
   const glueText = "export default function(){};export function search(){return '{}'}";
 

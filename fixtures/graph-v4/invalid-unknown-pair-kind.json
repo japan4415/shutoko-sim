@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 4,
+  "billingPairs": [
+    { "id": "fixture:unknown-pair", "pairKind": "futurePairKind" }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 4,
+  "billingPairs": [
+    {
+      "id": "fixture:legacy:c1",
+      "pairKind": "legacyRing",
+      "vehicleProfile": "passenger-car-etc",
+      "entryId": "fixture:edge:legacy:entry",
+      "exitId": "fixture:edge:legacy:exit",
+      "anchor": {
+        "anchorKind": "sameNode",
+        "nodeId": "fixture:node:legacy:anchor",
+        "routeId": "C1",
+        "direction": "inner",
+        "arcPolicy": "sameNodeLoop"
+      },
+      "entryToAnchorEdgeIds": ["fixture:edge:legacy:entry", "fixture:edge:legacy:mainline"],
+      "anchorToExitEdgeIds": ["fixture:edge:legacy:exit"],
+      "pairEligibility": {
+        "status": "verified_one_section_ahead",
+        "oneSectionAheadVerified": true
+      },
+      "loopValidation": { "status": "declared_route_validated" },
+      "tariff": {
+        "status": "priced",
+        "amountYen": 300,
+        "billingDistanceMeters": 1700,
+        "prices": [
+          { "amountYen": 300, "effectiveFrom": "2026-09-30T15:00:00Z", "effectiveTo": null }
+        ]
+      }
+    }
+  ]
+}

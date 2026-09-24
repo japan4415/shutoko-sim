@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 4,
+  "billingPairs": [
+    {
+      "id": "fixture:unknown-anchor",
+      "pairKind": "radialReturn",
+      "routePlanVersion": 1,
+      "routePlan": {
+        "anchor": { "anchorKind": "futureJunction" }
+      }
+    }
+  ]
+}

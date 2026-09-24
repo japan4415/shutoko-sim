@@ -45,18 +45,25 @@ export function deriveSegments(candidate: Candidate): DerivedSegments {
   const all = candidate.geometry.coordinates as Coords[];
   const empty: DerivedSegments = { access: [], loop: [], return: [], charged: [], main: [] };
   const edgeIds = candidate.edgeIds;
-  const loopEdgeIds = candidate.loop.edgeIds;
 
   // 座標数とエッジ数の整合（coordinates.length === edgeIds.length + 1）を検証する。
   if (edgeIds.length + 1 !== all.length || all.length < 2) {
     return { ...empty, main: all.slice() };
   }
 
-  const loopStart = contiguousIndex(edgeIds, loopEdgeIds);
-  if (loopStart === null) {
+  let loopStart: number | null;
+  let loopEndExclusive: number;
+  if (candidate.pairKind === "radialReturn") {
+    const mandatoryLap = candidate.edgeRouteLegs.find((leg) => leg.role === "mandatory_lap");
+    loopStart = mandatoryLap?.startEdgeIndex ?? null;
+    loopEndExclusive = mandatoryLap?.endEdgeIndexExclusive ?? -1;
+  } else {
+    loopStart = contiguousIndex(edgeIds, candidate.loop.edgeIds);
+    loopEndExclusive = loopStart === null ? -1 : loopStart + candidate.loop.edgeIds.length;
+  }
+  if (loopStart === null || loopEndExclusive <= loopStart) {
     return { ...empty, main: all.slice() };
   }
-  const loopEndExclusive = loopStart + loopEdgeIds.length;
 
   // 課金区間は entry エッジから exit エッジまで（entry/exit は loop に含まれる）。
   const entryIndex = edgeIds.indexOf(candidate.entryId);

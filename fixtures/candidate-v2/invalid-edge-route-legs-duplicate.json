@@ -1,0 +1,8 @@
+{
+  "edgeRouteLegs": [
+    { "role": "entry_approach", "resolvedSegmentId": "fixture:resolved:entry", "startEdgeIndex": 0, "endEdgeIndexExclusive": 3 },
+    { "role": "mandatory_lap", "resolvedSegmentId": "fixture:resolved:lap", "startEdgeIndex": 2, "endEdgeIndexExclusive": 5 },
+    { "role": "return_corridor", "resolvedSegmentId": "fixture:resolved:return", "startEdgeIndex": 5, "endEdgeIndexExclusive": 6 },
+    { "role": "exit_approach", "resolvedSegmentId": "fixture:resolved:exit", "startEdgeIndex": 6, "endEdgeIndexExclusive": 7 }
+  ]
+}

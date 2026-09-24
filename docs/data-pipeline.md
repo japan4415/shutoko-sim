@@ -151,7 +151,7 @@
 
 Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在させる。既存の `schemaVersion: 1` は現行どおりに読み込める。同一ファイルを schema 2 へ更新する時も、既存 C1 8要素の項目、値、意味は変更しない。`pairKind` を持たない要素は legacy ring pair と解釈する。
 
-Issue #62 で parser は `schemaVersion` を明示的に 1 / 2 へ dispatch し、全 nested struct の `deny_unknown_fields` を実装した。schema 2 では `pairKind` がない要素を legacy ring、`pairKind: "radialReturn"` と `routePlanVersion: 1` を持つ要素を diagnostic radial pair として読む。radial pair は graph schema 4 の実装と exact binding 完了まで `Graph.billingPairs` へ入れない。以下の fail-closed 規則は Issue #62 の fixture と unit test で検証済み。
+Issue #62 で parser は `schemaVersion` を明示的に 1 / 2 へ dispatch し、全 nested struct の `deny_unknown_fields` を実装した。schema 2 では `pairKind` がない要素を legacy ring、`pairKind: "radialReturn"` と `routePlanVersion: 1` を持つ要素を diagnostic radial pair として読む。Issue #65 で graph schema 4 reader は両 variant と binding / membership / resolved segment を読むが、diagnostic radial pair は exact binding 完了まで `Graph.billingPairs` へ昇格させない。以下の fail-closed 規則は Issue #62 の fixture と unit test で検証済み。
 
 混在の規則は次のとおりである。
 
@@ -349,7 +349,7 @@ mandatory lap 自身の境界は `routePlan.mandatoryLap.firstEdgeId` / `lastEdg
 | なし | `routePlanVersion`, `entryCorridor`, `anchor`, `mandatoryLap`, `returnCorridor` | radial variant だけを必須にする。 |
 | なし | `pairEligibility`, `loopValidation`, `tariff` の独立 status | endpoint support、routing capability、loop validation、料金状態を混在させない。 |
 
-generated graph の `billingPairs[]` も同じ判別 union にする。schema 2/3 の `pairKind` なしは legacy として読めるが、schema 4 の builder 出力では `pairKind` を必ず書く。`legacyRing` は `entryToAnchorEdgeIds` と `anchorToExitEdgeIds` を必須にし、`radialReturn` は `anchorNodeId` を省略する。未知の kind、anchor kind、route plan version は reader と builder の両方で拒否する。
+generated graph の `billingPairs[]` も同じ判別 union とする。schema 2/3 の `pairKind` なしは legacy として読めるが、schema 4 の builder 出力では `pairKind` を必ず書く。`legacyRing` は `entryToAnchorEdgeIds` と `anchorToExitEdgeIds` を必須にし、`radialReturn` は `anchorNodeId` を省略する。未知の kind、anchor kind、route plan version は reader と builder の両方で拒否する。Issue #65 で schema 4 builder 出力の legacy pair を明示 union へ変換し、core reader、WASM 型、Web Worker の dispatch / fail-closed 契約を追加した。
 
 以下はreader fixtureのwire fragmentである。IDとEdgeは実装テスト用の synthetic value であり、天現寺 binding が解けたこと、または公開可能な pair であることを表さない。`legacyRing` と `radialReturn` の判別、必須 field、status の配置を同じ例で確認する。
 
@@ -527,7 +527,7 @@ schema 4 の manifest は `billingPairsVersion=v2`、graph schema 4、route plan
 
 ### 3.3 `RouteMembershipIndex` は本線 relation と ramp binding を別々に証明する
 
-Issue #63 で graph-builder にこのデータ型と生成・検証処理を追加し、Issue #64 で `routePlanLapV1` の directed mandatory lap と return-corridor First Exit を同じ membership index 上で生成・検証する処理を追加した。`--graph-schema 4` を明示した場合だけ `graph.json` の top-level に `routeMemberships[]` を出力し、既定の schema 2 / `fixtures/generated/*` は変更しない。OSM relation の `relationMainline` と、正規ランプ台帳の exact directed binding に由来する `boundRamp` は同じ route/direction の membership 内でも別 segment として保持する。各 segment の `orderedEdgeIdsSha256`、source snapshot hash、way/node/Edge 連続性を builder が検証する。relation member は graph 上の端点連続性から directed path として再構成し、並び替えを無検証な断片にしない。`directionMappingVersion=osm-relation-role/v1` を記録し、route 2 の OSM `forward` / `backward` を `outbound` / `inbound` に正規化する。CLI の schema 4 opt-in は現在の実 snapshot に C1 relation `4256008` と route 2 relation `4256339` が揃う場合だけ relation ID を固定し、合成 snapshot では入力中の route relation を処理する。固定対象以外の relation は bound ramp evidence としてのみ保持する。schema 4 reader、manifest への route membership hash 統合、公開 release の切替は #65/#66 の範囲である。`find_first_exits_from_anchor` は C1 legacy のまま保存し、membership 制約付きの `find_first_exit_on_corridor` は B と return corridor の initial edge から relationMainline の順序どおりに一般 Exit を探す。declared candidate の exact binding が `unresolved` / `unsupported` の場合は次の supported Exit へ進まず、その状態を返す。
+Issue #63 で graph-builder にこのデータ型と生成・検証処理を追加し、Issue #64 で `routePlanLapV1` の directed mandatory lap と return-corridor First Exit を同じ membership index 上で生成・検証する処理を追加した。`--graph-schema 4` を明示した場合だけ `graph.json` の top-level に `routeMemberships[]` を出力し、既定の schema 2 / `fixtures/generated/*` は変更しない。OSM relation の `relationMainline` と、正規ランプ台帳の exact directed binding に由来する `boundRamp` は同じ route/direction の membership 内でも別 segment として保持する。各 segment の `orderedEdgeIdsSha256`、source snapshot hash、way/node/Edge 連続性を builder が検証する。relation member は graph 上の端点連続性から directed path として再構成し、並び替えを無検証な断片にしない。`directionMappingVersion=osm-relation-role/v1` を記録し、route 2 の OSM `forward` / `backward` を `outbound` / `inbound` に正規化する。CLI の schema 4 opt-in は現在の実 snapshot に C1 relation `4256008` と route 2 relation `4256339` が揃う場合だけ relation ID を固定し、合成 snapshot では入力中の route relation を処理する。固定対象以外の relation は bound ramp evidence としてのみ保持する。schema 4 reader は #65 で実装済み。manifest への route membership hash 統合と公開 release の切替は #66 の範囲である。`find_first_exits_from_anchor` は C1 legacy のまま保存し、membership 制約付きの `find_first_exit_on_corridor` は B と return corridor の initial edge から relationMainline の順序どおりに一般 Exit を探す。declared candidate の exact binding が `unresolved` / `unsupported` の場合は次の supported Exit へ進まず、その状態を返す。
 
 OSM route relation は mainline を列挙し、一般入口・出口の ramp way を含まない。目黒 entry way `207535708` や天現寺 exit candidate way `172358461` / `422023171` を mainline relation の member として扱い続けると、正しい ramp binding を relation の連続 Edge 列へ不正に対応させる。したがって、graph schema 4 の top-level `routeMemberships[]` は次の二層構造にする。
 
@@ -644,7 +644,7 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 
 ### 3.4 2号計画の診断用データと公開 BillingPair を分ける
 
-本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、parser test と snapshot で同じ wire shape を確認している。Issue #64 では同じ fixture を graph-builder の diagnostic route-plan resolver に渡し、inner / outer の M→B 長弧と return corridor の状態を検証する。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
+本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、parser test と snapshot で同じ wire shape を確認している。Issue #64 では同じ fixture を graph-builder の diagnostic route-plan resolver に渡し、inner / outer の M→B 長弧と return corridor の状態を検証する。Issue #65 では synthetic graph / wire fragment を reader と WASM/Web consumer へ通し、完全な exact binding のみ graph schema 4 の radial pair として受理する。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
 
 binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。binding が解けた後に、route membership、First Exit、全 segment の完全分割を再検証し、graph schema 4 の `radialReturn` として昇格する。昇格後も Issue #41 までは `amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced` を維持する。
 

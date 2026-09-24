@@ -4360,6 +4360,18 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
     let graph_json: serde_json::Value = serde_json::from_str(&graph_raw).unwrap();
     assert_eq!(graph_json["schemaVersion"], 4);
     assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 8);
+    for pair in graph_json["billingPairs"].as_array().unwrap() {
+        assert_eq!(pair["pairKind"], "legacyRing");
+        assert_eq!(pair["anchor"]["anchorKind"], "sameNode");
+        assert_eq!(pair["anchor"]["arcPolicy"], "sameNodeLoop");
+        assert!(pair["pairEligibility"]["status"].is_string());
+        assert_eq!(pair["loopValidation"]["status"], "declared_route_validated");
+        assert!(pair["tariff"]["status"].is_string());
+    }
+    let prepared = shutoko_routing_core::prepare_json(&graph_raw, "{}").unwrap();
+    assert_eq!(prepared.graph().schema_version, 4);
+    assert_eq!(prepared.graph().billing_pairs.len(), 8);
+    assert!(prepared.radial_billing_pairs().is_empty());
     let edge_ids = graph_json["edges"]
         .as_array()
         .unwrap()

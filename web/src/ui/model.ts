@@ -612,6 +612,16 @@ function timePerYenText(candidate: Candidate): string | null {
 export function toCardModel(candidate: Candidate, index = 1): CardModel {
   const entry = rampName(candidate, "entry");
   const exit = rampName(candidate, "exit");
+  const isRadial = candidate.pairKind === "radialReturn";
+  const mapsUrl = isRadial ? "" : candidate.handoff.mapsUrl;
+  const chargedSection = isRadial
+    ? "首都高区間: 入口 → 周回 → 戻り"
+    : `課金対象: ${entry} → ${exit} の1区間`;
+  const loopEdgeIds = isRadial
+    ? candidate.edgeRouteLegs
+        .filter((leg) => leg.role === "mandatory_lap")
+        .flatMap((leg) => candidate.edgeIds.slice(leg.startEdgeIndex, leg.endEdgeIndexExclusive))
+    : candidate.loop.edgeIds;
   return {
     id: candidate.id,
     index,
@@ -629,13 +639,13 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     reasons: candidate.reasons.map(reasonText),
     route: `${entry} → ${exit}`,
     roadNames: candidate.roadNames,
-    chargedSection: `課金対象: ${entry} → ${exit} の1区間`,
+    chargedSection,
     warnings: candidate.warnings.map(warningText),
-    mapsUrl: candidate.handoff.mapsUrl,
+    mapsUrl,
     geometry: candidate.geometry,
     entryId: candidate.entryId,
     exitId: candidate.exitId,
-    loopEdgeIds: candidate.loop.edgeIds,
+    loopEdgeIds,
     edgeIds: candidate.edgeIds,
   };
 }

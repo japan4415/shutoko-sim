@@ -2,7 +2,7 @@
 
 ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、schema 2 / 3 / 4 の対応表、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。schema 4 では `routeMemberships` と `billingPairs[].pairKind` / anchor kind も必須にする。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
 
-ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65 で WASM 境界が schema 4 pair union と Candidate v2 契約を受け付けるため `contractVersion=2`、`graphSchemaVersion=4`、`supportedGraphSchemaVersions=[2,3,4]` に更新した。engine package version は C1 release との互換性維持のため `0.1.0` のままにする。Issue #66 で公開 graph の既定 schema を 4 に切り替え、release `all-real-v3` の manifest に `graphSchemaVersion=4`、`routePlanVersion=1`、`routeMembershipsSha256` を記録する。Web Worker は manifest の graph schema、billing pair version、route plan version、route membership hash を graph artifact と照合してから WASM prepare を実行する。
+ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65 で WASM 境界が schema 4 pair union と Candidate v2 契約を受け付けるため `contractVersion=2`、`graphSchemaVersion=4`、`supportedGraphSchemaVersions=[2,3,4]` に更新した。engine package version は C1 release との互換性維持のため `0.1.0` のままにする。Issue #69 で `LegacyCandidate | TopologyOnlyCandidate | RadialCandidate` の3種類、dynamic topology-only、synthetic radial検索を追加したため `contractVersion=3` へ更新した。Issue #66 で公開 graph の既定 schema を 4 に切り替え、release `all-real-v3` の manifest に `graphSchemaVersion=4`、`routePlanVersion=1`、`routeMembershipsSha256` を記録する。Web Worker は manifest の graph schema、billing pair version、route plan version、route membership hash を graph artifact と照合してから WASM prepare を実行する。
 
 ## 今回の実装範囲
 
@@ -37,16 +37,17 @@ node scripts/test-wasm.mjs
 `dist/wasm/` に `.wasm`、ES module の JS glue、および TypeScript 型定義を生成する。
 - TypeScript 正典型定義: `crates/routing-wasm/types/index.d.ts`
 - ビルドスクリプト（`scripts/build-wasm.sh`）がビルド完了時に `dist/wasm/index.d.ts` へコピーし、npm パッケージ / Web Worker から直接型参照可能にする。
-- 定義される主要型: `SearchRequest`, `SearchLimits`, `SearchResult`, `LegacyCandidate`, `RadialCandidate`, `Candidate`, `GraphBillingPairV2`, `RouteMembershipIndex`, `EdgeRouteLeg`, `Handoff`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
+- 定義される主要型: `SearchRequest`, `SearchLimits`, `SearchResult`, `LegacyCandidate`, `TopologyOnlyCandidate`, `RadialCandidate`, `Candidate`, `GraphBillingPairV2`, `RouteMembershipIndex`, `EdgeRouteLeg`, `EstimatedLeg`, `Handoff`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
 
 `test-wasm.mjs` は配信用と同じ `--target web` の glue と WASM を Node.js でロードし、以下を自動検証する:
 1. graph schema 2 / 4 の prepare、schema 4 `legacyRing` / `radialReturn` と `sameNode` / `directedJunction` の reader 契約
 2. 合成グラフに対する `originNodeId` 探索および期待されるエッジ列・時間・料金の算出
 3. 決定論性（同一入力による連続実行でバイト完全一致）
 4. 候補の新フィールド構造（GeoJSON `LineString` 幾何、`mapsUrl` 形式および長さ ≤ 2,048、`snappedOrigin`、`warnings` への `HANDOFF_WAYPOINTS_UNVERIFIED` の包含）
-5. 座標入力（`origin: { lat, lon }`）による空間スナップ探索
-6. 200m 超過座標における接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
-7. 異常入力の拒否と JavaScript Error（Error の `message` に `RoutingErrorPayload { code: "INVALID_INPUT", message }` の JSON 文字列）のスロー検証
+5. schema 4のsynthetic radial pairから4 highway leg / 2 surface leg / 距離式を持つ`RadialCandidate`と、`chargedSectionCount`を持たない`TopologyOnlyCandidate`の生成
+6. 座標入力（`origin: { lat, lon }`）による空間スナップ探索
+7. 200m 超過座標における接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
+8. 異常入力の拒否と JavaScript Error（Error の `message` に `RoutingErrorPayload { code: "INVALID_INPUT", message }` の JSON 文字列）のスロー検証
 
 ## 呼び出し
 

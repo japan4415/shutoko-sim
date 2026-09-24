@@ -2140,7 +2140,7 @@ fn search_request_explicit_ramp_filters() {
     assert_eq!(res_ginza.status, "ok");
     assert_eq!(res_ginza.candidates.len(), 1);
     assert_eq!(
-        res_ginza.candidates[0].entry.ramp_id.as_deref(),
+        res_ginza.candidates[0].entry().ramp_id.as_deref(),
         Some("ramp:c1:ginza-entry")
     );
 
@@ -2217,9 +2217,22 @@ fn boundary_jct_and_half_ic_model_contract() {
 // ---------------------------------------------------------------------------
 mod coordinate_entry_tiers {
     use shutoko_routing_core::{
-        search, BillingPair, Edge, EdgeKind, Graph, LatLng, Node, OdTariff, Price, Ramp, RampKind,
-        SearchLimits, SearchRequest, VerificationStatus,
+        search, BillingPair, Candidate, Edge, EdgeKind, Graph, LatLng, LegacyCandidate, Node,
+        OdTariff, Price, Ramp, RampKind, SearchLimits, SearchRequest, TopologyOnlyCandidate,
+        VerificationStatus,
     };
+
+    fn legacy(candidate: &Candidate) -> &LegacyCandidate {
+        candidate
+            .as_legacy()
+            .expect("verified tier expects LegacyCandidate")
+    }
+
+    fn topology_only(candidate: &Candidate) -> &TopologyOnlyCandidate {
+        candidate
+            .as_topology_only()
+            .expect("dynamic tier expects TopologyOnlyCandidate")
+    }
 
     const RELEASE: &str = "tier-v1";
     const PROFILE: &str = "passenger-car-etc";
@@ -2439,7 +2452,7 @@ mod coordinate_entry_tiers {
         result
             .candidates
             .iter()
-            .map(|c| c.entry.ramp_id.clone())
+            .map(|c| c.entry().ramp_id.clone())
             .collect()
     }
 
@@ -2447,7 +2460,7 @@ mod coordinate_entry_tiers {
         result
             .candidates
             .iter()
-            .map(|c| c.exit.ramp_id.clone())
+            .map(|c| c.exit().ramp_id.clone())
             .collect()
     }
 
@@ -2497,11 +2510,11 @@ mod coordinate_entry_tiers {
         assert_eq!(result.status, "ok", "reason={:?}", result.reason);
         assert!(!result.candidates.is_empty());
         assert_eq!(
-            result.candidates[0].entry.ramp_id.as_deref(),
+            result.candidates[0].entry().ramp_id.as_deref(),
             Some("ramp:t:a-entry-1"),
             "the lex-smaller ramp at the nearest snap node must win"
         );
-        assert_eq!(result.candidates[0].snapped_origin.node_id, "sA");
+        assert_eq!(result.candidates[0].snapped_origin().node_id, "sA");
         assert!(
             !entry_ramps(&result)
                 .iter()
@@ -2548,7 +2561,7 @@ mod coordinate_entry_tiers {
         let result = search(&world.graph(), &request(30, 60), &SearchLimits::default()).unwrap();
         assert_eq!(result.status, "ok", "reason={:?}", result.reason);
         assert_eq!(result.candidates.len(), 1);
-        let candidate = &result.candidates[0];
+        let candidate = legacy(&result.candidates[0]);
         assert_eq!(candidate.exit.ramp_id.as_deref(), Some("ramp:t:v-exit"));
         assert_eq!(candidate.toll.amount_yen, Some(300));
         assert_eq!(candidate.toll.billing_pair_id, "bp:t:verified");
@@ -2599,7 +2612,7 @@ mod coordinate_entry_tiers {
         assert!(!result.candidates.is_empty());
         assert!(result.candidates.len() <= 2);
         assert_eq!(
-            result.candidates[0].exit.ramp_id.as_deref(),
+            result.candidates[0].exit().ramp_id.as_deref(),
             Some("ramp:t:c-exit-1"),
             "stable ID order must pick the lex-smaller exit first"
         );
@@ -2683,16 +2696,16 @@ mod coordinate_entry_tiers {
         let result = search(&world.graph(), &request(30, 60), &SearchLimits::default()).unwrap();
         assert_eq!(result.status, "ok", "reason={:?}", result.reason);
         assert_eq!(
-            result.candidates[0].entry.ramp_id.as_deref(),
+            result.candidates[0].entry().ramp_id.as_deref(),
             Some("ramp:t:d-entry"),
             "the nearest dynamic tier must win"
         );
         assert_eq!(
-            result.candidates[0].exit.ramp_id.as_deref(),
+            result.candidates[0].exit().ramp_id.as_deref(),
             Some("ramp:t:d-fallback-exit"),
             "fallback exit comes from the Verified pair ledger"
         );
-        assert_eq!(result.candidates[0].toll.amount_yen, None);
+        assert_eq!(topology_only(&result.candidates[0]).toll.amount_yen, None);
         assert_eq!(result.ranking_mode, "shutoko_time");
     }
 
@@ -2740,7 +2753,7 @@ mod coordinate_entry_tiers {
         let result = search(&world.graph(), &request(30, 60), &SearchLimits::default()).unwrap();
         assert_eq!(result.status, "ok", "reason={:?}", result.reason);
         assert_eq!(
-            result.candidates[0].entry.ramp_id.as_deref(),
+            result.candidates[0].entry().ramp_id.as_deref(),
             Some("ramp:t:live-entry"),
             "the fully evaluated no-candidate nearest tier must fall through"
         );
@@ -3009,10 +3022,10 @@ mod coordinate_entry_tiers {
         let result = search(&world.graph(), &request(30, 60), &limits).unwrap();
         assert_eq!(result.status, "ok", "reason={:?}", result.reason);
         assert_eq!(
-            result.candidates[0].entry.ramp_id.as_deref(),
+            result.candidates[0].entry().ramp_id.as_deref(),
             Some("ramp:t:p-entry")
         );
-        assert_eq!(result.candidates[0].toll.amount_yen, Some(300));
+        assert_eq!(legacy(&result.candidates[0]).toll.amount_yen, Some(300));
     }
 
     fn cohort_world(with_tariff: bool) -> World {
@@ -3041,10 +3054,8 @@ mod coordinate_entry_tiers {
         world
     }
 
-    /// One un-priced dynamic exit plus one OD-tariff exit must produce a single
-    /// priced cohort; unknown and priced candidates never mix.
     #[test]
-    fn dynamic_tier_cohort_is_homogeneous() {
+    fn topology_only_candidates_never_enter_product_cohort() {
         let priced = search(
             &cohort_world(true).graph(),
             &request(30, 60),
@@ -3053,10 +3064,19 @@ mod coordinate_entry_tiers {
         .unwrap();
         assert_eq!(priced.status, "ok", "reason={:?}", priced.reason);
         assert!(!priced.candidates.is_empty());
-        assert_eq!(priced.ranking_mode, "time_per_yen");
+        assert_eq!(priced.ranking_mode, "shutoko_time");
         for candidate in &priced.candidates {
+            let candidate = topology_only(candidate);
             assert_eq!(candidate.toll.amount_yen, Some(300));
+            assert_eq!(
+                candidate.tariff_status,
+                shutoko_routing_core::TariffStatus::Priced
+            );
             assert_eq!(candidate.exit.ramp_id.as_deref(), Some("ramp:t:h-exit-1"));
+            assert!(candidate
+                .reasons
+                .iter()
+                .all(|reason| reason == "TOPOLOGY_ONLY"));
         }
 
         let unpriced = search(
@@ -3069,7 +3089,12 @@ mod coordinate_entry_tiers {
         assert!(!unpriced.candidates.is_empty());
         assert_eq!(unpriced.ranking_mode, "shutoko_time");
         for candidate in &unpriced.candidates {
+            let candidate = topology_only(candidate);
             assert_eq!(candidate.toll.amount_yen, None);
+            assert_eq!(
+                candidate.tariff_status,
+                shutoko_routing_core::TariffStatus::Unpriced
+            );
         }
     }
 

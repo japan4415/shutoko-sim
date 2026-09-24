@@ -1,8 +1,21 @@
 use serde_json::{json, Value};
 use shutoko_routing_core::{
-    prepare_json, search, search_json, Graph, LatLng, SearchLimits, SearchRequest,
+    prepare_json, search, search_json, Candidate, Graph, LatLng, LegacyCandidate, SearchLimits,
+    SearchRequest, TopologyOnlyCandidate,
 };
 use std::collections::{BTreeSet, HashMap};
+
+fn legacy(candidate: &Candidate) -> &LegacyCandidate {
+    candidate
+        .as_legacy()
+        .expect("real graph contract expects LegacyCandidate")
+}
+
+fn topology_only(candidate: &Candidate) -> &TopologyOnlyCandidate {
+    candidate
+        .as_topology_only()
+        .expect("dynamic OD contract expects TopologyOnlyCandidate")
+}
 
 fn real_graph_str() -> &'static str {
     include_str!("../../../fixtures/generated/graph.json")
@@ -232,7 +245,7 @@ fn real_graph_routing_core_search_returns_candidates() {
         "expected at least 1 candidate route from real graph"
     );
 
-    let c = &result.candidates[0];
+    let c = legacy(&result.candidates[0]);
     assert!(
         !c.edge_ids.is_empty(),
         "candidate edgeIds must be non-empty"
@@ -292,7 +305,7 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
         .expect("search must succeed at boundary-1s");
     assert_eq!(res_before_boundary.status, "ok");
     assert_eq!(res_before_boundary.ranking_mode, "time_per_yen");
-    let c = &res_before_boundary.candidates[0];
+    let c = legacy(&res_before_boundary.candidates[0]);
     assert_eq!(c.toll.amount_yen, Some(300));
     assert_eq!(
         c.toll.effective_from.as_deref(),
@@ -305,7 +318,7 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
         .expect("search must succeed at boundary");
     assert_eq!(res_at_boundary.status, "ok");
     assert_eq!(res_at_boundary.ranking_mode, "time_per_yen");
-    let c = &res_at_boundary.candidates[0];
+    let c = legacy(&res_at_boundary.candidates[0]);
     assert_eq!(c.toll.amount_yen, Some(300));
     assert_eq!(
         c.toll.effective_from.as_deref(),
@@ -318,7 +331,7 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
         .expect("search must succeed post-revision");
     assert_eq!(res_post.status, "ok");
     assert_eq!(res_post.ranking_mode, "time_per_yen");
-    let c = &res_post.candidates[0];
+    let c = legacy(&res_post.candidates[0]);
     assert_eq!(c.toll.amount_yen, Some(300));
     assert_eq!(
         c.toll.effective_from.as_deref(),
@@ -331,7 +344,7 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
         .expect("search must succeed prior to tariff start");
     assert_eq!(res_prior.status, "ok");
     assert_eq!(res_prior.ranking_mode, "shutoko_time");
-    let c = &res_prior.candidates[0];
+    let c = legacy(&res_prior.candidates[0]);
     assert_eq!(c.toll.amount_yen, None);
     assert_eq!(c.toll.effective_from, None);
     assert_eq!(c.toll.effective_to, None);
@@ -425,7 +438,7 @@ fn explicit_full_network_ramps_route_deterministically_within_budget() {
             first
                 .candidates
                 .first()
-                .map_or(0, |c| c.r#loop.distance_meters)
+                .map_or(0, |c| topology_only(c).r#loop.distance_meters)
         );
         assert_eq!(first.status, "ok", "{area}: reason={:?}", first.reason);
         assert!(first.expanded_states < limits.max_expanded_states);
@@ -438,7 +451,7 @@ fn explicit_full_network_ramps_route_deterministically_within_budget() {
             serde_json::to_string(&second).unwrap(),
             "{area} explicit search must be deterministic"
         );
-        let candidate = &first.candidates[0];
+        let candidate = topology_only(&first.candidates[0]);
         assert_eq!(candidate.entry.ramp_id.as_deref(), Some(entry));
         assert_eq!(candidate.exit.ramp_id.as_deref(), Some(exit));
         assert!(candidate.r#loop.distance_meters >= limits.min_loop_meters);
@@ -591,7 +604,8 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         let candidate = result
             .candidates
             .iter()
-            .find(|c| c.toll.billing_pair_id == pair.id)
+            .find(|c| legacy(c).toll.billing_pair_id == pair.id)
+            .map(legacy)
             .unwrap_or_else(|| {
                 panic!(
                     "candidate with billing_pair_id {} must be found from origin {} with max_minutes={} ({})",
@@ -688,7 +702,8 @@ fn real_graph_coordinate_input_snap_and_candidate_enrichment() {
     let candidate = result
         .candidates
         .iter()
-        .find(|c| c.toll.billing_pair_id == "bp:c1-outer:kandabashi-takaracho")
+        .find(|c| legacy(c).toll.billing_pair_id == "bp:c1-outer:kandabashi-takaracho")
+        .map(legacy)
         .expect("kandabashi-takaracho must be available from Kandabashi coordinates");
     assert_eq!(candidate.entry.name.as_deref(), Some("神田橋入口"));
     assert_eq!(candidate.exit.name.as_deref(), Some("宝町出口"));
@@ -816,7 +831,7 @@ fn test_eight_pairs_determinism_and_performance_table() {
         let own = res
             .candidates
             .iter()
-            .any(|c| c.toll.billing_pair_id == p.id);
+            .any(|c| legacy(c).toll.billing_pair_id == p.id);
         eprintln!(
             "{} | {} | {} | {} | {} | {} | {:.2}ms | 3x_byte_identical_PASS",
             p.id,
@@ -921,7 +936,7 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
         1,
         "東京駅 15-60 分は最近接の宝町 tier が返す 1 候補だけを返す"
     );
-    let candidate = &result.candidates[0];
+    let candidate = topology_only(&result.candidates[0]);
     assert_eq!(
         candidate.toll.billing_pair_id,
         "od:ramp:c1-inner:takaracho-entry:ramp:c1-outer:takaracho-exit"
@@ -966,8 +981,9 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
         .expect("30-60 minute search must not error");
     assert_eq!(wide_window.status, "ok");
     assert_eq!(wide_window.candidates.len(), 1);
-    assert_eq!(wide_window.candidates[0].duration.plan_seconds, 2_795);
-    assert_eq!(wide_window.candidates[0].r#loop.distance_meters, 20_205);
+    let wide_candidate = topology_only(&wide_window.candidates[0]);
+    assert_eq!(wide_candidate.duration.plan_seconds, 2_795);
+    assert_eq!(wide_candidate.r#loop.distance_meters, 20_205);
     assert_eq!(wide_window.min_plan_seconds, Some(1_610));
 
     // 決定論: 同一入力の再実行で JSON が完全一致する。
@@ -983,7 +999,7 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
     let nearest_access_dist = result
         .candidates
         .iter()
-        .map(|c| c.snapped_origin.distance_meters)
+        .map(|c| topology_only(c).snapped_origin.distance_meters)
         .fold(f64::MAX, f64::min);
     assert!(
         nearest_access_dist < 2000.0,
@@ -1039,7 +1055,7 @@ fn shinjuku_and_shibuya_stations_return_candidates() {
         shinjuku.reason
     );
     assert_eq!(shinjuku.candidates.len(), 1);
-    let shinjuku_candidate = &shinjuku.candidates[0];
+    let shinjuku_candidate = topology_only(&shinjuku.candidates[0]);
     assert_eq!(
         shinjuku_candidate.entry.ramp_id.as_deref(),
         Some("ramp:4-inbound:ramp-entry")
@@ -1092,7 +1108,7 @@ fn shinjuku_and_shibuya_stations_return_candidates() {
         shibuya.reason
     );
     assert_eq!(shibuya.candidates.len(), 1);
-    let candidate = &shibuya.candidates[0];
+    let candidate = topology_only(&shibuya.candidates[0]);
     assert_eq!(
         candidate.entry.ramp_id.as_deref(),
         Some("ramp:3-outbound:shibuya-entry")
@@ -1266,8 +1282,8 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         tachikawa_min_plan <= FOUR_HOURS_SECONDS,
         "tachikawa minPlanSeconds ({tachikawa_min_plan}) must fit the 240 min window"
     );
-    // 最寄り 4号高井戸入口 tier は OD 料金表を持つため priced cohort。
-    let tachikawa_candidate = &tachikawa_wide.candidates[0];
+    // 最寄り4号高井戸入口はOD料金表を持つが、dynamic ODのため商品cohortには入らない。
+    let tachikawa_candidate = topology_only(&tachikawa_wide.candidates[0]);
     assert_eq!(
         tachikawa_candidate.entry.ramp_id.as_deref(),
         Some("ramp:4-inbound:takaido-entry")
@@ -1277,9 +1293,17 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         Some("ramp:4-outbound:takaido-exit")
     );
     assert_eq!(tachikawa_candidate.toll.amount_yen, Some(300));
+    assert_eq!(
+        tachikawa_candidate.tariff_status,
+        shutoko_routing_core::TariffStatus::Priced
+    );
+    assert_eq!(
+        tachikawa_candidate.eligibility_status,
+        shutoko_routing_core::PairEligibilityStatus::TopologyOnly
+    );
     assert_eq!(tachikawa_candidate.duration.plan_seconds, 13_294);
     assert_eq!(tachikawa_min_plan, 10_727);
-    assert_eq!(tachikawa_wide.ranking_mode, "time_per_yen");
+    assert_eq!(tachikawa_wide.ranking_mode, "shutoko_time");
 
     // ── 4. 八王子駅: 最近接の K7横浜青葉入口 tier が動的 OD 候補を返す ──
     let hachioji_wide = search(
@@ -1314,7 +1338,7 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         "hachioji nearest entry must be ~21.4 km, got {:.0} m",
         hachioji_nearest.distance_meters
     );
-    let hachioji_candidate = &hachioji_wide.candidates[0];
+    let hachioji_candidate = topology_only(&hachioji_wide.candidates[0]);
     assert_eq!(
         hachioji_candidate.entry.ramp_id.as_deref(),
         Some("ramp:k7-inbound:yokohama-aoba-entry")
@@ -1537,6 +1561,7 @@ fn meguro_coordinates_select_nearest_entry_across_windows() {
         );
 
         for candidate in &result.candidates {
+            let candidate = topology_only(candidate);
             assert_eq!(
                 candidate.entry.ramp_id.as_deref(),
                 Some("ramp:2-inbound:meguro-entry"),
@@ -1551,6 +1576,22 @@ fn meguro_coordinates_select_nearest_entry_across_windows() {
                 candidate.toll.amount_yen, None,
                 "meguro ({lat}, {lon}) {min}-{max}: dynamic OD has no tariff"
             );
+            assert_eq!(
+                candidate.eligibility_status,
+                shutoko_routing_core::PairEligibilityStatus::TopologyOnly
+            );
+            assert_eq!(
+                candidate.loop_validation_status,
+                shutoko_routing_core::LoopValidationStatus::TopologyOnly
+            );
+            assert_eq!(candidate.reasons, vec!["TOPOLOGY_ONLY"]);
+            let wire = serde_json::to_value(candidate).unwrap();
+            assert!(wire["toll"].get("chargedSectionCount").is_none());
+            assert!(wire["reasons"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|reason| reason != "ONE_SECTION_TOLL"));
             assert!(
                 candidate.toll.toll_source.is_none(),
                 "meguro ({lat}, {lon}) {min}-{max}: unknown toll must not claim a source"
@@ -1561,7 +1602,7 @@ fn meguro_coordinates_select_nearest_entry_across_windows() {
             "meguro ({lat}, {lon}) {min}-{max}: unknown toll ranks by shutoko time"
         );
 
-        let candidate = &result.candidates[0];
+        let candidate = topology_only(&result.candidates[0]);
         assert_eq!(
             candidate.duration.plan_seconds, plan,
             "meguro ({lat}, {lon}) {min}-{max}: pinned plan seconds"
@@ -1635,7 +1676,7 @@ fn meguro_explicit_ramp_pair_matches_coordinate_route() {
             result.reason
         );
         assert_eq!(result.candidates.len(), 1);
-        let candidate = &result.candidates[0];
+        let candidate = topology_only(&result.candidates[0]);
         assert_eq!(
             candidate.entry.ramp_id.as_deref(),
             Some("ramp:2-inbound:meguro-entry")

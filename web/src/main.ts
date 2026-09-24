@@ -1262,7 +1262,9 @@ function renderResult(result: SearchResult): void {
 
   clearRecovery();
   // 料金確定状況は集合全体で判定する。1 件でも未算出なら順位を出さない。
-  const allPriced = candidates.every((candidate) => candidate.toll.amountYen !== null);
+  const allPriced = candidates.every(
+    (candidate) => candidate.pairKind !== "topologyOnly" && candidate.toll.amountYen !== null,
+  );
   const models = candidates.map((candidate, i) => {
     const model = toCardModel(candidate, i + 1);
     model.rankLabel = formatRank(allPriced, i + 1);

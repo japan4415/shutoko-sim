@@ -69,7 +69,10 @@ export function deriveSegments(candidate: Candidate): DerivedSegments {
   const entryIndex = edgeIds.indexOf(candidate.entryId);
   const exitIndex = edgeIds.indexOf(candidate.exitId);
   const charged =
-    entryIndex !== -1 && exitIndex !== -1 && entryIndex <= exitIndex
+    candidate.pairKind !== "topologyOnly" &&
+    entryIndex !== -1 &&
+    exitIndex !== -1 &&
+    entryIndex <= exitIndex
       ? sliceEdges(all, entryIndex, exitIndex + 1)
       : [];
 

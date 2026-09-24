@@ -644,7 +644,7 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 
 ### 3.4 2号計画の診断用データと公開 BillingPair を分ける
 
-本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、parser test と snapshot で同じ wire shape を確認している。Issue #64 では同じ fixture を graph-builder の diagnostic route-plan resolver に渡し、inner / outer の M→B 長弧と return corridor の状態を検証する。Issue #65 では synthetic graph / wire fragment を reader と WASM/Web consumer へ通し、完全な exact binding のみ graph schema 4 の radial pair として受理する。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
+本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、parser test と snapshot で同じ wire shape を確認している。Issue #64 では同じ fixture を graph-builder の diagnostic route-plan resolver に渡し、inner / outer の M→B 長弧と return corridor の状態を検証する。Issue #65 では synthetic graph / wire fragment を reader と WASM/Web consumer へ通し、完全な exact binding のみ graph schema 4 の radial pair として受理する。Issue #69では同じsynthetic graphの`radialReturn`から4 leg / 2 surface leg / 3つのstatusを持つ`RadialCandidate`を生成し、dynamic ODを`TopologyOnlyCandidate`へ分離した。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
 
 binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。binding が解けた後に、route membership、First Exit、全 segment の完全分割を再検証し、graph schema 4 の `radialReturn` として昇格する。昇格後も Issue #41 までは `amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced` を維持する。
 

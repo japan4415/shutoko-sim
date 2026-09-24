@@ -638,6 +638,115 @@ function assertSha256(value: unknown, label: string): asserts value is string {
   }
 }
 
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0;
+}
+
+function validateEstimatedLegsAndTotals(candidate: Record<string, unknown>, label: string): void {
+  const estimated = candidate.estimatedLegs;
+  if (!Array.isArray(estimated) || estimated.length !== 2) {
+    throw contractMismatch(`${label} estimatedLegs が 2 件ではありません`);
+  }
+  const expectedRoles = ["surface_access", "surface_return"];
+  const allowedFields = new Set(["role", "estimated", "distanceMeters", "durationSeconds"]);
+  let surfaceDistance = 0;
+  for (let index = 0; index < estimated.length; index += 1) {
+    const leg = estimated[index];
+    if (
+      !isRecord(leg) ||
+      Object.keys(leg).length !== allowedFields.size ||
+      Object.keys(leg).some((field) => !allowedFields.has(field)) ||
+      leg.role !== expectedRoles[index] ||
+      leg.estimated !== true ||
+      !isNonNegativeSafeInteger(leg.distanceMeters) ||
+      !isNonNegativeSafeInteger(leg.durationSeconds) ||
+      (leg.distanceMeters === 0) !== (leg.durationSeconds === 0)
+    ) {
+      throw contractMismatch(`${label} estimatedLegs[${String(index)}] が不正です`);
+    }
+    surfaceDistance += leg.distanceMeters;
+  }
+  const duration = candidate.duration;
+  if (
+    !isRecord(duration) ||
+    !isNonNegativeSafeInteger(duration.accessSeconds) ||
+    !isNonNegativeSafeInteger(duration.shutokoSeconds) ||
+    !isNonNegativeSafeInteger(duration.returnSeconds) ||
+    !isNonNegativeSafeInteger(duration.baseSeconds) ||
+    !isNonNegativeSafeInteger(duration.bufferSeconds) ||
+    !isNonNegativeSafeInteger(duration.planSeconds)
+  ) {
+    throw contractMismatch(`${label} duration が不正です`);
+  }
+  const baseSeconds = duration.accessSeconds + duration.shutokoSeconds + duration.returnSeconds;
+  const bufferSeconds = Math.max(300, Math.ceil(baseSeconds / 5));
+  if (
+    duration.accessSeconds !== estimated[0].durationSeconds ||
+    duration.returnSeconds !== estimated[1].durationSeconds ||
+    duration.baseSeconds !== baseSeconds ||
+    duration.bufferSeconds !== bufferSeconds ||
+    duration.planSeconds !== baseSeconds + bufferSeconds
+  ) {
+    throw contractMismatch(`${label} duration と estimatedLegs が一致しません`);
+  }
+  if (
+    !isNonNegativeSafeInteger(candidate.distanceMeters) ||
+    !isNonNegativeSafeInteger(candidate.shutokoDistanceMeters) ||
+    !Number.isSafeInteger(surfaceDistance)
+  ) {
+    throw contractMismatch(`${label} distance が不正です`);
+  }
+  if (candidate.distanceMeters !== candidate.shutokoDistanceMeters + surfaceDistance) {
+    throw contractMismatch(`${label} distanceMeters の式が一致しません`);
+  }
+}
+
+function validateTariffStatus(
+  candidate: Record<string, unknown>,
+  label: string,
+  unpricedBillingMustBeNull: boolean,
+): void {
+  const toll = candidate.toll;
+  const amountYen = isRecord(toll) ? toll.amountYen : undefined;
+  const amountValid = amountYen === null || isNonNegativeSafeInteger(amountYen);
+  if (
+    !isRecord(toll) ||
+    !["priced", "unpriced", "expired", "not_applicable"].includes(String(candidate.tariffStatus)) ||
+    !amountValid ||
+    (candidate.tariffStatus === "priced" ? amountYen === null : amountYen !== null) ||
+    (unpricedBillingMustBeNull &&
+      candidate.tariffStatus === "unpriced" &&
+      toll.billingDistanceMeters != null)
+  ) {
+    throw contractMismatch(`${label} tariffStatus が toll と一致しません`);
+  }
+}
+
+function validateTopologyOnlyCandidate(candidate: Record<string, unknown>): void {
+  if (
+    candidate.eligibilityStatus !== "topology_only" ||
+    candidate.loopValidationStatus !== "topology_only" ||
+    !isRecord(candidate.loop) ||
+    candidate.loop.validated !== false ||
+    "anchor" in candidate ||
+    "routePlan" in candidate ||
+    "edgeRouteLegs" in candidate ||
+    !isRecord(candidate.toll) ||
+    "chargedSectionCount" in candidate.toll ||
+    !isRecord(candidate.handoff) ||
+    typeof candidate.handoff.mapsUrl !== "string" ||
+    !Array.isArray(candidate.reasons) ||
+    !candidate.reasons.includes("TOPOLOGY_ONLY") ||
+    candidate.reasons.some(
+      (reason) => reason === "ONE_SECTION_TOLL" || reason === "BEST_TIME_PER_YEN" || reason === "BEST_SHUTOKO_TIME",
+    )
+  ) {
+    throw contractMismatch("topologyOnly candidate の status / loop / toll / reasons が不正です");
+  }
+  validateTariffStatus(candidate, "topologyOnly", false);
+  validateEstimatedLegsAndTotals(candidate, "topologyOnly");
+}
+
 async function validateRadialCandidate(candidate: unknown): Promise<void> {
   if (
     !isRecord(candidate) ||
@@ -651,6 +760,26 @@ async function validateRadialCandidate(candidate: unknown): Promise<void> {
     throw contractMismatch("radialReturn candidate の anchor / routePlan / edgeRouteLegs が不正です");
   }
   assertStringArray(candidate.edgeIds, "radialReturn candidate.edgeIds");
+  validateEstimatedLegsAndTotals(candidate, "radialReturn");
+  const productEligible =
+    candidate.eligibilityStatus === "verified_one_section_ahead" &&
+    candidate.loopValidationStatus === "declared_route_validated";
+  if (
+    !["verified_one_section_ahead", "unverified", "topology_only"].includes(
+      String(candidate.eligibilityStatus),
+    ) ||
+    !["declared_route_validated", "unresolved", "topology_only"].includes(
+      String(candidate.loopValidationStatus),
+    ) ||
+    !Array.isArray(candidate.reasons) ||
+    candidate.reasons.includes("ONE_SECTION_TOLL") ||
+    (!productEligible &&
+      candidate.reasons.some(
+        (reason) => reason === "BEST_TIME_PER_YEN" || reason === "BEST_SHUTOKO_TIME",
+      ))
+  ) {
+    throw contractMismatch("radialReturn candidate reasons が不正です");
+  }
   assertStringArray(candidate.routePlan.membershipIds, "radialReturn routePlan.membershipIds");
   const resolved = candidate.routePlan.resolvedRouteSegments;
   if (!Array.isArray(resolved) || resolved.length !== ROUTE_ROLES.length) {
@@ -717,6 +846,7 @@ async function validateRadialCandidate(candidate: unknown): Promise<void> {
   if (!isRecord(candidate.toll) || "chargedSectionCount" in candidate.toll) {
     throw contractMismatch("radialReturn toll に chargedSectionCount があります");
   }
+  validateTariffStatus(candidate, "radialReturn", true);
   if (!isRecord(candidate.handoff) || candidate.handoff.enabled !== false) {
     throw contractMismatch("radialReturn handoff が無効ではありません");
   }
@@ -754,6 +884,8 @@ export async function parseSearchResult(resultJson: string): Promise<SearchResul
     }
     if (value.pairKind === "radialReturn") {
       await validateRadialCandidate(value);
+    } else if (value.pairKind === "topologyOnly") {
+      validateTopologyOnlyCandidate(value);
     } else if (value.pairKind !== undefined && value.pairKind !== "legacyRing") {
       throw contractMismatch("candidate.pairKind が未知です");
     }

@@ -455,6 +455,8 @@ export function reasonText(code: string): string {
       return "首都高滞在時間が最長";
     case "ONE_SECTION_TOLL":
       return "1区間料金（最低料金）";
+    case "TOPOLOGY_ONLY":
+      return "商品対象外（道路形状のみ）";
     default:
       return code;
   }
@@ -591,11 +593,20 @@ function tollShortText(toll: Toll): string {
     : `${toll.amountYen.toLocaleString("ja-JP")} 円`;
 }
 
+function referenceTollText(toll: Toll): string {
+  return toll.amountYen === null
+    ? "参考料金: 未算出"
+    : `参考料金: ${toll.amountYen.toLocaleString("ja-JP")} 円`;
+}
+
 /**
  * 円あたり効率（首都高時間 / 料金）。amountYen が null のときは算出しない。
  * 「1区間の料金で首都高を約 s 分走る」の比較値をカードに添えるための文字列。
  */
 function timePerYenText(candidate: Candidate): string | null {
+  if (candidate.pairKind === "topologyOnly") {
+    return null;
+  }
   const amount = candidate.toll.amountYen;
   if (amount === null || amount <= 0) {
     return null;
@@ -613,10 +624,13 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
   const entry = rampName(candidate, "entry");
   const exit = rampName(candidate, "exit");
   const isRadial = candidate.pairKind === "radialReturn";
+  const isTopologyOnly = candidate.pairKind === "topologyOnly";
   const mapsUrl = isRadial ? "" : candidate.handoff.mapsUrl;
-  const chargedSection = isRadial
-    ? "首都高区間: 入口 → 周回 → 戻り"
-    : `課金対象: ${entry} → ${exit} の1区間`;
+  const chargedSection = isTopologyOnly
+    ? "道路形状のみ（商品対象外）"
+    : isRadial
+      ? "首都高区間: 入口 → 周回 → 戻り"
+      : `課金対象: ${entry} → ${exit} の1区間`;
   const loopEdgeIds = isRadial
     ? candidate.edgeRouteLegs
         .filter((leg) => leg.role === "mandatory_lap")
@@ -632,7 +646,7 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     returnMinutes: minutesFromSeconds(candidate.duration.returnSeconds),
     bufferMinutes: minutesFromSeconds(candidate.duration.bufferSeconds),
     distanceKm: Number((candidate.distanceMeters / 1000).toFixed(1)),
-    toll: tollText(candidate.toll),
+    toll: isTopologyOnly ? referenceTollText(candidate.toll) : tollText(candidate.toll),
     tollShort: tollShortText(candidate.toll),
     timePerYen: timePerYenText(candidate),
     rankLabel: null,

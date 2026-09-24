@@ -21,7 +21,7 @@
 
 ## Issue #42: Directed Route-Plan Lap v1（設計・未実装）
 
-本節は、環状線だけを扱う現行モデル、放射線から環状線を通って元の路線へ戻る経路まで拡張するための設計である。まだ実装していない。データ・生成コード・探索コード・公開成果物への反映は別の implementation issue で行い、それまでは現行 C1 8 ペアの挙動を変えない。
+本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路的设计を定めたもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型は実装済みだが、route membership、探索、graph schema 4、公開成果物への反映は未実装である。現行 C1 8 ペアの挙動は変えない。
 
 ### 採用案は「指定 route の長弧を1周する」
 
@@ -125,7 +125,7 @@ route planのlegは`sourceSegmentIds[]`でmainlineとrampの由来を明示す�
 | 公開可否 | `unverified`、公開 blocked | `unverified`、公開 blocked |
 | 料金 | `unpriced`、`amountYen=null`、`billingDistanceMeters=null` | 同左 |
 
-この2件は本PRでwire-level schemaとroute shapeを確定した課金ペア設計である。実装issueでは、schema適合のdiagnostic fixtureとC1非回帰テストを作る。天現寺exact directed bindingが解決し、route/direction、First Exit、全端点がすべて通ったときだけ`Graph.billingPairs`の`radialReturn`として昇格する。解決前のplanをpublic candidateとして出さない。
+この2件は、wire-level schemaとroute shapeを確定した課金ペア設計である。Issue #62でschema適合のinner / outer diagnostic fixture、parser test、snapshot、C1非回帰テストを追加した。天現寺exact directed bindingが解決し、route/direction、First Exit、全端点がすべて通ったときだけ`Graph.billingPairs`の`radialReturn`として昇格する。解決前のplanをpublic candidateとして出さない。
 
 目黒入口 → 目黒出口の現行dynamic ODは別分類にする。entry Edgeは`e:w207535708:0:f`、exit Edgeは`e:w207535709:0:f`で、routing topology上は到達可能である。しかし物理的には天現寺Exitが先であり、exact bindingがなければ目黒を「1区間先」にできない。routing v2では`topology_only`とし、「1区間先」「最低料金」、`time_per_yen`の対象から外す。`routingCapability=routable`は道路を追跡できることを示すが、商品eligibilityの証拠ではない。現行pre-v2 outputは後述の互換fieldをdynamic ODにも残しているため、公開契約への移行完了まではこの節の`topology_only`を実装済みと読まない。
 
@@ -202,7 +202,7 @@ Issue #41で公式billing distanceと版管理済み料金規則を確定する�
 
 ### 実装 issue は単独で検証できる順に分ける
 
-graph schema 4をbuilderだけが先に出力する段階は作らない。現行graph readerはunknown fieldを拒否するが、現行seed parserは拒否しない。両者のschema dispatch、reader、release wiringが揃うまで、公開builderの既定出力は現行schemaのまま維持する。
+graph schema 4をbuilderだけが先に出力する段階は作らない。Issue #62 で seed parser は schema 1 / 2 の明示 dispatch、variant ごとの必須field、未知fieldの拒否を実装した。graph readerとrelease wiringは後続issueで整えるまで、公開builderの既定出力は現行schemaのまま維持する。
 
 | Issue | 実装範囲 | 主な受け入れ条件 | 依存 |
 | ---: | --- | --- | --- |

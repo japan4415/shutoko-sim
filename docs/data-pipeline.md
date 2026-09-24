@@ -147,11 +147,11 @@
 > **注記（内回り銀座入口の 1 区間先について）**:
 > 内回り銀座入口 → 新富町出口（0.4km、300 円）は公式資料上の 1 区間先だが、OSM の分流点・合流点の順序（内回り新富町出口の分流点が銀座入口の合流点より上流にある）により First Exit 検証が通らないため未登録。京橋出口は 2 区間先なので登録しない。
 
-### 3.1 `schemaVersion: 2` の混在 seed（設計・未実装）
+### 3.1 `schemaVersion: 2` の混在 seed（parser実装済み）
 
 Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在させる。既存の `schemaVersion: 1` は現行どおりに読み込める。同一ファイルを schema 2 へ更新する時も、既存 C1 8要素の項目、値、意味は変更しない。`pairKind` を持たない要素は legacy ring pair と解釈する。
 
-現在の parser は `schemaVersion` を明示的に dispatch せず、seed の各構造体も `deny_unknown_fields` を持たない。このため、現行実装では未知 version と legacy 互換 field を含む JSON でも v1 要素として読め、未知 field は黙って捨てられる。以下の fail-closed 規則は Issue #1 で実装する契約であり、現行挙動として主张しない。
+Issue #62 で parser は `schemaVersion` を明示的に 1 / 2 へ dispatch し、全 nested struct の `deny_unknown_fields` を実装した。schema 2 では `pairKind` がない要素を legacy ring、`pairKind: "radialReturn"` と `routePlanVersion: 1` を持つ要素を diagnostic radial pair として読む。radial pair は graph schema 4 の実装と exact binding 完了まで `Graph.billingPairs` へ入れない。以下の fail-closed 規則は Issue #62 の fixture と unit test で検証済み。
 
 混在の規則は次のとおりである。
 
@@ -162,7 +162,7 @@ Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在
 - `pairKind` または `routePlanVersion` が未知なら fail-closed で拒否する。
 - radial が `pairKind` / `routePlanVersion` のどちらかを欠く場合、または legacy が variant 必須フィールドを欠く場合も拒否する。
 - seed 内に legacy と radial を何件ずつ含めてよい。ただし ID は重複させない。同じ array 内で endpoint support、pair eligibility、loop validation、tariff status を混ぜない。
-- Issue #1 は、未知 version、各 variant の未知 field、variant 必須 field の欠落をそれぞれ fixture 化・検証してから完了とする。
+- Issue #62 で、未知 version、各 variant の未知 field、variant 必須 field の欠落をそれぞれ fixture 化して検証した。
 
 検証状態は次の軸で独立させ、1つの `status` に押し込まない。
 
@@ -641,7 +641,7 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 
 ### 3.4 2号計画の診断用データと公開 BillingPair を分ける
 
-本節で定義した inner / outer object は、Issue #42 の設計成果を示す schema-valid な diagnostic fixture にする。実装 issue 1 では、この JSON を parser test と snapshot に使う。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
+本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、parser test と snapshot で同じ wire shape を確認している。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
 
 binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。binding が解けた後に、route membership、First Exit、全 segment の完全分割を再検証し、graph schema 4 の `radialReturn` として昇格する。昇格後も Issue #41 までは `amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced` を維持する。
 

@@ -28,7 +28,7 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 
 `anchorNodeId` は入口の合流後から直接区間へ進む本線上の基準状態（ノード）。ここへ一周後に戻り、出口へ進む道路列を定義できるペアを登録する。料金規則の前提は原案に従い、個別ペアの登録ではその適用条件とデータ根拠を確認する。
 
-本節は現行 seed schema 1 / generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の opt-in schema 4 に `RouteMembershipIndex` を追加した。`legacyRing` / `radialReturn` の graph reader、diagnostic plan から公開 BillingPair への昇移、core/WASM/Web の schema 4 consumer は #65/#66 の範囲で未実装である。仕様の正本は[実データ生成パイプライン](data-pipeline.md)とし、既存 C1 8要素の raw seed は変更しない。
+本節は現行 seed schema 1 / generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の opt-in schema 4 に `RouteMembershipIndex` を追加した。schema 4 の membership は `directionMappingVersion` を持ち、relation mainline と bound ramp の endpoint・順序・hash を個別に検証する。`legacyRing` / `radialReturn` の graph reader、diagnostic plan から公開 BillingPair への昇移、core/WASM/Web の schema 4 consumer は #65/#66 の範囲で未実装である。仕様の正本は[実データ生成パイプライン](data-pipeline.md)とし、既存 C1 8要素の raw seed は変更しない。
 
 ## Workers の HTTP 境界
 

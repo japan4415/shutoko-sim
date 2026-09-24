@@ -85,16 +85,16 @@ mandatory lap自身のfirst / last Edgeは`routePlan.mandatoryLap.firstEdgeId` /
 
 ### route と direction は本線relationとramp bindingを別々に証明する
 
-現行 Edge には route membership と走行方向がない。edge kind だけで First Exit を求めると、B 付近の C1 出口や別 arm への近道を先に拾う。Issue #63 で、graph-builder の明示的な `--graph-schema 4` 出力に top-level `routeMemberships[]` を追加した。`RouteMembershipIndex` は OSM route relation の ordered member と way の node 順を `relationMainline` として写像し、正規ランプ台帳と exact directed binding を `boundRamp` として別々に保持する。
+現行 Edge には route membership と走行方向がない。edge kind だけで First Exit を求めると、B 付近の C1 出口や別 arm への近道を先に拾う。Issue #63 で、graph-builder の明示的な `--graph-schema 4` 出力に top-level `routeMemberships[]` を追加した。`RouteMembershipIndex` は OSM route relation の way member と graph の directed path を `relationMainline` として写像し、正規ランプ台帳と exact directed binding を `boundRamp` として別々に保持する。
 
-1つの`RouteMembershipIndex`は`membershipId`、`routeId`、`direction`、`segments[]`を持つ。各`RouteMembershipSegment`は`sourceKind`で由来を分ける。
+1つの`RouteMembershipIndex`は`membershipId`、`routeId`、`direction`、`directionMappingVersion`、`segments[]`を持つ。direction mapping は `osm-relation-role/v1` の固定バージョンを出力し、OSM relation の `forward` / `backward` を路線 2 では `outbound` / `inbound` に正規化し、C1 の `inner` / `outer` は保持する。各`RouteMembershipSegment`は`sourceKind`で由来を分ける。
 
-- `sourceKind=relationMainline`: OSM route relationのordered memberとwayのnode順をgraph Edgeへ写像する。`sourceRelationId`とsnapshot hashを必須にする。
-- `sourceKind=boundRamp`: 正規ランプ台帳とexact directed bindingから、wayをまたぐ順序付きEdge列を作る。`bindingEvidenceId`を必須にし、relation memberであることを求めない。
+- `sourceKind=relationMainline`: OSM route relationのway memberとwayのnode順をgraph Edgeへ写像する。`sourceRelationId`とsnapshot hashを必須にする。graph 上に存在し、route ref または relation name が一致する `motorway` / `motorway_link` だけを受け入れ、名前で明示された入口・出口や別 route の ref/nat_ref を持つ link は除外する。候補 member は graph の端点連続性から maximal directed path として再構成し、relation 配列の並び替えで任意の断片を受け入れることを防ぐ。
+- `sourceKind=boundRamp`: 正規ランプ台帳とexact directed bindingから、wayをまたぐ順序付きEdge列を作る。`bindingEvidenceId`、`fromNodeId`、`toNodeId`、`edgeIdsSha256` を保持し、graph の端点・way順・Edge順・hashを個別に照合する。relation memberであることを求めない。
 
-OSM route relationはmainlineを列挙し、目黒entry way `207535708`や天現寺exit候補way `172358461` / `422023171`を含まない。rampをrelationの連続Edge列へ強制すると、正しいbindingを誤って無検証にする。mainlineとrampを同じ`sourceKind`へ混ぜない。
+OSM route relationのmainline候補にはJCT linkやway tagの欠落が混在するため、builderはroute identityとgraphのShutoko Edgeでmainline候補を確定する。目黒entry way `207535708`や天現寺exit候補way `172358461` / `422023171` を無検証なrelation連続Edge列へ強制しない。rampをrelationの連続Edge列へ強制すると、正しいbindingを誤って無検証にする。mainlineとrampを同じ`sourceKind`へ混ぜない。
 
-route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を明示する。`mandatory_lap` は 1 つの `relationMainline` の連続部分列でなければならない。entry、return、exit は `relationMainline` と `boundRamp` を順番に連結できるが、各 segment 内部の Edge 順、node 接続、hash、binding 証拠を個別に検証する。Edge ごとに route metadata を複製せず、index から検索・検証する。名前や最接近 node だけで所属を補わない。
+route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を明示する。`mandatory_lap` は 1 つの `relationMainline` の連続部分列でなければならない。`validate_directed_junction_mandatory_lap` は anchor の M/B、route/direction、first/last Edge、lapCount=1、arm-boundary、除外 short connector の way/Edge数/距離を一并に検証する。entry、return、exit は `relationMainline` と `boundRamp` を順番に連結できるが、各 segment 内部の Edge 順、node 接続、hash、binding 証拠を個別に検証する。Edge ごとに route metadata を複製せず、index から検索・検証する。名前や最接近 node だけで所属を補わない。
 
 次の異常系は graph-builder の synthetic fixture と Issue #63 実装で検証する。
 
@@ -102,10 +102,10 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 - 一ノ橋JCTで別armへ切り替える近道を使う。
 - relationに含まれないmainline wayを使う。
 - relationに含まれないrampをbinding証拠なしで使う。
-- multi-way rampのway順、node接続、Edge順、hashを検証する。
+- multi-way rampのway順、node接続、Edge順、from/to endpoint、hashを検証する。
 - 同名または近接した別JCTのEdgeを使う。
 - excluded short connectorをmandatory lapとして選ぶ。
-- relationの順序と逆順にたどる。
+- relationの並び替えや逆順を、端点連続性を確認しない無検証な断片として受理しない。
 
 ### 2号目黒線の課金ペア形状（設計・未実装）
 

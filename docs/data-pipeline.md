@@ -527,16 +527,16 @@ schema 4 の manifest は `billingPairsVersion=v2`、graph schema 4、route plan
 
 ### 3.3 `RouteMembershipIndex` は本線 relation と ramp binding を別々に証明する
 
-Issue #63 で graph-builder にこのデータ型と生成・検証処理を追加した。`--graph-schema 4` を明示した場合だけ `graph.json` の top-level に `routeMemberships[]` を出力し、既定の schema 2 / `fixtures/generated/*` は変更しない。OSM relation の `relationMainline` と、正規ランプ台帳の exact directed binding に由来する `boundRamp` は同じ route/direction の membership 内でも別 segment として保持する。各 segment の `orderedEdgeIdsSha256`、source snapshot hash、way/node/Edge 連続性を builder が検証する。schema 4 reader、manifest への route membership hash 統合、公開 release の切替は #65/#66 の範囲である。`find_first_exits_from_anchor` は C1 legacy のまま保存し、membership 制約付きの基本処理として `find_first_exit_on_corridor` を新設した。
+Issue #63 で graph-builder にこのデータ型と生成・検証処理を追加した。`--graph-schema 4` を明示した場合だけ `graph.json` の top-level に `routeMemberships[]` を出力し、既定の schema 2 / `fixtures/generated/*` は変更しない。OSM relation の `relationMainline` と、正規ランプ台帳の exact directed binding に由来する `boundRamp` は同じ route/direction の membership 内でも別 segment として保持する。各 segment の `orderedEdgeIdsSha256`、source snapshot hash、way/node/Edge 連続性を builder が検証する。relation member は graph 上の端点連続性から directed path として再構成し、並び替えを無検証な断片にしない。`directionMappingVersion=osm-relation-role/v1` を記録し、route 2 の OSM `forward` / `backward` を `outbound` / `inbound` に正規化する。CLI の schema 4 opt-in は現在の実 snapshot に C1 relation `4256008` と route 2 relation `4256339` が揃う場合だけ relation ID を固定し、合成 snapshot では入力中の route relation を処理する。固定対象以外の relation は bound ramp evidence としてのみ保持する。schema 4 reader、manifest への route membership hash 統合、公開 release の切替は #65/#66 の範囲である。`find_first_exits_from_anchor` は C1 legacy のまま保存し、membership 制約付きの基本処理として `find_first_exit_on_corridor` を新設した。
 
 OSM route relation は mainline を列挙し、一般入口・出口の ramp way を含まない。目黒 entry way `207535708` や天現寺 exit candidate way `172358461` / `422023171` を mainline relation の member として扱い続けると、正しい ramp binding を relation の連続 Edge 列へ不正に対応させる。したがって、graph schema 4 の top-level `routeMemberships[]` は次の二層構造にする。
 
 | object | 必須 field | 証明する内容 |
 | --- | --- | --- |
-| `RouteMembershipIndex` | `membershipId`, `routeId`, `direction`, `segments[]` | 路線・方向ごとに使う ordered segment を束ねる。 |
+| `RouteMembershipIndex` | `membershipId`, `routeId`, `direction`, `directionMappingVersion`, `segments[]` | 路線・方向ごとに使う directed segment を束ねる。 |
 | `RouteMembershipSegment` | `segmentId`, `sourceKind`, `sourceRelationId`, `sourceSnapshotSha256`, `bindingEvidenceId`, `orderedEdgeIds`, `orderedEdgeIdsSha256` | `sourceKind=relationMainline` なら relation と snapshot、`sourceKind=boundRamp` なら exact binding を由来にする。 |
 
-`relationMainline` は `sourceRelationId` と `bindingEvidenceId=null` を要求し、relation の ordered member と way のノード順を graph Edge へ写像する。`boundRamp` は `sourceRelationId=null` と非 null の `bindingEvidenceId` を要求し、正規ランプ台帳と exact directed binding の順序付き Edge 列を使う。どちらも `orderedEdgeIdsSha256` を必須にする。
+`relationMainline` は `sourceRelationId` と `bindingEvidenceId=null` を要求し、relation の way member と graph 端点から再構成した directed path を使う。`boundRamp` は `sourceRelationId=null` と非 null の `bindingEvidenceId` を要求し、正規ランプ台帳と exact directed binding の順序付き Edge 列、from/to endpoint、way順、Edge順、hash を使う。どちらも `orderedEdgeIdsSha256` を必須にする。
 
 次の synthetic fragment は、1つの entry approach と return corridor が mainline segment と bound ramp segment を組み合わせた wire shape を示す。
 
@@ -547,6 +547,7 @@ OSM route relation は mainline を列挙し、一般入口・出口の ramp way
       "membershipId": "fixture:route:r1:inbound",
       "routeId": "fixture:R1",
       "direction": "inbound",
+      "directionMappingVersion": "osm-relation-role/v1",
       "segments": [
         {
           "segmentId": "fixture:binding:entry:0",
@@ -572,6 +573,7 @@ OSM route relation は mainline を列挙し、一般入口・出口の ramp way
       "membershipId": "fixture:route:loop:forward",
       "routeId": "fixture:loop",
       "direction": "forward",
+      "directionMappingVersion": "osm-relation-role/v1",
       "segments": [
         {
           "segmentId": "fixture:relation:loop:forward:main",
@@ -588,6 +590,7 @@ OSM route relation は mainline を列挙し、一般入口・出口の ramp way
       "membershipId": "fixture:route:r1:outbound",
       "routeId": "fixture:R1",
       "direction": "outbound",
+      "directionMappingVersion": "osm-relation-role/v1",
       "segments": [
         {
           "segmentId": "fixture:relation:r1:outbound:main",
@@ -621,7 +624,7 @@ route planのlegは`sourceSegmentIds[]`でmainlineとrampの由来を明示し�
 
 1. mandatory lap の B を出発点とし、return corridor の `initialEdgeId` から探索を始める。
 2. B から Exit split までの mainline Edge は指定 relation の `relationMainline` segment に順番どおり所属する。
-3. Exit split 以降は seed の `expectedRampId` と `verified_bound` の `boundRamp` segment が連続して一致する。
+3. Exit split 以降は seed の `expectedRampId` と `verified_bound` の `boundRamp` segment の先頭 Edge だけが split node から直接続き、segment 内の全 Edge・接続・way順・hash を検証して `CorridorExit.edgeIds` と距離へ含める。
 4. 候補は return corridor 内の一般 Exitだけで、C1 の Exit、entry approach 中の Exit、boundary JCT を数えない。
 5. 禁止遷移を満たし、探索予算を明示して処理する。
 
@@ -631,7 +634,7 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 
 - inner / outer の M→B長弧を選び、B→Mの0.493km / 0.461km connectorを拒否する。
 - relation memberに目黒entryや天現寺exitを含めない現行snapshotで、対応するboundRamp segmentだけをevidence付きで許可する。
-- multi-way rampのway順、node接続、Edge順、hashを検証し、候補をverified bindingへ昇格しない。
+- multi-way rampのway順、node接続、Edge順、from/to endpoint、hashを検証し、候補をverified bindingへ昇格しない。
 - entry corridorにC1 Exitがあっても、return corridorのExitと混同しない。
 - 逆方向、同名JCT、relation非所属mainline way、別armへの近道を拒否する。
 - segment内のEdge反復を拒否し、route planが宣言したsegment間反復を許す。

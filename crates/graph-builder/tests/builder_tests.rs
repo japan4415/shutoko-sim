@@ -1,7 +1,8 @@
 use serde_json::json;
 use shutoko_graph_builder::{
-    build_topology, build_topology_with_report, haversine_distance_meters, to_deterministic_json,
-    EdgeKind, OverpassResponse, TopologyConfig, LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
+    build_topology, build_topology_with_report, haversine_distance_meters, ordered_edge_ids_sha256,
+    to_deterministic_json, EdgeKind, OverpassResponse, TopologyConfig, LOCAL_SPEED_KMH,
+    RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
 };
 
 #[test]
@@ -4207,6 +4208,170 @@ fn test_cli_with_full_fixtures() {
         r["status"] == "active"
             && matches!(r["kind"].as_str(), Some("general_entry" | "general_exit"))
     }));
+
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let osm_path = manifest_dir.join("../../fixtures/osm/shutoko-all.json");
+    if !osm_path.exists() {
+        return;
+    }
+    let seed_path = manifest_dir.join("../../data/billing-pairs-seed.json");
+    let inv_path = manifest_dir.join("../../data/ramp-inventory.json");
+    let bin_data_path = manifest_dir.join("../../data/osm-ramp-bindings.json");
+    let tar_path = manifest_dir.join("../../data/od-tariffs.json");
+    let tmp_dir =
+        std::env::temp_dir().join(format!("shutoko-test-schema4-cli-{}", std::process::id()));
+    let out_dir = tmp_dir.join("out");
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+    let _ = std::fs::create_dir_all(&out_dir);
+    let bin_path = env!("CARGO_BIN_EXE_shutoko-graph-builder");
+    let status = std::process::Command::new(bin_path)
+        .args([
+            "--osm",
+            osm_path.to_str().unwrap(),
+            "--seed",
+            seed_path.to_str().unwrap(),
+            "--inventory",
+            inv_path.to_str().unwrap(),
+            "--bindings",
+            bin_data_path.to_str().unwrap(),
+            "--tariffs",
+            tar_path.to_str().unwrap(),
+            "--out-dir",
+            out_dir.to_str().unwrap(),
+            "--release-id",
+            "all-real-schema4-test",
+            "--coverage-area",
+            "Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)",
+            "--built-at",
+            "2026-09-16T00:00:00Z",
+            "--source-date",
+            "2026-09-16",
+            "--graph-schema",
+            "4",
+        ])
+        .status()
+        .expect("failed to execute schema 4 CLI");
+    assert!(
+        status.success(),
+        "schema 4 CLI run with full fixtures failed"
+    );
+
+    let graph_raw = std::fs::read_to_string(out_dir.join("graph.json")).unwrap();
+    let graph_json: serde_json::Value = serde_json::from_str(&graph_raw).unwrap();
+    assert_eq!(graph_json["schemaVersion"], 4);
+    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 8);
+    let edge_ids = graph_json["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|edge| edge["id"].as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    let memberships = graph_json["routeMemberships"].as_array().unwrap();
+    let membership_ids = memberships
+        .iter()
+        .map(|membership| membership["membershipId"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    for expected in [
+        "route:C1:inner",
+        "route:C1:outer",
+        "route:2:inbound",
+        "route:2:outbound",
+    ] {
+        assert!(membership_ids.contains(&expected));
+    }
+    assert!(!membership_ids.contains(&"route:C1:backward"));
+    let c1_inner = memberships
+        .iter()
+        .find(|membership| membership["membershipId"] == "route:C1:inner")
+        .unwrap();
+    let c1_outer = memberships
+        .iter()
+        .find(|membership| membership["membershipId"] == "route:C1:outer")
+        .unwrap();
+    assert!(!c1_inner["segments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|segment| segment["orderedEdgeIds"].as_array().unwrap())
+        .any(|edge_id| edge_id == "e:w668292569:0:f"));
+    assert!(c1_outer["segments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|segment| segment["orderedEdgeIds"].as_array().unwrap())
+        .any(|edge_id| edge_id == "e:w668292569:0:f"));
+    for membership in memberships {
+        assert_eq!(
+            membership["directionMappingVersion"],
+            "osm-relation-role/v1"
+        );
+        for segment in membership["segments"].as_array().unwrap() {
+            let ordered_edge_ids = segment["orderedEdgeIds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|edge| edge.as_str().unwrap().to_owned())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                segment["orderedEdgeIdsSha256"],
+                ordered_edge_ids_sha256(&ordered_edge_ids).unwrap()
+            );
+            for edge_id in &ordered_edge_ids {
+                assert!(edge_ids.iter().any(|candidate| candidate == edge_id));
+                assert!(!edge_id.contains(":w378284491:"));
+                assert!(!edge_id.contains(":w4849055:"));
+                assert!(!edge_id.contains(":w378284507:"));
+                assert!(!edge_id.contains(":w45138860:"));
+                assert!(!edge_id.contains(":w706016194:"));
+            }
+        }
+    }
+    let route_two_inbound = memberships
+        .iter()
+        .find(|membership| membership["membershipId"] == "route:2:inbound")
+        .unwrap();
+    let route_two_outbound = memberships
+        .iter()
+        .find(|membership| membership["membershipId"] == "route:2:outbound")
+        .unwrap();
+    assert!(route_two_inbound["segments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|segment| segment["orderedEdgeIds"].as_array().unwrap())
+        .any(|edge_id| edge_id == "e:w4853804:16:f"));
+    assert!(route_two_outbound["segments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|segment| segment["orderedEdgeIds"].as_array().unwrap())
+        .any(|edge_id| edge_id == "e:w45248411:0:f"));
+    for route_id in [
+        "route:C1:inner",
+        "route:C1:outer",
+        "route:2:inbound",
+        "route:2:outbound",
+    ] {
+        let membership = memberships
+            .iter()
+            .find(|membership| membership["membershipId"] == route_id)
+            .unwrap();
+        let source_kinds = membership["segments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|segment| segment["sourceKind"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert!(source_kinds.contains(&"relationMainline"));
+        if route_id.starts_with("route:2:") {
+            assert!(source_kinds.contains(&"boundRamp"));
+        }
+    }
 
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }

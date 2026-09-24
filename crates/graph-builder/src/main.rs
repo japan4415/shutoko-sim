@@ -51,6 +51,19 @@ OPTIONS:
     );
 }
 
+const ROUTE_MEMBERSHIP_RELATION_IDS: &[i64] = &[4256008, 4256339];
+
+fn default_route_membership_relation_ids(response: &OverpassResponse) -> Option<Vec<i64>> {
+    if ROUTE_MEMBERSHIP_RELATION_IDS
+        .iter()
+        .all(|id| response.elements.iter().any(|element| element.id == *id))
+    {
+        Some(ROUTE_MEMBERSHIP_RELATION_IDS.to_vec())
+    } else {
+        None
+    }
+}
+
 struct CliArgs {
     osm_path: PathBuf,
     out_dir: PathBuf,
@@ -509,7 +522,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let source_snapshot_sha256 = shutoko_graph_builder::compute_sha256(osm_raw.as_bytes());
         let options = RouteMembershipBuildOptions {
             source_snapshot_sha256,
-            relation_ids: None,
+            relation_ids: default_route_membership_relation_ids(&overpass_resp),
             bound_ramp_evidence: route_membership_evidence,
         };
         build_route_membership_indices(&overpass_resp, &graph, &options)

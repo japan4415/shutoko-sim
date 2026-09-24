@@ -38,11 +38,12 @@ pub use route_membership::{
     bound_ramp_evidence_from_inventory, build_bound_ramp_memberships, build_relation_memberships,
     build_route_membership_indices, build_route_memberships, find_first_exit_on_corridor,
     find_first_exit_on_corridor_from_edge, find_first_exit_on_corridor_with_budget,
-    graph_schema_v4_to_deterministic_json, ordered_edge_ids_sha256, validate_mandatory_lap,
+    graph_schema_v4_to_deterministic_json, ordered_edge_ids_sha256,
+    validate_directed_junction_mandatory_lap, validate_mandatory_lap,
     validate_route_membership_structure, validate_route_memberships, BoundRampEvidence,
     CorridorExit, GraphSchemaV4, RouteMembershipBuildOptions, RouteMembershipError,
     RouteMembershipIndex, RouteMembershipSegment, RouteMembershipSourceKind,
-    CORRIDOR_EXIT_STATE_BUDGET,
+    CORRIDOR_EXIT_STATE_BUDGET, ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION,
 };
 pub use seed::{
     parse_billing_pairs_seed, AnchorKind, ArcPolicy, BillingPairSeed, BillingPairSeedEntry,

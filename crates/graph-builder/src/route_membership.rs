@@ -3,7 +3,7 @@ use crate::inventory::{
 };
 use crate::model::{BillingPair, Edge, EdgeKind, Graph, Node, OdTariff, Ramp, RampKind};
 use crate::osm::{OsmElement, OsmMember, OverpassResponse};
-use crate::seed::DirectedEndpointSegment;
+use crate::seed::{DirectedEndpointSegment, DirectedJunctionAnchor, MandatoryLap};
 use crate::validate::contains_forbidden_transition;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -65,6 +65,7 @@ pub struct RouteMembershipIndex {
     pub membership_id: String,
     pub route_id: String,
     pub direction: String,
+    pub direction_mapping_version: String,
     pub segments: Vec<RouteMembershipSegment>,
 }
 
@@ -89,6 +90,9 @@ pub struct BoundRampEvidence {
     pub direction: String,
     pub osm_way_ids: Vec<i64>,
     pub edge_ids: Vec<String>,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub edge_ids_sha256: String,
 }
 
 impl BoundRampEvidence {
@@ -106,6 +110,9 @@ impl BoundRampEvidence {
             direction: direction.into(),
             osm_way_ids: segment.osm_way_ids.clone(),
             edge_ids: segment.edge_ids.clone(),
+            from_node_id: segment.from_node_id.clone(),
+            to_node_id: segment.to_node_id.clone(),
+            edge_ids_sha256: segment.edge_ids_sha256.clone(),
         }
     }
 }
@@ -198,6 +205,8 @@ fn validate_sha256(value: &str, field: &str) -> Result<(), RouteMembershipError>
     Ok(())
 }
 
+pub const ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION: &str = "osm-relation-role/v1";
+
 fn normalized(value: &str) -> String {
     value.trim().to_ascii_lowercase().replace('_', "-")
 }
@@ -209,30 +218,111 @@ fn direction_is_reverse(direction: &str) -> bool {
     )
 }
 
-fn role_direction(role: &str) -> Option<(String, Option<bool>)> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RelationMemberRole {
+    Inner,
+    Outer,
+    Backward,
+    Forward,
+    East,
+    West,
+    North,
+    South,
+}
+
+fn relation_member_role(role: &str) -> Option<RelationMemberRole> {
     let role = normalized(role);
     if role.contains("inner") {
-        Some(("inner".into(), None))
+        Some(RelationMemberRole::Inner)
     } else if role.contains("outer") {
-        Some(("outer".into(), None))
+        Some(RelationMemberRole::Outer)
     } else if role.contains("backward") || role.contains("reverse") {
-        Some(("backward".into(), None))
+        Some(RelationMemberRole::Backward)
     } else if role.contains("forward") {
-        Some(("forward".into(), None))
+        Some(RelationMemberRole::Forward)
     } else if role == "east" {
-        Some(("east".into(), None))
+        Some(RelationMemberRole::East)
     } else if role == "west" {
-        Some(("west".into(), None))
+        Some(RelationMemberRole::West)
     } else if role == "north" {
-        Some(("north".into(), None))
+        Some(RelationMemberRole::North)
     } else if role == "south" {
-        Some(("south".into(), None))
+        Some(RelationMemberRole::South)
     } else {
         None
     }
 }
 
-fn relation_directions(relation: &OsmElement) -> Vec<String> {
+fn inferred_blank_member_direction(
+    members: &[OsmMember],
+    index: usize,
+    route_id: &str,
+) -> Option<String> {
+    let mut previous = None;
+    for member in members[..index].iter().rev() {
+        if member.member_type != "way" {
+            continue;
+        }
+        if let Some(role) = relation_member_role(&member.role) {
+            previous = Some(canonical_relation_direction(route_id, role));
+            break;
+        }
+    }
+    let mut next = None;
+    for member in members.iter().skip(index + 1) {
+        if member.member_type != "way" {
+            continue;
+        }
+        if let Some(role) = relation_member_role(&member.role) {
+            next = Some(canonical_relation_direction(route_id, role));
+            break;
+        }
+    }
+    match (previous, next) {
+        (Some(previous), Some(next)) if previous == next => Some(previous),
+        (Some(direction), None) | (None, Some(direction)) => Some(direction),
+        _ => None,
+    }
+}
+
+fn canonical_relation_direction(route_id: &str, role: RelationMemberRole) -> String {
+    match role {
+        RelationMemberRole::Inner => "inner".into(),
+        RelationMemberRole::Outer => "outer".into(),
+        RelationMemberRole::Backward if route_id == "2" => "inbound".into(),
+        RelationMemberRole::Forward if route_id == "2" => "outbound".into(),
+        RelationMemberRole::Backward => "backward".into(),
+        RelationMemberRole::Forward => "forward".into(),
+        RelationMemberRole::East => "east".into(),
+        RelationMemberRole::West => "west".into(),
+        RelationMemberRole::North => "north".into(),
+        RelationMemberRole::South => "south".into(),
+    }
+}
+
+fn canonicalize_declared_direction(
+    route_id: &str,
+    direction: &str,
+) -> Result<String, RouteMembershipError> {
+    let direction = normalized(direction);
+    let canonical = match direction.as_str() {
+        "forward" if route_id == "2" => "outbound",
+        "backward" if route_id == "2" => "inbound",
+        "forward" | "backward" | "inner" | "outer" | "east" | "west" | "north" | "south" => {
+            direction.as_str()
+        }
+        _ => {
+            return Err(RouteMembershipError::Relation(format!(
+                "relation {} has unsupported direction {:?}",
+                route_id, direction
+            )))
+        }
+    };
+    Ok(canonical.into())
+}
+
+fn relation_directions(relation: &OsmElement) -> Result<Vec<String>, RouteMembershipError> {
+    let route_id = relation_route_id(relation)?;
     if let Some(direction) = relation
         .get_tag("direction")
         .or_else(|| relation.get_tag("route_direction"))
@@ -241,9 +331,10 @@ fn relation_directions(relation: &OsmElement) -> Vec<String> {
             .split([',', ';'])
             .map(normalized)
             .filter(|value| !value.is_empty())
-            .collect();
+            .map(|value| canonicalize_declared_direction(&route_id, &value))
+            .collect::<Result<_, _>>()?;
         if !values.is_empty() {
-            return values;
+            return Ok(values);
         }
     }
 
@@ -252,14 +343,17 @@ fn relation_directions(relation: &OsmElement) -> Vec<String> {
         if member.member_type != "way" {
             continue;
         }
-        if let Some((direction, _)) = role_direction(&member.role) {
-            directions.insert(direction);
+        if let Some(role) = relation_member_role(&member.role) {
+            directions.insert(canonical_relation_direction(&route_id, role));
         }
     }
+    if route_id == "C1" && (directions.contains("inner") || directions.contains("outer")) {
+        directions.retain(|direction| matches!(direction.as_str(), "inner" | "outer"));
+    }
     if directions.is_empty() {
-        vec!["forward".into()]
+        Ok(vec!["forward".into()])
     } else {
-        directions.into_iter().collect()
+        Ok(directions.into_iter().collect())
     }
 }
 
@@ -306,6 +400,100 @@ fn way_by_id_from_response(response: &OverpassResponse, way_id: i64) -> Option<&
         .find(|element| element.is_way() && element.id == way_id)
 }
 
+#[derive(Debug)]
+struct RelationMemberEdges {
+    way_id: i64,
+    from_node_id: String,
+    to_node_id: String,
+    ordered_edge_ids: Vec<String>,
+}
+
+fn route_tag_conflicts(tags: Option<&BTreeMap<String, String>>, route_id: &str) -> bool {
+    let Some(tags) = tags else {
+        return false;
+    };
+    ["ref", "nat_ref"].iter().any(|key| {
+        let Some(value) = tags.get(*key) else {
+            return false;
+        };
+        let tokens = value
+            .split([';', ','])
+            .map(normalized)
+            .filter(|token| !token.is_empty())
+            .collect::<Vec<_>>();
+        !tokens.is_empty() && !tokens.iter().any(|token| token == &normalized(route_id))
+    })
+}
+
+fn way_name_matches_relation(relation: &OsmElement, way: &OsmElement) -> bool {
+    ["name", "name:en"]
+        .iter()
+        .filter_map(|key| relation.get_tag(key).map(normalized))
+        .filter(|value| !value.is_empty())
+        .any(|relation_name| {
+            ["name", "name:en"]
+                .iter()
+                .filter_map(|key| way.get_tag(key).map(normalized))
+                .any(|way_name| way_name == relation_name)
+        })
+}
+
+fn relation_member_is_mainline(
+    relation: &OsmElement,
+    way: &OsmElement,
+    graph: &Graph,
+) -> Result<bool, RouteMembershipError> {
+    let route_id = relation_route_id(relation)?;
+    let Some(highway) = way.get_tag("highway") else {
+        return Ok(false);
+    };
+    if !matches!(highway, "motorway" | "motorway_link") {
+        return Ok(false);
+    }
+    if route_tag_conflicts(way.tags.as_ref(), &route_id) {
+        return Ok(false);
+    }
+    let is_named_ramp = ["name", "name:en", "destination"]
+        .iter()
+        .filter_map(|key| way.get_tag(key))
+        .any(|value| {
+            let value = normalized(value);
+            value.contains("入口")
+                || value.contains("出口")
+                || value.contains("entry")
+                || value.contains("exit")
+        });
+    if highway == "motorway_link" && is_named_ramp {
+        return Ok(false);
+    }
+    if highway == "motorway_link"
+        && !graph
+            .edges
+            .iter()
+            .any(|edge| edge_way_id(edge) == Some(way.id) && edge.kind == EdgeKind::Shutoko)
+    {
+        return Err(RouteMembershipError::Relation(format!(
+            "relation {} includes motorway_link way {} without a Shutoko graph edge",
+            relation.id, way.id
+        )));
+    }
+    if highway == "motorway"
+        || way.get_tag("ref").is_some()
+        || way_name_matches_relation(relation, way)
+        || graph
+            .edges
+            .iter()
+            .any(|edge| edge_way_id(edge) == Some(way.id) && edge.kind == EdgeKind::Shutoko)
+    {
+        Ok(true)
+    } else {
+        Err(RouteMembershipError::Relation(format!(
+            "relation {} includes motorway_link way {} without matching route identity",
+            relation.id, way.id
+        )))
+    }
+}
+
 fn build_relation_segments(
     relation: &OsmElement,
     response: &OverpassResponse,
@@ -316,85 +504,167 @@ fn build_relation_segments(
     let relation_members = relation.members.as_ref().ok_or_else(|| {
         RouteMembershipError::Relation(format!("relation {} has no members", relation.id))
     })?;
-    let mut members = Vec::new();
+    let route_id = relation_route_id(relation)?;
     let has_role_direction = relation_members
         .iter()
         .filter(|member| member.member_type == "way")
-        .any(|member| role_direction(&member.role).is_some());
-    for member in relation_members.iter() {
+        .any(|member| relation_member_role(&member.role).is_some());
+    let edges = edge_map(graph);
+    let mut mapped_members = Vec::new();
+    let mut seen_way_ids = HashSet::new();
+    for (member_index, member) in relation_members.iter().enumerate() {
         if member.member_type != "way" {
             continue;
         }
-        let member_direction = role_direction(&member.role).map(|(value, _)| value);
-        if !member.role.trim().is_empty() && member_direction.is_none() {
+        let member_role = relation_member_role(&member.role);
+        if !member.role.trim().is_empty() && member_role.is_none() {
             return Err(RouteMembershipError::Relation(format!(
                 "relation {} member {} has unsupported role {:?}",
                 relation.id, member.ref_id, member.role
             )));
         }
-        if has_role_direction
-            && member_direction
-                .as_deref()
-                .is_some_and(|value| value != direction)
-        {
+        let member_direction = member_role
+            .map(|role| canonical_relation_direction(&route_id, role))
+            .or_else(|| {
+                has_role_direction
+                    .then(|| {
+                        inferred_blank_member_direction(relation_members, member_index, &route_id)
+                    })
+                    .flatten()
+            });
+        let way = way_by_id_from_response(response, member.ref_id).ok_or_else(|| {
+            RouteMembershipError::Relation(format!(
+                "relation {} references missing way {}",
+                relation.id, member.ref_id
+            ))
+        })?;
+        if !relation_member_is_mainline(relation, way, graph)? {
             continue;
         }
-        members.push(member);
-    }
-    if members.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let mut segments = Vec::new();
-    let mut current = Vec::new();
-    let mut seen_way_ids = HashSet::new();
-    let edges = edge_map(graph);
-    for member in members {
+        if has_role_direction && member_direction.as_deref() != Some(direction) {
+            if member_direction.is_none() {
+                return Err(RouteMembershipError::Relation(format!(
+                    "relation {} has an ambiguous directionless mainline member {}",
+                    relation.id, member.ref_id
+                )));
+            }
+            continue;
+        }
         if !seen_way_ids.insert(member.ref_id) {
             return Err(RouteMembershipError::Relation(format!(
                 "relation {} repeats way {}",
                 relation.id, member.ref_id
             )));
         }
-        let way_edges =
+        let ordered_edge_ids =
             map_relation_way_from_response(relation, member, direction, response, &edges)?;
-        if way_edges.is_empty() {
-            continue;
-        }
-        if let Some(previous) = current.last() {
-            let previous_edge = graph
-                .edges
-                .iter()
-                .find(|edge| edge.id == *previous)
-                .ok_or_else(|| {
-                    RouteMembershipError::Relation(format!(
-                        "relation {} produced an unknown previous edge {}",
-                        relation.id, previous
-                    ))
-                })?;
-            let next_edge = graph
-                .edges
-                .iter()
-                .find(|edge| edge.id == way_edges[0])
-                .ok_or_else(|| {
-                    RouteMembershipError::Relation(format!(
-                        "relation {} produced an unknown next edge {}",
-                        relation.id, way_edges[0]
-                    ))
-                })?;
-            if previous_edge.to != next_edge.from {
-                segments.push(current);
-                current = Vec::new();
-            }
-        }
-        current.extend(way_edges);
+        let first_id = ordered_edge_ids.first().ok_or_else(|| {
+            RouteMembershipError::Relation(format!(
+                "relation {} way {} produced no graph edges",
+                relation.id, member.ref_id
+            ))
+        })?;
+        let last_id = ordered_edge_ids.last().ok_or_else(|| {
+            RouteMembershipError::Relation(format!(
+                "relation {} way {} produced no graph edges",
+                relation.id, member.ref_id
+            ))
+        })?;
+        let first = edges.get(first_id.as_str()).ok_or_else(|| {
+            RouteMembershipError::Relation(format!(
+                "relation {} produced an unknown edge {}",
+                relation.id, first_id
+            ))
+        })?;
+        let last = edges.get(last_id.as_str()).ok_or_else(|| {
+            RouteMembershipError::Relation(format!(
+                "relation {} produced an unknown edge {}",
+                relation.id, last_id
+            ))
+        })?;
+        mapped_members.push(RelationMemberEdges {
+            way_id: member.ref_id,
+            from_node_id: first.from.clone(),
+            to_node_id: last.to.clone(),
+            ordered_edge_ids,
+        });
     }
-    if !current.is_empty() {
-        segments.push(current);
+    if mapped_members.is_empty() {
+        return Ok(Vec::new());
     }
 
-    let mut result = Vec::with_capacity(segments.len());
-    for (index, ordered_edge_ids) in segments.into_iter().enumerate() {
+    mapped_members.sort_by_key(|member| member.way_id);
+    let mut outgoing: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    let mut incoming: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for (index, member) in mapped_members.iter().enumerate() {
+        outgoing
+            .entry(member.from_node_id.clone())
+            .or_default()
+            .push(index);
+        incoming
+            .entry(member.to_node_id.clone())
+            .or_default()
+            .push(index);
+    }
+    for candidates in outgoing.values_mut() {
+        candidates.sort_by_key(|index| mapped_members[*index].way_id);
+    }
+    for candidates in incoming.values_mut() {
+        candidates.sort_by_key(|index| mapped_members[*index].way_id);
+    }
+
+    let mut used = vec![false; mapped_members.len()];
+    let mut paths: Vec<Vec<String>> = Vec::new();
+    while used.iter().any(|used| !used) {
+        let mut roots = (0..mapped_members.len())
+            .filter(|index| {
+                !used[*index]
+                    && !incoming
+                        .get(&mapped_members[*index].from_node_id)
+                        .is_some_and(|preds| preds.iter().any(|pred| !used[*pred]))
+            })
+            .collect::<Vec<_>>();
+        if roots.is_empty() {
+            roots.push(
+                used.iter()
+                    .position(|used| !used)
+                    .expect("loop requires an unused member"),
+            );
+        }
+        roots.sort_by_key(|index| mapped_members[*index].way_id);
+        for root in roots {
+            if used[root] {
+                continue;
+            }
+            used[root] = true;
+            let mut path_member_indices = vec![root];
+            let mut visited_nodes = HashSet::from([mapped_members[root].from_node_id.clone()]);
+            let mut current_node = mapped_members[root].to_node_id.clone();
+            while visited_nodes.insert(current_node.clone()) {
+                let Some(next) = outgoing.get(&current_node).and_then(|candidates| {
+                    candidates
+                        .iter()
+                        .copied()
+                        .find(|candidate| !used[*candidate])
+                }) else {
+                    break;
+                };
+                used[next] = true;
+                path_member_indices.push(next);
+                current_node = mapped_members[next].to_node_id.clone();
+            }
+            let ordered_edge_ids = path_member_indices
+                .into_iter()
+                .flat_map(|index| mapped_members[index].ordered_edge_ids.clone())
+                .collect::<Vec<_>>();
+            validate_ordered_edges(graph, &ordered_edge_ids, "assembled relation member path")?;
+            paths.push(ordered_edge_ids);
+        }
+    }
+    paths.sort_by_key(|path| path[0].clone());
+
+    let mut result = Vec::with_capacity(paths.len());
+    for (index, ordered_edge_ids) in paths.into_iter().enumerate() {
         let ordered_edge_ids_sha256 = ordered_edge_ids_sha256(&ordered_edge_ids)
             .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
         result.push(RouteMembershipSegment {
@@ -458,17 +728,8 @@ fn map_relation_way_from_response(
             relation.id, member.ref_id
         )));
     }
-    if way.get_tag("highway") != Some("motorway") {
-        return Err(RouteMembershipError::Relation(format!(
-            "relation {} way {} is not a motorway mainline way",
-            relation.id, member.ref_id
-        )));
-    }
-    let role_orientation = role_direction(&member.role).and_then(|(_, orientation)| orientation);
-    let requested_reverse = role_orientation.unwrap_or_else(|| direction_is_reverse(direction));
-    let reverse = if role_orientation.is_some()
-        || way_has_directed_edges(edges, member.ref_id, nodes, requested_reverse)
-    {
+    let requested_reverse = direction_is_reverse(direction);
+    let reverse = if way_has_directed_edges(edges, member.ref_id, nodes, requested_reverse) {
         requested_reverse
     } else {
         !requested_reverse
@@ -542,7 +803,7 @@ pub fn build_relation_memberships(
 
     for relation in relations {
         let route_id = relation_route_id(relation)?;
-        for direction in relation_directions(relation) {
+        for direction in relation_directions(relation)? {
             let segments = build_relation_segments(
                 relation,
                 response,
@@ -559,6 +820,7 @@ pub fn build_relation_memberships(
                     membership_id: format!("route:{}:{}", route_id, direction),
                     route_id: route_id.clone(),
                     direction,
+                    direction_mapping_version: ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION.into(),
                     segments,
                 },
             );
@@ -637,6 +899,8 @@ pub fn build_bound_ramp_memberships(
             || item.ramp_id.is_empty()
             || item.route_id.is_empty()
             || item.direction.is_empty()
+            || item.from_node_id.is_empty()
+            || item.to_node_id.is_empty()
         {
             return Err(RouteMembershipError::RampBinding(
                 "bound ramp evidence has an empty identity field".into(),
@@ -649,7 +913,24 @@ pub fn build_bound_ramp_memberships(
             )));
         }
         let segment_id = format!("binding:{}:segment:0", item.binding_evidence_id);
+        validate_sha256(&item.edge_ids_sha256, "edge_ids_sha256")?;
+        let evidence_hash = ordered_edge_ids_sha256(&item.edge_ids)
+            .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
+        if evidence_hash != item.edge_ids_sha256 {
+            return Err(RouteMembershipError::RampBinding(format!(
+                "{} edge_ids_sha256 does not match the ordered edge list",
+                segment_id
+            )));
+        }
         let edges = validate_ordered_edges(graph, &item.edge_ids, &segment_id)?;
+        if edges.first().map(|edge| &edge.from) != Some(&item.from_node_id)
+            || edges.last().map(|edge| &edge.to) != Some(&item.to_node_id)
+        {
+            return Err(RouteMembershipError::RampBinding(format!(
+                "{} endpoints do not match its ordered graph edges",
+                segment_id
+            )));
+        }
         validate_way_order(&item.osm_way_ids, &edges, &segment_id)?;
         if edges
             .iter()
@@ -692,20 +973,19 @@ pub fn build_bound_ramp_memberships(
                 item.ramp_id
             )));
         }
-        if !edges.iter().any(|edge| edge.id == ramp.edge_id) {
+        if edges.first().map(|edge| edge.id.as_str()) != Some(ramp.edge_id.as_str()) {
             return Err(RouteMembershipError::RampBinding(format!(
-                "ramp {} exact graph edge {} is absent from its evidence",
+                "ramp {} exact graph edge {} is not the first edge of its evidence",
                 item.ramp_id, ramp.edge_id
             )));
         }
-        let hash = ordered_edge_ids_sha256(&item.edge_ids)
-            .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
         merge_membership(
             &mut result,
             RouteMembershipIndex {
                 membership_id: format!("route:{}:{}", item.route_id, item.direction),
                 route_id: item.route_id.clone(),
                 direction: item.direction.clone(),
+                direction_mapping_version: ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION.into(),
                 segments: vec![RouteMembershipSegment {
                     segment_id,
                     source_kind: RouteMembershipSourceKind::BoundRamp,
@@ -713,7 +993,7 @@ pub fn build_bound_ramp_memberships(
                     source_snapshot_sha256: source_snapshot_sha256.to_string(),
                     binding_evidence_id: Some(item.binding_evidence_id.clone()),
                     ordered_edge_ids: item.edge_ids.clone(),
-                    ordered_edge_ids_sha256: hash,
+                    ordered_edge_ids_sha256: evidence_hash,
                 }],
             },
         );
@@ -786,30 +1066,55 @@ pub fn bound_ramp_evidence_from_inventory(
         } else {
             (motorway, ground)
         };
-        let matches: Vec<&Edge> = graph
-            .edges
-            .iter()
-            .filter(|edge| {
-                edge.kind == expected_kind
-                    && edge_way_id(edge) == Some(binding.osm_way_id)
-                    && edge.from == from
-                    && edge.to == to
-            })
-            .collect();
-        if matches.len() != 1 {
+        let mut edge_ids = Vec::new();
+        let mut current_node = from.clone();
+        let mut visited = HashSet::new();
+        while current_node != to {
+            let next_edges = graph
+                .edges
+                .iter()
+                .filter(|edge| {
+                    edge.kind == expected_kind
+                        && edge_way_id(edge) == Some(binding.osm_way_id)
+                        && edge.from == current_node
+                })
+                .collect::<Vec<_>>();
+            if next_edges.len() != 1 {
+                return Err(RouteMembershipError::RampBinding(format!(
+                    "ramp {} has {} exact next graph edges at {}",
+                    item.ramp_id,
+                    next_edges.len(),
+                    current_node
+                )));
+            }
+            let next = next_edges[0];
+            if !visited.insert(next.id.as_str()) {
+                return Err(RouteMembershipError::RampBinding(format!(
+                    "ramp {} binding path is cyclic",
+                    item.ramp_id
+                )));
+            }
+            edge_ids.push(next.id.clone());
+            current_node = next.to.clone();
+        }
+        if edge_ids.is_empty() {
             return Err(RouteMembershipError::RampBinding(format!(
-                "ramp {} has {} exact graph edges for its binding",
-                item.ramp_id,
-                matches.len()
+                "ramp {} binding has an empty directed path",
+                item.ramp_id
             )));
         }
+        let edge_ids_sha256 = ordered_edge_ids_sha256(&edge_ids)
+            .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
         result.push(BoundRampEvidence {
             binding_evidence_id: format!("osm-ramp-binding:{}", item.ramp_id),
             ramp_id: item.ramp_id.clone(),
             route_id: item.route.clone(),
             direction: item.direction.clone(),
             osm_way_ids: vec![binding.osm_way_id],
-            edge_ids: vec![matches[0].id.clone()],
+            from_node_id: from,
+            to_node_id: to,
+            edge_ids,
+            edge_ids_sha256,
         });
     }
     Ok(result)
@@ -897,6 +1202,9 @@ pub fn validate_route_membership_structure(
             || membership.route_id.is_empty()
             || membership.direction.is_empty()
             || membership.segments.is_empty()
+            || membership.membership_id
+                != format!("route:{}:{}", membership.route_id, membership.direction)
+            || membership.direction_mapping_version != ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION
         {
             return Err(RouteMembershipError::Validation(
                 "route membership has an empty identity or no segments".into(),
@@ -965,10 +1273,19 @@ pub fn validate_route_memberships(
     bound_ramp_evidence: &[BoundRampEvidence],
 ) -> Result<(), RouteMembershipError> {
     validate_route_membership_structure(graph, route_memberships, source_snapshot_sha256)?;
-    let evidence_by_id: HashMap<&str, &BoundRampEvidence> = bound_ramp_evidence
+    let expected_bound =
+        build_bound_ramp_memberships(graph, source_snapshot_sha256, bound_ramp_evidence)?;
+    let expected_bound_segments = expected_bound
         .iter()
-        .map(|item| (item.binding_evidence_id.as_str(), item))
-        .collect();
+        .flat_map(|membership| membership.segments.iter())
+        .filter_map(|segment| {
+            segment
+                .binding_evidence_id
+                .as_deref()
+                .map(|evidence_id| (evidence_id, segment))
+        })
+        .collect::<HashMap<_, _>>();
+    let mut actual_bound_segment_ids = HashSet::new();
     let mut relation_segment_keys = HashSet::new();
     for membership in route_memberships {
         let relation_segments: Vec<&RouteMembershipSegment> = membership
@@ -999,7 +1316,7 @@ pub fn validate_route_memberships(
                         ))
                     })?;
                 if relation_route_id(relation)? != membership.route_id
-                    || !relation_directions(relation)
+                    || !relation_directions(relation)?
                         .iter()
                         .any(|direction| direction == &membership.direction)
                 {
@@ -1040,11 +1357,14 @@ pub fn validate_route_memberships(
                     )));
                 }
                 for segment in grouped_segments {
-                    let key = format!("{}:{}", source_relation_id, segment.ordered_edge_ids_sha256);
-                    if !relation_segment_keys.insert(key) {
+                    let key = format!(
+                        "{}:{}:{}",
+                        source_relation_id, membership.direction, segment.ordered_edge_ids_sha256
+                    );
+                    if !relation_segment_keys.insert(key.clone()) {
                         return Err(RouteMembershipError::Relation(format!(
-                            "relation segment {} is assigned more than once",
-                            segment.segment_id
+                            "relation segment {} is assigned more than once (key={})",
+                            segment.segment_id, key
                         )));
                     }
                 }
@@ -1058,24 +1378,30 @@ pub fn validate_route_memberships(
             let evidence_id = segment.binding_evidence_id.as_deref().ok_or_else(|| {
                 RouteMembershipError::RampBinding("bound ramp segment has no evidence id".into())
             })?;
-            let evidence = evidence_by_id.get(evidence_id).ok_or_else(|| {
-                RouteMembershipError::RampBinding(format!(
-                    "{} references unknown binding evidence {}",
-                    segment.segment_id, evidence_id
-                ))
-            })?;
-            if evidence.route_id != membership.route_id
-                || evidence.direction != membership.direction
-                || evidence.edge_ids != segment.ordered_edge_ids
-            {
+            let expected_segment = expected_bound_segments
+                .get(evidence_id)
+                .copied()
+                .ok_or_else(|| {
+                    RouteMembershipError::RampBinding(format!(
+                        "{} references unknown binding evidence {}",
+                        segment.segment_id, evidence_id
+                    ))
+                })?;
+            if expected_segment != segment {
                 return Err(RouteMembershipError::RampBinding(format!(
                     "{} does not match its exact binding evidence",
                     segment.segment_id
                 )));
             }
-            let edges = validate_ordered_edges(graph, &evidence.edge_ids, &segment.segment_id)?;
-            validate_way_order(&evidence.osm_way_ids, &edges, &segment.segment_id)?;
+            actual_bound_segment_ids.insert(segment.segment_id.as_str());
         }
+    }
+    if actual_bound_segment_ids.len() != expected_bound_segments.len() {
+        return Err(RouteMembershipError::RampBinding(format!(
+            "route memberships contain {} bound ramp segments but evidence yields {}",
+            actual_bound_segment_ids.len(),
+            expected_bound_segments.len()
+        )));
     }
     Ok(())
 }
@@ -1144,27 +1470,211 @@ pub fn validate_mandatory_lap(
     Ok(())
 }
 
-fn ramp_id_for_edge<'a>(graph: &'a Graph, edge_id: &str) -> Vec<&'a Ramp> {
-    graph
-        .ramps
+pub fn validate_directed_junction_mandatory_lap(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    anchor: &DirectedJunctionAnchor,
+    mandatory_lap: &MandatoryLap,
+) -> Result<(), RouteMembershipError> {
+    if mandatory_lap.lap_count != 1 {
+        return Err(RouteMembershipError::Validation(
+            "directed mandatory lap must have lapCount=1".into(),
+        ));
+    }
+    let membership = route_memberships
         .iter()
-        .filter(|ramp| ramp.edge_id == edge_id)
-        .collect()
+        .find(|membership| membership.membership_id == mandatory_lap.membership_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "unknown mandatory lap membership {}",
+                mandatory_lap.membership_id
+            ))
+        })?;
+    if membership.route_id != anchor.route_id || membership.direction != anchor.direction {
+        return Err(RouteMembershipError::Validation(format!(
+            "mandatory lap membership {} does not match anchor {}/{}",
+            mandatory_lap.membership_id, anchor.route_id, anchor.direction
+        )));
+    }
+    let merge_terminal = graph
+        .edges
+        .iter()
+        .find(|edge| edge.id == anchor.merge_terminal_edge_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "merge terminal edge {} is absent from graph",
+                anchor.merge_terminal_edge_id
+            ))
+        })?;
+    let branch_initial = graph
+        .edges
+        .iter()
+        .find(|edge| edge.id == anchor.branch_initial_edge_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "branch initial edge {} is absent from graph",
+                anchor.branch_initial_edge_id
+            ))
+        })?;
+    if merge_terminal.to != anchor.merge_node_id || branch_initial.from != anchor.branch_node_id {
+        return Err(RouteMembershipError::Validation(
+            "directed junction M/B boundaries do not match their terminal edges".into(),
+        ));
+    }
+
+    let mut matches = Vec::new();
+    for segment in membership
+        .segments
+        .iter()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+    {
+        let first = segment
+            .ordered_edge_ids
+            .iter()
+            .position(|edge_id| edge_id == &mandatory_lap.first_edge_id);
+        let last = segment
+            .ordered_edge_ids
+            .iter()
+            .position(|edge_id| edge_id == &mandatory_lap.last_edge_id);
+        if let (Some(first), Some(last)) = (first, last) {
+            if first < last {
+                matches.push((segment, first, last));
+            }
+        }
+    }
+    if matches.len() != 1 {
+        return Err(RouteMembershipError::Validation(format!(
+            "directed mandatory lap boundaries must occur once in forward relationMainline order (matches={})",
+            matches.len()
+        )));
+    }
+    let (segment, first, last) = matches[0];
+    let lap_edge_ids = segment.ordered_edge_ids[first..=last].to_vec();
+    validate_mandatory_lap(
+        graph,
+        route_memberships,
+        &mandatory_lap.membership_id,
+        &lap_edge_ids,
+        &[],
+        Some(anchor.excluded_short_connector.osm_way_id),
+    )?;
+    let first_edge = graph
+        .edges
+        .iter()
+        .find(|edge| edge.id == segment.ordered_edge_ids[first])
+        .ok_or_else(|| {
+            RouteMembershipError::Validation("mandatory lap first edge is absent".into())
+        })?;
+    let last_edge = graph
+        .edges
+        .iter()
+        .find(|edge| edge.id == segment.ordered_edge_ids[last])
+        .ok_or_else(|| {
+            RouteMembershipError::Validation("mandatory lap last edge is absent".into())
+        })?;
+    if first_edge.from != anchor.merge_node_id || last_edge.to != anchor.branch_node_id {
+        return Err(RouteMembershipError::Validation(
+            "mandatory lap does not run from M to B on the declared arm".into(),
+        ));
+    }
+
+    let connector_candidates = graph
+        .edges
+        .iter()
+        .filter(|edge| {
+            edge_way_id(edge) == Some(anchor.excluded_short_connector.osm_way_id)
+                && edge.from == anchor.excluded_short_connector.from_node_id
+                && edge.to == anchor.excluded_short_connector.to_node_id
+        })
+        .collect::<Vec<_>>();
+    let connector_distance = connector_candidates
+        .iter()
+        .map(|edge| edge.distance_meters)
+        .sum::<u64>();
+    if connector_candidates.len() != anchor.excluded_short_connector.edge_count as usize
+        || connector_distance != anchor.excluded_short_connector.distance_meters
+    {
+        return Err(RouteMembershipError::Validation(format!(
+            "excluded short connector evidence does not match graph (edges={}, distance={})",
+            connector_candidates.len(),
+            connector_distance
+        )));
+    }
+    let mut current_node = anchor.excluded_short_connector.from_node_id.clone();
+    let mut visited = HashSet::new();
+    while let Some(edge) = connector_candidates
+        .iter()
+        .find(|edge| edge.from == current_node)
+    {
+        if !visited.insert(edge.id.as_str()) {
+            return Err(RouteMembershipError::Validation(
+                "excluded short connector is not an acyclic directed path".into(),
+            ));
+        }
+        if lap_edge_ids.iter().any(|edge_id| edge_id == &edge.id) {
+            return Err(RouteMembershipError::Segment(
+                "mandatory lap uses an excluded short connector".into(),
+            ));
+        }
+        current_node = edge.to.clone();
+    }
+    if current_node != anchor.excluded_short_connector.to_node_id {
+        return Err(RouteMembershipError::Validation(
+            "excluded short connector is disconnected".into(),
+        ));
+    }
+    Ok(())
 }
 
-fn bound_edge_ids_for_membership(
-    route_memberships: &[RouteMembershipIndex],
+fn bound_ramp_segment_for_exit<'a>(
+    graph: &'a Graph,
+    route_memberships: &'a [RouteMembershipIndex],
     membership: &RouteMembershipIndex,
-) -> HashSet<String> {
-    route_memberships
+    expected_ramp_id: &str,
+    exit_edge_id: &str,
+) -> Result<(&'a RouteMembershipSegment, &'a Ramp), RouteMembershipError> {
+    let ramps = graph
+        .ramps
+        .iter()
+        .filter(|ramp| {
+            ramp.id == expected_ramp_id
+                && ramp.kind == RampKind::GeneralExit
+                && ramp.route == membership.route_id
+                && ramp.direction == membership.direction
+        })
+        .collect::<Vec<_>>();
+    if ramps.len() != 1 {
+        return Err(RouteMembershipError::RampBinding(format!(
+            "expected exit ramp {} must resolve to exactly one route/direction binding",
+            expected_ramp_id
+        )));
+    }
+    let ramp = ramps[0];
+    if ramp.edge_id != exit_edge_id {
+        return Err(RouteMembershipError::RampBinding(format!(
+            "first exit edge {} does not equal exact ramp edge {}",
+            exit_edge_id, ramp.edge_id
+        )));
+    }
+    let segments = route_memberships
         .iter()
         .filter(|candidate| {
             candidate.route_id == membership.route_id && candidate.direction == membership.direction
         })
         .flat_map(|candidate| candidate.segments.iter())
-        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::BoundRamp)
-        .flat_map(|segment| segment.ordered_edge_ids.iter().cloned())
-        .collect()
+        .filter(|segment| {
+            segment.source_kind == RouteMembershipSourceKind::BoundRamp
+                && segment.ordered_edge_ids.first() == Some(&ramp.edge_id)
+        })
+        .collect::<Vec<_>>();
+    if segments.len() != 1 {
+        return Err(RouteMembershipError::RampBinding(format!(
+            "ramp {} must have exactly one ordered boundRamp segment (matches={})",
+            expected_ramp_id,
+            segments.len()
+        )));
+    }
+    Ok((segments[0], ramp))
 }
 
 fn relation_sequences(membership: &RouteMembershipIndex) -> Vec<&RouteMembershipSegment> {
@@ -1252,7 +1762,6 @@ pub fn find_first_exit_on_corridor_with_budget(
             initial_edge_id, start_node_id
         )));
     }
-    let bound_edge_ids = bound_edge_ids_for_membership(route_memberships, membership);
     let mut position = start_position;
     let mut path = Vec::new();
     let mut mainline = Vec::new();
@@ -1304,48 +1813,42 @@ pub fn find_first_exit_on_corridor_with_budget(
         mainline.push(edge.id.clone());
         distance = distance.saturating_add(edge.distance_meters);
 
-        let mut exit_edges: Vec<&Edge> = graph
+        let mut exit_edges = graph
             .edges
             .iter()
             .filter(|candidate| candidate.kind == EdgeKind::Exit && candidate.from == edge.to)
-            .collect();
+            .collect::<Vec<_>>();
         if !exit_edges.is_empty() {
-            if exit_edges.len() > 1 {
-                exit_edges.sort_by(|left, right| left.id.cmp(&right.id));
-            }
-            let mut matched: Option<(&Edge, &Ramp)> = None;
-            for exit in &exit_edges {
-                let ramps = ramp_id_for_edge(graph, &exit.id);
-                if bound_edge_ids.contains(&exit.id) {
-                    for ramp in ramps {
-                        if ramp.id == expected_ramp_id
-                            && ramp.kind == RampKind::GeneralExit
-                            && ramp.route == membership.route_id
-                            && ramp.direction == membership.direction
-                        {
-                            matched = Some((exit, ramp));
-                            break;
-                        }
-                    }
-                }
-            }
-            let Some((exit, ramp)) = matched else {
-                return Err(RouteMembershipError::ExitNotFound(format!(
-                    "first Exit at {} is not the expected bound ramp {} in membership {}",
-                    edge.to, expected_ramp_id, membership_id
-                )));
-            };
+            exit_edges.sort_by(|left, right| left.id.cmp(&right.id));
+            let first_exit = exit_edges[0];
+            let (bound_segment, ramp) = bound_ramp_segment_for_exit(
+                graph,
+                route_memberships,
+                membership,
+                expected_ramp_id,
+                &first_exit.id,
+            )?;
+            let ramp_edges = validate_ordered_edges(
+                graph,
+                &bound_segment.ordered_edge_ids,
+                &bound_segment.segment_id,
+            )?;
             let mut full_path = path.clone();
-            full_path.push(exit.id.clone());
+            full_path.extend(bound_segment.ordered_edge_ids.iter().cloned());
             if contains_forbidden_transition(&full_path, &graph.forbidden_transitions) {
                 return Err(RouteMembershipError::Validation(
                     "first corridor Exit contains a forbidden transition".into(),
                 ));
             }
-            distance = distance.saturating_add(exit.distance_meters);
+            distance = distance.saturating_add(
+                ramp_edges
+                    .iter()
+                    .map(|edge| edge.distance_meters)
+                    .sum::<u64>(),
+            );
             return Ok(CorridorExit {
                 distance_meters: distance,
-                exit_edge_id: exit.id.clone(),
+                exit_edge_id: ramp_edges[0].id.clone(),
                 ramp_id: ramp.id.clone(),
                 edge_ids: full_path,
                 mainline_edge_ids: mainline,
@@ -1499,6 +2002,7 @@ mod tests {
                 way(201, vec![7, 8, 10]),
                 way(202, vec![4, 9]),
                 relation(10, "forward", vec![member(101), member(102), member(103)]),
+                way(203, vec![9, 10]),
             ],
         };
         let graph = Graph {
@@ -1525,6 +2029,7 @@ mod tests {
                 edge("e:w201:0:f", "n:7", "n:8", EdgeKind::Entry),
                 edge("e:w201:1:f", "n:8", "n:10", EdgeKind::Entry),
                 edge("e:w202:0:f", "n:4", "n:9", EdgeKind::Exit),
+                edge("e:w203:0:f", "n:9", "n:10", EdgeKind::Exit),
             ],
             billing_pairs: Vec::new(),
             forbidden_transitions: Vec::new(),
@@ -1560,6 +2065,8 @@ mod tests {
     }
 
     fn evidence() -> Vec<BoundRampEvidence> {
+        let entry_edge_ids = vec!["e:w201:0:f".into(), "e:w201:1:f".into()];
+        let exit_edge_ids = vec!["e:w202:0:f".into(), "e:w203:0:f".into()];
         vec![
             BoundRampEvidence {
                 binding_evidence_id: "binding:entry".into(),
@@ -1567,17 +2074,222 @@ mod tests {
                 route_id: "R1".into(),
                 direction: "forward".into(),
                 osm_way_ids: vec![201],
-                edge_ids: vec!["e:w201:0:f".into(), "e:w201:1:f".into()],
+                from_node_id: "n:7".into(),
+                to_node_id: "n:10".into(),
+                edge_ids_sha256: ordered_edge_ids_sha256(&entry_edge_ids).unwrap(),
+                edge_ids: entry_edge_ids,
             },
             BoundRampEvidence {
                 binding_evidence_id: "binding:exit".into(),
                 ramp_id: "ramp:exit".into(),
                 route_id: "R1".into(),
                 direction: "forward".into(),
-                osm_way_ids: vec![202],
-                edge_ids: vec!["e:w202:0:f".into()],
+                osm_way_ids: vec![202, 203],
+                from_node_id: "n:4".into(),
+                to_node_id: "n:10".into(),
+                edge_ids_sha256: ordered_edge_ids_sha256(&exit_edge_ids).unwrap(),
+                edge_ids: exit_edge_ids,
             },
         ]
+    }
+
+    #[test]
+    fn normalizes_route_two_roles_and_rejects_tampered_relation_order() {
+        let (mut response, graph, snapshot) = synthetic();
+        let relation = &mut response.elements[5];
+        relation
+            .tags
+            .as_mut()
+            .unwrap()
+            .insert("ref".into(), "2".into());
+        relation.tags.as_mut().unwrap().remove("direction");
+        relation.members.as_mut().unwrap()[0].role = "forward".into();
+        relation.members.as_mut().unwrap()[1].role = "forward".into();
+        relation.members.as_mut().unwrap()[2].role = "backward".into();
+        let memberships = build_relation_memberships(&response, &graph, &snapshot, None).unwrap();
+        assert!(memberships
+            .iter()
+            .any(|membership| membership.membership_id == "route:2:outbound"));
+        assert!(memberships
+            .iter()
+            .any(|membership| membership.membership_id == "route:2:inbound"));
+        assert!(memberships.iter().all(|membership| {
+            membership.direction_mapping_version == ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION
+        }));
+
+        let mut tampered = build_route_memberships(
+            &response,
+            &graph,
+            &RouteMembershipBuildOptions {
+                source_snapshot_sha256: snapshot,
+                relation_ids: None,
+                bound_ramp_evidence: evidence(),
+            },
+        )
+        .unwrap();
+        let segment = tampered
+            .iter_mut()
+            .flat_map(|membership| membership.segments.iter_mut())
+            .find(|segment| {
+                segment.source_kind == RouteMembershipSourceKind::RelationMainline
+                    && segment.ordered_edge_ids.len() > 1
+            })
+            .unwrap();
+        segment.ordered_edge_ids.swap(0, 1);
+        segment.ordered_edge_ids_sha256 =
+            ordered_edge_ids_sha256(&segment.ordered_edge_ids).unwrap();
+        assert!(validate_route_memberships(
+            &tampered,
+            &graph,
+            &response,
+            &compute_sha256(b"fixture-snapshot"),
+            &evidence()
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn filters_conflicting_route_links_and_keeps_c1_arms_separate() {
+        let (mut response, graph, snapshot) = synthetic();
+        let relation = &mut response.elements[5];
+        relation
+            .tags
+            .as_mut()
+            .unwrap()
+            .insert("ref".into(), "C1".into());
+        relation.tags.as_mut().unwrap().remove("direction");
+        relation.members.as_mut().unwrap()[0].role = "Inner directions".into();
+        relation.members.as_mut().unwrap()[1].role = "Outer directions".into();
+        relation.members.as_mut().unwrap()[2].role = "Outer directions".into();
+        let mut conflicting_link = way(301, vec![4, 9]);
+        conflicting_link
+            .tags
+            .as_mut()
+            .unwrap()
+            .insert("highway".into(), "motorway_link".into());
+        conflicting_link
+            .tags
+            .as_mut()
+            .unwrap()
+            .insert("nat_ref".into(), "8".into());
+        conflicting_link
+            .tags
+            .as_mut()
+            .unwrap()
+            .insert("name".into(), "首都高速都心環状線".into());
+        relation.members.as_mut().unwrap().push(member(301));
+        response.elements.push(conflicting_link);
+        let memberships = build_relation_memberships(&response, &graph, &snapshot, None).unwrap();
+        assert!(memberships
+            .iter()
+            .any(|membership| membership.membership_id == "route:C1:inner"));
+        assert!(memberships
+            .iter()
+            .any(|membership| membership.membership_id == "route:C1:outer"));
+        assert!(!memberships
+            .iter()
+            .any(|membership| { membership.membership_id == "route:C1:backward" }));
+        assert!(memberships.iter().all(|membership| membership
+            .segments
+            .iter()
+            .all(|segment| !segment.ordered_edge_ids.iter().any(|id| id == "e:w301:0:f"))));
+    }
+
+    #[test]
+    fn validates_directed_junction_arm_and_short_connector_contract() {
+        let (response, mut graph, snapshot) = synthetic();
+        graph.nodes.push(node("n:5"));
+        graph
+            .edges
+            .push(edge("e:w999:0:f", "n:4", "n:2", EdgeKind::Shutoko));
+        graph
+            .edges
+            .push(edge("e:w999:1:f", "n:4", "n:5", EdgeKind::Shutoko));
+        let memberships = build_route_membership_indices(
+            &response,
+            &graph,
+            &RouteMembershipBuildOptions {
+                source_snapshot_sha256: snapshot,
+                relation_ids: None,
+                bound_ramp_evidence: evidence(),
+            },
+        )
+        .unwrap();
+        let anchor = DirectedJunctionAnchor {
+            anchor_kind: crate::seed::AnchorKind::DirectedJunction,
+            route_id: "R1".into(),
+            direction: "forward".into(),
+            merge_node_id: "n:2".into(),
+            branch_node_id: "n:4".into(),
+            merge_terminal_edge_id: "e:w101:0:f".into(),
+            branch_initial_edge_id: "e:w999:1:f".into(),
+            arc_policy: crate::seed::ArcPolicy::OrdinaryLongArc,
+            excluded_short_connector: crate::seed::ExcludedShortConnector {
+                from_node_id: "n:4".into(),
+                to_node_id: "n:2".into(),
+                osm_way_id: 999,
+                edge_count: 1,
+                distance_meters: 100,
+            },
+        };
+        let lap = MandatoryLap {
+            membership_id: "route:R1:forward".into(),
+            first_edge_id: "e:w102:0:f".into(),
+            last_edge_id: "e:w103:0:f".into(),
+            lap_count: 1,
+        };
+        validate_directed_junction_mandatory_lap(&graph, &memberships, &anchor, &lap).unwrap();
+        let mut wrong_arm = anchor.clone();
+        wrong_arm.merge_node_id = "n:3".into();
+        assert!(
+            validate_directed_junction_mandatory_lap(&graph, &memberships, &wrong_arm, &lap)
+                .is_err()
+        );
+        let mut wrong_connector = anchor;
+        wrong_connector.excluded_short_connector.osm_way_id = 1000;
+        assert!(validate_directed_junction_mandatory_lap(
+            &graph,
+            &memberships,
+            &wrong_connector,
+            &lap
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn rejects_binding_hash_endpoint_and_missing_way_evidence() {
+        let (_response, graph, snapshot) = synthetic();
+        let multi_edge_ids = vec!["e:w202:0:f".into(), "e:w203:0:f".into()];
+        let segment = DirectedEndpointSegment {
+            segment_id: "binding:multi:segment:0".into(),
+            osm_way_ids: vec![202, 203],
+            edge_ids: multi_edge_ids.clone(),
+            from_node_id: "n:4".into(),
+            to_node_id: "n:10".into(),
+            edge_ids_sha256: ordered_edge_ids_sha256(&multi_edge_ids).unwrap(),
+        };
+        let constructed = BoundRampEvidence::from_directed_segment(
+            "binding:multi",
+            "ramp:exit",
+            "R1",
+            "forward",
+            &segment,
+        );
+        assert_eq!(constructed.from_node_id, "n:4");
+        assert_eq!(constructed.to_node_id, "n:10");
+        assert!(build_bound_ramp_memberships(&graph, &snapshot, &[constructed]).is_ok());
+        let mut bad_hash = evidence();
+        bad_hash[0].edge_ids_sha256 = compute_sha256(b"wrong");
+        assert!(build_bound_ramp_memberships(&graph, &snapshot, &bad_hash).is_err());
+        let mut bad_endpoint = evidence();
+        bad_endpoint[0].to_node_id = "n:8".into();
+        assert!(build_bound_ramp_memberships(&graph, &snapshot, &bad_endpoint).is_err());
+        let mut missing_edge = evidence();
+        missing_edge[1].edge_ids.pop();
+        missing_edge[1].to_node_id = "n:9".into();
+        missing_edge[1].edge_ids_sha256 =
+            ordered_edge_ids_sha256(&missing_edge[1].edge_ids).unwrap();
+        assert!(build_bound_ramp_memberships(&graph, &snapshot, &missing_edge).is_err());
     }
 
     #[test]
@@ -1590,7 +2302,12 @@ mod tests {
         };
         let memberships = build_route_membership_indices(&response, &graph, &options).unwrap();
         assert_eq!(memberships.len(), 1);
-        assert_eq!(memberships[0].segments.len(), 3);
+        assert_eq!(
+            memberships[0].segments.len(),
+            3,
+            "{:#?}",
+            memberships[0].segments
+        );
         assert!(memberships[0]
             .segments
             .iter()
@@ -1683,6 +2400,7 @@ mod tests {
             None,
         )
         .is_err());
+        let reversed_entry_edges = vec!["e:w201:1:f".into(), "e:w201:0:f".into()];
         assert!(build_bound_ramp_memberships(
             &graph,
             &compute_sha256(b"fixture-snapshot"),
@@ -1692,7 +2410,10 @@ mod tests {
                 route_id: "R1".into(),
                 direction: "forward".into(),
                 osm_way_ids: vec![201],
-                edge_ids: vec!["e:w201:1:f".into(), "e:w201:0:f".into()],
+                from_node_id: "n:8".into(),
+                to_node_id: "n:7".into(),
+                edge_ids_sha256: ordered_edge_ids_sha256(&reversed_entry_edges).unwrap(),
+                edge_ids: reversed_entry_edges,
             }],
         )
         .is_err());
@@ -1737,7 +2458,12 @@ mod tests {
         )
         .unwrap();
         assert_eq!(exit.exit_edge_id, "e:w202:0:f");
+        assert_eq!(
+            exit.edge_ids,
+            vec!["e:w103:0:f", "e:w202:0:f", "e:w203:0:f"]
+        );
         assert_eq!(exit.mainline_edge_ids, vec!["e:w103:0:f"]);
+        assert_eq!(exit.distance_meters, 300);
         assert!(matches!(
             find_first_exit_on_corridor_with_budget(
                 &graph,

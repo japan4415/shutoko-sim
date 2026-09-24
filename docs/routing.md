@@ -19,9 +19,9 @@
 
 [首都高の料金距離説明](https://www.shutoko.jp/fee/fee-info/pay_etc/distance/)は、複数経路がある場合に入口出口間の首都高最短経路を料金距離とする原則を示している。具体的なペアの料金と利用条件は別途確認し、実走行距離へ単価を掛けて料金を計算しない。
 
-## Issue #42: Directed Route-Plan Lap v1（設計・未実装）
+## Issue #42: Directed Route-Plan Lap v1（route membership実装済み・残りは設計・未実装）
 
-本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路的设计を定めたもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型は実装済みだが、route membership、探索、graph schema 4、公開成果物への反映は未実装である。現行 C1 8 ペアの挙動は変えない。
+本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路を設計したもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型を実装し、Issue #63 で graph-builder 内限定の `RouteMembershipIndex`、relation mainline / bound ramp の生成・検証、`find_first_exit_on_corridor` の基本処理を実装した。`--graph-schema 4` を明示した場合だけ `graph.json` の最上位に `routeMemberships[]` を含める。route plan の分解、schema 4 reader、公開 release への反映は #64〜#66 の範囲であり、現行 C1 8 ペアの挙動は変えない。
 
 ### 採用案は「指定 route の長弧を1周する」
 
@@ -85,7 +85,7 @@ mandatory lap自身のfirst / last Edgeは`routePlan.mandatoryLap.firstEdgeId` /
 
 ### route と direction は本線relationとramp bindingを別々に証明する
 
-現行Edgeにはroute membershipと走行方向がない。edge kindだけでFirst Exitを求めると、B付近のC1出口や別armへの近道を先に拾う。そこでgraph schema 4のtop-level `routeMemberships[]`へ`RouteMembershipIndex`を出す。
+現行 Edge には route membership と走行方向がない。edge kind だけで First Exit を求めると、B 付近の C1 出口や別 arm への近道を先に拾う。Issue #63 で、graph-builder の明示的な `--graph-schema 4` 出力に top-level `routeMemberships[]` を追加した。`RouteMembershipIndex` は OSM route relation の ordered member と way の node 順を `relationMainline` として写像し、正規ランプ台帳と exact directed binding を `boundRamp` として別々に保持する。
 
 1つの`RouteMembershipIndex`は`membershipId`、`routeId`、`direction`、`segments[]`を持つ。各`RouteMembershipSegment`は`sourceKind`で由来を分ける。
 
@@ -94,9 +94,9 @@ mandatory lap自身のfirst / last Edgeは`routePlan.mandatoryLap.firstEdgeId` /
 
 OSM route relationはmainlineを列挙し、目黒entry way `207535708`や天現寺exit候補way `172358461` / `422023171`を含まない。rampをrelationの連続Edge列へ強制すると、正しいbindingを誤って無検証にする。mainlineとrampを同じ`sourceKind`へ混ぜない。
 
-route planのlegは`sourceSegmentIds[]`でmainlineとrampの由来を明示する。`mandatory_lap`は1つの`relationMainline`の連続部分列でなければならない。entry、return、exitは`relationMainline`と`boundRamp`を順番に連結できるが、各segment内部のEdge順、node接続、hash、binding証拠を検証する。Edgeごとにroute metadataを複製せず、indexから検索・検証し、manifestへhashを渡す。名前や最接近nodeだけで所属を補わない。
+route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を明示する。`mandatory_lap` は 1 つの `relationMainline` の連続部分列でなければならない。entry、return、exit は `relationMainline` と `boundRamp` を順番に連結できるが、各 segment 内部の Edge 順、node 接続、hash、binding 証拠を個別に検証する。Edge ごとに route metadata を複製せず、index から検索・検証する。名前や最接近 node だけで所属を補わない。
 
-次の異常系テストを必須とする。
+次の異常系は graph-builder の synthetic fixture と Issue #63 実装で検証する。
 
 - C1内回りを要求しているのにouterのmember Edgeを使う。
 - 一ノ橋JCTで別armへ切り替える近道を使う。
@@ -202,12 +202,12 @@ Issue #41で公式billing distanceと版管理済み料金規則を確定する�
 
 ### 実装 issue は単独で検証できる順に分ける
 
-graph schema 4をbuilderだけが先に出力する段階は作らない。Issue #62 で seed parser は schema 1 / 2 の明示 dispatch、variant ごとの必須field、未知fieldの拒否を実装した。graph readerとrelease wiringは後続issueで整えるまで、公開builderの既定出力は現行schemaのまま維持する。
+graph schema 4 を builder だけが先に出力する段階は、Issue #63 の opt-in として維持する。`--graph-schema 4` を明示した場合だけ top-level `routeMemberships[]` を生成し、既定の schema 2 出力・generated fixtures・manifest は変更しない。graph reader と release wiring は #65/#66 で整える。
 
 | Issue | 実装範囲 | 主な受け入れ条件 | 依存 |
 | ---: | --- | --- | --- |
 | 1 | seed schema v2 と diagnostic pair 型 | `schemaVersion`を明示的に1 / 2へdispatchし、全nested structでunknown fieldを拒否する。未知version / kind / field fixtureを通し、既存C1 8要素のID・意味・価格・状態・anchorを保つ。radial endpointは`directedSegments[]`と未解決`bindingCandidates[]`を区別する。 | なし |
-| 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance | `relationMainline`と`boundRamp`を別segmentとして生成し、way順、node接続、Edge順、hash、binding証拠を検証する。逆方向、同名JCT、非所属mainline way、ramp証拠なし、別arm近道、short connectorを拒否する。 | 1 |
+| 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance（#63実装済み） | `--graph-schema 4` の明示時だけ `relationMainline` と `boundRamp` を別 segment として生成し、way順、node接続、Edge順、hash、binding証拠を個別に検証する。逆方向、非所属mainline way、ramp証拠なし、short connector、relationの逆順を拒否する。#64のradial route planへの統合は未実装。 | 1 |
 | 3 | directed mandatory lap と return-corridor First Exit | synthetic radial fixtureでM→B長弧、return corridor、first general Exitを分解する。C1 legacyを完全維持し、segment内反復を拒否しつつ、route planが宣言したsegment間反復を許可する。 | 1, 2 |
 | 4 | graph schema 4 reader と consumer 契約 | core、WASM型、Web Workerがschema 2 / 3 / 4を読む。`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`を判別し、wire fragmentとfield failure fixtureを追加する。未知kind / version、部分data、route legの重複・欠落を拒否する。 | 1, 3 |
 | 5 | graph schema 4 の atomic release activation | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |

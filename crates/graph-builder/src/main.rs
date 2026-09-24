@@ -4,14 +4,15 @@
 //! from OSM Overpass export JSON and human-verified billing pair seeds.
 
 use shutoko_graph_builder::{
-    apply_od_tariffs_to_graph, bind_ramps_to_graph, build_manifest, build_topology_with_report,
-    generate_and_validate_parsed_billing_pairs, manifest_to_deterministic_json,
-    parse_billing_pairs_seed, ramps_artifact_to_deterministic_json,
+    apply_od_tariffs_to_graph, bind_ramps_to_graph, bound_ramp_evidence_from_inventory,
+    build_manifest, build_route_membership_indices, build_topology_with_report,
+    generate_and_validate_parsed_billing_pairs, graph_schema_v4_to_deterministic_json,
+    manifest_to_deterministic_json, parse_billing_pairs_seed, ramps_artifact_to_deterministic_json,
     snap_index_to_deterministic_json, to_deterministic_json, validate_od_tariffs,
     validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm, validate_ramp_inventory,
     BillingPairProvenance, EdgeKind, ManifestConfig, OdTariffsFile, OsmRampBindingsFile,
-    OverpassResponse, RampInventoryFile, RampKind, RampsArtifact, TopologyConfig,
-    VerificationStatus,
+    OverpassResponse, RampInventoryFile, RampKind, RampsArtifact, RouteMembershipBuildOptions,
+    TopologyConfig, VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -41,6 +42,7 @@ OPTIONS:
     --source-date <DATE>    Data capture date (YYYY-MM-DD) [default: "2026-09-10"]
     --coverage-area <STR>   Textual coverage scope description [default: "Tokyo Inner Circular Route (C1) and Metropolitan Expressway"]
     --graph-version <VER>   Graph dataset version [default: "1.0.0"]
+    --graph-schema <2|4>     Graph JSON schema [default: 2]
     --unverified-section <S> Unverified section to record in manifest (can be specified multiple times)
     --strict                Fail with non-zero exit code if no verified billing pairs are generated
     -h, --help              Print help information
@@ -62,6 +64,7 @@ struct CliArgs {
     source_date: String,
     coverage_area: String,
     graph_version: String,
+    graph_schema: u32,
     unverified_sections: Vec<String>,
     strict: bool,
 }
@@ -87,6 +90,7 @@ fn parse_args() -> Result<CliArgs, String> {
     let mut coverage_area =
         "Tokyo Inner Circular Route (C1) and Metropolitan Expressway".to_string();
     let mut graph_version = "1.0.0".to_string();
+    let mut graph_schema = 2u32;
     let mut unverified_sections: Vec<String> = Vec::new();
     let mut strict = false;
 
@@ -185,6 +189,15 @@ fn parse_args() -> Result<CliArgs, String> {
                 }
                 graph_version = raw_args[i].clone();
             }
+            "--graph-schema" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err("--graph-schema requires 2 or 4".into());
+                }
+                graph_schema = raw_args[i]
+                    .parse::<u32>()
+                    .map_err(|_| "--graph-schema requires 2 or 4".to_string())?;
+            }
             "--unverified-section" => {
                 i += 1;
                 if i >= raw_args.len() {
@@ -204,6 +217,9 @@ fn parse_args() -> Result<CliArgs, String> {
 
     let osm_path = osm_path.ok_or_else(|| "missing required argument: --osm".to_string())?;
     let out_dir = out_dir.ok_or_else(|| "missing required argument: --out-dir".to_string())?;
+    if graph_schema != 2 && graph_schema != 4 {
+        return Err("--graph-schema must be 2 or 4".into());
+    }
 
     Ok(CliArgs {
         osm_path,
@@ -218,6 +234,7 @@ fn parse_args() -> Result<CliArgs, String> {
         source_date,
         coverage_area,
         graph_version,
+        graph_schema,
         unverified_sections,
         strict,
     })
@@ -320,6 +337,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 3.5. Process canonical ramp inventory, OSM bindings, and OD tariffs if provided
+    let mut route_membership_evidence = Vec::new();
     let mut ramps_artifact_opt: Option<(RampsArtifact, String)> = None;
     if let Some(inv_path) = &args.inventory_path {
         let inv_raw = fs::read_to_string(inv_path).map_err(|e| {
@@ -382,6 +400,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let (bound_ramps, ramp_artifact_entries, unbound_notes) =
             bind_ramps_to_graph(&graph, &inv, &bindings_file);
         graph.ramps = bound_ramps;
+        if args.graph_schema == 4 {
+            route_membership_evidence =
+                bound_ramp_evidence_from_inventory(&graph, &inv, &bindings_file)
+                    .map_err(|error| format!("route membership binding build failed: {}", error))?;
+        }
         if inv.version >= 3 {
             shutoko_graph_builder::validate_endpoint_capability_contract(&graph, &inv).map_err(
                 |errs| {
@@ -482,8 +505,24 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 4. Serialize graph.json and snap-index.json deterministically
-    let graph_json =
-        to_deterministic_json(&graph).map_err(|e| format!("graph serialization failed: {}", e))?;
+    let route_memberships = if args.graph_schema == 4 {
+        let source_snapshot_sha256 = shutoko_graph_builder::compute_sha256(osm_raw.as_bytes());
+        let options = RouteMembershipBuildOptions {
+            source_snapshot_sha256,
+            relation_ids: None,
+            bound_ramp_evidence: route_membership_evidence,
+        };
+        build_route_membership_indices(&overpass_resp, &graph, &options)
+            .map_err(|error| format!("route membership build failed: {}", error))?
+    } else {
+        Vec::new()
+    };
+    let graph_json = if args.graph_schema == 4 {
+        graph_schema_v4_to_deterministic_json(&graph, &route_memberships)
+            .map_err(|e| format!("graph schema 4 serialization failed: {}", e))?
+    } else {
+        to_deterministic_json(&graph).map_err(|e| format!("graph serialization failed: {}", e))?
+    };
     let snap_json = snap_index_to_deterministic_json(&snap_index)
         .map_err(|e| format!("snap index serialization failed: {}", e))?;
 

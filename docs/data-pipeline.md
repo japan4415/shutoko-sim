@@ -527,7 +527,7 @@ schema 4 の manifest は `billingPairsVersion=v2`、graph schema 4、route plan
 
 ### 3.3 `RouteMembershipIndex` は本線 relation と ramp binding を別々に証明する
 
-現行 Graph の Edge には route membership と direction がない。`find_first_exits_from_anchor` の現行挙動は C1 legacy adapter として保存し、radial には `find_first_exit_on_corridor` を新設する。
+Issue #63 で graph-builder にこのデータ型と生成・検証処理を追加した。`--graph-schema 4` を明示した場合だけ `graph.json` の top-level に `routeMemberships[]` を出力し、既定の schema 2 / `fixtures/generated/*` は変更しない。OSM relation の `relationMainline` と、正規ランプ台帳の exact directed binding に由来する `boundRamp` は同じ route/direction の membership 内でも別 segment として保持する。各 segment の `orderedEdgeIdsSha256`、source snapshot hash、way/node/Edge 連続性を builder が検証する。schema 4 reader、manifest への route membership hash 統合、公開 release の切替は #65/#66 の範囲である。`find_first_exits_from_anchor` は C1 legacy のまま保存し、membership 制約付きの基本処理として `find_first_exit_on_corridor` を新設した。
 
 OSM route relation は mainline を列挙し、一般入口・出口の ramp way を含まない。目黒 entry way `207535708` や天現寺 exit candidate way `172358461` / `422023171` を mainline relation の member として扱い続けると、正しい ramp binding を relation の連続 Edge 列へ不正に対応させる。したがって、graph schema 4 の top-level `routeMemberships[]` は次の二層構造にする。
 

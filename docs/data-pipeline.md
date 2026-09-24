@@ -230,16 +230,17 @@ Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在
   "exitEndpoint": {
     "rampId": "ramp:2-outbound:tengenji-exit",
     "name": "天現寺出口",
-    "supportState": "unsupported",
+    "supportState": "unresolved",
     "directedSegments": [],
     "bindingCandidates": [
       {
-        "candidateId": "tengenji:g21:172358461-422023171",
+        "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460-172358466",
         "status": "unresolved",
         "directedSegments": [
           {
-            "segmentId": "tengenji:g21:chain:0",
-            "osmWayIds": [172358461, 422023171],
+            "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
+            "osmWayIds": [172358461, 422023171, 931759044, 172358460, 172358466],
+            "osmNodeIds": [252175582, 1832672250, 1832672244, 1832672214, 1832672165, 1832672133, 1832672121, 1832672108, 1832672093, 1832672090, 1832672098, 8638072333, 1832672096, 1832672105, 1832672128, 1832672146, 1832672162, 1832672205],
             "edgeIds": [
               "e:w172358461:0:f",
               "e:w172358461:1:f",
@@ -249,11 +250,19 @@ Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在
               "e:w172358461:5:f",
               "e:w422023171:0:f",
               "e:w422023171:1:f",
-              "e:w422023171:2:f"
+              "e:w422023171:2:f",
+              "e:w931759044:0:f",
+              "e:w172358460:0:f",
+              "e:w172358460:1:f",
+              "e:w172358460:2:f",
+              "e:w172358460:3:f",
+              "e:w172358460:4:f",
+              "e:w172358460:5:f",
+              "e:w172358466:0:f"
             ],
             "fromNodeId": "n:252175582",
-            "toNodeId": "n:1832672090",
-            "edgeIdsSha256": "ac97e5a464d46bc4dd5cfb641171da94639832516d8bc4876ef510dab2a7872a"
+            "toNodeId": "n:1832672205",
+            "edgeIdsSha256": "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
           }
         ]
       }
@@ -295,7 +304,7 @@ Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在
       "firstGeneralExit": {
         "rule": "firstGeneralExit",
         "expectedRampId": "ramp:2-outbound:tengenji-exit",
-        "exactDirectedBinding": "unsupported"
+        "exactDirectedBinding": "unresolved"
       }
     }
   },
@@ -316,12 +325,12 @@ Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在
   "provenance": {
     "source": "https://www.shutoko.jp/use/network/map/",
     "sourceDate": "2026-09-16",
-    "notes": "目黒入口から一ノ橋JCTのC1 inner長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。天現寺exitのexact directed bindingは未解決。"
+    "notes": "目黒入口から一ノ橋JCTのC1 inner長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。5 wayの有向鎖は2号下りのn:252175582から明治通りのn:1832672205へ到達するが、n:1832672162も明治通りへ接続するためexact ground endpointを一意に確定できず、bindingはunresolvedのままとする。"
   }
 }
 ```
 
-endpoint は単一 OSM way を仮定しない。`supportState=verified_bound` では `directedSegments[]` に、解釈が確定した順に連続する `osmWayIds` と `edgeIds` を必ず記録する。way をまたぐ場合も1つの directed segment にまとめ、各要素の接続と順序を検証する。`supportState=unresolved` / `unsupported` では `directedSegments` を空にし、監査した候補だけを `bindingCandidates[]` に置く。候補は `eligibilityStatus=verified_one_section_ahead` へ昇移できず、目黒出口や別施設 ID で補完しない。
+endpoint は単一 OSM way を仮定しない。`supportState=verified_bound` では `directedSegments[]` に、解釈が確定した順に連続する `osmWayIds`、`osmNodeIds`、`edgeIds`、両端nodeとhashを必ず記録する。wayをまたぐ場合も1つのdirected segmentにまとめ、各要素の接続と順序を検証する。`supportState=unresolved` / `unsupported`では`directedSegments`を空にし、監査した候補だけを`bindingCandidates[]`に置く。天現寺候補は5 wayと18 node、17 Edgeの接続とhashを固定できるが、way `172358466`の始点`n:1832672162`も一般道・明治通りへ接続するため、ground endpointが一意でない。候補は`eligibilityStatus=verified_one_section_ahead`へ昇移できず、目黒出口や別施設IDで補完しない。schema 2の`Graph.ramps`と`ramps.json`にもcandidateを投影しない。
 
 `edgeIdsSha256` は、順序を保った `edgeIds` を空白なしの JSON array へ直列化し、その UTF-8 バイト列を SHA-256 にした値とする。outer も同じ形を使い、`anchor.direction=outer`、M=`n:31297008`、B=`n:31297000`、mandatory lap の first / last Edge=`e:w24039737:24:f` / `e:w24039737:3:f`、除外 connector は way `24039737`、20 edges、461m、return initial Edge は `e:w4853805:0:f` とする。
 
@@ -529,14 +538,14 @@ schema 4 の manifest は `billingPairsVersion=v2`、graph schema 4、route plan
 
 現行 Graph の Edge には route membership と direction がない。`find_first_exits_from_anchor` の現行挙動は C1 legacy adapter として保存し、radial には `find_first_exit_on_corridor` を新設する。
 
-OSM route relation は mainline を列挙し、一般入口・出口の ramp way を含まない。目黒 entry way `207535708` や天現寺 exit candidate way `172358461` / `422023171` を mainline relation の member として扱い続けると、正しい ramp binding を relation の連続 Edge 列へ不正に対応させる。したがって、graph schema 4 の top-level `routeMemberships[]` は次の二層構造にする。
+OSM route relation は mainline を列挙し、一般入口・出口の ramp way を含まない。目黒 entry way `207535708` や天現寺 exit candidate way `172358461` / `422023171` / `931759044` / `172358460` / `172358466` を mainline relation の member として扱い続けると、正しい ramp binding を relation の連続 Edge 列へ不正に対応させる。したがって、graph schema 4 の top-level `routeMemberships[]` は次の二層構造にする。
 
 | object | 必須 field | 証明する内容 |
 | --- | --- | --- |
 | `RouteMembershipIndex` | `membershipId`, `routeId`, `direction`, `segments[]` | 路線・方向ごとに使う ordered segment を束ねる。 |
 | `RouteMembershipSegment` | `segmentId`, `sourceKind`, `sourceRelationId`, `sourceSnapshotSha256`, `bindingEvidenceId`, `orderedEdgeIds`, `orderedEdgeIdsSha256` | `sourceKind=relationMainline` なら relation と snapshot、`sourceKind=boundRamp` なら exact binding を由来にする。 |
 
-`relationMainline` は `sourceRelationId` と `bindingEvidenceId=null` を要求し、relation の ordered member と way のノード順を graph Edge へ写像する。`boundRamp` は `sourceRelationId=null` と非 null の `bindingEvidenceId` を要求し、正規ランプ台帳と exact directed binding の順序付き Edge 列を使う。どちらも `orderedEdgeIdsSha256` を必須にする。
+`relationMainline` は `sourceRelationId` と `bindingEvidenceId=null` を要求し、relation の ordered member と way のノード順を graph Edge へ写像する。`boundRamp` は `sourceRelationId=null` と非 null の `bindingEvidenceId` を要求し、正規ランプ台帳と exact directed binding の順序付き Edge 列を使う。どちらも `orderedEdgeIdsSha256` を必須にする。天現寺候補はway順・node接続・Edge順・hashを監査できているが、ground endpointが一意でないためcandidateIdだけを`bindingEvidenceId`として`boundRamp`へ昇格させない。ground endpointを他根拠で一意に確定できた後に、#63が同じdirected segmentを`boundRamp`として変換する。
 
 次の synthetic fragment は、1つの entry approach と return corridor が mainline segment と bound ramp segment を組み合わせた wire shape を示す。
 
@@ -631,7 +640,7 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 
 - inner / outer の M→B長弧を選び、B→Mの0.493km / 0.461km connectorを拒否する。
 - relation memberに目黒entryや天現寺exitを含めない現行snapshotで、対応するboundRamp segmentだけをevidence付きで許可する。
-- multi-way rampのway順、node接続、Edge順、hashを検証し、候補をverified bindingへ昇格しない。
+- multi-way rampのway順、node接続、Edge順、hashを検証し、way `172358466`の始点`n:1832672162`も一般道へ接続するためcandidateをverified bindingへ昇格しない。
 - entry corridorにC1 Exitがあっても、return corridorのExitと混同しない。
 - 逆方向、同名JCT、relation非所属mainline way、別armへの近道を拒否する。
 - segment内のEdge反復を拒否し、route planが宣言したsegment間反復を許す。
@@ -643,7 +652,7 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 
 本節で定義した inner / outer object は、Issue #42 の設計成果を示す schema-valid な diagnostic fixture にする。実装 issue 1 では、この JSON を parser test と snapshot に使う。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
 
-binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。binding が解けた後に、route membership、First Exit、全 segment の完全分割を再検証し、graph schema 4 の `radialReturn` として昇格する。昇格後も Issue #41 までは `amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced` を維持する。
+binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。今回は5 wayの連続性を確認したが、2号下りの`n:252175582`から`n:1832672205`へ至る間に、一般道・明治通りへ接続する`n:1832672162`も存在する。公式2号下りの出口番号順は201天現寺、203目黒、205戸越、207荏原で施設名とは矛盾しないが、地上端点の選択までは一意にしない。よって`data/osm-ramp-bindings.json`には`status=unresolved`、`publicProjection=excluded_unresolved`のcandidateとして保持し、現行schema 2の`Graph.ramps`と`ramps.json`へ投影しない。地上端点を他根拠で一意に確定し、#63で`boundRamp`と`bindingEvidenceId`に変換した後、#68でroute membership、First Exit、全segmentの完全分割を再検証してgraph schema 4の`radialReturn`として昇格する。昇格後もIssue #41までは`amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`を維持する。
 
 ## 4. 成果物の決定論的再生成手順
 
@@ -742,7 +751,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
 
 ## 7. OSM ランプバインディング（`data/osm-ramp-bindings.json`）
 
-正規ランプ台帳の active 一般ランプと OpenStreetMap 実データの要素（way / node）を決定論的に紐付ける。境界 JCT と閉鎖済みランプは台帳にのみ保持し、このファイルには含めない。
+正規ランプ台帳の active 一般ランプと OpenStreetMap 実データの要素（way / node）を決定論的に紐付ける。境界 JCT と閉鎖済みランプは台帳にのみ保持する。version 4の`bindings[]`は現行schema 2へ投影する単一way binding、`bindingCandidates[]`はpublic projectionから除外する順序付きmulti-way候補として分離する。
 
 - **バインディングファイル**: `data/osm-ramp-bindings.json`
 - **判断正本**: `data/ramp-support-decisions.json`。距離順位による fallback は使わず、未分類の公式レコードが現れた場合は生成を停止する。
@@ -752,6 +761,8 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
   - `osmNodeId`: 一般道接続端点ノード（入口の乗込ノードまたは出口の流出ノード）
   - `motorwayNodeId`: 首都高本線（`motorway`）との分合流ノード ID
   - `sharedPhysicalOverrides`: 公式番号が異なる共有物理segmentである G15/G27/G53 の完全なメンバー集合、directed segment triplet、理由、証拠。同一facility・別directionも例外にせず、すべてのduplicate triplet集合とoverride集合の完全一致を強制する。方向一意性を立証できない旧22組は `unsupported` としbindingを削除した。
+  - `bindingCandidates[]`: `candidateId`, `rampId`, `status`, `publicProjection`, `direction`, 理由・reason code・根拠。`directedSegments[]` は順序付き`osmWayIds`、`osmNodeIds`、`edgeIds`、両端node、`edgeIdsSha256`を保持し、wayTags、route relation role、ground way、公式施設順をsnapshotと照合する。ground endpointが一意でないcandidateは`status=unresolved`、`publicProjection=excluded_unresolved`とし、`bindings[]`へ移してschema 2公開へ昇格させない。
+  - 天現寺出口候補の5 wayは`172358461` → `422023171` → `931759044` → `172358460` → `172358466`。17 Edgeのhashは`06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a`だが、`n:1832672162`と`n:1832672205`が一般道・明治通りに接続するため、`reasonCodes=[EARLY_SURFACE_CONNECTION,MULTIPLE_GROUND_CONNECTION_CANDIDATES]`のunresolvedを保持する。
 - **Overpass クエリ戦略**:
   - 首都高速道路のリレーション（全 24 路線）および `network="首都高速道路"` タグを起点とし、関連する `motorway_link` を多ホップ展開（1〜4 ホップ）して抽出。
   - 一般道との接続判定は、地表コンテキストウェイ（車両通行可能な `highway` ウェイ）のノード集合との積集合により機械的・決定論的に特定。
@@ -803,7 +814,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
 路線拡張やランプの新設・改修、料金改定時は以下の手順で安全に更新を行う:
 
 1. **公式snapshot更新**: `data/official-population-snapshot.json` を更新する。
-2. **根拠付き分類**: `data/ramp-support-decisions.json` に `verified_bound` と exact directed segment、または `unsupported` と理由・証拠を追加する。未分類のまま生成しない。
+2. **根拠付き分類**: `data/ramp-support-decisions.json` に `verified_bound` と exact directed segment、`unresolved` multi-way candidate、または `unsupported` と理由・証拠を追加する。未分類のまま生成しない。
 3. **料金定義**: 必要に応じて `data/od-tariffs.json` に新 OD ペアの料金距離・料金額を追加。
 4. **自動バリデーション**: `cargo test -p shutoko-graph-builder` を実行。台帳・バインディング・料金の整合性検証（ID 参照整合性、座標範囲、料金範囲、10円丸め等）が自動的に走る。
 5. **フィクスチャ再生成**: `bash scripts/generate-fixtures.sh` を実行し、`fixtures/generated/` の成果物を更新。

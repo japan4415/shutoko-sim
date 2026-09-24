@@ -150,7 +150,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | `nearestAccess` | `SnappedOrigin \| null` | 座標入力（`origin`）における最近接の入口アクセス地点（`{ nodeId, lat, lon, distanceMeters }`）。距離キャップ超過の `NO_CONNECTION` でも返す。`originNodeId` 入力および Entry アクセス地点が0件のときは `null` |
 | `minPlanSeconds` | `number \| null` | ループ時間が製品上限 240 分以内にある合法（禁止遷移を満たす）周回の `planSeconds`（`baseSeconds + bufferSeconds`）の最小値。指定時間枠で棄却した周回も含む。座標検索では最近接入口 tier が診断（`TIME_WINDOW` / `NO_HANDOFF`）を確定する場合、値は評価済み tier 内の最小値となる（合法周回を持つ最近接 tier で診断を確定し遠方入口へフォールスルーしないため）。従来のノード検索（`originNodeId`）や、`origin` 座標を伴わない片側ランプ指定では評価された検証済み課金ペア全体における最小値となる。`origin` 座標と片側ランプ指定を併用した場合は座標検索と同様に評価済み tier 内の最小値となる。列挙は「ループ部分の秒数 ≤ 240 分」で打ち切られるため、その値は列挙範囲内の最小値であり真の全周回最小を上回り得る。**`minPlanSeconds > 240 * 60` を「240 分以内に収まる合法周回が無い」の根拠として使えるのは、列挙が資源上限で打ち切られていない場合に限る**。`SearchLimits.beamWidth`・`maxExpandedStates`・`maxPairs`（または候補側の上限）が列挙を打ち切ったときは真の最小が証明できないため `null` を返す（この場合 UI は「最短でも N 分」「最大 4 時間でも無理」を断定してはならない）。値が non-null でも `240 * 60` を超えるときは列挙範囲内の最小にすぎず列挙外のより長い周回がより小さい `planSeconds` を持ち得るため、UI は絶対的な「最短」と断定せず出所（確認できた範囲）を明示する。`240 * 60` 以下の値は「240 分以内に収まる周回が存在する」ことの根拠として使える。合法な周回が1件も無い場合も `null`。`TIME_WINDOW` の数値根拠（最寄り入口までの距離は `nearestAccess.distanceMeters`）として使う |
 
-### 現行 pre-v2 Candidate の必須フィールド
+### `LegacyCandidate` の必須フィールド
 
 | フィールド | 型 | 内容 |
 | --- | --- | --- |
@@ -163,27 +163,28 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | `edgeIds` | `string[]` | 順序付き走行エッジ ID 列（首都高上の entry → loop → exit） |
 | `geometry` | `GeoJsonLineString` | 全経路の GeoJSON LineString（`{ type: "LineString", coordinates: [[lon, lat], ...] }`）。重複端点なし |
 | `duration` | `Duration` | `accessSeconds`, `shutokoSeconds`, `returnSeconds`, `baseSeconds`, `bufferSeconds`, `planSeconds` |
-| `distanceMeters`, `shutokoDistanceMeters` | `number` | 現行pre-v2ではどちらも首都高Edge距離（m）として同じ値を返す。一般道のaccess / return距離はDurationだけを持ち、総距離ではない |
-| `toll` | `Toll` | `billingPairId`, `chargedSectionCount: 1`（現行pre-v2全outputの互換field）, `amountYen`（未確認なら`null`）, `pricingAt`, `effectiveFrom`, `effectiveTo`, `billingDistanceMeters?`, `tollSource?`（`"table" \| "od_tariff" \| "calculated"`） |
+| `distanceMeters`, `shutokoDistanceMeters` | `number` | C1 legacyではどちらも首都高Edge距離（m）として同じ値を返す。`RadialCandidate`と`TopologyOnlyCandidate`では別定義を使う |
+| `toll` | `LegacyToll` | `billingPairId`, `chargedSectionCount: 1`, `amountYen`（未確認なら`null`）, `pricingAt`, `effectiveFrom`, `effectiveTo`, `billingDistanceMeters?`, `tollSource?`（`"table" \| "od_tariff" \| "calculated"`） |
 | `loop` | `Loop` | 現行 C1 の `anchorNodeId`, `edgeIds`, `durationSeconds`, `distanceMeters`, `validated: true` |
-| `reasons` | `string[]` | 機械可読推薦理由コード。現行pre-v2ではC1 pairだけでなくdynamic ODにも`ONE_SECTION_TOLL`を付け、`BEST_TIME_PER_YEN`または`BEST_SHUTOKO_TIME`を先頭に置く。これはeligibilityの証拠ではない |
+| `reasons` | `string[]` | 機械可読推薦理由コード。`LegacyCandidate`は`BEST_TIME_PER_YEN`または`BEST_SHUTOKO_TIME`と`ONE_SECTION_TOLL`を持つ。これはlegacy adapterの互換fieldであり、商品eligibilityの証拠ではない |
 | `warnings` | `string[]` | 警告コード（常時付与: `HANDOFF_WAYPOINTS_UNVERIFIED`（#8 実機検証未了）、`STATIC_TRAVEL_TIME`） |
 | `handoff` | `Handoff` | Google Maps引き継ぎ情報（`{ origin, destination, waypoints, mapsUrl, verificationSetVersion }`） |
 
-現行pre-v2のdynamic ODはseed由来かどうかにかかわらず`status=ok`、`rankingMode=shutoko_time`で返り、`toll.amountYen=null`でも`chargedSectionCount=1`と`ONE_SECTION_TOLL`を持つ。Web UIも全Candidateへ「1区間料金」と表示する。現行の`distanceMeters`と`shutokoDistanceMeters`はどちらもhighway Edge距離で、UIの距離表示と名称が完全には一致しない。これらは移行前の互換contractであり、C1 legacyだけ、または実装済みのradial / total distance契約ではない。
+Issue #69でdynamic ODは`LegacyCandidate`から`TopologyOnlyCandidate`へ分離した。`pairKind="topologyOnly"`を判別値とし、`eligibilityStatus`と`loopValidationStatus`をともに`topology_only`、`estimatedLegs=[surface_access, surface_return]`、`distanceMeters=shutokoDistanceMeters+surface access/return`を返す。`toll`には`chargedSectionCount`を持たず、`reasons`には`TOPOLOGY_ONLY`を必ず含める。entry / exitを明示したdynamic ODでは`EXPLICIT_OD`も加える。道路形状としては返す。dynamic ODは商品推薦cohortと`time_per_yen`から除外し、`rankingMode=shutoko_time`で扱う。旧`loop`は診断情報として保持し、`validated=false`とする。
 
 ### 推薦理由コード（`reasons`）一覧
 - `BEST_TIME_PER_YEN`: 時間あたり料金効率が最も高い最優先候補（料金確定時）
 - `BEST_SHUTOKO_TIME`: 首都高滞在時間が最も長い最優先候補（料金未確定時等の時間ソート時）
-- `ONE_SECTION_TOLL`: 現行pre-v2ではC1 pairとdynamic ODの双方に付ける後方互換コード。routing v2では`legacyRing` adapterだけが付け、radialと`topology_only`には生成しない。Web UIも同じvariant境界で「1区間料金」を表示しない
+- `ONE_SECTION_TOLL`: C1 `legacyRing` adapterだけが付ける後方互換コード。`radialReturn`と`topologyOnly`には生成しない
+- `TOPOLOGY_ONLY`: dynamic ODが道路形状として追跡可能でも商品eligibilityの証拠ではないことを示す。商品推薦のreasonにはしない
 
 ### 警告コード（`warnings`）一覧
 - `HANDOFF_WAYPOINTS_UNVERIFIED`: Google Maps 引き継ぎ経由地選定ルールが暫定であり実機検証未了であることを示す（#8 完了まで常時付与）。2026-09 に Android Chrome + Google マップアプリ「あり」で代表1系列の周回維持を確認したが、アプリ「なし」・iOS Safari・経由地点0〜3点の系列網羅・URL 長上限は未検証のため引き続き付与する（[検証記録](delivery.md) 参照）
 - `STATIC_TRAVEL_TIME`: 渋滞・規制を含まない静的制限速度に基づく推定時間であることを示す
 
-### Issue #42 後の Candidate v2（reader / consumer 契約実装済み・公開radial探索はbinding unresolved）
+### Issue #42 後の Candidate v2（3種類を追加し、synthetic radial検索とWeb表示を実装）
 
-graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy outputと区別する。
+WASM / Webの`Candidate` unionは`LegacyCandidate | TopologyOnlyCandidate | RadialCandidate`の3 variantとする。graph schema 4 / routing v2の`RadialCandidate`は、次の点で現行C1 legacy outputと区別する。 実データの2号pair統合は#68の担当で、このfixtureは公開bindingsや実データを表さない。
 
 - `pairKind="radialReturn"`、`routePlanVersion=1`、`anchor.anchorKind="directedJunction"`とM / Bを持つ。`anchorNodeId`と旧`loop`objectは不要。
 - `routePlan.membershipIds[]`と`routePlan.resolvedRouteSegments[]`で、mainline relationとbound rampの由来を保つ。
@@ -195,7 +196,9 @@ graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy output�
 - `distanceMeters`はhighway + surface access + surface returnの推定距離、`shutokoDistanceMeters`はhighway Edge距離とする。
 - radialの`handoff`は`{ enabled: false, legUrls: [] }`で返し、device verification gate通過後だけ`enabled=true`と検証済みleg URLを持たせる。
 
-`edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。graph-builder は `routePlanLapV1` の順序付き Edge 列と hash、return corridor の declared Exit candidate を検証する。declared candidateの`fromNodeId`へ到達できない場合はunresolved成功を返さず、verified bindingと4 resolved segmentがすべて揃った場合だけgraph schema 4の`radialReturn`として昇格する。unresolved / unsupported binding は公開候補に昇格させない。
+`edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。`edgeRouteLegs`と`routePlan`は`RadialCandidate`専用で、`TopologyOnlyCandidate`は宣言済みmandatory lapを意味付けないため持たない。graph-builder は `routePlanLapV1` の順序付き Edge 列と hash、return corridor の declared Exit candidate を検証する。declared candidateの`fromNodeId`へ到達できない場合はunresolved成功を返さず、verified bindingと4 resolved segmentがすべて揃った場合だけgraph schema 4の`radialReturn`として昇格する。unresolved / unsupported binding は公開候補に昇格させない。
+
+Issue #70でWeb consumerの表示を実装した。radialは4 roleを契約順に番号・名称・線種で提示し、地図も各roleを別の線種で描く。`estimatedLegs`は「一般道の概算区間」として推定距離と時間を別に提示し、地図の線には追加しない。カードと地図は`distanceMeters`を「総距離」、`shutokoDistanceMeters`を「首都高距離」として扱う。`TopologyOnlyCandidate`はedge route legを作らず、商品対象外の道路形状として3段の経路順序を表示する。unpriced radialとtopology-onlyは1区間の商品名・最低料金・円あたり効率を表示しない。
 
 以下はreader fixture用のwire-level Candidateである。IDと座標はsynthetic valueで、公開可能な2号bindingや料金を表さない。`toll`に`chargedSectionCount`はなく、4 legのindex、segment hash、距離式が一致する。
 

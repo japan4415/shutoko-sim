@@ -40,8 +40,15 @@ const ACCESS_SPEED_MPS: f64 = 30.0 / 3.6;
 /// Estimate one-way access or return time in seconds given a straight-line distance.
 ///
 /// Formula: ⌈distance × DETOUR_FACTOR / ACCESS_SPEED_MPS⌉
+fn estimated_surface_leg(dist_m: f64) -> (u64, u64) {
+    let estimated_distance = dist_m * DETOUR_FACTOR;
+    let distance_meters = estimated_distance.ceil() as u64;
+    let duration_seconds = (estimated_distance / ACCESS_SPEED_MPS).ceil() as u64;
+    (distance_meters, duration_seconds)
+}
+
 fn estimated_access_seconds(dist_m: f64) -> u64 {
-    ((dist_m * DETOUR_FACTOR) / ACCESS_SPEED_MPS).ceil() as u64
+    estimated_surface_leg(dist_m).1
 }
 
 mod candidate_v2;
@@ -50,9 +57,10 @@ pub mod grid;
 pub mod handoff;
 
 pub use candidate_v2::{
-    validate_radial_return_candidate, CandidateResolvedRouteSegment, CandidateRoutePlan,
-    CandidateV2Handoff, CandidateV2Toll, EdgeRouteLeg, EstimatedLeg, EstimatedLegRole,
-    RadialReturnCandidate,
+    validate_radial_return_candidate, validate_topology_only_candidate,
+    CandidateResolvedRouteSegment, CandidateRoutePlan, CandidateV2Handoff, CandidateV2Toll,
+    EdgeRouteLeg, EstimatedLeg, EstimatedLegRole, RadialCandidate, RadialReturnCandidate,
+    TopologyOnlyCandidate, TopologyOnlyCandidateKind,
 };
 
 pub use graph_v4::{
@@ -340,11 +348,19 @@ pub struct GeoJsonLineString {
     pub r#type: String,
     pub coordinates: Vec<[f64; 2]>,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LegacyCandidateKind {
+    #[serde(rename = "legacyRing")]
+    LegacyRing,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Candidate {
+pub struct LegacyCandidate {
     pub id: String,
     pub release_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pair_kind: Option<LegacyCandidateKind>,
     pub origin: Option<LatLng>,
     pub origin_node_id: String,
     /// Entry access point for this candidate.  Candidates from the same
@@ -367,6 +383,70 @@ pub struct Candidate {
     pub warnings: Vec<String>,
     pub handoff: Handoff,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Candidate {
+    LegacyCandidate(LegacyCandidate),
+    TopologyOnlyCandidate(TopologyOnlyCandidate),
+    RadialCandidate(RadialReturnCandidate),
+}
+
+impl Candidate {
+    pub fn as_legacy(&self) -> Option<&LegacyCandidate> {
+        match self {
+            Self::LegacyCandidate(candidate) => Some(candidate),
+            Self::TopologyOnlyCandidate(_) | Self::RadialCandidate(_) => None,
+        }
+    }
+
+    pub fn as_topology_only(&self) -> Option<&TopologyOnlyCandidate> {
+        match self {
+            Self::TopologyOnlyCandidate(candidate) => Some(candidate),
+            Self::LegacyCandidate(_) | Self::RadialCandidate(_) => None,
+        }
+    }
+
+    pub fn as_radial(&self) -> Option<&RadialReturnCandidate> {
+        match self {
+            Self::RadialCandidate(candidate) => Some(candidate),
+            Self::LegacyCandidate(_) | Self::TopologyOnlyCandidate(_) => None,
+        }
+    }
+
+    pub fn entry(&self) -> &RampInfo {
+        match self {
+            Self::LegacyCandidate(candidate) => &candidate.entry,
+            Self::TopologyOnlyCandidate(candidate) => &candidate.entry,
+            Self::RadialCandidate(candidate) => &candidate.entry,
+        }
+    }
+
+    pub fn exit(&self) -> &RampInfo {
+        match self {
+            Self::LegacyCandidate(candidate) => &candidate.exit,
+            Self::TopologyOnlyCandidate(candidate) => &candidate.exit,
+            Self::RadialCandidate(candidate) => &candidate.exit,
+        }
+    }
+
+    pub fn duration(&self) -> &Duration {
+        match self {
+            Self::LegacyCandidate(candidate) => &candidate.duration,
+            Self::TopologyOnlyCandidate(candidate) => &candidate.duration,
+            Self::RadialCandidate(candidate) => &candidate.duration,
+        }
+    }
+
+    pub fn snapped_origin(&self) -> &SnappedOrigin {
+        match self {
+            Self::LegacyCandidate(candidate) => &candidate.snapped_origin,
+            Self::TopologyOnlyCandidate(candidate) => &candidate.snapped_origin,
+            Self::RadialCandidate(candidate) => &candidate.snapped_origin,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
@@ -1625,7 +1705,7 @@ fn prepare_parts(
 }
 
 struct DynamicOdOutcome {
-    candidate: Option<Candidate>,
+    candidate: Option<TopologyOnlyCandidate>,
     min_plan_seconds: Option<u64>,
     found_cycle: bool,
     legal_route: bool,
@@ -1690,14 +1770,14 @@ fn evaluate_dynamic_od(
         entry_access.lat,
         entry_access.lon,
     );
-    let access_secs = estimated_access_seconds(access_dist);
+    let (access_distance_meters, access_secs) = estimated_surface_leg(access_dist);
     let return_dist = distance_meters(
         exit_access.lat,
         exit_access.lon,
         origin_ll.lat,
         origin_ll.lon,
     );
-    let return_secs = estimated_access_seconds(return_dist);
+    let (return_distance_meters, return_secs) = estimated_surface_leg(return_dist);
     let mut min_plan_seconds = None;
     let mut found_cycle = false;
     let mut legal_route = false;
@@ -1754,21 +1834,21 @@ fn evaluate_dynamic_od(
                     && (pair.exit_ramp_id.as_deref() == Some(exit_ramp.id.as_str())
                         || pair.exit_id == exit_edge.id)
             });
-            let tariff = pg
+            let od_tariff = pg
                 .index
                 .od_tariff_map
                 .get(&(entry_ramp.id.clone(), exit_ramp.id.clone()))
-                .map(|&idx| &pg.graph.od_tariffs[idx])
-                .filter(|tariff| {
-                    tariff
-                        .effective_from
+                .map(|&idx| &pg.graph.od_tariffs[idx]);
+            let tariff = od_tariff.filter(|tariff| {
+                tariff
+                    .effective_from
+                    .as_deref()
+                    .is_none_or(|from| utc(from).is_ok_and(|from| from <= now))
+                    && tariff
+                        .effective_to
                         .as_deref()
-                        .is_none_or(|from| utc(from).is_ok_and(|from| from <= now))
-                        && tariff
-                            .effective_to
-                            .as_deref()
-                            .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
-                });
+                        .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
+            });
             let table_price = billing_pair.and_then(|pair| {
                 pair.prices.iter().find(|price| {
                     utc(&price.effective_from).is_ok_and(|from| from <= now)
@@ -1845,14 +1925,24 @@ fn evaluate_dynamic_od(
                     continue;
                 }
             };
-            let ranking_reason = if amount.is_some() {
-                "BEST_TIME_PER_YEN"
+            let tariff_status = if amount.is_some() {
+                TariffStatus::Priced
+            } else if billing_pair.is_some_and(|pair| !pair.prices.is_empty())
+                || (od_tariff.is_some() && tariff.is_none())
+            {
+                TariffStatus::Expired
             } else {
-                "BEST_SHUTOKO_TIME"
+                TariffStatus::Unpriced
             };
-            candidate = Some(Candidate {
+            let highway_distance = meters(&highway);
+            let total_distance = highway_distance
+                .checked_add(access_distance_meters)
+                .and_then(|value| value.checked_add(return_distance_meters))
+                .ok_or_else(|| invalid("topologyOnly distance overflow"))?;
+            let topology_candidate = TopologyOnlyCandidate {
                 id: candidate_id,
                 release_id: r.release_id.clone(),
+                pair_kind: TopologyOnlyCandidateKind::TopologyOnly,
                 origin: r.origin.clone(),
                 origin_node_id: entry_edge.from.clone(),
                 snapped_origin: SnappedOrigin {
@@ -1883,6 +1973,20 @@ fn evaluate_dynamic_od(
                     r#type: "LineString".into(),
                     coordinates,
                 },
+                estimated_legs: vec![
+                    EstimatedLeg {
+                        role: EstimatedLegRole::SurfaceAccess,
+                        estimated: true,
+                        distance_meters: access_distance_meters,
+                        duration_seconds: access_secs,
+                    },
+                    EstimatedLeg {
+                        role: EstimatedLegRole::SurfaceReturn,
+                        estimated: true,
+                        distance_meters: return_distance_meters,
+                        duration_seconds: return_secs,
+                    },
+                ],
                 duration: Duration {
                     access_seconds: access_secs,
                     shutoko_seconds: seconds(&highway),
@@ -1891,14 +1995,16 @@ fn evaluate_dynamic_od(
                     buffer_seconds: buffer,
                     plan_seconds: plan,
                 },
-                distance_meters: meters(&highway),
-                shutoko_distance_meters: meters(&highway),
-                toll: Toll {
+                distance_meters: total_distance,
+                shutoko_distance_meters: highway_distance,
+                eligibility_status: PairEligibilityStatus::TopologyOnly,
+                loop_validation_status: LoopValidationStatus::TopologyOnly,
+                tariff_status,
+                toll: CandidateV2Toll {
                     billing_pair_id: billing_pair.map_or_else(
                         || format!("od:{}:{}", entry_ramp.id, exit_ramp.id),
                         |pair| pair.id.clone(),
                     ),
-                    charged_section_count: 1,
                     amount_yen: amount,
                     pricing_at: r.pricing_at.clone(),
                     effective_from,
@@ -1911,12 +2017,12 @@ fn evaluate_dynamic_od(
                     edge_ids: edge_ids(&loop_refs),
                     duration_seconds: seconds(&loop_refs),
                     distance_meters: meters(&loop_refs),
-                    validated: true,
+                    validated: false,
                 },
                 reasons: if is_explicit {
-                    vec![ranking_reason.into(), "EXPLICIT_OD".into()]
+                    vec!["TOPOLOGY_ONLY".into(), "EXPLICIT_OD".into()]
                 } else {
-                    Vec::new()
+                    vec!["TOPOLOGY_ONLY".into()]
                 },
                 warnings: vec![
                     "STATIC_TRAVEL_TIME".into(),
@@ -1929,7 +2035,9 @@ fn evaluate_dynamic_od(
                     maps_url,
                     verification_set_version: None,
                 },
-            });
+            };
+            validate_topology_only_candidate(&topology_candidate)?;
+            candidate = Some(topology_candidate);
         }
         if budget.truncated {
             break;
@@ -2002,7 +2110,7 @@ fn explicit_pair_search(
         });
     }
 
-    let candidates: Vec<Candidate> = outcome.candidate.into_iter().collect();
+    let candidates: Vec<TopologyOnlyCandidate> = outcome.candidate.into_iter().collect();
     let (status, reason) = if !candidates.is_empty() {
         ("ok", None)
     } else if outcome.found_cycle && outcome.min_plan_seconds.is_some() {
@@ -2010,23 +2118,17 @@ fn explicit_pair_search(
     } else {
         ("no_candidates", Some("NO_LOOP"))
     };
-    let ranking_mode = if candidates
-        .iter()
-        .all(|value| value.toll.amount_yen.is_some())
-        && !candidates.is_empty()
-    {
-        "time_per_yen"
-    } else {
-        "shutoko_time"
-    };
     Ok(SearchResult {
         request_id: r.request_id.clone(),
         release_id: r.release_id.clone(),
         status: status.into(),
         reason: reason.map(str::to_owned),
-        ranking_mode: ranking_mode.into(),
+        ranking_mode: "shutoko_time".into(),
         expanded_states: budget.expanded,
-        candidates,
+        candidates: candidates
+            .into_iter()
+            .map(Candidate::TopologyOnlyCandidate)
+            .collect(),
         nearest_access,
         min_plan_seconds: outcome.min_plan_seconds,
     })
@@ -2170,7 +2272,7 @@ fn coordinate_tier_search(
                 });
             }
 
-            let mut tier_candidates: Vec<Candidate> = Vec::new();
+            let mut tier_candidates: Vec<LegacyCandidate> = Vec::new();
             let mut tier_min_plan: Option<u64> = None;
             let mut tier_candidate_edges = 0usize;
 
@@ -2404,9 +2506,11 @@ fn coordinate_tier_search(
                             (None, None, None, None, None)
                         };
 
-                    tier_candidates.push(Candidate {
+                    tier_candidates.push(LegacyCandidate {
                         id,
                         release_id: r.release_id.clone(),
+                        pair_kind: (pg.graph.schema_version == 4)
+                            .then_some(LegacyCandidateKind::LegacyRing),
                         origin: r.origin.clone(),
                         origin_node_id: entry_edge.from.clone(),
                         snapped_origin,
@@ -2508,9 +2612,12 @@ fn coordinate_tier_search(
                         })
                         .then_with(|| a.id.cmp(&b.id))
                 });
-                let mut selected: Vec<Candidate> = Vec::new();
+                let mut selected: Vec<LegacyCandidate> = Vec::new();
                 for c in tier_candidates {
-                    if selected.iter().any(|s| similar_pg(pg, &c, s)) {
+                    if selected
+                        .iter()
+                        .any(|s| similar_pg(pg, &c.edge_ids, &s.edge_ids))
+                    {
                         continue;
                     }
                     selected.push(c);
@@ -2555,7 +2662,10 @@ fn coordinate_tier_search(
                         "time_per_yen".into()
                     },
                     expanded_states: budget.expanded,
-                    candidates: selected,
+                    candidates: selected
+                        .into_iter()
+                        .map(Candidate::LegacyCandidate)
+                        .collect(),
                     nearest_access,
                     min_plan_seconds: min_p,
                 });
@@ -2639,7 +2749,7 @@ fn coordinate_tier_search(
             });
         }
 
-        let mut tier_candidates: Vec<Candidate> = Vec::new();
+        let mut tier_candidates: Vec<TopologyOnlyCandidate> = Vec::new();
         let mut tier_min_plan: Option<u64> = None;
 
         for exit_ramp in exits {
@@ -2673,24 +2783,10 @@ fn coordinate_tier_search(
         }
 
         if !tier_candidates.is_empty() {
-            let (priced, unknown): (Vec<_>, Vec<_>) = tier_candidates
-                .into_iter()
-                .partition(|c| c.toll.amount_yen.is_some());
-            let mut cohort = if !priced.is_empty() { priced } else { unknown };
-            let time_ranking = cohort.iter().any(|c| c.toll.amount_yen.is_none());
-            cohort.sort_by(|a, b| {
-                let ratio = if time_ranking {
-                    std::cmp::Ordering::Equal
-                } else {
-                    ((b.duration.shutoko_seconds as u128)
-                        * (a.toll.amount_yen.unwrap_or(1) as u128))
-                        .cmp(
-                            &((a.duration.shutoko_seconds as u128)
-                                * (b.toll.amount_yen.unwrap_or(1) as u128)),
-                        )
-                };
-                ratio
-                    .then_with(|| b.duration.shutoko_seconds.cmp(&a.duration.shutoko_seconds))
+            tier_candidates.sort_by(|a, b| {
+                b.duration
+                    .shutoko_seconds
+                    .cmp(&a.duration.shutoko_seconds)
                     .then_with(|| {
                         (a.duration.access_seconds + a.duration.return_seconds)
                             .cmp(&(b.duration.access_seconds + b.duration.return_seconds))
@@ -2698,9 +2794,12 @@ fn coordinate_tier_search(
                     .then_with(|| a.id.cmp(&b.id))
             });
 
-            let mut selected: Vec<Candidate> = Vec::new();
-            for c in cohort {
-                if selected.iter().any(|s| similar_pg(pg, &c, s)) {
+            let mut selected: Vec<TopologyOnlyCandidate> = Vec::new();
+            for c in tier_candidates {
+                if selected
+                    .iter()
+                    .any(|s| similar_pg(pg, &c.edge_ids, &s.edge_ids))
+                {
                     continue;
                 }
                 selected.push(c);
@@ -2708,25 +2807,10 @@ fn coordinate_tier_search(
                     break;
                 }
             }
-            for (i, c) in selected.iter_mut().enumerate() {
-                c.reasons = if i == 0 {
-                    vec![
-                        if time_ranking {
-                            "BEST_SHUTOKO_TIME".to_string()
-                        } else {
-                            "BEST_TIME_PER_YEN".to_string()
-                        },
-                        "ONE_SECTION_TOLL".to_string(),
-                    ]
-                } else {
-                    vec!["ONE_SECTION_TOLL".to_string()]
-                };
+            for c in &mut selected {
+                c.reasons = vec!["TOPOLOGY_ONLY".to_string()];
             }
-            let ranking_mode = if time_ranking {
-                "shutoko_time"
-            } else {
-                "time_per_yen"
-            };
+            let ranking_mode = "shutoko_time";
             let min_p = if budget.truncated || diagnostic_budget.truncated {
                 None
             } else {
@@ -2745,7 +2829,10 @@ fn coordinate_tier_search(
                 },
                 ranking_mode: ranking_mode.into(),
                 expanded_states: budget.expanded,
-                candidates: selected,
+                candidates: selected
+                    .into_iter()
+                    .map(Candidate::TopologyOnlyCandidate)
+                    .collect(),
                 nearest_access,
                 min_plan_seconds: min_p,
             });
@@ -2789,6 +2876,380 @@ fn coordinate_tier_search(
         nearest_access,
         min_plan_seconds: min_p,
     })
+}
+
+fn radial_pair_search(
+    pg: &PreparedGraph,
+    r: &SearchRequest,
+    now: OffsetDateTime,
+    origin_ll: &LatLng,
+    access_node_indices: &BTreeSet<usize>,
+    nearest_access: Option<SnappedOrigin>,
+) -> Result<Option<SearchResult>, RoutingError> {
+    if pg.radial_billing_pairs.is_empty() {
+        return Ok(None);
+    }
+    let nearest_unconstrained_entry = if r.origin.is_some() && r.entry_ramp_id.is_none() {
+        Some(
+            access_node_indices
+                .iter()
+                .copied()
+                .min_by(|left, right| {
+                    let left_node = &pg.graph.nodes[*left];
+                    let right_node = &pg.graph.nodes[*right];
+                    distance_meters(origin_ll.lat, origin_ll.lon, left_node.lat, left_node.lon)
+                        .total_cmp(&distance_meters(
+                            origin_ll.lat,
+                            origin_ll.lon,
+                            right_node.lat,
+                            right_node.lon,
+                        ))
+                        .then_with(|| left_node.id.cmp(&right_node.id))
+                })
+                .ok_or_else(|| invalid("radial search requires an access node"))?,
+        )
+    } else {
+        None
+    };
+    let mut pairs = Vec::new();
+    for pair in &pg.radial_billing_pairs {
+        let entry_edge = pg.edge(pair.entry_id.as_str());
+        let entry_node = pg.index.node_pos[entry_edge.from.as_str()];
+        if !access_node_indices.contains(&entry_node) {
+            continue;
+        }
+        if nearest_unconstrained_entry.is_some_and(|node| entry_node != node) {
+            continue;
+        }
+        if r.entry_ramp_id.as_deref().is_some_and(|requested| {
+            requested != pair.entry_endpoint.ramp_id && requested != pair.entry_id
+        }) {
+            continue;
+        }
+        if r.exit_ramp_id.as_deref().is_some_and(|requested| {
+            requested != pair.exit_endpoint.ramp_id && requested != pair.exit_id
+        }) {
+            continue;
+        }
+        pairs.push(pair);
+    }
+    if pairs.is_empty() {
+        return Ok(None);
+    }
+    pairs.sort_by(|a, b| {
+        let a_node = pg.node(pg.edge(a.entry_id.as_str()).from.as_str());
+        let b_node = pg.node(pg.edge(b.entry_id.as_str()).from.as_str());
+        distance_meters(origin_ll.lat, origin_ll.lon, a_node.lat, a_node.lon)
+            .total_cmp(&distance_meters(
+                origin_ll.lat,
+                origin_ll.lon,
+                b_node.lat,
+                b_node.lon,
+            ))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    let truncated = pairs.len() > pg.limits.max_pairs;
+    if truncated {
+        pairs.truncate(pg.limits.max_pairs);
+    }
+
+    let mut candidates = Vec::new();
+    let mut min_plan_seconds = None;
+    for pair in pairs {
+        let candidate = build_radial_candidate(pg, r, now, origin_ll, pair)?;
+        min_plan_seconds = Some(
+            min_plan_seconds.map_or(candidate.duration.plan_seconds, |value: u64| {
+                value.min(candidate.duration.plan_seconds)
+            }),
+        );
+        if candidate.duration.base_seconds < r.min_minutes * 60
+            || candidate.duration.plan_seconds > r.max_minutes * 60
+        {
+            continue;
+        }
+        candidates.push(candidate);
+    }
+
+    let product_cohort =
+        !candidates.is_empty() && candidates.iter().all(radial_candidate_is_product_eligible);
+    let all_priced = candidates
+        .iter()
+        .all(|candidate| candidate.tariff_status == TariffStatus::Priced);
+    let time_per_yen = product_cohort && all_priced;
+    candidates.sort_by(|a, b| {
+        let primary = if time_per_yen {
+            let a_amount = a.toll.amount_yen.unwrap_or(0) as u128;
+            let b_amount = b.toll.amount_yen.unwrap_or(0) as u128;
+            (b.duration.shutoko_seconds as u128 * a_amount)
+                .cmp(&(a.duration.shutoko_seconds as u128 * b_amount))
+        } else {
+            b.duration.shutoko_seconds.cmp(&a.duration.shutoko_seconds)
+        };
+        primary
+            .then_with(|| b.duration.shutoko_seconds.cmp(&a.duration.shutoko_seconds))
+            .then_with(|| {
+                (b.duration.access_seconds + b.duration.return_seconds)
+                    .cmp(&(a.duration.access_seconds + a.duration.return_seconds))
+            })
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    candidates.truncate(pg.limits.max_candidates);
+    for (index, candidate) in candidates.iter_mut().enumerate() {
+        if product_cohort && index == 0 {
+            candidate.reasons = vec![if time_per_yen {
+                "BEST_TIME_PER_YEN"
+            } else {
+                "BEST_SHUTOKO_TIME"
+            }
+            .into()];
+        } else {
+            candidate.reasons.clear();
+        }
+        validate_radial_return_candidate(candidate)?;
+    }
+
+    let (status, reason) = if truncated {
+        ("truncated", Some("SEARCH_LIMIT"))
+    } else if candidates.is_empty() {
+        ("no_candidates", Some("TIME_WINDOW"))
+    } else {
+        ("ok", None)
+    };
+    Ok(Some(SearchResult {
+        request_id: r.request_id.clone(),
+        release_id: r.release_id.clone(),
+        status: status.into(),
+        reason: reason.map(str::to_owned),
+        ranking_mode: if time_per_yen {
+            "time_per_yen"
+        } else {
+            "shutoko_time"
+        }
+        .into(),
+        expanded_states: 0,
+        candidates: candidates
+            .into_iter()
+            .map(Candidate::RadialCandidate)
+            .collect(),
+        nearest_access,
+        min_plan_seconds: if truncated { None } else { min_plan_seconds },
+    }))
+}
+
+fn radial_candidate_is_product_eligible(candidate: &RadialReturnCandidate) -> bool {
+    candidate.eligibility_status == PairEligibilityStatus::VerifiedOneSectionAhead
+        && candidate.loop_validation_status == LoopValidationStatus::DeclaredRouteValidated
+}
+
+fn build_radial_candidate(
+    pg: &PreparedGraph,
+    r: &SearchRequest,
+    now: OffsetDateTime,
+    origin_ll: &LatLng,
+    pair: &RadialReturnBillingPair,
+) -> Result<RadialReturnCandidate, RoutingError> {
+    let mut edge_ids = Vec::new();
+    let mut resolved_segments = Vec::with_capacity(4);
+    let mut edge_route_legs = Vec::with_capacity(4);
+    let mut membership_ids = Vec::new();
+    for segment in &pair.resolved_route_segments {
+        if !membership_ids.iter().any(|id| id == &segment.membership_id) {
+            membership_ids.push(segment.membership_id.clone());
+        }
+        let start_edge_index = edge_ids.len();
+        edge_ids.extend(segment.edge_ids.iter().cloned());
+        let end_edge_index_exclusive = edge_ids.len();
+        edge_route_legs.push(EdgeRouteLeg {
+            role: segment.role,
+            resolved_segment_id: segment.resolved_segment_id.clone(),
+            start_edge_index,
+            end_edge_index_exclusive,
+        });
+        resolved_segments.push(CandidateResolvedRouteSegment {
+            resolved_segment_id: segment.resolved_segment_id.clone(),
+            role: segment.role,
+            membership_id: segment.membership_id.clone(),
+            source_segment_ids: segment.source_segment_ids.clone(),
+            edge_ids_sha256: segment.edge_ids_sha256.clone(),
+        });
+    }
+    if edge_ids.len() > 20_000 {
+        return Err(invalid("radial candidate route exceeds edge limit"));
+    }
+    let highway = edge_ids
+        .iter()
+        .map(|id| pg.edge(id.as_str()))
+        .collect::<Vec<_>>();
+    if highway
+        .windows(2)
+        .any(|window| window[0].to != window[1].from)
+        || !allowed_pg(pg, &highway)
+    {
+        return Err(invalid("radial candidate route is disconnected"));
+    }
+
+    let entry_edge = pg.edge(pair.entry_id.as_str());
+    let exit_edge = pg.edge(pair.exit_id.as_str());
+    let entry_node = pg.node(entry_edge.from.as_str());
+    let exit_node = pg.node(exit_edge.to.as_str());
+    let entry_distance =
+        distance_meters(origin_ll.lat, origin_ll.lon, entry_node.lat, entry_node.lon);
+    let return_distance =
+        distance_meters(exit_node.lat, exit_node.lon, origin_ll.lat, origin_ll.lon);
+    let (access_distance, access_seconds) = estimated_surface_leg(entry_distance);
+    let (return_distance_meters, return_seconds) = estimated_surface_leg(return_distance);
+    let shutoko_distance = meters(&highway);
+    let distance_meters = shutoko_distance
+        .checked_add(access_distance)
+        .and_then(|value| value.checked_add(return_distance_meters))
+        .ok_or_else(|| invalid("radial candidate distance overflow"))?;
+    let shutoko_seconds = seconds(&highway);
+    let base_seconds = access_seconds
+        .checked_add(shutoko_seconds)
+        .and_then(|value| value.checked_add(return_seconds))
+        .ok_or_else(|| invalid("radial candidate duration overflow"))?;
+    let buffer_seconds = 300.max(base_seconds.div_ceil(5));
+    let plan_seconds = base_seconds
+        .checked_add(buffer_seconds)
+        .ok_or_else(|| invalid("radial candidate plan duration overflow"))?;
+
+    let entry_ramp = &pg.graph.ramps[pg.index.ramp_by_id[pair.entry_endpoint.ramp_id.as_str()]];
+    let exit_ramp = &pg.graph.ramps[pg.index.ramp_by_id[pair.exit_endpoint.ramp_id.as_str()]];
+    let mut coordinates = Vec::with_capacity(highway.len() + 1);
+    coordinates.push([entry_node.lon, entry_node.lat]);
+    for edge in &highway {
+        let node = pg.node(edge.to.as_str());
+        coordinates.push([node.lon, node.lat]);
+    }
+    let mut road_names = Vec::new();
+    for edge in &highway {
+        if let Some(name) = &edge.name {
+            if !road_names.contains(name) {
+                road_names.push(name.clone());
+            }
+        }
+    }
+    let (tariff_status, active_price) = match pair.tariff.status {
+        TariffStatus::Priced => {
+            let active_price = pair.tariff.prices.iter().find(|price| {
+                utc(&price.effective_from).is_ok_and(|from| from <= now)
+                    && price
+                        .effective_to
+                        .as_deref()
+                        .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
+            });
+            let status = if active_price.is_some() {
+                TariffStatus::Priced
+            } else if pair
+                .tariff
+                .prices
+                .iter()
+                .any(|price| utc(&price.effective_from).is_ok_and(|from| from <= now))
+            {
+                TariffStatus::Expired
+            } else {
+                TariffStatus::Unpriced
+            };
+            (status, active_price)
+        }
+        status @ (TariffStatus::Unpriced | TariffStatus::Expired | TariffStatus::NotApplicable) => {
+            (status, None)
+        }
+    };
+    let amount_yen = active_price.map(|price| price.amount_yen);
+    let candidate_id = std::iter::once(pair.id.as_str())
+        .chain(edge_ids.iter().map(String::as_str))
+        .map(|value| format!("{}:{}", value.len(), value))
+        .collect::<String>();
+    let candidate = RadialReturnCandidate {
+        id: candidate_id,
+        release_id: r.release_id.clone(),
+        pair_kind: PairKind::RadialReturn,
+        route_plan_version: pair.route_plan_version,
+        origin: r.origin.clone(),
+        origin_node_id: entry_edge.from.clone(),
+        snapped_origin: SnappedOrigin {
+            node_id: entry_edge.from.clone(),
+            lat: entry_node.lat,
+            lon: entry_node.lon,
+            distance_meters: entry_distance,
+        },
+        entry: RampInfo {
+            edge_id: pair.entry_id.clone(),
+            name: Some(pair.entry_endpoint.name.clone()),
+            ramp_id: Some(entry_ramp.id.clone()),
+            route: Some(entry_ramp.route.clone()),
+            direction: Some(entry_ramp.direction.clone()),
+        },
+        exit: RampInfo {
+            edge_id: pair.exit_id.clone(),
+            name: Some(pair.exit_endpoint.name.clone()),
+            ramp_id: Some(exit_ramp.id.clone()),
+            route: Some(exit_ramp.route.clone()),
+            direction: Some(exit_ramp.direction.clone()),
+        },
+        entry_id: pair.entry_id.clone(),
+        exit_id: pair.exit_id.clone(),
+        road_names,
+        edge_ids,
+        geometry: GeoJsonLineString {
+            r#type: "LineString".into(),
+            coordinates,
+        },
+        anchor: pair.route_plan.anchor.clone(),
+        route_plan: CandidateRoutePlan {
+            membership_ids,
+            resolved_route_segments: resolved_segments,
+        },
+        edge_route_legs,
+        estimated_legs: vec![
+            EstimatedLeg {
+                role: EstimatedLegRole::SurfaceAccess,
+                estimated: true,
+                distance_meters: access_distance,
+                duration_seconds: access_seconds,
+            },
+            EstimatedLeg {
+                role: EstimatedLegRole::SurfaceReturn,
+                estimated: true,
+                distance_meters: return_distance_meters,
+                duration_seconds: return_seconds,
+            },
+        ],
+        duration: Duration {
+            access_seconds,
+            shutoko_seconds,
+            return_seconds,
+            base_seconds,
+            buffer_seconds,
+            plan_seconds,
+        },
+        distance_meters,
+        shutoko_distance_meters: shutoko_distance,
+        eligibility_status: pair.pair_eligibility.status,
+        loop_validation_status: pair.loop_validation.status,
+        tariff_status,
+        toll: CandidateV2Toll {
+            billing_pair_id: pair.id.clone(),
+            amount_yen,
+            pricing_at: r.pricing_at.clone(),
+            effective_from: active_price.map(|price| price.effective_from.clone()),
+            effective_to: active_price.and_then(|price| price.effective_to.clone()),
+            billing_distance_meters: active_price.and(pair.tariff.billing_distance_meters),
+            toll_source: None,
+        },
+        reasons: Vec::new(),
+        warnings: vec![
+            "STATIC_TRAVEL_TIME".into(),
+            "HANDOFF_WAYPOINTS_UNVERIFIED".into(),
+        ],
+        handoff: CandidateV2Handoff {
+            enabled: false,
+            leg_urls: Vec::new(),
+        },
+    };
+    validate_radial_return_candidate(&candidate)?;
+    Ok(candidate)
 }
 
 /// Execute a route search on an already-prepared graph.
@@ -2909,6 +3370,17 @@ pub fn search_prepared(
         }
         _ => return Err(invalid("origin resolution state unreachable")),
     };
+
+    if let Some(result) = radial_pair_search(
+        pg,
+        r,
+        now,
+        &origin_ll,
+        &access_node_indices,
+        nearest_access.clone(),
+    )? {
+        return Ok(result);
+    }
 
     if r.entry_ramp_id.is_some() && r.exit_ramp_id.is_some() {
         return explicit_pair_search(pg, r, now, &origin_ll, nearest_access);
@@ -3267,9 +3739,11 @@ pub fn search_prepared(
                     (None, None, None, None, None)
                 };
 
-            candidates.push(Candidate {
+            candidates.push(LegacyCandidate {
                 id,
                 release_id: r.release_id.clone(),
+                pair_kind: (pg.graph.schema_version == 4)
+                    .then_some(LegacyCandidateKind::LegacyRing),
                 origin: r.origin.clone(),
                 origin_node_id: entry_edge.from.clone(),
                 snapped_origin,
@@ -3398,9 +3872,12 @@ pub fn search_prepared(
             })
             .then_with(|| a.id.cmp(&b.id))
     });
-    let mut selected: Vec<Candidate> = Vec::new();
+    let mut selected: Vec<LegacyCandidate> = Vec::new();
     for c in candidates {
-        if selected.iter().any(|s| similar_pg(pg, &c, s)) {
+        if selected
+            .iter()
+            .any(|s| similar_pg(pg, &c.edge_ids, &s.edge_ids))
+        {
             continue;
         }
         selected.push(c);
@@ -3456,18 +3933,18 @@ pub fn search_prepared(
         }
         .into(),
         expanded_states: budget.expanded,
-        candidates: selected,
+        candidates: selected
+            .into_iter()
+            .map(Candidate::LegacyCandidate)
+            .collect(),
         nearest_access,
         min_plan_seconds,
     })
 }
 
-fn similar_pg(pg: &PreparedGraph, a: &Candidate, b: &Candidate) -> bool {
-    // All edges in the candidate are now highway edges (no Local edges);
-    // the former EdgeKind::Local filter is removed as it was a no-op.
-    let set = |c: &Candidate| -> BTreeSet<String> { c.edge_ids.iter().cloned().collect() };
-    let sa = set(a);
-    let sb = set(b);
+fn similar_pg(pg: &PreparedGraph, a: &[String], b: &[String]) -> bool {
+    let sa: BTreeSet<String> = a.iter().cloned().collect();
+    let sb: BTreeSet<String> = b.iter().cloned().collect();
     let shared: u64 = sa
         .intersection(&sb)
         .map(|id| pg.edge(id.as_str()).distance_meters)

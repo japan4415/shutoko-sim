@@ -115,8 +115,11 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
   });
 }
 
-async function stubWorkerWithRadialCandidate(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+async function stubWorkerWithRadialCandidate(
+  page: Page,
+  variant: "radial" | "topologyOnly" | "pricedIneligible" = "radial",
+): Promise<void> {
+  await page.addInitScript((variant) => {
     const candidate = {
       id: "fixture-candidate-radial",
       releaseId: "all-real-v3",
@@ -242,13 +245,50 @@ async function stubWorkerWithRadialCandidate(page: Page): Promise<void> {
       reasons: [],
       warnings: [],
       handoff: { enabled: false, legUrls: [] },
+    } as unknown as Record<string, unknown> & {
+      toll: { amountYen: number | null; effectiveFrom: string | null };
+      loop: unknown;
+      handoff: unknown;
     };
+    if (variant === "topologyOnly") {
+      candidate.id = "fixture-candidate-topology";
+      candidate.pairKind = "topologyOnly";
+      candidate.eligibilityStatus = "topology_only";
+      candidate.loopValidationStatus = "topology_only";
+      candidate.tariffStatus = "priced";
+      candidate.toll.amountYen = 500;
+      candidate.toll.effectiveFrom = "2026-01-01T00:00:00Z";
+      candidate.reasons = ["TOPOLOGY_ONLY"];
+      candidate.loop = {
+        anchorNodeId: "fixture-merge",
+        edgeIds: ["fixture-lap"],
+        durationSeconds: 1200,
+        distanceMeters: 20000,
+        validated: false,
+      };
+      candidate.handoff = {
+        origin: { lat: 35.6896727, lon: 139.7644248 },
+        destination: { lat: 35.6896727, lon: 139.7644248 },
+        waypoints: [],
+        mapsUrl: "https://www.google.com/maps/dir/?api=1&candidate=topology",
+        verificationSetVersion: "fixture",
+      };
+      Reflect.deleteProperty(candidate, "anchor");
+      Reflect.deleteProperty(candidate, "routePlan");
+      Reflect.deleteProperty(candidate, "edgeRouteLegs");
+    } else if (variant === "pricedIneligible") {
+      candidate.eligibilityStatus = "unverified";
+      candidate.loopValidationStatus = "unresolved";
+      candidate.tariffStatus = "priced";
+      candidate.toll.amountYen = 500;
+      candidate.toll.effectiveFrom = "2026-01-01T00:00:00Z";
+    }
     const result = {
       requestId: "",
       releaseId: "all-real-v3",
       status: "ok",
       reason: null,
-      rankingMode: "time_per_yen",
+      rankingMode: variant === "pricedIneligible" ? "shutoko_time" : "time_per_yen",
       expandedStates: 1,
       candidates: [candidate],
       nearestAccess: null,
@@ -266,7 +306,7 @@ async function stubWorkerWithRadialCandidate(page: Page): Promise<void> {
       terminate(): void {}
     }
     Object.defineProperty(window, "Worker", { configurable: true, value: FixtureWorker });
-  });
+  }, variant);
 }
 
 /** getCurrentPosition を決定論的にスタブする。呼び出し回数は __geoCallCount で数える。 */
@@ -765,8 +805,8 @@ test("(18) 八王子駅は最近接の横浜青葉入口 tier から 15〜240 �
   await expect(firstCard).toBeVisible();
   await expect(page.locator("#results .card")).toHaveCount(1);
   await expect(firstCard).toContainText("横浜青葉");
-  // 動的 OD は料金額が未算出（amountYen=null）。
-  await expect(firstCard).toContainText("料金額: 未算出");
+  // 動的 OD は商品対象外で、参考料金も未算出（amountYen=null）。
+  await expect(firstCard).toContainText("参考料金: 未算出");
 });
 
 test("(19) 奥多摩（cap 超）は対応範囲外と最寄り入口の距離を示す", async ({ page }) => {
@@ -1506,7 +1546,8 @@ test("(42) 2候補fixtureでクリック・Enter選択、aria-current、地図�
   expect(calls[0]?.[0]).toContain("candidate=fixture-candidate-2");
 });
 
-test("(43) radialReturn カードへ legacy の1区間文言を出さない", async ({ page }) => {
+test("(43) radialReturn は4区間と一般道概算を番号・線種・距離で読み分ける", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
   await stubWorkerWithRadialCandidate(page);
   await openApp(page);
   await setTimeRange(page, "15", "60");
@@ -1515,5 +1556,99 @@ test("(43) radialReturn カードへ legacy の1区間文言を出さない", as
   const card = page.locator("#results .card").first();
   await expect(card).toBeVisible();
   await expect(card.locator(".charging")).toHaveText("首都高区間: 入口 → 周回 → 戻り");
+  const routeLegs = card.locator(".route-order-list li");
+  await expect(routeLegs).toHaveCount(4);
+  await expect(routeLegs.nth(0)).toContainText("1");
+  await expect(routeLegs.nth(0)).toContainText("入口アプローチ");
+  await expect(routeLegs.nth(0)).toContainText("実線");
+  await expect(routeLegs.nth(1)).toContainText("必須周回");
+  await expect(routeLegs.nth(1)).toContainText("点線");
+  await expect(routeLegs.nth(2)).toContainText("戻り経路");
+  await expect(routeLegs.nth(2)).toContainText("破線");
+  await expect(routeLegs.nth(3)).toContainText("出口アプローチ");
+  await expect(routeLegs.nth(3)).toContainText("一点鎖線");
+  const paths = page.locator("#map .leaflet-overlay-pane path");
+  await expect(paths).toHaveCount(4);
+  expect(await paths.nth(0).getAttribute("stroke-dasharray")).toBeNull();
+  await expect(paths.nth(1)).toHaveAttribute("stroke-dasharray", "2 6");
+  await expect(paths.nth(2)).toHaveAttribute("stroke-dasharray", "12 6");
+  await expect(paths.nth(3)).toHaveAttribute("stroke-dasharray", "10 4 2 4");
+  await expect(page.locator("#map .leaflet-tooltip")).toHaveCount(0);
+  const routeLegTooltips = [
+    "1 入口アプローチ（実線）",
+    "2 必須周回（点線）",
+    "3 戻り経路（破線）",
+    "4 出口アプローチ（一点鎖線）",
+  ];
+  for (const [index, label] of routeLegTooltips.entries()) {
+    await paths.nth(index).dispatchEvent("mouseover");
+    await expect(page.locator("#map .leaflet-tooltip").filter({ hasText: label })).toHaveCount(1);
+    await paths.nth(index).dispatchEvent("mouseout");
+  }
+  await expect(card.locator(".estimated-legs li")).toHaveCount(2);
+  await expect(card.locator(".estimated-legs")).toContainText("地図の線に含めていません");
+  await expect(card.locator(".distance--total")).toHaveText("総距離: 12.5 km");
+  await expect(card.locator(".distance--shutoko")).toHaveText("首都高距離: 11.5 km");
+  const overflow = await page.evaluate(() => {
+    const root = document.scrollingElement ?? document.documentElement;
+    return root.scrollWidth <= window.innerWidth + 1;
+  });
+  expect(overflow).toBe(true);
   await expect(card).not.toContainText("1区間");
+  await expect(card).not.toContainText("最低料金");
+});
+
+test("(44) topologyOnly は1区間文言と課金区間のオーバーレイを描画しない", async ({ page }) => {
+  await stubWorkerWithRadialCandidate(page, "topologyOnly");
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const card = page.locator("#results .card").first();
+  await expect(card).toBeVisible();
+  await expect(card.locator(".charging")).toHaveText("道路形状のみ（商品対象外）");
+  await expect(card.locator(".toll")).toHaveText("参考料金: 500 円");
+  const routeSteps = card.locator(".route-order-list li");
+  await expect(routeSteps).toHaveCount(3);
+  await expect(routeSteps.nth(0)).toContainText("一般道アクセス（推定）");
+  await expect(routeSteps.nth(1)).toContainText("首都高の道路形状");
+  await expect(routeSteps.nth(2)).toContainText("一般道帰路（推定）");
+  await expect(card.locator(".estimated-legs li")).toHaveCount(2);
+  await expect(card).not.toContainText("1区間");
+  await expect(card).not.toContainText("最低料金");
+  await expect(page.locator("#map .leaflet-overlay-pane path")).toHaveCount(3);
+});
+
+test("(45) 目黒座標のTopologyOnly候補は区間順序と商品対象外を実結果で固定する", async ({ page }) => {
+  await searchFromCoordinate(page, "35.635681", "139.718489", "15", "60");
+
+  const card = page.locator("#results .card").first();
+  await expect(card).toBeVisible();
+  await expect(card.locator(".charging")).toHaveText("道路形状のみ（商品対象外）");
+  await expect(card.locator(".route-order-list li")).toHaveCount(3);
+  await expect(card.locator(".route-order-list")).toContainText("一般道アクセス（推定）");
+  await expect(card.locator(".route-order-list")).toContainText("首都高の道路形状");
+  await expect(card.locator(".route-order-list")).toContainText("一般道帰路（推定）");
+  await expect(card.locator(".estimated-legs li")).toHaveCount(2);
+  await expect(card.locator(".distance--total")).toContainText("総距離:");
+  await expect(card.locator(".distance--shutoko")).toContainText("首都高距離:");
+  await expect(card).not.toContainText("1区間");
+  await expect(card).not.toContainText("最低料金");
+});
+
+test("(46) pricedでも商品cohort外のradialは効率と最安順位を表示しない", async ({ page }) => {
+  await stubWorkerWithRadialCandidate(page, "pricedIneligible");
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const card = page.locator("#results .card").first();
+  await expect(card).toBeVisible();
+  await expect(card.locator(".charging")).toHaveText(
+    "首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）",
+  );
+  await expect(card.locator(".toll")).toHaveText("料金額: 500 円");
+  await expect(card.locator(".efficiency")).toHaveCount(0);
+  await expect(card.locator(".rank")).toHaveCount(0);
+  await expect(card.locator(".recommended")).toHaveCount(0);
 });

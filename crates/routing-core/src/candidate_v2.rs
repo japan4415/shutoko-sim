@@ -1,7 +1,7 @@
 use crate::{
-    invalid, utc, ArcPolicy, Duration, GeoJsonLineString, LatLng, LoopValidationStatus,
-    PairEligibilityStatus, PairKind, RampInfo, RouteAnchor, RoutePlanSegmentRole, RoutingError,
-    SnappedOrigin, TariffStatus,
+    invalid, utc, ArcPolicy, Duration, GeoJsonLineString, Handoff, LatLng, Loop,
+    LoopValidationStatus, PairEligibilityStatus, PairKind, RampInfo, RouteAnchor,
+    RoutePlanSegmentRole, RoutingError, SnappedOrigin, TariffStatus,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -59,6 +59,44 @@ pub struct CandidateV2Toll {
     pub effective_from: Option<String>,
     pub effective_to: Option<String>,
     pub billing_distance_meters: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toll_source: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TopologyOnlyCandidateKind {
+    #[serde(rename = "topologyOnly")]
+    TopologyOnly,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TopologyOnlyCandidate {
+    pub id: String,
+    pub release_id: String,
+    pub pair_kind: TopologyOnlyCandidateKind,
+    pub origin: Option<LatLng>,
+    pub origin_node_id: String,
+    pub snapped_origin: SnappedOrigin,
+    pub entry: RampInfo,
+    pub exit: RampInfo,
+    pub entry_id: String,
+    pub exit_id: String,
+    pub road_names: Vec<String>,
+    pub edge_ids: Vec<String>,
+    pub geometry: GeoJsonLineString,
+    pub estimated_legs: Vec<EstimatedLeg>,
+    pub duration: Duration,
+    pub distance_meters: u64,
+    pub shutoko_distance_meters: u64,
+    pub eligibility_status: PairEligibilityStatus,
+    pub loop_validation_status: LoopValidationStatus,
+    pub tariff_status: TariffStatus,
+    pub toll: CandidateV2Toll,
+    pub r#loop: Loop,
+    pub reasons: Vec<String>,
+    pub warnings: Vec<String>,
+    pub handoff: Handoff,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,6 +139,8 @@ pub struct RadialReturnCandidate {
     pub handoff: CandidateV2Handoff,
 }
 
+pub type RadialCandidate = RadialReturnCandidate;
+
 pub fn validate_radial_return_candidate(
     candidate: &RadialReturnCandidate,
 ) -> Result<(), RoutingError> {
@@ -118,11 +158,12 @@ pub fn validate_radial_return_candidate(
         || candidate.geometry.r#type != "LineString"
         || candidate.geometry.coordinates.len() != candidate.edge_ids.len() + 1
         || candidate.toll.billing_pair_id.is_empty()
-        || candidate.toll.amount_yen.is_some()
-        || candidate.toll.billing_distance_meters.is_some()
         || candidate.handoff.enabled
         || !candidate.handoff.leg_urls.is_empty()
-        || candidate.tariff_status != TariffStatus::Unpriced
+        || candidate
+            .reasons
+            .iter()
+            .any(|reason| reason == "ONE_SECTION_TOLL")
     {
         return Err(invalid("invalid radialReturn candidate base contract"));
     }
@@ -132,7 +173,7 @@ pub fn validate_radial_return_candidate(
     if anchor.arc_policy != ArcPolicy::OrdinaryLongArc {
         return Err(invalid("invalid radialReturn candidate anchor"));
     }
-    utc(&candidate.toll.pricing_at)?;
+    let pricing_at = utc(&candidate.toll.pricing_at)?;
     let effective_from = candidate
         .toll
         .effective_from
@@ -145,11 +186,29 @@ pub fn validate_radial_return_candidate(
         .as_deref()
         .map(utc)
         .transpose()?;
-    if effective_from
+    let interval_valid = effective_from
         .zip(effective_to)
-        .is_some_and(|(from, to)| to <= from)
-    {
-        return Err(invalid("candidate tariff interval is invalid"));
+        .is_none_or(|(from, to)| from < to);
+    let tariff_consistent = match candidate.tariff_status {
+        TariffStatus::Priced => {
+            candidate.toll.amount_yen.is_some_and(|amount| amount > 0)
+                && effective_from.is_some_and(|from| from <= pricing_at)
+                && effective_to.is_none_or(|to| pricing_at < to)
+        }
+        TariffStatus::Unpriced => {
+            candidate.toll.amount_yen.is_none()
+                && candidate.toll.billing_distance_meters.is_none()
+                && effective_from.is_none()
+                && effective_to.is_none()
+        }
+        TariffStatus::Expired | TariffStatus::NotApplicable => {
+            candidate.toll.amount_yen.is_none()
+                && effective_from.is_none()
+                && effective_to.is_none()
+        }
+    };
+    if !interval_valid || !tariff_consistent {
+        return Err(invalid("radialReturn tariff status is inconsistent"));
     }
     let expected_roles = [
         RoutePlanSegmentRole::EntryApproach,
@@ -211,27 +270,135 @@ pub fn validate_radial_return_candidate(
     if next_index != candidate.edge_ids.len() {
         return Err(invalid("candidate edgeRouteLegs do not cover every edge"));
     }
-    if candidate.estimated_legs.len() != 2
-        || candidate.estimated_legs[0].role != EstimatedLegRole::SurfaceAccess
-        || candidate.estimated_legs[1].role != EstimatedLegRole::SurfaceReturn
-        || candidate
-            .estimated_legs
+    validate_estimated_legs(&candidate.estimated_legs)?;
+    validate_v2_duration_distance(
+        &candidate.estimated_legs,
+        &candidate.duration,
+        candidate.distance_meters,
+        candidate.shutoko_distance_meters,
+    )?;
+    let product_eligible = candidate.eligibility_status
+        == PairEligibilityStatus::VerifiedOneSectionAhead
+        && candidate.loop_validation_status == LoopValidationStatus::DeclaredRouteValidated;
+    if !product_eligible
+        && candidate
+            .reasons
             .iter()
-            .any(|leg| !leg.estimated || leg.distance_meters == 0 || leg.duration_seconds == 0)
+            .any(|reason| reason == "BEST_TIME_PER_YEN" || reason == "BEST_SHUTOKO_TIME")
+    {
+        return Err(invalid(
+            "ineligible radial candidate must not be recommended",
+        ));
+    }
+    Ok(())
+}
+
+pub fn validate_topology_only_candidate(
+    candidate: &TopologyOnlyCandidate,
+) -> Result<(), RoutingError> {
+    if candidate.pair_kind != TopologyOnlyCandidateKind::TopologyOnly
+        || candidate.id.is_empty()
+        || candidate.release_id.is_empty()
+        || candidate.origin_node_id.is_empty()
+        || candidate.entry_id.is_empty()
+        || candidate.exit_id.is_empty()
+        || candidate.entry.edge_id != candidate.entry_id
+        || candidate.exit.edge_id != candidate.exit_id
+        || candidate.edge_ids.is_empty()
+        || candidate.edge_ids.len() > 20_000
+        || candidate.geometry.r#type != "LineString"
+        || candidate.geometry.coordinates.len() != candidate.edge_ids.len() + 1
+        || candidate.eligibility_status != PairEligibilityStatus::TopologyOnly
+        || candidate.loop_validation_status != LoopValidationStatus::TopologyOnly
+        || candidate.r#loop.validated
+        || candidate
+            .reasons
+            .iter()
+            .any(|reason| reason == "ONE_SECTION_TOLL" || reason.starts_with("BEST_"))
+        || !candidate
+            .reasons
+            .iter()
+            .any(|reason| reason == "TOPOLOGY_ONLY")
+        || candidate.toll.billing_pair_id.is_empty()
+    {
+        return Err(invalid("invalid topologyOnly candidate contract"));
+    }
+    utc(&candidate.toll.pricing_at)?;
+    let effective_from = candidate
+        .toll
+        .effective_from
+        .as_deref()
+        .map(utc)
+        .transpose()?;
+    let effective_to = candidate
+        .toll
+        .effective_to
+        .as_deref()
+        .map(utc)
+        .transpose()?;
+    if effective_from
+        .zip(effective_to)
+        .is_some_and(|(from, to)| to <= from)
+    {
+        return Err(invalid("topologyOnly tariff interval is invalid"));
+    }
+    let tariff_consistent = match candidate.tariff_status {
+        TariffStatus::Priced => candidate.toll.amount_yen.is_some(),
+        TariffStatus::Unpriced | TariffStatus::Expired | TariffStatus::NotApplicable => {
+            candidate.toll.amount_yen.is_none()
+        }
+    };
+    if !tariff_consistent {
+        return Err(invalid("topologyOnly tariff status is inconsistent"));
+    }
+    validate_estimated_legs(&candidate.estimated_legs)?;
+    validate_v2_duration_distance(
+        &candidate.estimated_legs,
+        &candidate.duration,
+        candidate.distance_meters,
+        candidate.shutoko_distance_meters,
+    )
+}
+
+fn validate_estimated_legs(legs: &[EstimatedLeg]) -> Result<(), RoutingError> {
+    if legs.len() != 2
+        || legs[0].role != EstimatedLegRole::SurfaceAccess
+        || legs[1].role != EstimatedLegRole::SurfaceReturn
+        || legs
+            .iter()
+            .any(|leg| !leg.estimated || (leg.distance_meters == 0) != (leg.duration_seconds == 0))
     {
         return Err(invalid("invalid candidate estimatedLegs"));
     }
-    let base_seconds = candidate
-        .duration
+    Ok(())
+}
+
+fn validate_v2_duration_distance(
+    legs: &[EstimatedLeg],
+    duration: &Duration,
+    distance_meters: u64,
+    shutoko_distance_meters: u64,
+) -> Result<(), RoutingError> {
+    let surface_distance = legs
+        .iter()
+        .try_fold(0_u64, |total, leg| total.checked_add(leg.distance_meters));
+    let base_seconds = duration
         .access_seconds
-        .checked_add(candidate.duration.shutoko_seconds)
-        .and_then(|value| value.checked_add(candidate.duration.return_seconds));
-    let plan_seconds =
-        base_seconds.and_then(|value| value.checked_add(candidate.duration.buffer_seconds));
-    if base_seconds != Some(candidate.duration.base_seconds)
-        || plan_seconds != Some(candidate.duration.plan_seconds)
+        .checked_add(duration.shutoko_seconds)
+        .and_then(|value| value.checked_add(duration.return_seconds));
+    let expected_buffer = base_seconds.map(|base| 300.max(base.div_ceil(5)));
+    let plan_seconds = base_seconds.and_then(|value| value.checked_add(duration.buffer_seconds));
+    if surface_distance.and_then(|value| value.checked_add(shutoko_distance_meters))
+        != Some(distance_meters)
+        || duration.access_seconds != legs[0].duration_seconds
+        || duration.return_seconds != legs[1].duration_seconds
+        || base_seconds != Some(duration.base_seconds)
+        || expected_buffer != Some(duration.buffer_seconds)
+        || plan_seconds != Some(duration.plan_seconds)
     {
-        return Err(invalid("candidate duration totals are inconsistent"));
+        return Err(invalid(
+            "candidate duration or distance totals are inconsistent",
+        ));
     }
     Ok(())
 }

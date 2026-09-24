@@ -313,9 +313,12 @@ export interface RadialToll {
   effectiveFrom: string | null;
   effectiveTo: string | null;
   billingDistanceMeters?: number | null;
+  tollSource?: string | null;
 }
 
-export type Toll = LegacyToll | RadialToll;
+export type TopologyOnlyToll = RadialToll;
+
+export type Toll = LegacyToll | RadialToll | TopologyOnlyToll;
 
 export interface Loop {
   anchorNodeId: string;
@@ -393,6 +396,17 @@ export interface EstimatedLeg {
   durationSeconds: number;
 }
 
+export interface TopologyOnlyCandidate extends CandidateBase {
+  pairKind: "topologyOnly";
+  estimatedLegs: EstimatedLeg[];
+  eligibilityStatus: "topology_only";
+  loopValidationStatus: "topology_only";
+  tariffStatus: TariffStatus;
+  toll: TopologyOnlyToll;
+  loop: Loop;
+  handoff: Handoff;
+}
+
 export interface RadialCandidate extends CandidateBase {
   pairKind: "radialReturn";
   routePlanVersion: 1;
@@ -407,7 +421,7 @@ export interface RadialCandidate extends CandidateBase {
   handoff: RadialHandoff;
 }
 
-export type Candidate = LegacyCandidate | RadialCandidate;
+export type Candidate = LegacyCandidate | TopologyOnlyCandidate | RadialCandidate;
 
 export interface SearchResult {
   requestId: string;

@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "sourceDate": "2026-09-16",
+  "version": 4,
+  "sourceDate": "2026-09-24",
   "bindings": [
     {
       "rampId": "ramp:c1-inner:takaracho-entry",
@@ -1857,6 +1857,103 @@
       "motorwayNodeId": 12913951806,
       "direction": "outbound",
       "notes": "Verified OSM binding for 横浜青葉 (K7 outbound)"
+    }
+  ],
+  "bindingCandidates": [
+    {
+      "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460-172358466",
+      "rampId": "ramp:2-outbound:tengenji-exit",
+      "status": "unresolved",
+      "publicProjection": "excluded_unresolved",
+      "direction": "outbound",
+      "unresolvedReason": "way 172358461 → 422023171 → 931759044 → 172358460 → 172358466 の有向鎖は2号下りの n:252175582 から明治通りの n:1832672205 へ到達するが、way 172358466 の始点 n:1832672162 も明治通り（OSM way 258834790, highway=secondary）に接続する。地上接続点が2つ存在し、way・名称・公式施設順だけではどちらをexactな地上端点とするか一意に決められないためunresolvedとする。",
+      "unresolvedReasonCodes": [
+        "EARLY_SURFACE_CONNECTION",
+        "MULTIPLE_GROUND_CONNECTION_CANDIDATES"
+      ],
+      "directedSegments": [
+        {
+          "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
+          "osmWayIds": [
+            172358461,
+            422023171,
+            931759044,
+            172358460,
+            172358466
+          ],
+          "osmNodeIds": [
+            252175582,
+            1832672250,
+            1832672244,
+            1832672214,
+            1832672165,
+            1832672133,
+            1832672121,
+            1832672108,
+            1832672093,
+            1832672090,
+            1832672098,
+            8638072333,
+            1832672096,
+            1832672105,
+            1832672128,
+            1832672146,
+            1832672162,
+            1832672205
+          ],
+          "edgeIds": [
+            "e:w172358461:0:f",
+            "e:w172358461:1:f",
+            "e:w172358461:2:f",
+            "e:w172358461:3:f",
+            "e:w172358461:4:f",
+            "e:w172358461:5:f",
+            "e:w422023171:0:f",
+            "e:w422023171:1:f",
+            "e:w422023171:2:f",
+            "e:w931759044:0:f",
+            "e:w172358460:0:f",
+            "e:w172358460:1:f",
+            "e:w172358460:2:f",
+            "e:w172358460:3:f",
+            "e:w172358460:4:f",
+            "e:w172358460:5:f",
+            "e:w172358466:0:f"
+          ],
+          "fromNodeId": "n:252175582",
+          "toNodeId": "n:1832672205",
+          "edgeIdsSha256": "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+        }
+      ],
+      "routeEvidence": {
+        "routeId": "2",
+        "direction": "outbound",
+        "relationId": 4256339,
+        "relationMemberWayId": 23377599,
+        "relationMemberRole": "forward",
+        "officialExitNumber": "201",
+        "officialDownstreamExitNumbers": [
+          "201",
+          "203",
+          "205",
+          "207"
+        ],
+        "groundWayId": 258834779,
+        "groundWayName": "明治通り",
+        "firstExitAfterBranch": true
+      },
+      "supportEvidence": [
+        "fixtures/osm/shutoko-all.json:way/172358461",
+        "fixtures/osm/shutoko-all.json:way/422023171",
+        "fixtures/osm/shutoko-all.json:way/931759044",
+        "fixtures/osm/shutoko-all.json:way/172358460",
+        "fixtures/osm/shutoko-all.json:way/172358466",
+        "fixtures/osm/shutoko-all.json:way/23377599",
+        "fixtures/osm/shutoko-all.json:way/258834779",
+        "fixtures/osm/shutoko-all.json:way/258834790",
+        "data/official-population-snapshot.json:route/2/outbound",
+        "https://www.shutoko.jp/use/network/map/route-2/tengenji/"
+      ]
     }
   ],
   "sharedPhysicalOverrides": [

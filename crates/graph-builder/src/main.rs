@@ -406,6 +406,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 version: 1,
                 source_date: args.source_date.clone(),
                 bindings: Vec::new(),
+                binding_candidates: Vec::new(),
                 shared_physical_overrides: Vec::new(),
             }
         };

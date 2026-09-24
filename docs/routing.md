@@ -92,7 +92,7 @@ mandatory lap自身のfirst / last Edgeは`routePlan.mandatoryLap.firstEdgeId` /
 - `sourceKind=relationMainline`: OSM route relationのway memberとwayのnode順をgraph Edgeへ写像する。`sourceRelationId`とsnapshot hashを必須にする。graph 上に存在し、route ref または relation name が一致する `motorway` / `motorway_link` だけを受け入れ、名前で明示された入口・出口や別 route の ref/nat_ref を持つ link は除外する。候補 member は graph の端点連続性から maximal directed path として再構成し、relation 配列の並び替えで任意の断片を受け入れることを防ぐ。
 - `sourceKind=boundRamp`: 正規ランプ台帳とexact directed bindingから、wayをまたぐ順序付きEdge列を作る。`bindingEvidenceId`、`fromNodeId`、`toNodeId`、`edgeIdsSha256` を保持し、graph の端点・way順・Edge順・hashを個別に照合する。relation memberであることを求めない。
 
-OSM route relationのmainline候補にはJCT linkやway tagの欠落が混在するため、builderはroute identityとgraphのShutoko Edgeでmainline候補を確定する。目黒entry way `207535708`や天現寺exit候補way `172358461` / `422023171` を無検証なrelation連続Edge列へ強制しない。rampをrelationの連続Edge列へ強制すると、正しいbindingを誤って無検証にする。mainlineとrampを同じ`sourceKind`へ混ぜない。
+OSM route relationのmainline候補にはJCT linkやway tagの欠落が混在するため、builderはroute identity、relation member、wayのノード順、graphのShutoko Edgeでmainline候補を確定する。目黒entry way `207535708`や天現寺exit候補way `172358461` / `422023171` / `931759044` / `172358460` / `172358466`を無検証なrelation連続Edge列へ強制しない。rampをrelationの連続Edge列へ強制すると、正しいbindingを誤って無検証にする。mainlineとrampを同じ`sourceKind`へ混ぜない。
 
 route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を明示する。`mandatory_lap` は 1 つの `relationMainline` の連続部分列でなければならない。graph-builder は `generate_route_plan_lap_v1` で M→B の通常の長弧を生成し、relation segment の終端をまたぐ場合は directed order の wrap-around として继续保持する。`validate_directed_junction_mandatory_lap` は anchor の M/B、route/direction、first/last Edge、lapCount=1、arm-boundary、除外 short connector の way/Edge数/距離を一并に検証する。entry、return、exit は `relationMainline` と `boundRamp` を順番に連結できるが、各 segment 内部の Edge 順、node 接続、hash、binding 証拠を個別に検証する。resolved segment 内の Edge 反復は拒否し、別 segment として宣言された反復は接続性と hash を満たす限り許可する。Edge ごとに route metadata を複製せず、index から検索・検証する。名前や最接近 node だけで所属を補わない。
 
@@ -102,7 +102,7 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 - 一ノ橋JCTで別armへ切り替える近道を使う。
 - relationに含まれないmainline wayを使う。
 - relationに含まれないrampをbinding証拠なしで使う。
-- multi-way rampのway順、node接続、Edge順、from/to endpoint、hashを検証する。
+- multi-way rampのway順、node接続、Edge順、from/to endpoint、hashを検証し、終点前に別の一般道nodeがあれば`boundRamp`へ昇格しない。
 - 同名または近接した別JCTのEdgeを使う。
 - excluded short connectorをmandatory lapとして選ぶ。
 - relationの並び替えや逆順を、端点連続性を確認しない無検証な断片として受理しない。
@@ -121,15 +121,15 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 | 除外する B → M 短 connector | way `23297444`、23 edges、493m | way `24039737`、20 edges、461m |
 | B 後の2号下り initial Edge | `e:w45248411:0:f` | `e:w4853805:0:f` |
 | 天現寺候補までの距離 | 1,972m | 1,846m |
-| 天現寺 Exit の exact binding | 未解決 | 未解決 |
+| 天現寺 Exit の exact binding | `unresolved`：5 way鎖は連続するがground nodeが2候補 | `unresolved`：5 way鎖は連続するがground nodeが2候補 |
 | 公開可否 | `unverified`、公開 blocked | `unverified`、公開 blocked |
 | 料金 | `unpriced`、`amountYen=null`、`billingDistanceMeters=null` | 同左 |
 
-この2件は、wire-level schemaとroute shapeを確定した課金ペア設計である。Issue #62でschema適合のinner / outer diagnostic fixture、parser test、snapshot、C1非回帰テストを追加した。天現寺exact directed bindingが解決し、route/direction、First Exit、全端点がすべて通ったときだけ`Graph.billingPairs`の`radialReturn`として昇格する。解決前のplanをpublic candidateとして出さない。
+この2件は、wire-level schemaとroute shapeを確定した課金ペア設計である。Issue #62でschema適合のinner / outer diagnostic fixture、parser test、snapshot、C1非回帰テストを追加した。Issue #67では5 wayの順序、17 Edge、18 nodeとhash、2号下りrelation、公式施設順を監査したが、`n:1832672162`と`n:1832672205`が一般道へ接続するためground endpointが未確定である。したがって、現行pair eligibilityは変更せず、#63でboundRampを生成する前に追加根拠が必要である。ground endpoint、route/direction、First Exit、全端点がすべて通ったときだけ、`Graph.billingPairs`の`radialReturn`として昇格する。解決前のplanをpublic candidateとして出さない。
 
 目黒入口 → 目黒出口の現行dynamic ODは別分類にする。entry Edgeは`e:w207535708:0:f`、exit Edgeは`e:w207535709:0:f`で、routing topology上は到達可能である。しかし物理的には天現寺Exitが先であり、exact bindingがなければ目黒を「1区間先」にできない。routing v2では`topology_only`とし、「1区間先」「最低料金」、`time_per_yen`の対象から外す。`routingCapability=routable`は道路を追跡できることを示すが、商品eligibilityの証拠ではない。現行pre-v2 outputは後述の互換fieldをdynamic ODにも残しているため、公開契約への移行完了まではこの節の`topology_only`を実装済みと読まない。
 
-天現寺・荏原・戸越入口については、現行support dataでentry / exitのexact directed bindingが未解決である。候補wayや施設名をnearest nodeへ割り当てて補わない。天現寺binding issueは、multi-way ramp候補を順序付き`osmWayIds`と`edgeIds`で表し、ground ↔ mainline接続、ramp IDの逆引き、公式施設順、node接続とhashを同じevidence modelで扱う。`supportState=verified_bound`では解決した`directedSegments[]`を必須とし、`unresolved` / `unsupported`では空配列と`bindingCandidates[]`だけを許す。
+天現寺・荏原・戸越入口については、現行support dataでentry / exitのexact directed bindingが未解決である。候補wayや施設名をnearest nodeへ割り当てて補わない。天現寺binding issueは、multi-way ramp候補を順序付き`osmWayIds`、`osmNodeIds`、`edgeIds`、両端nodeとhashで表し、ground ↔ mainline接続、ramp IDの逆引き、公式施設順を同じevidence modelで扱う。実装済みcandidateは5 wayの連続性を保っていてもground endpointが二候補となるため、`status=unresolved`と`publicProjection=excluded_unresolved`を保持する。`supportState=verified_bound`では解決した`directedSegments[]`を必須とし、`unresolved` / `unsupported`では空配列と`bindingCandidates[]`だけを許す。
 
 ### C1 8ペアは legacy adapter で変更しない
 
@@ -207,11 +207,11 @@ graph schema 4 は reader/consumer と `all-real-v3` の atomic activation ま�
 | Issue | 実装範囲 | 主な受け入れ条件 | 依存 |
 | ---: | --- | --- | --- |
 | 1 | seed schema v2 と diagnostic pair 型 | `schemaVersion`を明示的に1 / 2へdispatchし、全nested structでunknown fieldを拒否する。未知version / kind / field fixtureを通し、既存C1 8要素のID・意味・価格・状態・anchorを保つ。radial endpointは`directedSegments[]`と未解決`bindingCandidates[]`を区別する。 | なし |
-| 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance（#63実装済み） | `--graph-schema 4` の明示時だけ `relationMainline` と `boundRamp` を別 segment として生成し、way順、node接続、Edge順、hash、binding証拠を個別に検証する。逆方向、非所属mainline way、ramp証拠なし、short connector、relationの逆順を拒否する。#64のradial route plan生成・検証を同じindex上で実行する。 | 1 |
+| 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance（#63実装済み） | `--graph-schema 4` の明示時だけ `relationMainline` と `boundRamp` を別 segment として生成し、way順、node接続、Edge順、hash、binding証拠を個別に検証する。逆方向、同名JCT、非所属mainline way、ramp証拠なし、別arm近道、short connector、relationの逆順を拒否する。#64のradial route plan生成・検証を同じindex上で実行する。 | 1 |
 | 3 | directed mandatory lap と return-corridor First Exit（#64実装済み） | synthetic radial fixtureと実 inner/outer snapshotでM→B長弧、return corridor、first general Exitを分解する。C1 legacyを完全維持し、segment内反復を拒否しつつ、route planが宣言したsegment間反復を許可する。 | 1, 2 |
 | 4 | graph schema 4 reader と consumer 契約（#65実装済み） | core、WASM型、Web Workerがschema 2 / 3 / 4を読む。`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`を判別し、wire fragmentとfield failure fixtureを追加する。未知kind / version、部分data、route legの重複・欠落を拒否する。 | 1, 3 |
 | 5 | graph schema 4 の atomic release activation（#66実装済み） | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
-| 6 | 天現寺 exact directed binding | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。候補から一意な`directedSegments[]`だけ昇格し、way順・node接続・Edge順・hashを固定する。解決できなければ根拠付きunresolved / unsupportedのままにする。 | なし |
+| 6 | 天現寺 exact directed binding（#67診断完了・unresolved） | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。way `172358461` → `422023171` → `931759044` → `172358460` → `172358466`のway順・18 node・17 Edge・hashは固定した。`n:1832672162`も一般道へ接続するためground endpointは未確定で、根拠付きunresolved candidateのままにする。 | なし |
 | 7 | 2号 inner / outer radial pair 統合 | schema適合fixtureとC1 non-regressionが通る。exact binding未完ならdiagnostic planのみとする。完了時だけGraph radial pairとpublic eligibilityへ昇格し、#41までtariffは未算出とする。 | 3, 5, 6 |
 | 8 | Candidate route legs と product / tariff 状態 | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。pre-v2 dynamic ODのcharged section / reasonを撤去し、radialに`chargedSectionCount`と`ONE_SECTION_TOLL`を出さない。 | 4 |
 | 9 | Web の順序表示 | entry / lap / return / exitを番号・線種・テキストで提示し、surface概算とhighway経路を混同しない。総距離とhighway距離を同じ定義で表示し、unpriced / topology_onlyへ「1区間料金」を出さない。C1 UI regressionを維持する。 | 5, 8 |

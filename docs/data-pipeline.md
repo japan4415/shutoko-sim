@@ -120,6 +120,203 @@
 > **注記（内回り銀座入口の 1 区間先について）**:
 > 内回り銀座入口 → 新富町出口（0.4km、300 円）は公式資料上の 1 区間先だが、OSM の分流点・合流点の順序（内回り新富町出口の分流点が銀座入口の合流点より上流にある）により First Exit 検証が通らないため未登録。京橋出口は 2 区間先なので登録しない。
 
+### 3.1 `schemaVersion: 2` の混在 seed（設計・未実装）
+
+Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在させる。既存の `schemaVersion: 1` は現行どおりに読み込める。同一ファイルを schema 2 へ更新する時も、既存 C1 8要素の項目、値、意味は変更しない。`pairKind` を持たない要素は legacy ring pair と解釈する。
+
+混在の規則は次のとおりである。
+
+- legacy 要素は現行の `entryOsmWayId`、`exitOsmWayId`、`anchorOsmNodeId`、`status`、`oneSectionAheadVerified` を持つ。`pairKind` は必須ではない。
+- radial 要素は `pairKind: "radialReturn"` と `routePlanVersion: 1` を必須とする。
+- `pairKind` または `routePlanVersion` が未知なら fail-closed で拒否する。
+- radial が `pairKind` / `routePlanVersion` のどちらかを欠く場合、または legacy が variant 必須フィールドを欠く場合も拒否する。
+- seed 内に legacy と radial を何件ずつ含めてよい。ただし ID は重複させない。同じ array 内で endpoint support、pair eligibility、loop validation、tariff status を混ぜない。
+- schema 1 の parser は維持し、schema 2 の parser は上記 union として読む。どちらの parser も unknown field を拒否する。
+
+検証状態は次の軸で独立させ、1つの `status` に押し込まない。
+
+| 軸 | 主な値 |
+| --- | --- |
+| endpoint `supportState` | `verified_bound`, `unsupported`, `unresolved` |
+| `routingCapability` | `routable`, `structural_no_loop`, `unsupported` |
+| `pairEligibility.status` | `verified_one_section_ahead`, `unverified`, `topology_only` |
+| `loopValidation.status` | `declared_route_validated`, `unresolved`, `topology_only` |
+| `tariff.status` / Candidate `tariffStatus` | `priced`, `unpriced`, `expired`, `not_applicable` |
+
+以下は、同じ `billingPairs` array に置ける legacy 1件と radial 1件の wire-level 例である。長い `notes` を含む legacy 要素も、現行データから値を変えない。
+
+```json
+{
+  "id": "bp:c1-outer:kandabashi-takaracho",
+  "entryOsmWayId": 92243921,
+  "entryName": "神田橋入口",
+  "exitOsmWayId": 297864314,
+  "exitName": "宝町出口",
+  "anchorOsmNodeId": 499831338,
+  "vehicleProfile": "passenger-car-etc",
+  "status": "verified",
+  "oneSectionAheadVerified": true,
+  "provenance": {
+    "source": "https://www.shutoko.jp/use/network/map/",
+    "sourceDate": "2026-09-10",
+    "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kandabashi entry to Takaracho exit (Gofukubashi and Edobashi exits decommissioned in 2021). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/tolls/about/price/ (旧 URL https://www.shutoko.jp/fee/fee-info/about/ は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト)); Kandabashi to Takaracho toll distance 1.7km with minimum toll 300 yen applied (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf (旧 URL https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf は 2026-09-10 時点で 404)); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+  },
+  "prices": [
+    {
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
+    },
+    {
+      "amountYen": 300,
+      "effectiveFrom": "2026-09-30T15:00:00Z"
+    }
+  ]
+}
+```
+
+```json
+{
+  "id": "bp:2-inbound:meguro:c1-inner:tengenji",
+  "pairKind": "radialReturn",
+  "routePlanVersion": 1,
+  "vehicleProfile": "passenger-car-etc",
+  "entryEndpoint": {
+    "rampId": "ramp:2-inbound:meguro-entry",
+    "osmWayId": 207535708,
+    "name": "目黒入口",
+    "supportState": "verified_bound"
+  },
+  "exitEndpoint": {
+    "rampId": "ramp:2-outbound:tengenji-exit",
+    "osmWayId": null,
+    "name": "天現寺出口",
+    "supportState": "unsupported"
+  },
+  "routePlan": {
+    "entryCorridor": {
+      "routeId": "2",
+      "direction": "inbound",
+      "membershipId": "route:2:inbound",
+      "terminalEdgeId": "e:w4853804:16:f",
+      "mergeNodeId": "n:574460576"
+    },
+    "loop": {
+      "anchorKind": "directedJunction",
+      "routeId": "C1",
+      "direction": "inner",
+      "membershipId": "route:C1:inner",
+      "startNodeId": "n:574460576",
+      "endNodeId": "n:574460605",
+      "firstEdgeId": "e:w23297444:43:f",
+      "lastEdgeId": "e:w23297444:19:f",
+      "arcPolicy": "ordinaryLongArc",
+      "excludedShortConnector": {
+        "fromNodeId": "n:574460605",
+        "toNodeId": "n:574460576",
+        "osmWayId": "23297444",
+        "edgeCount": 23,
+        "distanceMeters": 493
+      }
+    },
+    "returnCorridor": {
+      "routeId": "2",
+      "direction": "outbound",
+      "membershipId": "route:2:outbound",
+      "startNodeId": "n:574460605",
+      "initialEdgeId": "e:w45248411:0:f",
+      "firstGeneralExit": {
+        "rule": "firstGeneralExit",
+        "expectedRampId": "ramp:2-outbound:tengenji-exit",
+        "exactDirectedBinding": "unsupported"
+      }
+    }
+  },
+  "routingCapability": "routable",
+  "pairEligibility": {
+    "status": "unverified",
+    "oneSectionAheadVerified": false
+  },
+  "loopValidation": {
+    "status": "declared_route_validated"
+  },
+  "tariff": {
+    "status": "unpriced",
+    "amountYen": null,
+    "billingDistanceMeters": null,
+    "prices": []
+  },
+  "provenance": {
+    "source": "https://www.shutoko.jp/use/network/map/",
+    "sourceDate": "2026-09-16",
+    "notes": "目黒入口から一ノ橋JCTのC1 inner長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。天現寺exitのexact directed bindingは未解決。"
+  }
+}
+```
+
+`exitEndpoint.osmWayId=null` と `supportState=unsupported` は、現時点で意図的に未解決であることを表す。ここを目黒出口や他の施設 ID で補完しない。outer も同じ shape とし、`loop.direction=outer`、M=`n:31297008`、B=`n:31297000`、first / last Edge=`e:w24039737:24:f` / `e:w24039737:3:f`、除外 connector は way `24039737`、20 edges、461m とする。return initial Edge は `e:w4853805:0:f` である。
+
+### 3.2 legacy と新 variant のフィールド対応
+
+| 現行 schema 1 | schema 2 の内部型・graph schema 4 | 規則 |
+| --- | --- | --- |
+| `pairKind` なし | `pairKind="legacyRing"` | seed では省略を許す。graph schema 4 の出力では明示する。 |
+| `anchorOsmNodeId` | `anchorKind="sameNode"`, `nodeId` | C1 8件では値と意味を変えない。 |
+| `entryOsmWayId` / `entryName` | `entryEndpoint.osmWayId` / `name` | 別 field を同じ値に写すだけで、legacy 側を変更しない。 |
+| `exitOsmWayId` / `exitName` | `exitEndpoint.osmWayId` / `name` | 同上。 |
+| `status` と `oneSectionAheadVerified` | `pairEligibility.status` と `oneSectionAheadVerified` | legacy adapter の内部正規化では併記できるが、raw seed は変更しない。 |
+| なし | Candidate `eligibilityStatus` | seed の `pairEligibility.status` を同じ値で渡し、loop validation や tariff status と合成しない。 |
+| なし | Candidate `loopValidationStatus` | seed の `loopValidation.status` を同じ値で渡す。 |
+| `prices[]` | `tariff.prices[]` と `tariff.status` | 300円→300円の record と有効期間を保持する。radial は #41 まで空。 |
+| なし | `routePlanVersion`, `entryCorridor`, `loop`, `returnCorridor` | radial variant だけを必須にする。 |
+| なし | `pairEligibility`, `loopValidation`, `tariff` の独立 status | endpoint support、routing capability、loop validation、料金状態を混在させない。 |
+
+generated graph の `billingPairs[]` も判別可能な union にする。schema 2/3 の `pairKind` なしは legacy として読めるが、schema 4 の builder 出力では `pairKind` を必ず書く。`legacyRing` variant は `anchorNodeId`、`entryToAnchorEdgeIds`、`anchorToExitEdgeIds` を必須にする。`radialReturn` variant は `anchorNodeId` を省略し、`directedJunction` の M/B pair と `resolvedRouteSegments` を必須にする。未知の kind は reader と builder の両方で拒否する。
+
+schema 4 の manifest は `billingPairsVersion=v2` と graph schema 4、route plan version、route membership hash を記録し、`graph.json`、`ramps.json`、tariff 成果物と release ID を結び付ける。旧 manifest の schema 1/2 record は上書きしない。公開 release の切替は、consumer reader と Web/Workers の検証が通った後に行う。
+
+`resolvedRouteSegments` の role は次の4種類だけに固定する。
+
+| role | 範囲 |
+| --- | --- |
+| `entry_approach` | entry Edge から M まで。 |
+| `mandatory_lap` | M から B までの指定 route・direction の長弧。 |
+| `return_corridor` | B から return corridor の initial Edge と、その先の最初の一般 Exit split まで。 |
+| `exit_approach` | Exit split から ground-side endpoint まで。 |
+
+各 segment は順序付き Edge 列と segment hash を持つ。Candidate では `edgeRouteLegs` の `startEdgeIndex`（含む）から `endEdgeIndexExclusive`（含まない）へ写し、4 区間が `edgeIds` の `[0, edgeIds.length)` を重複も欠落もなく覆うことを検証する。一般道の surface access / return は Edge を持たないため graph segment にも Candidate の Edge index にも入れない。
+
+### 3.3 `RouteMembershipIndex` の生成と First Exit の拡張（設計・未実装）
+
+現行 Graph の Edge には route membership と direction がない。`find_first_exits_from_anchor` の現行挙動は C1 legacy adapter として保存し、radial には `find_first_exit_on_corridor` を新設する。
+
+先に、OSM relation の ordered member と way のノード順を生成済み有向 Edge ID へ写像し、graph schema 4 の top-level `routeMemberships[]` に `RouteMembershipIndex` を出力する。各要素は `membershipId`、`routeId`、`direction`、`sourceRelationId`、`sourceSnapshotSha256`、`orderedEdgeIds`、`orderedEdgeIdsSha256` を持つ。Edge ごとの metadata では順序と由来を一元管理できないため、索引として分離する設計を採用する。radial seed の entry、loop、return は `membershipId` でこの索引を参照し、relation ID と snapshot hash は build 時に索引から解決する。
+
+`find_first_exit_on_corridor` は、次の条件をすべて満たす場合だけ一般 Exit を返す。
+
+1. mandatory lap の B を出発点とし、return corridor の `initialEdgeId` から探索を始める。
+2. 全 Edge が指定 `routeId`、`direction`、`sourceRelationId` の `orderedEdgeIds` に順番どおり所属する。
+3. 候補は return corridor 内の一般 Exit だけで、C1 の Exit、entry approach 中の Exit、boundary JCT を数えない。
+4. seed の `expectedRampId` と exact directed binding に一致する。
+5. 禁止遷移を満たし、探索予算を明示して処理する。
+
+B から全グラフの最短 Exit を選ぶ処理は使わない。実データでは B から C1 芝公園 Exit が1,306m、天現寺候補の開始点が1,972mであり、route constraint なしで Exit を選ぶと誤る。天現寺候補が未解決なら `firstGeneralExit.exactDirectedBinding=unsupported` を保持し、次の supported Exit へ skip しない。First Exit の幾何探索が成功しても、端点 support や pair eligibility の証拠にはしない。
+
+実装テストには次を含める。
+
+- inner/outer の M→B 長弧を選び、B→M の0.493km / 0.461km connector を拒否する。
+- entry corridor に C1 Exit があっても、return corridor の Exit と混同しない。
+- 逆方向、同名 JCT、relation 非所属 way、別 arm への近道を拒否する。
+- segment 内の Edge 反復を拒否し、route plan が宣言した segment 間反復を許す。
+- 探索予算超過を「Exit なし」と読み替えない。
+- 既存 C1 8件の anchor、edge resolution、First Exit、300円→300円、verified 2件・unverified 6件を回帰 test で固定する。
+
+### 3.4 2号計画の診断用データと公開 BillingPair を分ける
+
+本節で定義した inner / outer object は、Issue #42 の設計成果を示す schema-valid な diagnostic fixture にする。実装 issue 1 では、この JSON を parser test と snapshot に使う。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
+
+binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。binding が解けた後に、route membership、First Exit、全 segment の完全分割を再検証し、graph schema 4 の `radialReturn` として昇格する。昇格後も Issue #41 までは `amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced` を維持する。
+
 ## 4. 成果物の決定論的再生成手順
 
 ### 再生成コマンド
@@ -244,7 +441,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
   - `shutoko_distance_meters`: 首都高速上の実際の走行距離（エッジ長の積算値）。周回ループを含むため数十〜百キロ超になり得る。
   - `toll.billing_distance_meters`: 入口〜出口間の公称料金距離（OD テーブルまたはベースライン最短経路長）。
   - **OSM 幾何距離を公称料金距離として扱わない規律**: グラフ幾何から計算される実走距離（`shutoko_distance_meters`）を公称料金距離として勝手に流用しない。料金計算は `data/od-tariffs.json` の検証済み OD ペアまたは公式料金距離テーブルに明示された値のみを根拠とし、未定義区間では安易な幾何距離代用を行わず未計算（None）として誠実にモデル化する。
-  - 周回走行を行っても、料金距離は入口と出口の組み合わせによって決まるため、1区間先退出時は下限 300 円で周回が可能。
+  - 周回走行を行っても、料金距離は入口と出口の組み合わせで決める。現行 C1 8件の legacy price record は300円→300円だが、2号 radial pair の金額を「1区間先だから300円」という理由だけで決めない。
 - **検証済み OD ペア**:
   - 頻出・代表的な OD ペア（C1 各ランプ、八重洲線接続、主要放射線連絡等）について公式料金距離および料金額を検証済みデータとして保持。
 

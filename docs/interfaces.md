@@ -28,6 +28,8 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 
 `anchorNodeId` は入口の合流後から直接区間へ進む本線上の基準状態（ノード）。ここへ一周後に戻り、出口へ進む道路列を定義できるペアを登録する。料金規則の前提は原案に従い、個別ペアの登録ではその適用条件とデータ根拠を確認する。
 
+本節は現行 seed schema 1 / generated graph schema 2 の legacy ring pair について記載する。Issue #42 で追加する seed schema 2 の混在 union、generated graph schema 4 の `legacyRing` / `radialReturn` variant、`RouteMembershipIndex`、diagnostic plan から公開 BillingPair への昇移条件は[実データ生成パイプライン](data-pipeline.md)を正本とする。既存 C1 8要素の raw seed は変更しない。
+
 ## Workers の HTTP 境界
 
 | インターフェース | 入出力・挙動 |
@@ -162,20 +164,35 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | `geometry` | `GeoJsonLineString` | 全経路の GeoJSON LineString（`{ type: "LineString", coordinates: [[lon, lat], ...] }`）。重複端点なし |
 | `duration` | `Duration` | `accessSeconds`, `shutokoSeconds`, `returnSeconds`, `baseSeconds`, `bufferSeconds`, `planSeconds` |
 | `distanceMeters`, `shutokoDistanceMeters` | `number` | 総距離と首都高実走行部分の距離（メートル） |
-| `toll` | `Toll` | `billingPairId`, `chargedSectionCount: 1`, `amountYen`（未確認なら `null`）, `pricingAt`, `effectiveFrom`, `effectiveTo`, `billingDistanceMeters?`, `tollSource?`（`"table" \| "od_tariff" \| "calculated"`） |
-| `loop` | `Loop` | `anchorNodeId`, `edgeIds`, `durationSeconds`, `distanceMeters`, `validated: true` |
-| `reasons` | `string[]` | 機械可読推薦理由コード（先頭候補: 料金確定時は `BEST_TIME_PER_YEN`、時間ソート時は `BEST_SHUTOKO_TIME`。全候補共通: `ONE_SECTION_TOLL`） |
+| `toll` | `Toll` | `billingPairId`, `chargedSectionCount: 1`（現行 legacy C1 output 専用）, `amountYen`（未確認なら `null`）, `pricingAt`, `effectiveFrom`, `effectiveTo`, `billingDistanceMeters?`, `tollSource?`（`"table" \| "od_tariff" \| "calculated"`） |
+| `loop` | `Loop` | 現行 C1 の `anchorNodeId`, `edgeIds`, `durationSeconds`, `distanceMeters`, `validated: true` |
+| `reasons` | `string[]` | 機械可読推薦理由コード（先頭候補: 料金確定時は `BEST_TIME_PER_YEN`、時間ソート時は `BEST_SHUTOKO_TIME`。現行 C1 legacy output のみ `ONE_SECTION_TOLL`） |
 | `warnings` | `string[]` | 警告コード（常時付与: `HANDOFF_WAYPOINTS_UNVERIFIED`（#8 実機検証未了）、`STATIC_TRAVEL_TIME`） |
 | `handoff` | `Handoff` | Google Maps 引き継ぎ情報（`{ origin, destination, waypoints, mapsUrl, verificationSetVersion }`） |
 
 ### 推薦理由コード（`reasons`）一覧
 - `BEST_TIME_PER_YEN`: 時間あたり料金効率が最も高い最優先候補（料金確定時）
 - `BEST_SHUTOKO_TIME`: 首都高滞在時間が最も長い最優先候補（料金未確定時等の時間ソート時）
-- `ONE_SECTION_TOLL`: 1区間料金（最低料金）が適用される周回経路
+- `ONE_SECTION_TOLL`: 現行 C1 legacy output における後方互換理由コード。新規 radial output には生成せず、UI も「1区間料金」と表示しない
 
 ### 警告コード（`warnings`）一覧
 - `HANDOFF_WAYPOINTS_UNVERIFIED`: Google Maps 引き継ぎ経由地選定ルールが暫定であり実機検証未了であることを示す（#8 完了まで常時付与）。2026-09 に Android Chrome + Google マップアプリ「あり」で代表1系列の周回維持を確認したが、アプリ「なし」・iOS Safari・経由地点0〜3点の系列網羅・URL 長上限は未検証のため引き続き付与する（[検証記録](delivery.md) 参照）
 - `STATIC_TRAVEL_TIME`: 渋滞・規制を含まない静的制限速度に基づく推定時間であることを示す
+
+### Issue #42 後の Candidate v2（設計・未実装）
+
+graph schema 4 / routing v2 の Candidate は、現行 C1 legacy output と次の点で区別する。
+
+- `pairKind="radialReturn"`、`routePlanVersion=1`、directed JCT の M/B、`resolvedRouteSegments` を持つ。`anchorNodeId` は必須ではない。
+- `eligibilityStatus` は `verified_one_section_ahead`、`unverified`、`topology_only` のいずれか。端点 support、loop validation、routing capability とは独立させる。
+- `loopValidationStatus` は `declared_route_validated`、`unresolved`、`topology_only` のいずれか。route plan の解決状態だけを表し、商品 eligibility へ代用しない。
+- `tariffStatus` は `priced`、`unpriced`、`expired`、`not_applicable` のいずれか。#41 前の2号 radial は `amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced` とする。
+- 新規 radial output に `chargedSectionCount` と `ONE_SECTION_TOLL` を出さない。現行 C1 output への legacy adapter だけが両者を維持する。
+- `time_per_yen` は全候補の tariff が `priced` のときだけ使う。unpriced が混在する集合は `shutoko_time`、`topology_only` は商品推薦の比較対象から外す。
+
+高速道路の区間は `edgeRouteLegs` に分ける。role は `entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach` の4種類で、`startEdgeIndex` は含む、`endEdgeIndexExclusive` は含まない。4区間を Candidate 順に並べると `edgeIds` の `[0, edgeIds.length)` を重複も欠落もなく覆う。一般道の surface access / return は `estimatedLegs` に置き、`estimated=true`、Edge index と Edge geometry を持たない。`post_lap_transfer` は使用しない。
+
+core、WASM 型、Web Worker は graph schema 2/3/4 を読む。schema 2/3 の `pairKind` なしは `legacyRing`、schema 4 の builder 出力は `pairKind` を必須とし、未知の kind/version は部分データを返さず停止する。builder の既定 schema 4 への切替は、reader、WASM、Web pipeline、Workers allowlist、release ID、manifest hash を同時に更新する独立 issue で行う。
 
 ## Google マップへの引き継ぎ
 
@@ -186,6 +203,8 @@ URL は座標のみの固定形式を `format!` で組み立て（区切りは `
 本線上の座標が別道路や停車地点に解釈される可能性を先行検証する。一周を省略せず入口・主要通過点・出口を最大3点で表現でき、代表端末で確認済みの経路系列だけを初期の公開候補とする。入口と1区間先の出口だけでは周回を省略した短い経路になり得るため、周回の再現を必ず確認する。上限超過時に黙って地点を削除したり、走行中の手動区間切替を要求したりしない。
 
 任意出発地点について外部経路の完全一致を事前保証できないため、検証済み系列でも利用者に最終確認を促す。Google の再計算結果を取得して自動比較する機能は含めない。再現不能な系列を除外すると企画価値を満たせない場合は、公開を進めず連携方式を再設計する。
+
+Google Maps URL は waypoint の順序を示しても、近接 JCT の正しい arm、首都高の道路、radial の往路・復路を強制できない。放射線の公開 handoff は、URL 分割だけでは有効にしない。device verification manifest に `routePlanId`、`releaseId`、URL builder version、leg URL hash、期待する道路・向き、OS / browser / app version、検証日時、結果、期限を記録し、Android / iOS × Web / app の必要条件が1件でも `missing`、`failed`、`expired` なら public departure を無効にする。manifest と release gate の詳細は[ルート探索設計](routing.md)を正本とする。
 
 ## 地図・住所検索のデータ利用
 

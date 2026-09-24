@@ -1,5 +1,7 @@
 # ルート探索設計
 
+本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は「設計（未実装）」と明示し、両方を同じ実装済み契約として扱わない。
+
 ## 探索問題
 
 [原案](original.md)の「首都高を一周したうえで1区間先で降りると1区間分の料金になる」を前提に、その走り方が時間予算に収まる経路を探す。単なる最短経路や、任意の出口へ抜ける長距離経路は対象ではない。
@@ -13,9 +15,201 @@
 課金対象: 入口 → 1区間先の出口（実走行の一周分を加算しない）
 ```
 
-「1区間先」は緯度経度の近さや出口番号の加算では決めない。方向・接続・課金条件を確認した `billingPair` で指定する。一周は、そのペアに定義した本線の基準点へ、同じ進行方向で戻る非空の有向閉路と定義する。単に道路名が環状線であることや、一般道で出発地へ戻ることを一周とは数えない。この形式化は初期版の実装定義であり、対象にできる一周の種類は実経路検証で調整する。
+「1区間先」は緯度経度の近さや出口番号の加算では決めない。方向・接続・課金条件を確認した `billingPair` で指定する。現行 schema 2/3 の C1 legacy は、そのペアに定義した本線の基準点へ、同じ進行方向で戻る非空の有向閉路を一周とする。単に道路名が環状線であることや、一般道で出発地へ戻ることを一周とは数えない。放射線を含む一般化は、後述する Directed Route-Plan Lap v1（設計・未実装）で定義する。
 
 [首都高の料金距離説明](https://www.shutoko.jp/fee/fee-info/pay_etc/distance/)は、複数経路がある場合に入口出口間の首都高最短経路を料金距離とする原則を示している。具体的なペアの料金と利用条件は別途確認し、実走行距離へ単価を掛けて料金を計算しない。
+
+## Issue #42: Directed Route-Plan Lap v1（設計・未実装）
+
+本節は、環状線だけを扱う現行モデル、放射線から環状線を通って元の路線へ戻る経路まで拡張するための設計である。まだ実装していない。データ・生成コード・探索コード・公開成果物への反映は別の implementation issue で行い、それまでは現行 C1 8 ペアの挙動を変えない。
+
+### 採用案は「指定 route の長弧を1周する」
+
+対象は、一般入口から放射線へ入り、1本の環状線を指定方向で長弧として1通り、反対方向の放射線へ戻って一般出口で降りる経路に限定する。2本以上の環状線をまたぐ `multipleLoopPlans` は今回対象外である。
+
+```text
+entry approach
+  → merge node M
+  → 指定 route・direction の通常長弧（mandatory lap、lapCount = 1）
+  → branch node B
+  → return corridor
+  → 最初の一般 Exit
+  → exit approach
+```
+
+「1周」は、次の条件を満たす `routePlanLapV1` とする。
+
+- 開始境界 M と終了境界 B を明示し、間に `routeId`、`direction`、最初・最後のエッジを宣言する。
+- 環状線上の通常長弧を1通りだけ使う。JCT の短い連結路を周回として数えない。
+- 放射線では M と B を別のノードとして保持し、どちらか一方へ寄せない。
+- 全体が単純閉路である必要はない。entry と return corridor が同じノードを再訪することは許す。
+- 同じエッジを2回通った場合も、(edge ID, 出現順) として保持する。`edgeIds` を集合にまとめない。
+- 周回数を増やす代わりに時間を埋めない。`lapCount` は1に固定する。
+
+現行 C1 の `anchorOsmNodeId` は、開始と終了が同じノードである `sameNodeLoopAnchor` の特殊例として扱う。既存の anchor、First Exit、料金レコード、検証状態は変えない。
+
+### 「1区間先」は商品上の入口・出口関係であり、料金区間数ではない
+
+「1区間先」は、mandatory lap を終えて return corridor へ入った後、その路線と方向を保った最初に到達する一般 Exit と定義する。次のいずれも採用理由にしない。
+
+- 全グラフで、出口までの距離が最短の Exit
+- entry approach 中に通り過ぎた C1 の Exit
+- entry と同じ施設名の Exit
+- exact binding が未解決だから、その次の supported Exit
+- 別の JCT arm へ短く切り替える近道
+
+2号目黒線では、公式施設順と現行スナップから天現寺が次の出口候補となる。天現寺出口の exact directed OSM binding が解決するまでは、`verified_one_section_ahead` に昇格させない。目黒出口や他の supported 施設へ飛ばして「1区間先」を作らない。
+
+「1区間」は料金制度に存在する計算項目ではない。商品上で表示する入口 → 出口の関係であり、金額は常に公式の入口・出口間 `billingDistanceMeters` と料金規則から別に求める。金額、料金距離、端点 support、商品適格性を一つの `status` に混在させない。
+
+### 比較した案と不採用理由
+
+| 案 | 周回と出口 | 採否 | 判断理由 |
+| --- | --- | --- | --- |
+| A. M→B の通常長弧を1周とする | B へ入った return corridor の最初の一般 Exit | 採用 | Issue #42 の「放射線→環状線→同じ放射線」に最も直接対応し、短い connector を明確に除外できる。C1 も同じ型へ正規化できる。 |
+| B. M→B→M を閉路として1周する | M へ戻ってから M→B へ進み、その先の Exit | 不採用 | 幾何的には真の閉路だが、もう1周分の C1 長弧が必要で、往復の説明が難しくなる。短い connector を周回として数える危険もある。 |
+| C. C1 周回後に C1 最初の Exit で降りる | C1 の最初の Exit | 不採用 | 説明は簡単だが、entry と同じ放射線へ戻る要件を外し、inner C1 の既知 First Exit 不整合も引き継ぐ。 |
+| D. 同じ施設名の Exit まで戻る | 同名施設 Exit | 不採用 | 「目黒→目黒」は自然でも first exit の意味を定義できず、binding 欠損時の skip 理由にもならない。 |
+| E. 任意の 5km 以上 SCC 閉路 | Exit は別途探索 | 不採用 | 路線・方向・JCT の役割を保証せず、短い接続路を誤って選ぶ。現行の動的 OD 診断に限って保持する。 |
+
+### アンカーは2種類に分ける
+
+| 型 | 主なフィールド | 用途 |
+| --- | --- | --- |
+| `sameNodeLoopAnchor` | `nodeId`, `routeId`, `direction`, `arcPolicy` | 現行 C1。開始と終了を同じノードとして表す。 |
+| `directedJunctionLoopAnchor` | `mergeNodeId`, `branchNodeId`, `mergeTerminalEdgeId`, `branchInitialEdgeId`, `routeId`, `direction`, `arcPolicy`, `excludedShortConnector` | 放射線 → 環状線 → 放射線。M と B を directed JCT pair として表す。 |
+
+`anchorNodeId`、`entryToAnchorEdgeIds`、`anchorToExitEdgeIds` は legacy C1 variant 専用である。radial variant に M を `anchorNodeId` として詰め込み、B までの経路を偽の post-anchor path へ押し込まない。正本となるのは M/B pair と `resolvedRouteSegments` である。
+
+### route と direction の所属を Graph 上の索引で証明する
+
+現行 Edge には route membership と走行方向がない。edge kind だけで First Exit を求めると、B 付近の C1 出口や別 arm への近道を先に拾う。そこで **graph schema 4 の top-level `routeMemberships[]` に `RouteMembershipIndex` を持たせる**方式に決める。Edge ごとに同じメタデータを複製するより、OSM relation の順序・方向・由来を一つの索引として検索、検証、manifest へ渡せるためである。
+
+索引の各要素は次を保持する。
+
+```text
+membershipId
+routeId
+direction
+sourceRelationId
+sourceSnapshotSha256
+orderedEdgeIds
+orderedEdgeIdsSha256
+```
+
+生成時、OSM relation の ordered member と way のノード順を、生成済み有向 Edge ID へ写像する。route plan の entry、loop、return は `membershipId` で index を参照し、各 resolved segment は参照先 `orderedEdgeIds` の連続部分列でなければならない。境界の terminal/initial Edge も seed の宣言と一致させる。`sourceRelationId`、snapshot hash、resolved exact Edge 列、segment hash は build 時に index と graph へ出力し、実行時検査の正本とする。名前や最接近ノードだけで所属を補わない。
+
+次の異常系テストを必須とする。
+
+- C1 内回りを要求しているのに outer の member Edge を使う。
+- 一ノ橋 JCT で別 arm へ切り替える近道を使う。
+- route relation の member に含まれない way を使う。
+- 同名または近接した別 JCT の Edge を使う。
+- excluded short connector を mandatory lap として選ぶ。
+- relation の順序と逆順にたどる。
+
+### 2号目黒線の課金ペア形状（設計・未実装）
+
+目黒入口から2号上り、一ノ橋 JCT で C1 に入る。entry Edge は `e:w207535708:0:f`、ramp ID は `ramp:2-inbound:meguro-entry` であり、現行 binding は `verified_bound` である。C1 を長弧で1通りした後、2号下りへ戻り、次の一般 Exit 候補を天現寺とする。
+
+| 項目 | C1 inner | C1 outer |
+| --- | --- | --- |
+| 定義 ID | `bp:2-inbound:meguro:c1-inner:tengenji` | `bp:2-inbound:meguro:c1-outer:tengenji` |
+| 目黒入口から M まで | 3,808m、Edge 終端 `e:w4853804:16:f` | 3,887m、Edge 終端 `e:w45248631:3:f` |
+| M → B の長弧 | 13,304m、527 edges | 13,352m、546 edges |
+| M / B | `n:574460576` / `n:574460605` | `n:31297008` / `n:31297000` |
+| 長弧の first / last Edge | `e:w23297444:43:f` / `e:w23297444:19:f` | `e:w24039737:24:f` / `e:w24039737:3:f` |
+| 除外する B → M 短 connector | way `23297444`、23 edges、493m | way `24039737`、20 edges、461m |
+| B 後の2号下り initial Edge | `e:w45248411:0:f` | `e:w4853805:0:f` |
+| 天現寺候補までの距離 | 1,972m | 1,846m |
+| 天現寺 Exit の exact binding | 未解決 | 未解決 |
+| 公開可否 | `unverified`、公開 blocked | `unverified`、公開 blocked |
+| 料金 | `unpriced`、`amountYen=null`、`billingDistanceMeters=null` | 同左 |
+
+この2件は本 PR で wire-level schema と route shape を確定した課金ペア設計である。実装 issue では、schema 適合の diagnostic fixture と C1 非回帰テストを作る。天現寺 exact directed binding が解決し、route/direction、First Exit、全端点がすべて通ったときだけ `Graph.billingPairs` の `radialReturn` として昇格する。解決前の plan を public candidate として出さない。
+
+目黒入口 → 目黒出口の現行 dynamic OD は別分類にする。entry Edge は `e:w207535708:0:f`、exit Edge は `e:w207535709:0:f` で、routing topology 上は到達可能である。しかし物理的には天現寺 Exit が先であり、exact binding がなければ目黒を「1区間先」にできない。したがって `topology_only` とし、「1区間先」「最低料金」、`time_per_yen` の対象から外す。`routingCapability=routable` は道路を追跡できることを示すが、商品 eligibility の証拠ではない。
+
+天現寺・荏原・戸越入口については、現行 support data で entry / exit の exact directed binding が未解決である。候補 way や施設名を nearest node へ割り当てて補わない。天現寺 binding issue は multi-way ramp の全 way 候補、ground ↔ mainline の接続、ramp ID の逆引き、topology classification を同じ evidence model で扱う。
+
+### C1 8ペアは legacy adapter で変更しない
+
+8件はいずれも `pairKind` を持たない現行 v1 形式として読む。schema 2 の seed でも配列要素の意味と値は変えず、生成 graph の schema 4 で `pairKind=legacyRing` として明示する。`sameNodeLoopAnchor`、entry/exit、First Exit の判定、300円→300円の legacy price records、verified 2件・unverified 6件を保つ。
+
+| ID | 意味 | 基準点 | 状態と First Exit 結果 |
+| --- | --- | ---: | --- |
+| `bp:c1-outer:kandabashi-takaracho` | 神田橋入口 → C1 outer → 宝町出口 | `499831338` | `verified`。宝町 Exit `e:w297864314:11:f` まで2,027mで唯一の First Exit。 |
+| `bp:c1-outer:kasumigaseki-daikancho` | 霞が関入口 → C1 outer → 代官町出口 | `577255571` | `verified`。endpoint exact audit と outer First Exit contract を維持。 |
+| `bp:c1-outer:ginza-shibakoen` | 銀座入口 → C1 outer → 芝公園出口 | `31254160` | `unverified`。同距離の2 Exit と endpoint exact reverse-map が未確定。 |
+| `bp:c1-outer:shibakoen-iikura` | 芝公園入口 → C1 outer → 飯倉出口 | `31296971` | `unverified`。endpoint exact reverse-map が未確定。 |
+| `bp:c1-inner:kasumigaseki-shibakoen` | 霞が関入口 → C1 inner → 芝公園出口 | `264877748` | `unverified`。way `203832854`（高樹町 Exit）が seed の芝公園 Exit より先。 |
+| `bp:c1-inner:daikancho-kasumigaseki` | 代官町入口 → C1 inner → 霞が関出口 | `297945194` | `unverified`。endpoint exact reverse-map が未確定。 |
+| `bp:c1-inner:shibakoen-shiodome` | 芝公園入口 → C1 inner → 汐留出口 | `31295430` | `unverified`。endpoint exact reverse-map が未確定。 |
+| `bp:c1-inner:takaracho-kandabashi` | 宝町入口 → C1 inner → 神田橋出口 | `1891818143` | `unverified`。way `199311811` が seed の神田橋 Exit より先。 |
+
+既知の First Exit mismatch はこの設計で解消しない。legacy adapter の contract test として、2件の verified 結果と6件の unverified 結果を固定する。2号を同じ generated graph へ追加する際も、この表を変更にしない。
+
+### 所要時間・経路表示は正規の route leg で表す
+
+時間計算の式は変えない。首都高時間は、完成した順序付き Edge 列の各出現について `durationSeconds` を合計した値である。2号往路、C1 mandatory lap、2号復路をそれぞれ1回ずつ数える。dedup した Edge 集合から所要時間を組み立てない。
+
+Candidate v2 は、高速道路の区間と一般道の概算区間を別配列にする。
+
+- `edgeRouteLegs`: `edgeIds` の index を持ち、次の4 roleだけを使う。`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`。
+- `estimatedLegs`: `surface_access` と `surface_return` を持ち、`estimated=true`、Edge index と Edge 几何を持たない。
+
+`startEdgeIndex` は包含、`endEdgeIndexExclusive` は除外とする。`edgeRouteLegs` を Candidate 順に並べると、`[0, edgeIds.length)` を重複も欠落もなく覆うことを契約テストにする。同じ Edge ID が複数 index に現れるのは許すが、index 範囲が重なるのは許さない。`post_lap_transfer` という別 role は採用せず、seed、generated graph、Candidate、UI で `return_corridor` だけを使う。
+
+`geometry` は首都高の Edge に対応する線分を連結したもので、Web が推定する一般道区間は含めない。地図と詳細画面には `entry_approach → mandatory_lap → return_corridor → exit_approach` を番号とテキストで示す。色だけで経路の順序を示さない。画面上の surface access / return は Edge 付き経路に含めず、推定時間として別に表示する。
+
+### Google Maps URL は道路・方向を保証しない
+
+Google Maps の URL は origin、destination、waypoint を渡せるが、近接 JCT の arm や C1 の道路・向きを強制できない。Waypoint の順序だけを示しても、Google が M/B へ正しく snap し、長弧を維持することは保証されない。この制約を正式に採用し、放射線候補の公開 handoff は既定で無効とする。
+
+将来の実装候補は、leg 単位の split handoff である。
+
+1. surface access: origin → 目黒入口
+2. loop transfer: 目黒入口 → M → C1 長弧の距離中点 → B
+3. surface return: B → 天現寺 Exit → origin
+
+各 URL は waypoint 3点以下、完成長2,048文字以下とし、Google の自動 nav は開始しない。leg ごとの確認と手動継続は利用者に委ねる。ただし、この分割化だけでは道路・向きを保証できない。実装 issue 10 で URL 生成、unit test、E2E を実装し、issue 11 で Android / iOS、Web / app の実機 matrix と release gate を別に作る。
+
+device verification manifest には `routePlanId`、`releaseId`、URL builder version、leg URL hash、期待する道路・向き、OS / browser / app version、検証日時、結果、期限を記録する。必要条件の1件でも missing、failed、expired の場合、放射線候補の public departure を必ず無効にする。C1 legacy の単一 URL と warning は現行互換として残せるが、同じ保証を radial へ転用しない。
+
+### Issue #41 までは1区間の商品状態と金額を分離する
+
+新 routing contract では `eligibilityStatus`、`amountYen`、`billingDistanceMeters`、`tariffStatus` を正本にする。`chargedSectionCount=1` と `ONE_SECTION_TOLL` は、旧 C1 output だけを受け持つ legacy adapter に限定する。radial output には `chargedSectionCount` を出さず、`ONE_SECTION_TOLL` も生成しない。「1区間先関係」と「料金制度上の1区間」を同一表示にしない。
+
+Issue #41 で公式 billing distance と版管理済み料金規則を確定するまでは、次の規律を適用する。
+
+- 2号 radial の `amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`。
+- 約21km の OSM driven distance を billing distance へ代入しない。
+- 「1区間の最低料金」「1区間料金」と表示しない。
+- `time_per_yen` を計算しない。unpriced 候補を含む cohort は `shutoko_time` で比較する。
+- 動的 OD は `topology_only` とし、商品 ranking cohort に入れない。
+
+#41 後も金額は entry → exit の公式 billing distance で決める。C1 8件は既存の300円→300円を当面保持しつつ、#41 で全件を再計算し、金額 source と tariff rule version を明示する。2号が下限料金より高くなる場合も、OSM 経路長に代えて公式距離で計算する。
+
+### 実装 issue は単独で検証できる順に分ける
+
+graph schema 4 を builder だけが先に出力する段階は作らない。現行 engine は unknown field を拒否するため、新 schema の reader と release wiring が整うまで、公開 builder の既定出力は現行 schema のまま維持する。
+
+| Issue | 実装範囲 | 主な受け入れ条件 | 依存 |
+| ---: | --- | --- | --- |
+| 1 | seed schema v2 と diagnostic pair 型 | 既存 C1 8要素を無改変で読む。`pairKind` なしは legacy、新 radial は明示 `pairKind=radialReturn` と version 必須。未知 kind/version を拒否。wire-level JSON fixture を追加し、C1 8件の ID・意味・価格・状態・anchor が一致。 | なし |
+| 2 | `RouteMembershipIndex` と OSM relation provenance | route/direction の順序付き Edge 索引と hash を生成。逆方向・同名 JCT・非所属 way・別 arm 近道・short connector の異常系テストが通る。 | 1 |
+| 3 | directed mandatory lap と return-corridor First Exit | synthetic radial fixture で M→B 長弧、return corridor、first general Exit を分解。C1 legacy の完全一致を維持。segment 内反復は禁止し、route plan が宣言する segment 間反復は許可する。 | 1, 2 |
+| 4 | graph schema 4 reader と consumer 契約 | core、WASM 型、Web Worker が schema 2/3/4 を読み、legacy / radial の union を判別。未知 kind/version、部分 data、route leg の重複・欠落を拒否。公開 release はまだ変更しない。 | 1, 3 |
+| 5 | graph schema 4 の atomic release activation | builder の既定 output 切替、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しい versioned release ID、manifest hash を同時に整合。旧 release は rollback 用に残す。 | 2, 3, 4 |
+| 6 | 天現寺 exact directed binding | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じ support evidence として設計・実装。解決できなければ根拠付き unsupported のままにする。 | なし |
+| 7 | 2号 inner / outer radial pair 統合 | schema 適合 fixture と C1 non-regression が通る。exact binding 未完なら diagnostic plan のみ。完了時だけ Graph radial pair と public eligibility へ昇格し、#41 まで tariff は未算出。 | 3, 5, 6 |
+| 8 | Candidate route legs と product / tariff 状態 | synthetic radial fixture で4 highway legs が Edge 列を重複なく被覆し、surface legs は推定値。eligibility / tariff / topology_only を分離し、radial に `chargedSectionCount` や `ONE_SECTION_TOLL` を出さない。 | 4 |
+| 9 | Web の順序表示 | entry / lap / return / exit を番号・線種・テキストで提示し、surface 概算と highway 経路を混同しない。unpriced と topology_only に「1区間料金」を表示しない。C1 UI regression を維持。 | 5, 8 |
+| 10 | split Maps URL 生成 | 3 waypoint / 2,048文字制限、leg ごとの手動継続、URL builder unit / E2E を実装。道路・向きを強制できないため、実機 gate 通過まで public handoff は disabled。 | 8 |
+| 11 | Maps 実機検証と release gate | Android / iOS × Web / app の必要 matrix を manifest に記録。失敗・期限切れで radial public departure を無効にし、C1 への副作用がないことを確認。device 未接続でも code issue 10 は完了可能。 | 10 |
+| 12 | Issue #41 後の tariff 統合 | 公式 billing distance、車種、税率、単価、最低・上限、丸め、effective interval を版管理し、C1 8件と2号代表 pair を再検証。OSM distance fallback と radial の `time_per_yen` 無効状態を維持しない。 | #41, 7, 8 |
+
+Issue #42 の設計完了は、この節と seed / graph の wire-level schema により2号課金ペア形状を確定することとする。実装済み verified public pair を Issue #42 の design 完了条件には含めない。天現寺 binding、schema 実装、device gate はそれぞれ実装上の公開を止める条件として残す。
 
 ## 時間条件
 

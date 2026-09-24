@@ -781,7 +781,7 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
   const isRadial = candidate.pairKind === "radialReturn";
   const isTopologyOnly = candidate.pairKind === "topologyOnly";
   const productEligible = isProductEligible(candidate);
-  const mapsUrl = isRadial ? "" : candidate.handoff.mapsUrl;
+  const mapsUrl = isRadial || isTopologyOnly ? "" : candidate.handoff.mapsUrl;
   const chargedSection = isTopologyOnly
     ? "道路形状のみ（商品対象外）"
     : isRadial && !productEligible

@@ -1654,6 +1654,7 @@ test("(45) 目黒座標のTopologyOnly候補は区間順序と商品対象外を
   await expect(card.locator(".distance--shutoko")).toContainText("首都高距離:");
   await expect(card).not.toContainText("1区間");
   await expect(card).not.toContainText("最低料金");
+  await expect(card.locator(".depart")).toHaveCount(0);
 });
 
 test("(46) pricedでも商品cohort外のradialは効率と最安順位を表示しない", async ({ page }) => {

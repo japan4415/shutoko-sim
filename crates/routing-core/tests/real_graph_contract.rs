@@ -1593,6 +1593,98 @@ fn tokyo_wide_narrow_window_reports_nearest_tier_time_window() {
     assert!(hachioji.expanded_states < wide.max_expanded_states);
 }
 
+#[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn meguro_station_all_real_v3_end_to_end_contract() {
+    let graph = real_graph();
+    assert_eq!(graph.billing_pairs.len(), 8);
+    assert!(graph
+        .billing_pairs
+        .iter()
+        .all(|pair| pair.id.starts_with("bp:c1-")));
+
+    let request = SearchRequest {
+        request_id: "req-meguro-all-real-v3-contract".into(),
+        release_id: "all-real-v3".into(),
+        origin_node_id: None,
+        origin: Some(LatLng {
+            lat: 35.635681,
+            lon: 139.718489,
+        }),
+        entry_ramp_id: None,
+        exit_ramp_id: None,
+        min_minutes: 15,
+        max_minutes: 60,
+        vehicle_profile: "passenger-car-etc".into(),
+        pricing_at: "2026-09-10T00:00:00Z".into(),
+    };
+    let result = search(&graph, &request, &SearchLimits::default())
+        .expect("Meguro station search must succeed on all-real-v3");
+
+    assert_eq!(result.status, "ok");
+    assert_eq!(result.ranking_mode, "shutoko_time");
+    assert_eq!(
+        result
+            .nearest_access
+            .as_ref()
+            .map(|access| access.node_id.as_str()),
+        Some("n:2177935837")
+    );
+    assert!(!result.candidates.is_empty());
+    for candidate in &result.candidates {
+        assert!(candidate.as_radial().is_none());
+        let candidate = topology_only(candidate);
+        assert_eq!(
+            candidate.entry.ramp_id.as_deref(),
+            Some("ramp:2-inbound:meguro-entry")
+        );
+        assert_eq!(
+            candidate.exit.ramp_id.as_deref(),
+            Some("ramp:2-outbound:meguro-exit")
+        );
+        assert_eq!(
+            candidate.eligibility_status,
+            shutoko_routing_core::PairEligibilityStatus::TopologyOnly
+        );
+        assert_eq!(
+            candidate.loop_validation_status,
+            shutoko_routing_core::LoopValidationStatus::TopologyOnly
+        );
+        assert_eq!(candidate.reasons, vec!["TOPOLOGY_ONLY"]);
+        let wire = serde_json::to_value(candidate).unwrap();
+        assert!(wire["toll"].get("chargedSectionCount").is_none());
+        assert!(wire["reasons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|reason| reason != "ONE_SECTION_TOLL"));
+    }
+
+    let generated_graph: Value = serde_json::from_str(real_graph_str()).unwrap();
+    assert_eq!(generated_graph["billingPairs"].as_array().unwrap().len(), 8);
+    assert!(generated_graph["billingPairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|pair| pair["pairKind"] == "legacyRing"));
+    let manifest: Value =
+        serde_json::from_str(include_str!("../../../fixtures/generated/manifest.json")).unwrap();
+    let diagnostic_only = manifest["unverifiedSections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|section| section.starts_with("diagnostic-only:"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        diagnostic_only,
+        vec![
+            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved",
+            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved",
+        ]
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Issue #57 acceptance: Meguro coordinates must select the nearest entry.
 //

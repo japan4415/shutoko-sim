@@ -611,6 +611,7 @@ describe("toCardModel", () => {
     expect(model.chargedSection).toBe("道路形状のみ（商品対象外）");
     expect(model.chargedSection).not.toContain("1区間");
     expect(model.toll).toBe("参考料金: 500 円");
+    expect(model.mapsUrl).toBe("");
     expect(model.timePerYen).toBeNull();
     expect(model.routeLegs).toEqual([]);
     expect(model.routeOverview.map((step) => [step.number, step.label, step.lineStyle])).toEqual([

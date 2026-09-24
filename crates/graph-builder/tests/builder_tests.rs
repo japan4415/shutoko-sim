@@ -1,4 +1,4 @@
-use serde_json::json;
+use serde_json::{json, Value};
 use shutoko_graph_builder::{
     bound_ramp_evidence_from_inventory, build_route_membership_indices, build_topology,
     build_topology_with_report, generate_route_plan_lap_v1, haversine_distance_meters,
@@ -3468,13 +3468,18 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     let parsed_seed = parse_billing_pairs_seed(seed_str)
         .expect("data/billing-pairs-seed.json must use the supported seed parser");
     let seed_file = match parsed_seed {
-        ParsedBillingPairsSeed::Schema1(seed) => seed,
-        ParsedBillingPairsSeed::Schema2(_) => panic!("C1 seed must use schema 1"),
+        ParsedBillingPairsSeed::Schema2(seed) => seed,
+        ParsedBillingPairsSeed::Schema1(_) => panic!("seed must use schema 2"),
     };
+    let legacy_pairs: Vec<_> = seed_file
+        .billing_pairs
+        .iter()
+        .filter_map(shutoko_graph_builder::BillingPairSeedEntry::as_legacy_ring)
+        .collect();
     assert_eq!(
-        seed_file.billing_pairs.len(),
+        legacy_pairs.len(),
         8,
-        "seed must have exactly 8 billing pairs"
+        "seed must retain exactly 8 legacy billing pairs"
     );
 
     let verified_pair_ids = [
@@ -3491,8 +3496,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     ];
 
     for expected_id in &verified_pair_ids {
-        let seed_pair = seed_file
-            .billing_pairs
+        let seed_pair = legacy_pairs
             .iter()
             .find(|p| p.id == *expected_id)
             .unwrap_or_else(|| panic!("seed pair {} not found in seed file", expected_id));
@@ -3516,8 +3520,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
         assert_eq!(seed_pair.prices[1].effective_to, None);
     }
     for unverified_id in &unverified_pair_ids {
-        let seed_pair = seed_file
-            .billing_pairs
+        let seed_pair = legacy_pairs
             .iter()
             .find(|p| p.id == *unverified_id)
             .unwrap_or_else(|| panic!("seed pair {} not found in seed file", unverified_id));
@@ -3578,9 +3581,14 @@ fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
     let parsed_seed = parse_billing_pairs_seed(seed_str)
         .expect("data/billing-pairs-seed.json must use the supported seed parser");
     let seed_file = match parsed_seed {
-        ParsedBillingPairsSeed::Schema1(seed) => seed,
-        ParsedBillingPairsSeed::Schema2(_) => panic!("C1 seed must use schema 1"),
+        ParsedBillingPairsSeed::Schema2(seed) => seed,
+        ParsedBillingPairsSeed::Schema1(_) => panic!("seed must use schema 2"),
     };
+    let legacy_pairs: Vec<_> = seed_file
+        .billing_pairs
+        .iter()
+        .filter_map(shutoko_graph_builder::BillingPairSeedEntry::as_legacy_ring)
+        .collect();
 
     // 1. All nodes must have finite, valid coordinates in Tokyo bounds
     assert!(!graph.nodes.is_empty(), "nodes must not be empty");
@@ -3613,8 +3621,8 @@ fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
     }
 
     // 3. Billing pair entryName and exitName propagation from seed
-    assert_eq!(seed_file.billing_pairs.len(), 8);
-    for seed_pair in &seed_file.billing_pairs {
+    assert_eq!(legacy_pairs.len(), 8);
+    for seed_pair in &legacy_pairs {
         let graph_pair = graph
             .billing_pairs
             .iter()
@@ -4241,6 +4249,20 @@ fn test_cli_with_full_fixtures() {
     assert_eq!(manifest_json["graphSchemaVersion"], 4);
     assert_eq!(manifest_json["routePlanVersion"], 1);
     assert_eq!(manifest_json["billingPairsVersion"], "v2");
+    let diagnostic_only = manifest_json["unverifiedSections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|section| section.starts_with("diagnostic-only:"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        diagnostic_only,
+        vec![
+            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved",
+            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved",
+        ]
+    );
     let route_memberships: Vec<RouteMembershipIndex> =
         serde_json::from_value(graph_json["routeMemberships"].clone()).unwrap();
     assert_eq!(
@@ -4341,10 +4363,8 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
         },
     )
     .unwrap();
-    let seed = parse_billing_pairs_seed(include_str!(
-        "../../../fixtures/seed-v2/diagnostic-radial-v2.json"
-    ))
-    .unwrap();
+    let seed =
+        parse_billing_pairs_seed(include_str!("../../../data/billing-pairs-seed.json")).unwrap();
     let generated_plans =
         shutoko_graph_builder::generate_diagnostic_radial_route_plans(&graph, &memberships, &seed);
     assert_eq!(generated_plans.len(), 2);
@@ -4358,7 +4378,27 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
         .is_none()));
     let radial_pairs = seed.radial_pairs();
     assert_eq!(radial_pairs.len(), 2);
+    assert_eq!(
+        radial_pairs
+            .iter()
+            .map(|pair| pair.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "bp:2-inbound:meguro:c1-inner:tengenji",
+            "bp:2-inbound:meguro:c1-outer:tengenji"
+        ]
+    );
     for pair in radial_pairs {
+        assert_eq!(
+            pair.pair_eligibility.status,
+            shutoko_graph_builder::PairEligibilityStatus::Unverified
+        );
+        assert_eq!(
+            pair.tariff.status,
+            shutoko_graph_builder::TariffStatus::Unpriced
+        );
+        assert!(pair.tariff.amount_yen.is_none());
+        assert!(pair.tariff.billing_distance_meters.is_none());
         let lap =
             generate_route_plan_lap_v1(&graph, &memberships, &pair.route_plan.anchor).unwrap();
         assert_eq!(lap.merge_node_id, pair.route_plan.anchor.merge_node_id);
@@ -4393,7 +4433,7 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
         assert!(resolution.first_exit.exit.is_none());
         assert_eq!(
             resolution.first_exit.exact_directed_binding,
-            shutoko_graph_builder::EndpointSupportState::Unsupported
+            shutoko_graph_builder::EndpointSupportState::Unresolved
         );
         assert!(resolution.first_exit.blocked_ramp_id.is_none());
     }
@@ -4450,6 +4490,24 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
 
     let graph_raw = std::fs::read_to_string(out_dir.join("graph.json")).unwrap();
     let graph_json: serde_json::Value = serde_json::from_str(&graph_raw).unwrap();
+    let manifest_json: Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("manifest.json")).unwrap())
+            .unwrap();
+    let diagnostic_only = manifest_json["unverifiedSections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|section| section.starts_with("diagnostic-only:"))
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        diagnostic_only,
+        vec![
+            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved".to_owned(),
+            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved".to_owned(),
+        ]
+    );
     assert_eq!(graph_json["schemaVersion"], 4);
     assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 8);
     for pair in graph_json["billingPairs"].as_array().unwrap() {

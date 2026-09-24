@@ -149,9 +149,9 @@
 
 ### 3.1 `schemaVersion: 2` の混在 seed（parser実装済み）
 
-Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在させる。既存の `schemaVersion: 1` は現行どおりに読み込める。同一ファイルを schema 2 へ更新する時も、既存 C1 8要素の項目、値、意味は変更しない。`pairKind` を持たない要素は legacy ring pair と解釈する。
+Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在させる。`data/billing-pairs-seed.json` は Issue #68 で `schemaVersion: 2` へ更新され、既存 C1 8要素の項目、値、意味は変更せず2件の diagnostic radial pair を追加した。`pairKind` を持たない要素は legacy ring pair と解釈する。
 
-Issue #62 で parser は `schemaVersion` を明示的に 1 / 2 へ dispatch し、全 nested struct の `deny_unknown_fields` を実装した。schema 2 では `pairKind` がない要素を legacy ring、`pairKind: "radialReturn"` と `routePlanVersion: 1` を持つ要素を diagnostic radial pair として読む。Issue #65 で graph schema 4 reader は両 variant と binding / membership / resolved segment を読むが、diagnostic radial pair は exact binding 完了まで `Graph.billingPairs` へ昇格させない。以下の fail-closed 規則は Issue #62 の fixture と unit test で検証済み。
+Issue #62 で parser は `schemaVersion` を明示的に 1 / 2 へ dispatch し、全 nested struct の `deny_unknown_fields` を実装した。schema 2 では `pairKind` がない要素を legacy ring、`pairKind: "radialReturn"` と `routePlanVersion: 1` を持つ要素を diagnostic radial pair として読む。Issue #68 で実 seed の2件も graph-builder の diagnostic route-plan resolver に渡し、route/membership、mandatory lap、return corridor の検証を行う。Issue #65 で graph schema 4 reader は両 variant と binding / membership / resolved segment を読むが、exact binding 完了まで diagnostic radial pair を `Graph.billingPairs` へ昇格させない。以下の fail-closed 規則は fixture と unit test で検証済み。
 
 混在の規則は次のとおりである。
 
@@ -653,9 +653,9 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 
 ### 3.4 2号計画の診断用データと公開 BillingPair を分ける
 
-本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、parser test と snapshot で同じ wire shape を確認している。Issue #64 では同じ fixture を graph-builder の diagnostic route-plan resolver に渡し、inner / outer の M→B 長弧と return corridor の状態を検証する。Issue #65 では synthetic graph / wire fragment を reader と WASM/Web consumer へ通し、完全な exact binding のみ graph schema 4 の radial pair として受理する。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
+本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、Issue #68 で同じ2件を実 `data/billing-pairs-seed.json` にも追加した。parser test、snapshot、実 seed の graph-builder contract test で同じ wire shape を確認する。graph-builder は両 route plan の M→B 長弧と return corridor を検証し、天現寺 exact directed binding が未解決の間は plan を `Graph.billingPairs` へ入れて公開候補にせず、manifest の `diagnostic-only` 記録だけを残す。
 
-binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。今回は5 wayの連続性を確認したが、2号下りの`n:252175582`から`n:1832672205`へ至る間に、一般道・明治通りへ接続する`n:1832672162`も存在する。公式2号下りの出口番号順は201天現寺、203目黒、205戸越、207荏原で施設名とは矛盾しないが、地上端点の選択までは一意にしない。よって`data/osm-ramp-bindings.json`には`status=unresolved`、`publicProjection=excluded_unresolved`のcandidateとして保持し、現行schema 2の`Graph.ramps`と`ramps.json`へ投影しない。地上端点を他根拠で一意に確定し、#63で`boundRamp`と`bindingEvidenceId`に変換した後、#68でroute membership、First Exit、全segmentの完全分割を再検証してgraph schema 4の`radialReturn`として昇格する。昇格後もIssue #41までは`amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`を維持する。
+binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。今回は5 wayの連続性を確認したが、2号下りの`n:252175582`から`n:1832672205`へ至る間に、一般道・明治通りへ接続する`n:1832672162`も存在する。公式2号下りの出口番号順は201天現寺、203目黒、205戸越、207荏原で施設名とは矛盾しないが、地上端点の選択までは一意にしない。よって`data/osm-ramp-bindings.json`には`status=unresolved`、`publicProjection=excluded_unresolved`のcandidateとして保持し、現行schema 2の`Graph.ramps`と`ramps.json`へ投影しない。Issue #68 の実 seed も同じ5 way候補と unresolved 状態を保持し、route plan の検証結果だけを diagnostic として記録する。地上端点を他根拠で一意に確定し、#63で`boundRamp`と`bindingEvidenceId`に変換した後、graph schema 4の`radialReturn`として昇格する。昇格後もIssue #41までは`amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`を維持する。
 
 ## 4. 成果物の決定論的再生成手順
 
@@ -696,10 +696,10 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
-| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,637、Entry 168、Exit 182）、billing pairs 8件、route memberships 46件、bound ramps 232件 | 7,282,325 bytes |
+| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,637、Entry 168、Exit 182）、legacy billing pairs 8件、route memberships 46件、bound ramps 232件 | 7,282,910 bytes |
 | `ramps.json` | 1 | 正規台帳399件、うちbound 232件 | 277,569 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
-| `manifest.json` | 1 | release、schema/route-plan/hash、artifact hash、byte length、unverified sections、provenance | 41,726 bytes |
+| `manifest.json` | 1 | release、schema/route-plan/hash、artifact hash、byte length、unverified sections、provenance | 41,916 bytes |
 
 `graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は `graph.json`、`ramps.json`、`snap-index.json` のpath・SHA-256・byte lengthを固定し、manifest自身のサイズとschemaは別情報として扱う。`all-real-v3` の `routeMembershipsSha256` は `239a847d575722493a342d03a682b5700a032eeb7ad0ea8feddfbb838344983b` であり、同一入力の2回の生成で一致する。
 
@@ -720,7 +720,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって`manifest.json`の`unverifiedSections[]`へ自動列挙する。
 - **自動列挙対象**: graph内のEntry / Exit Edgeのうち、verified billing pairのentry / exitへ採用されていないEdge。wayに`name`があれば「Edge ID（way name）」で記録する。
 - **通行規制のskip注記**: 現行`all-real-v3`はconditional 2件、via欠落2件、graph外要素16件を数える。`all` inputのため「C1以外の路線を除外した」という注記は出さない。
-- **現状**: `all-real-v3`は監査用課金ペア8件を保持し、端点と公式施設名を照合できた2件だけを`verified`とする。残る6件は`unverified`としてpair検索から除外する。active一般ランプ371件のうち232件をexact directed segmentへbindし、139件は根拠付き`unsupported`としてgraph外へ隔離する。
+- **現状**: `all-real-v3`は監査用legacy課金ペア8件を保持し、端点と公式施設名を照合できた2件だけを`verified`とする。残る6件は`unverified`としてpair検索から除外する。2号 radial pair 2件は seed には保持するが、天現寺 binding が `unresolved` のため graph の `billingPairs` には入らず、manifest の `diagnostic-only` 記録だけになる。active一般ランプ371件のうち232件をexact directed segmentへbindし、139件は根拠付き`unsupported`としてgraph外へ隔離する。
 
 ## 6. 全24路線・正規ランプ台帳（Canonical Ramp Inventory）
 

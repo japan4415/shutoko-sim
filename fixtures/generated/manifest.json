@@ -271,6 +271,8 @@
   "attribution": "© OpenStreetMap contributors",
   "odblLicenseUrl": "https://www.openstreetmap.org/copyright",
   "unverifiedSections": [
+    "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved",
+    "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved",
     "entry:e:w1006338881:0:f (外苑入口)",
     "entry:e:w1021042293:0:f (花之木入口)",
     "entry:e:w1022519232:0:f",

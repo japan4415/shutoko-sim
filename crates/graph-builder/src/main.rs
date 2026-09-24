@@ -6,13 +6,14 @@
 use shutoko_graph_builder::{
     apply_od_tariffs_to_graph, bind_ramps_to_graph, bound_ramp_evidence_from_inventory,
     build_manifest, build_route_membership_indices, build_topology_with_report,
-    generate_and_validate_parsed_billing_pairs, graph_schema_v4_to_deterministic_json,
-    manifest_to_deterministic_json, parse_billing_pairs_seed, ramps_artifact_to_deterministic_json,
-    route_memberships_sha256, snap_index_to_deterministic_json, to_deterministic_json,
-    validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
-    validate_ramp_inventory, BillingPairProvenance, EdgeKind, ManifestConfig, OdTariffsFile,
-    OsmRampBindingsFile, OverpassResponse, RampInventoryFile, RampKind, RampsArtifact,
-    RouteMembershipBuildOptions, TopologyConfig, VerificationStatus,
+    generate_and_validate_parsed_billing_pairs, generate_diagnostic_radial_route_plans,
+    graph_schema_v4_to_deterministic_json, manifest_to_deterministic_json,
+    parse_billing_pairs_seed, ramps_artifact_to_deterministic_json, route_memberships_sha256,
+    snap_index_to_deterministic_json, to_deterministic_json, validate_od_tariffs,
+    validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm, validate_ramp_inventory,
+    BillingPairProvenance, EdgeKind, EndpointSupportState, ManifestConfig, OdTariffsFile,
+    OsmRampBindingsFile, OverpassResponse, ParsedBillingPairsSeed, RampInventoryFile, RampKind,
+    RampsArtifact, RouteMembershipBuildOptions, TopologyConfig, VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -61,6 +62,14 @@ fn default_route_membership_relation_ids(response: &OverpassResponse) -> Option<
         Some(ROUTE_MEMBERSHIP_RELATION_IDS.to_vec())
     } else {
         None
+    }
+}
+
+fn endpoint_support_state_wire_value(state: EndpointSupportState) -> &'static str {
+    match state {
+        EndpointSupportState::VerifiedBound => "verified_bound",
+        EndpointSupportState::Unresolved => "unresolved",
+        EndpointSupportState::Unsupported => "unsupported",
     }
 }
 
@@ -291,6 +300,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // 3. Process declarative billing pair seeds if provided
     let mut unverified_from_seeds = Vec::new();
     let mut billing_provenances = Vec::new();
+    let mut parsed_seed_file: Option<ParsedBillingPairsSeed> = None;
 
     if let Some(seed_file_path) = &args.seed_path {
         let seed_raw = fs::read_to_string(seed_file_path).map_err(|e| {
@@ -307,6 +317,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 e
             )
         })?;
+        parsed_seed_file = Some(seed_file.clone());
 
         let report = generate_and_validate_parsed_billing_pairs(&graph, &seed_file);
 
@@ -317,7 +328,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
             for rej in &report.rejected_pairs {
                 eprintln!("  - {}: {}", rej.seed_id, rej.reason);
-                unverified_from_seeds.push(format!("rejected:{}:{}", rej.seed_id, rej.reason));
+                if !rej
+                    .reason
+                    .starts_with("diagnostic radialReturn pair is not publishable")
+                {
+                    unverified_from_seeds.push(format!("rejected:{}:{}", rej.seed_id, rej.reason));
+                }
             }
         }
 
@@ -531,6 +547,41 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Vec::new()
     };
+    if args.graph_schema == 4 {
+        if let Some(seed_file) = &parsed_seed_file {
+            for plan in
+                generate_diagnostic_radial_route_plans(&graph, &route_memberships, seed_file)
+            {
+                if let Some(error) = plan.error {
+                    return Err(format!(
+                        "diagnostic radial route plan {} failed: {}",
+                        plan.seed_id, error
+                    )
+                    .into());
+                }
+                let Some(resolution) = plan.resolution.as_ref() else {
+                    return Err(format!(
+                        "diagnostic radial route plan {} produced no resolution",
+                        plan.seed_id
+                    )
+                    .into());
+                };
+                let support_state =
+                    endpoint_support_state_wire_value(resolution.first_exit.exact_directed_binding);
+                if resolution.first_exit.exit.is_some() {
+                    return Err(format!(
+                        "diagnostic radial route plan {} resolved to a publishable exit without public promotion",
+                        plan.seed_id
+                    )
+                    .into());
+                }
+                unverified_from_seeds.push(format!(
+                    "diagnostic-only:{}:exact_directed_binding_{}",
+                    plan.seed_id, support_state
+                ));
+            }
+        }
+    }
     let route_memberships_digest = if args.graph_schema == 4 {
         Some(
             route_memberships_sha256(&route_memberships)

@@ -28,7 +28,7 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 
 `anchorNodeId` は入口の合流後から直接区間へ進む本線上の基準状態（ノード）。ここへ一周後に戻り、出口へ進む道路列を定義できるペアを登録する。料金規則の前提は原案に従い、個別ペアの登録ではその適用条件とデータ根拠を確認する。
 
-本節は legacy seed schema 1 と、明示指定時の generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の schema 4 に `RouteMembershipIndex` を追加し、Issue #64 で `routePlanLapV1` と return-corridor First Exit の builder 側解決を追加した。Issue #65 で schema 2 / 3 / 4 reader、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の検証と、WASM/Web consumer 型を実装した。Issue #66 で builder の既定 output、manifest、Web pipeline、Workers allowlist、versioned release ID を `all-real-v3` に接続した。diagnostic plan から公開 radial BillingPair への昇移は #67/#68 の範囲で、既存 C1 8要素の raw seed は変更しない。
+本節は legacy seed schema 1 と、明示指定時の generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の schema 4 に `RouteMembershipIndex` を追加し、Issue #64 で `routePlanLapV1` と return-corridor First Exit の builder 側解決を追加した。Issue #65 で schema 2 / 3 / 4 reader、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の検証と、WASM/Web consumer 型を実装した。Issue #66 で builder の既定 output、manifest、Web pipeline、Workers allowlist、versioned release ID を `all-real-v3` に接続した。Issue #68 で実 seed に2件の diagnostic radial pair を追加し、graph-builder が route plan を検証する diagnostic-only 経路を接続した。天現寺 binding が unresolved の間、既存 C1 8要素の raw seed と公開 graph の legacy pair は変更しない。
 
 ## Workers の HTTP 境界
 
@@ -181,7 +181,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 - `HANDOFF_WAYPOINTS_UNVERIFIED`: Google Maps 引き継ぎ経由地選定ルールが暫定であり実機検証未了であることを示す（#8 完了まで常時付与）。2026-09 に Android Chrome + Google マップアプリ「あり」で代表1系列の周回維持を確認したが、アプリ「なし」・iOS Safari・経由地点0〜3点の系列網羅・URL 長上限は未検証のため引き続き付与する（[検証記録](delivery.md) 参照）
 - `STATIC_TRAVEL_TIME`: 渋滞・規制を含まない静的制限速度に基づく推定時間であることを示す
 
-### Issue #42 後の Candidate v2（reader / consumer 契約実装済み・radial 探索統合は未実装）
+### Issue #42 後の Candidate v2（reader / consumer 契約実装済み・公開radial探索はbinding unresolved）
 
 graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy outputと区別する。
 

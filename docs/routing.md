@@ -107,7 +107,7 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 - excluded short connectorをmandatory lapとして選ぶ。
 - relationの並び替えや逆順を、端点連続性を確認しない無検証な断片として受理しない。
 
-### 2号目黒線の課金ペア形状（graph-builder の診断 route plan 実装済み・radial 公開統合は未実装）
+### 2号目黒線の課金ペア形状（seed統合・診断 route plan 実装済み・公開昇格はbinding unresolved）
 
 目黒入口から2号上り、一ノ橋 JCT で C1 に入る。entry Edge は `e:w207535708:0:f`、ramp ID は `ramp:2-inbound:meguro-entry` であり、現行 binding は `verified_bound` である。C1 を長弧で1通りした後、2号下りへ戻り、次の一般 Exit 候補を天現寺とする。
 
@@ -125,7 +125,7 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 | 公開可否 | `unverified`、公開 blocked | `unverified`、公開 blocked |
 | 料金 | `unpriced`、`amountYen=null`、`billingDistanceMeters=null` | 同左 |
 
-この2件は、wire-level schemaとroute shapeを確定した課金ペア設計である。Issue #62でschema適合のinner / outer diagnostic fixture、parser test、snapshot、C1非回帰テストを追加した。Issue #67では5 wayの順序、17 Edge、18 nodeとhash、2号下りrelation、公式施設順を監査したが、`n:1832672162`と`n:1832672205`が一般道へ接続するためground endpointが未確定である。したがって、現行pair eligibilityは変更せず、#63でboundRampを生成する前に追加根拠が必要である。ground endpoint、route/direction、First Exit、全端点がすべて通ったときだけ、`Graph.billingPairs`の`radialReturn`として昇格する。解決前のplanをpublic candidateとして出さない。
+この2件は、wire-level schemaとroute shapeを確定した課金ペア設計である。Issue #62でschema適合のinner / outer diagnostic fixture、parser test、snapshot、C1非回帰テストを追加した。Issue #67では5 wayの順序、17 Edge、18 nodeとhash、2号下りrelation、公式施設順を監査したが、`n:1832672162`と`n:1832672205`が一般道へ接続するためground endpointが未確定である。Issue #68で両radial pairを`data/billing-pairs-seed.json`へ統合し、graph-builderが両route planを検証する診断経路を追加した。現在のbinding unresolvedを理由に、`Graph.billingPairs`とpublic candidateは8件のlegacy pairのままとし、manifestには2件のdiagnostic-only記録だけを残す。ground endpoint、route/direction、First Exit、全端点がすべて通ったときだけ、`Graph.billingPairs`の`radialReturn`として昇格する。
 
 目黒入口 → 目黒出口の現行dynamic ODは別分類にする。entry Edgeは`e:w207535708:0:f`、exit Edgeは`e:w207535709:0:f`で、routing topology上は到達可能である。しかし物理的には天現寺Exitが先であり、exact bindingがなければ目黒を「1区間先」にできない。routing v2では`topology_only`とし、「1区間先」「最低料金」、`time_per_yen`の対象から外す。`routingCapability=routable`は道路を追跡できることを示すが、商品eligibilityの証拠ではない。現行pre-v2 outputは後述の互換fieldをdynamic ODにも残しているため、公開契約への移行完了まではこの節の`topology_only`を実装済みと読まない。
 
@@ -212,7 +212,7 @@ graph schema 4 は reader/consumer と `all-real-v3` の atomic activation ま�
 | 4 | graph schema 4 reader と consumer 契約（#65実装済み） | core、WASM型、Web Workerがschema 2 / 3 / 4を読む。`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`を判別し、wire fragmentとfield failure fixtureを追加する。未知kind / version、部分data、route legの重複・欠落を拒否する。 | 1, 3 |
 | 5 | graph schema 4 の atomic release activation（#66実装済み） | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
 | 6 | 天現寺 exact directed binding（#67診断完了・unresolved） | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。way `172358461` → `422023171` → `931759044` → `172358460` → `172358466`のway順・18 node・17 Edge・hashは固定した。`n:1832672162`も一般道へ接続するためground endpointは未確定で、根拠付きunresolved candidateのままにする。 | なし |
-| 7 | 2号 inner / outer radial pair 統合 | schema適合fixtureとC1 non-regressionが通る。exact binding未完ならdiagnostic planのみとする。完了時だけGraph radial pairとpublic eligibilityへ昇格し、#41までtariffは未算出とする。 | 3, 5, 6 |
+| 7 | 2号 inner / outer radial pair 統合（#68診断統合済み） | schema2 seedへ2件を追加し、graph-builderが両route planを検証する。exact binding未完ならdiagnostic planとmanifest記録だけとし、Graph radial pairとpublic eligibilityへ昇格しない。#41までtariffは未算出とする。 | 3, 5, 6 |
 | 8 | Candidate route legs と product / tariff 状態 | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。pre-v2 dynamic ODのcharged section / reasonを撤去し、radialに`chargedSectionCount`と`ONE_SECTION_TOLL`を出さない。 | 4 |
 | 9 | Web の順序表示 | entry / lap / return / exitを番号・線種・テキストで提示し、surface概算とhighway経路を混同しない。総距離とhighway距離を同じ定義で表示し、unpriced / topology_onlyへ「1区間料金」を出さない。C1 UI regressionを維持する。 | 5, 8 |
 | 10 | split Maps URL 生成 | 3 waypoint / 2,048文字制限、legごとの手動継続、URL builder unit / E2Eを実装する。道路・向きを強制できないため、実機gate通過までpublic handoffを無効にする。 | 8 |

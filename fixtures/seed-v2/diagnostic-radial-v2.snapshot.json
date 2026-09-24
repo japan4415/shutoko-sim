@@ -50,18 +50,21 @@
       "exitEndpoint": {
         "rampId": "ramp:2-outbound:tengenji-exit",
         "name": "天現寺出口",
-        "supportState": "unsupported",
+        "supportState": "unresolved",
         "directedSegments": [],
         "bindingCandidates": [
           {
-            "candidateId": "tengenji:g21:172358461-422023171",
+            "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460-172358466",
             "status": "unresolved",
             "directedSegments": [
               {
-                "segmentId": "tengenji:g21:chain:0",
+                "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
                 "osmWayIds": [
                   172358461,
-                  422023171
+                  422023171,
+                  931759044,
+                  172358460,
+                  172358466
                 ],
                 "edgeIds": [
                   "e:w172358461:0:f",
@@ -72,11 +75,19 @@
                   "e:w172358461:5:f",
                   "e:w422023171:0:f",
                   "e:w422023171:1:f",
-                  "e:w422023171:2:f"
+                  "e:w422023171:2:f",
+                  "e:w931759044:0:f",
+                  "e:w172358460:0:f",
+                  "e:w172358460:1:f",
+                  "e:w172358460:2:f",
+                  "e:w172358460:3:f",
+                  "e:w172358460:4:f",
+                  "e:w172358460:5:f",
+                  "e:w172358466:0:f"
                 ],
                 "fromNodeId": "n:252175582",
-                "toNodeId": "n:1832672090",
-                "edgeIdsSha256": "ac97e5a464d46bc4dd5cfb641171da94639832516d8bc4876ef510dab2a7872a"
+                "toNodeId": "n:1832672205",
+                "edgeIdsSha256": "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
               }
             ]
           }
@@ -118,7 +129,7 @@
           "firstGeneralExit": {
             "rule": "firstGeneralExit",
             "expectedRampId": "ramp:2-outbound:tengenji-exit",
-            "exactDirectedBinding": "unsupported"
+            "exactDirectedBinding": "unresolved"
           }
         }
       },
@@ -139,7 +150,7 @@
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-16",
-        "notes": "目黒入口から一ノ橋JCTのC1 inner長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。天現寺exitのexact directed bindingは未解決。"
+        "notes": "目黒入口から一ノ橋JCTのC1 inner長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。天現寺exitの5 way候補は連続するが、n:1832672162とn:1832672205がともに一般道へ接続するためexact directed bindingは未解決。"
       }
     },
     {
@@ -169,18 +180,21 @@
       "exitEndpoint": {
         "rampId": "ramp:2-outbound:tengenji-exit",
         "name": "天現寺出口",
-        "supportState": "unsupported",
+        "supportState": "unresolved",
         "directedSegments": [],
         "bindingCandidates": [
           {
-            "candidateId": "tengenji:g21:172358461-422023171",
+            "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460-172358466",
             "status": "unresolved",
             "directedSegments": [
               {
-                "segmentId": "tengenji:g21:chain:0",
+                "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
                 "osmWayIds": [
                   172358461,
-                  422023171
+                  422023171,
+                  931759044,
+                  172358460,
+                  172358466
                 ],
                 "edgeIds": [
                   "e:w172358461:0:f",
@@ -191,11 +205,19 @@
                   "e:w172358461:5:f",
                   "e:w422023171:0:f",
                   "e:w422023171:1:f",
-                  "e:w422023171:2:f"
+                  "e:w422023171:2:f",
+                  "e:w931759044:0:f",
+                  "e:w172358460:0:f",
+                  "e:w172358460:1:f",
+                  "e:w172358460:2:f",
+                  "e:w172358460:3:f",
+                  "e:w172358460:4:f",
+                  "e:w172358460:5:f",
+                  "e:w172358466:0:f"
                 ],
                 "fromNodeId": "n:252175582",
-                "toNodeId": "n:1832672090",
-                "edgeIdsSha256": "ac97e5a464d46bc4dd5cfb641171da94639832516d8bc4876ef510dab2a7872a"
+                "toNodeId": "n:1832672205",
+                "edgeIdsSha256": "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
               }
             ]
           }
@@ -237,7 +259,7 @@
           "firstGeneralExit": {
             "rule": "firstGeneralExit",
             "expectedRampId": "ramp:2-outbound:tengenji-exit",
-            "exactDirectedBinding": "unsupported"
+            "exactDirectedBinding": "unresolved"
           }
         }
       },
@@ -258,7 +280,7 @@
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-16",
-        "notes": "目黒入口から一ノ橋JCTのC1 outer長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。天現寺exitのexact directed bindingは未解決。"
+        "notes": "目黒入口から一ノ橋JCTのC1 outer長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。天現寺exitの5 way候補は連続するが、n:1832672162とn:1832672205がともに一般道へ接続するためexact directed bindingは未解決。"
       }
     }
   ]

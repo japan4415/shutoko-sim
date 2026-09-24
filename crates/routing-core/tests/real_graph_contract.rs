@@ -189,6 +189,110 @@ fn real_graph_deserialization_and_schema_validation() {
             s
         );
     }
+    let diagnostic_only = unverified
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|section| section.starts_with("diagnostic-only:"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        diagnostic_only,
+        vec![
+            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved",
+            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved",
+        ]
+    );
+}
+
+#[test]
+fn issue68_diagnostic_radial_seed_stays_non_public_until_binding_resolves() {
+    let seed: Value =
+        serde_json::from_str(include_str!("../../../data/billing-pairs-seed.json")).unwrap();
+    assert_eq!(seed["schemaVersion"], 2);
+    assert_eq!(seed["billingPairs"].as_array().unwrap().len(), 10);
+
+    let radial_pairs = seed["billingPairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|pair| pair["pairKind"] == "radialReturn")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        radial_pairs
+            .iter()
+            .map(|pair| pair["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec![
+            "bp:2-inbound:meguro:c1-inner:tengenji",
+            "bp:2-inbound:meguro:c1-outer:tengenji"
+        ]
+    );
+
+    for pair in &radial_pairs {
+        assert_eq!(pair["routePlanVersion"], 1);
+        assert_eq!(pair["entryEndpoint"]["supportState"], "verified_bound");
+        assert_eq!(pair["exitEndpoint"]["supportState"], "unresolved");
+        assert_eq!(
+            pair["exitEndpoint"]["bindingCandidates"][0]["status"],
+            "unresolved"
+        );
+        assert_eq!(
+            pair["exitEndpoint"]["bindingCandidates"][0]["directedSegments"][0]["edgeIds"]
+                .as_array()
+                .unwrap()
+                .len(),
+            17
+        );
+        assert_eq!(
+            pair["exitEndpoint"]["bindingCandidates"][0]["directedSegments"][0]["edgeIdsSha256"],
+            "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+        );
+        assert_eq!(pair["pairEligibility"]["status"], "unverified");
+        assert_eq!(pair["pairEligibility"]["oneSectionAheadVerified"], false);
+        assert_eq!(pair["tariff"]["status"], "unpriced");
+        assert!(pair["tariff"]["amountYen"].is_null());
+        assert!(pair["tariff"]["billingDistanceMeters"].is_null());
+    }
+
+    assert_eq!(
+        radial_pairs[0]["routePlan"]["anchor"]["mergeNodeId"],
+        "n:574460576"
+    );
+    assert_eq!(
+        radial_pairs[0]["routePlan"]["anchor"]["branchNodeId"],
+        "n:574460605"
+    );
+    assert_eq!(
+        radial_pairs[1]["routePlan"]["anchor"]["mergeNodeId"],
+        "n:31297008"
+    );
+    assert_eq!(
+        radial_pairs[1]["routePlan"]["anchor"]["branchNodeId"],
+        "n:31297000"
+    );
+    assert_eq!(
+        radial_pairs[0]["routePlan"]["anchor"]["excludedShortConnector"]["edgeCount"],
+        23
+    );
+    assert_eq!(
+        radial_pairs[0]["routePlan"]["anchor"]["excludedShortConnector"]["distanceMeters"],
+        493
+    );
+    assert_eq!(
+        radial_pairs[1]["routePlan"]["anchor"]["excludedShortConnector"]["edgeCount"],
+        20
+    );
+    assert_eq!(
+        radial_pairs[1]["routePlan"]["anchor"]["excludedShortConnector"]["distanceMeters"],
+        461
+    );
+
+    let graph: Value = serde_json::from_str(real_graph_str()).unwrap();
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 8);
+    assert!(!graph["billingPairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|pair| pair["pairKind"] == "radialReturn"));
 }
 
 #[test]

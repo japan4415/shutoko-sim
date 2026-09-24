@@ -472,7 +472,7 @@ pub fn generate_and_validate_parsed_billing_pairs(
                         rejected_pairs.push(RejectedSeedRecord {
                             seed_id: seed.id.clone(),
                             reason:
-                                "diagnostic radialReturn pair is not publishable in graph schema 2"
+                                "diagnostic radialReturn pair is not publishable in Graph.billingPairs until its exact directed exit binding is verified"
                                     .to_string(),
                         });
                     }

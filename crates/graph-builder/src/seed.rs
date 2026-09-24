@@ -861,7 +861,7 @@ mod tests {
     }
 
     #[test]
-    fn schema_1_preserves_c1_seed_data_and_legacy_generation_contract() {
+    fn schema_2_preserves_c1_seed_data_and_integrates_diagnostic_radial_pairs() {
         let raw = include_str!("../../../data/billing-pairs-seed.json");
         let parsed = parse_billing_pairs_seed(raw).unwrap();
         let original: Value = serde_json::from_str(raw).unwrap();
@@ -869,27 +869,100 @@ mod tests {
         assert_eq!(serialized, original);
 
         let seed = match &parsed {
-            ParsedBillingPairsSeed::Schema1(seed) => seed,
-            ParsedBillingPairsSeed::Schema2(_) => panic!("expected schema 1"),
+            ParsedBillingPairsSeed::Schema2(seed) => seed,
+            ParsedBillingPairsSeed::Schema1(_) => panic!("expected schema 2"),
         };
-        assert_eq!(seed.billing_pairs.len(), 8);
+        assert_eq!(parsed.schema_version(), 2);
+        assert_eq!(seed.billing_pairs.len(), 10);
+        let legacy_pairs: Vec<_> = seed
+            .billing_pairs
+            .iter()
+            .filter_map(BillingPairSeedEntry::as_legacy_ring)
+            .collect();
+        assert_eq!(legacy_pairs.len(), 8);
         assert_eq!(
-            seed.billing_pairs
+            legacy_pairs
                 .iter()
                 .filter(|pair| pair.status == VerificationStatus::Verified)
                 .count(),
             2
         );
         assert_eq!(
-            seed.billing_pairs
+            legacy_pairs
                 .iter()
                 .filter(|pair| pair.status == VerificationStatus::Unverified)
                 .count(),
             6
         );
-        assert!(seed.billing_pairs.iter().all(|pair| {
+        assert!(legacy_pairs.iter().all(|pair| {
             pair.prices.len() == 2 && pair.prices.iter().all(|price| price.amount_yen == 300)
         }));
+
+        let radial_pairs: Vec<_> = seed
+            .billing_pairs
+            .iter()
+            .filter_map(BillingPairSeedEntry::as_radial_return)
+            .collect();
+        assert_eq!(radial_pairs.len(), 2);
+        assert_eq!(
+            radial_pairs
+                .iter()
+                .map(|pair| pair.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "bp:2-inbound:meguro:c1-inner:tengenji",
+                "bp:2-inbound:meguro:c1-outer:tengenji"
+            ]
+        );
+        for pair in &radial_pairs {
+            assert_eq!(pair.pair_kind, PairKind::RadialReturn);
+            assert_eq!(pair.route_plan_version, RoutePlanVersion::V1);
+            assert_eq!(
+                pair.entry_endpoint.support_state,
+                EndpointSupportState::VerifiedBound
+            );
+            assert_eq!(
+                pair.exit_endpoint.support_state,
+                EndpointSupportState::Unresolved
+            );
+            assert_eq!(
+                pair.pair_eligibility.status,
+                PairEligibilityStatus::Unverified
+            );
+            assert!(!pair.pair_eligibility.one_section_ahead_verified);
+            assert_eq!(pair.tariff.status, TariffStatus::Unpriced);
+            assert_eq!(pair.tariff.amount_yen, None);
+            assert_eq!(pair.tariff.billing_distance_meters, None);
+            assert!(pair.tariff.prices.is_empty());
+            assert_eq!(pair.exit_endpoint.binding_candidates.len(), 1);
+            assert_eq!(
+                pair.exit_endpoint.binding_candidates[0].status,
+                BindingCandidateStatus::Unresolved
+            );
+            let exit_segment = &pair.exit_endpoint.binding_candidates[0].directed_segments[0];
+            assert_eq!(exit_segment.osm_way_ids.len(), 5);
+            assert_eq!(exit_segment.edge_ids.len(), 17);
+            assert_eq!(
+                exit_segment.edge_ids_sha256,
+                "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+            );
+        }
+        assert_eq!(
+            radial_pairs[0].route_plan.anchor.merge_node_id,
+            "n:574460576"
+        );
+        assert_eq!(
+            radial_pairs[0].route_plan.anchor.branch_node_id,
+            "n:574460605"
+        );
+        assert_eq!(
+            radial_pairs[1].route_plan.anchor.merge_node_id,
+            "n:31297008"
+        );
+        assert_eq!(
+            radial_pairs[1].route_plan.anchor.branch_node_id,
+            "n:31297000"
+        );
     }
 
     #[test]

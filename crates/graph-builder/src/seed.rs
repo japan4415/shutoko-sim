@@ -431,6 +431,61 @@ impl RadialReturnBillingPairSeed {
     pub fn validate(&self) -> Result<(), String> {
         self.entry_endpoint.validate()?;
         self.exit_endpoint.validate()?;
+        if self.route_plan.anchor.merge_node_id == self.route_plan.anchor.branch_node_id {
+            return Err(format!(
+                "radial pair {} must keep directed junction M and B as different nodes",
+                self.id
+            ));
+        }
+        if self.route_plan.entry_corridor.merge_node_id != self.route_plan.anchor.merge_node_id
+            || self.route_plan.entry_corridor.terminal_edge_id
+                != self.route_plan.anchor.merge_terminal_edge_id
+        {
+            return Err(format!(
+                "radial pair {} entry corridor does not meet anchor M",
+                self.id
+            ));
+        }
+        if self.route_plan.return_corridor.start_node_id != self.route_plan.anchor.branch_node_id {
+            return Err(format!(
+                "radial pair {} return corridor does not start at anchor B",
+                self.id
+            ));
+        }
+        if self.route_plan.mandatory_lap.first_edge_id.is_empty()
+            || self.route_plan.mandatory_lap.last_edge_id.is_empty()
+        {
+            return Err(format!(
+                "radial pair {} mandatory lap requires first and last edge IDs",
+                self.id
+            ));
+        }
+        if self.route_plan.return_corridor.initial_edge_id.is_empty()
+            || self
+                .route_plan
+                .return_corridor
+                .first_general_exit
+                .expected_ramp_id
+                .is_empty()
+        {
+            return Err(format!(
+                "radial pair {} return corridor requires an initial edge and expected ramp",
+                self.id
+            ));
+        }
+        let connector = &self.route_plan.anchor.excluded_short_connector;
+        if connector.from_node_id.is_empty()
+            || connector.to_node_id.is_empty()
+            || connector.osm_way_id <= 0
+            || connector.edge_count == 0
+            || connector.distance_meters == 0
+            || connector.from_node_id == connector.to_node_id
+        {
+            return Err(format!(
+                "radial pair {} has invalid excluded short connector evidence",
+                self.id
+            ));
+        }
         if self.route_plan.mandatory_lap.lap_count != 1 {
             return Err(format!(
                 "radial pair {} must declare mandatory lap lapCount=1",
@@ -703,6 +758,22 @@ mod tests {
             let raw = serde_json::to_string(&value).unwrap();
             assert!(parse_billing_pairs_seed(&raw).is_ok());
         }
+    }
+
+    #[test]
+    fn rejects_directed_junction_boundary_mismatches() {
+        let mut value: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+        value["billingPairs"][1]["routePlan"]["anchor"]["mergeNodeId"] =
+            json!(value["billingPairs"][1]["routePlan"]["anchor"]["branchNodeId"]);
+        assert!(parse_billing_pairs_seed(&value.to_string()).is_err());
+
+        let mut value: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+        value["billingPairs"][1]["routePlan"]["entryCorridor"]["mergeNodeId"] = json!("mismatch");
+        assert!(parse_billing_pairs_seed(&value.to_string()).is_err());
+
+        let mut value: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+        value["billingPairs"][1]["routePlan"]["returnCorridor"]["startNodeId"] = json!("mismatch");
+        assert!(parse_billing_pairs_seed(&value.to_string()).is_err());
     }
 
     #[test]

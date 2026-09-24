@@ -19,9 +19,9 @@
 
 [首都高の料金距離説明](https://www.shutoko.jp/fee/fee-info/pay_etc/distance/)は、複数経路がある場合に入口出口間の首都高最短経路を料金距離とする原則を示している。具体的なペアの料金と利用条件は別途確認し、実走行距離へ単価を掛けて料金を計算しない。
 
-## Issue #42: Directed Route-Plan Lap v1（route membership実装済み・残りは設計・未実装）
+## Issue #42: Directed Route-Plan Lap v1（route membership・mandatory lap・return First Exit 実装済み）
 
-本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路を設計したもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型を実装し、Issue #63 で graph-builder 内限定の `RouteMembershipIndex`、relation mainline / bound ramp の生成・検証、`find_first_exit_on_corridor` の基本処理を実装した。`--graph-schema 4` を明示した場合だけ `graph.json` の最上位に `routeMemberships[]` を含める。route plan の分解、schema 4 reader、公開 release への反映は #64〜#66 の範囲であり、現行 C1 8 ペアの挙動は変えない。
+本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路を設計したもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型を実装し、Issue #63 で graph-builder 内限定の `RouteMembershipIndex`、relation mainline / bound ramp の生成・検証を実装した。Issue #64 で `routePlanLapV1` の M→B 長弧生成、cyclic relation segment の wrap-around、short connector 除外、return corridor 制約付き `find_first_exit_on_corridor`、未解決 binding の保持、route-plan segment の反復規則を実装した。`--graph-schema 4` を明示した場合だけ `graph.json` の最上位に `routeMemberships[]` を含める。schema 4 reader と公開 release への反映は #65/#66 の範囲であり、現行 C1 8 ペアの挙動は変えない。
 
 ### 採用案は「指定 route の長弧を1周する」
 
@@ -94,7 +94,7 @@ mandatory lap自身のfirst / last Edgeは`routePlan.mandatoryLap.firstEdgeId` /
 
 OSM route relationのmainline候補にはJCT linkやway tagの欠落が混在するため、builderはroute identityとgraphのShutoko Edgeでmainline候補を確定する。目黒entry way `207535708`や天現寺exit候補way `172358461` / `422023171` を無検証なrelation連続Edge列へ強制しない。rampをrelationの連続Edge列へ強制すると、正しいbindingを誤って無検証にする。mainlineとrampを同じ`sourceKind`へ混ぜない。
 
-route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を明示する。`mandatory_lap` は 1 つの `relationMainline` の連続部分列でなければならない。`validate_directed_junction_mandatory_lap` は anchor の M/B、route/direction、first/last Edge、lapCount=1、arm-boundary、除外 short connector の way/Edge数/距離を一并に検証する。entry、return、exit は `relationMainline` と `boundRamp` を順番に連結できるが、各 segment 内部の Edge 順、node 接続、hash、binding 証拠を個別に検証する。Edge ごとに route metadata を複製せず、index から検索・検証する。名前や最接近 node だけで所属を補わない。
+route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を明示する。`mandatory_lap` は 1 つの `relationMainline` の連続部分列でなければならない。graph-builder は `generate_route_plan_lap_v1` で M→B の通常の長弧を生成し、relation segment の終端をまたぐ場合は directed order の wrap-around として继续保持する。`validate_directed_junction_mandatory_lap` は anchor の M/B、route/direction、first/last Edge、lapCount=1、arm-boundary、除外 short connector の way/Edge数/距離を一并に検証する。entry、return、exit は `relationMainline` と `boundRamp` を順番に連結できるが、各 segment 内部の Edge 順、node 接続、hash、binding 証拠を個別に検証する。resolved segment 内の Edge 反復は拒否し、別 segment として宣言された反復は接続性と hash を満たす限り許可する。Edge ごとに route metadata を複製せず、index から検索・検証する。名前や最接近 node だけで所属を補わない。
 
 次の異常系は graph-builder の synthetic fixture と Issue #63 実装で検証する。
 
@@ -107,7 +107,7 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 - excluded short connectorをmandatory lapとして選ぶ。
 - relationの並び替えや逆順を、端点連続性を確認しない無検証な断片として受理しない。
 
-### 2号目黒線の課金ペア形状（設計・未実装）
+### 2号目黒線の課金ペア形状（graph-builder の診断 route plan 実装済み・公開統合は未実装）
 
 目黒入口から2号上り、一ノ橋 JCT で C1 に入る。entry Edge は `e:w207535708:0:f`、ramp ID は `ramp:2-inbound:meguro-entry` であり、現行 binding は `verified_bound` である。C1 を長弧で1通りした後、2号下りへ戻り、次の一般 Exit 候補を天現寺とする。
 
@@ -207,8 +207,8 @@ graph schema 4 を builder だけが先に出力する段階は、Issue #63 の 
 | Issue | 実装範囲 | 主な受け入れ条件 | 依存 |
 | ---: | --- | --- | --- |
 | 1 | seed schema v2 と diagnostic pair 型 | `schemaVersion`を明示的に1 / 2へdispatchし、全nested structでunknown fieldを拒否する。未知version / kind / field fixtureを通し、既存C1 8要素のID・意味・価格・状態・anchorを保つ。radial endpointは`directedSegments[]`と未解決`bindingCandidates[]`を区別する。 | なし |
-| 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance（#63実装済み） | `--graph-schema 4` の明示時だけ `relationMainline` と `boundRamp` を別 segment として生成し、way順、node接続、Edge順、hash、binding証拠を個別に検証する。逆方向、非所属mainline way、ramp証拠なし、short connector、relationの逆順を拒否する。#64のradial route planへの統合は未実装。 | 1 |
-| 3 | directed mandatory lap と return-corridor First Exit | synthetic radial fixtureでM→B長弧、return corridor、first general Exitを分解する。C1 legacyを完全維持し、segment内反復を拒否しつつ、route planが宣言したsegment間反復を許可する。 | 1, 2 |
+| 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance（#63実装済み） | `--graph-schema 4` の明示時だけ `relationMainline` と `boundRamp` を別 segment として生成し、way順、node接続、Edge順、hash、binding証拠を個別に検証する。逆方向、非所属mainline way、ramp証拠なし、short connector、relationの逆順を拒否する。#64のradial route plan生成・検証を同じindex上で実行する。 | 1 |
+| 3 | directed mandatory lap と return-corridor First Exit（#64実装済み） | synthetic radial fixtureと実 inner/outer snapshotでM→B長弧、return corridor、first general Exitを分解する。C1 legacyを完全維持し、segment内反復を拒否しつつ、route planが宣言したsegment間反復を許可する。 | 1, 2 |
 | 4 | graph schema 4 reader と consumer 契約 | core、WASM型、Web Workerがschema 2 / 3 / 4を読む。`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`を判別し、wire fragmentとfield failure fixtureを追加する。未知kind / version、部分data、route legの重複・欠落を拒否する。 | 1, 3 |
 | 5 | graph schema 4 の atomic release activation | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
 | 6 | 天現寺 exact directed binding | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。候補から一意な`directedSegments[]`だけ昇格し、way順・node接続・Edge順・hashを固定する。解決できなければ根拠付きunresolved / unsupportedのままにする。 | なし |
@@ -333,6 +333,6 @@ Google マップ上でのナビゲーションにおいて、一周を短絡（�
 
 現行C1 / dynamic ODは、人工グラフで空閉路、anchorへの帰還、帰還時の禁止遷移、入口から出口への短絡、間違った1区間先、二周、途中退出・再入場、マイクロループ排除を検出する。接続区間と一周部分の重複を誤って落とさないことも確認する。小規模では全列挙した閉路と比較し、探索打ち切りによる候補欠落と不正経路を区別する。
 
-routing v2は別に、4 legのindex完全被覆、segment内反復、relation / ramp由来、multi-way binding、First Exit exact binding、`distanceMeters`の距離式、unpriced / topology_onlyの非表示、pre-v2 dynamic compatibility fieldの撤去を検証する。
+routing v2は別に、4 legのindex完全被覆、segment内反復、relation / ramp由来、multi-way binding、First Exit exact binding、`distanceMeters`の距離式、unpriced / topology_onlyの非表示、pre-v2 dynamic compatibility fieldの撤去を検証する。Issue #64 の builder 側では、routePlanLapV1 の M/B・route/direction・wrap-around・short connector、return corridor の declared Exit candidate、exact binding state、`CORRIDOR_EXIT_STATE_BUDGET` を synthetic contract test と real schema4 opt-in test で検証する。
 
 実データでは方向別入出口ペア、一周の道路列、JCT、高架、データ境界を人手でも検証する。通行可能性と課金ペアの確認は別項目とし、どちらかが未確認なら公開候補に使わない。

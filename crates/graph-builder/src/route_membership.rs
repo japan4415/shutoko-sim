@@ -3,7 +3,10 @@ use crate::inventory::{
 };
 use crate::model::{BillingPair, Edge, EdgeKind, Graph, Node, OdTariff, Ramp, RampKind};
 use crate::osm::{OsmElement, OsmMember, OverpassResponse};
-use crate::seed::{DirectedEndpointSegment, DirectedJunctionAnchor, MandatoryLap};
+use crate::seed::{
+    DiagnosticEndpoint, DiagnosticRoutePlan, DirectedEndpointSegment, DirectedJunctionAnchor,
+    EndpointSupportState, MandatoryLap, RadialReturnBillingPairSeed,
+};
 use crate::validate::contains_forbidden_transition;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -178,6 +181,55 @@ pub struct CorridorExit {
     pub ramp_id: String,
     pub edge_ids: Vec<String>,
     pub mainline_edge_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RoutePlanLapV1 {
+    pub merge_node_id: String,
+    pub branch_node_id: String,
+    pub route_id: String,
+    pub direction: String,
+    pub first_edge_id: String,
+    pub last_edge_id: String,
+    pub lap_count: u8,
+    pub source_segment_id: String,
+    pub edge_ids: Vec<String>,
+    pub edge_ids_sha256: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RoutePlanSegmentRole {
+    EntryApproach,
+    MandatoryLap,
+    ReturnCorridor,
+    ExitApproach,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolvedRouteSegment {
+    pub resolved_segment_id: String,
+    pub role: RoutePlanSegmentRole,
+    pub membership_id: String,
+    pub source_segment_ids: Vec<String>,
+    pub edge_ids: Vec<String>,
+    pub edge_ids_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CorridorFirstExitResolution {
+    pub exact_directed_binding: EndpointSupportState,
+    pub exit: Option<CorridorExit>,
+    pub blocked_exit_edge_id: Option<String>,
+    pub blocked_ramp_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectedRoutePlanResolution {
+    pub lap: RoutePlanLapV1,
+    pub first_exit: CorridorFirstExitResolution,
 }
 
 pub fn compute_sha256(bytes: &[u8]) -> String {
@@ -872,6 +924,200 @@ fn validate_ordered_edges<'a>(
     Ok(edges)
 }
 
+fn collect_connector_paths(
+    graph: &Graph,
+    way_id: i64,
+    current: &str,
+    target: &str,
+    path: &mut Vec<String>,
+    visited_nodes: &mut HashSet<String>,
+    paths: &mut Vec<Vec<String>>,
+) -> Result<(), RouteMembershipError> {
+    if path.len() > 10_000 {
+        return Err(RouteMembershipError::BudgetExceeded(
+            "excluded short connector search exceeded 10000 edges".into(),
+        ));
+    }
+    let mut outgoing: Vec<&Edge> = graph
+        .edges
+        .iter()
+        .filter(|edge| {
+            edge.kind == EdgeKind::Shutoko
+                && edge_way_id(edge) == Some(way_id)
+                && edge.from == current
+        })
+        .collect();
+    outgoing.sort_by(|left, right| left.id.cmp(&right.id));
+    for edge in outgoing {
+        if edge.to == target {
+            let mut candidate = path.clone();
+            candidate.push(edge.id.clone());
+            paths.push(candidate);
+            if paths.len() > 1 {
+                return Err(RouteMembershipError::Validation(
+                    "excluded short connector has multiple directed paths".into(),
+                ));
+            }
+            continue;
+        }
+        if !visited_nodes.insert(edge.to.clone()) {
+            continue;
+        }
+        path.push(edge.id.clone());
+        collect_connector_paths(graph, way_id, &edge.to, target, path, visited_nodes, paths)?;
+        path.pop();
+        visited_nodes.remove(&edge.to);
+    }
+    Ok(())
+}
+
+fn resolve_excluded_short_connector(
+    graph: &Graph,
+    connector: &crate::seed::ExcludedShortConnector,
+) -> Result<Vec<String>, RouteMembershipError> {
+    if connector.from_node_id == connector.to_node_id
+        || connector.from_node_id.is_empty()
+        || connector.to_node_id.is_empty()
+        || connector.edge_count == 0
+        || connector.osm_way_id <= 0
+        || connector.distance_meters == 0
+    {
+        return Err(RouteMembershipError::Validation(
+            "excluded short connector has invalid endpoints or evidence".into(),
+        ));
+    }
+    let mut paths = Vec::new();
+    let mut path = Vec::new();
+    let mut visited_nodes = HashSet::from([connector.from_node_id.clone()]);
+    collect_connector_paths(
+        graph,
+        connector.osm_way_id,
+        &connector.from_node_id,
+        &connector.to_node_id,
+        &mut path,
+        &mut visited_nodes,
+        &mut paths,
+    )?;
+    let Some(edge_ids) = paths.into_iter().next() else {
+        return Err(RouteMembershipError::Validation(
+            "excluded short connector has no directed graph path".into(),
+        ));
+    };
+    let edges = validate_ordered_edges(graph, &edge_ids, "excluded short connector")?;
+    let distance = edges
+        .iter()
+        .map(|edge| edge.distance_meters)
+        .fold(0_u64, u64::saturating_add);
+    if edge_ids.len() != connector.edge_count as usize || distance != connector.distance_meters {
+        return Err(RouteMembershipError::Validation(format!(
+            "excluded short connector evidence does not match graph (edges={}, distance={})",
+            edge_ids.len(),
+            distance
+        )));
+    }
+    Ok(edge_ids)
+}
+
+fn relation_lap_edge_ids(
+    graph: &Graph,
+    segment: &RouteMembershipSegment,
+    first_edge_id: &str,
+    last_edge_id: &str,
+    merge_node_id: &str,
+    branch_node_id: &str,
+) -> Result<Vec<String>, RouteMembershipError> {
+    let sequence = &segment.ordered_edge_ids;
+    let first_positions: Vec<usize> = sequence
+        .iter()
+        .enumerate()
+        .filter_map(|(index, edge_id)| (edge_id == first_edge_id).then_some(index))
+        .collect();
+    let last_positions: Vec<usize> = sequence
+        .iter()
+        .enumerate()
+        .filter_map(|(index, edge_id)| (edge_id == last_edge_id).then_some(index))
+        .collect();
+    if first_positions.len() != 1 || last_positions.len() != 1 {
+        return Err(RouteMembershipError::Validation(
+            "mandatory lap boundaries must each occur once in a relationMainline segment".into(),
+        ));
+    }
+    let first = first_positions[0];
+    let last = last_positions[0];
+    let mut edge_ids = Vec::new();
+    if first <= last {
+        edge_ids.extend_from_slice(&sequence[first..=last]);
+    } else {
+        edge_ids.extend_from_slice(&sequence[first..]);
+        edge_ids.extend_from_slice(&sequence[..=last]);
+    }
+    let edges = validate_ordered_edges(graph, &edge_ids, &segment.segment_id)?;
+    if edges.first().map(|edge| edge.from.as_str()) != Some(merge_node_id)
+        || edges.last().map(|edge| edge.to.as_str()) != Some(branch_node_id)
+    {
+        return Err(RouteMembershipError::Validation(
+            "mandatory lap does not run from M to B on the declared arm".into(),
+        ));
+    }
+    Ok(edge_ids)
+}
+
+fn find_matching_membership<'a>(
+    route_memberships: &'a [RouteMembershipIndex],
+    route_id: &str,
+    direction: &str,
+) -> Result<&'a RouteMembershipIndex, RouteMembershipError> {
+    let matches: Vec<&RouteMembershipIndex> = route_memberships
+        .iter()
+        .filter(|membership| membership.route_id == route_id && membership.direction == direction)
+        .collect();
+    if matches.len() != 1 {
+        return Err(RouteMembershipError::Validation(format!(
+            "route {} direction {} must resolve to exactly one membership (matches={})",
+            route_id,
+            direction,
+            matches.len()
+        )));
+    }
+    Ok(matches[0])
+}
+
+fn validate_ordered_edge_sequence_allowing_repeats<'a>(
+    graph: &'a Graph,
+    edge_ids: &[String],
+    segment_id: &str,
+) -> Result<Vec<&'a Edge>, RouteMembershipError> {
+    if edge_ids.is_empty() {
+        return Err(RouteMembershipError::Segment(format!(
+            "{} has an empty ordered edge list",
+            segment_id
+        )));
+    }
+    let mut edges = Vec::with_capacity(edge_ids.len());
+    for edge_id in edge_ids {
+        let edge = graph
+            .edges
+            .iter()
+            .find(|edge| edge.id == *edge_id)
+            .ok_or_else(|| {
+                RouteMembershipError::Segment(format!(
+                    "{} references missing graph edge {}",
+                    segment_id, edge_id
+                ))
+            })?;
+        edges.push(edge);
+    }
+    for pair in edges.windows(2) {
+        if pair[0].to != pair[1].from {
+            return Err(RouteMembershipError::Segment(format!(
+                "{} is disconnected between {} and {}",
+                segment_id, pair[0].id, pair[1].id
+            )));
+        }
+    }
+    Ok(edges)
+}
+
 fn validate_segment_hash(segment: &RouteMembershipSegment) -> Result<(), RouteMembershipError> {
     validate_sha256(&segment.source_snapshot_sha256, "sourceSnapshotSha256")?;
     validate_sha256(&segment.ordered_edge_ids_sha256, "orderedEdgeIdsSha256")?;
@@ -1419,9 +1665,15 @@ pub fn validate_mandatory_lap(
             "mandatory lap edge list is empty".into(),
         ));
     }
+    let edges = validate_ordered_edges(graph, edge_ids, "mandatory lap")?;
     if edge_ids.iter().collect::<HashSet<_>>().len() != edge_ids.len() {
         return Err(RouteMembershipError::Segment(
-            "mandatory lap repeats an edge".into(),
+            "mandatory lap repeats an edge inside one route-plan segment".into(),
+        ));
+    }
+    if contains_forbidden_transition(edge_ids, &graph.forbidden_transitions) {
+        return Err(RouteMembershipError::Validation(
+            "mandatory lap contains a forbidden transition".into(),
         ));
     }
     let excluded: HashSet<&str> = excluded_edge_ids.iter().map(String::as_str).collect();
@@ -1434,10 +1686,10 @@ pub fn validate_mandatory_lap(
     if edge_ids.iter().any(|edge_id| {
         excluded.contains(edge_id.as_str())
             || excluded_way_id.is_some_and(|way_id| {
-                graph
-                    .edges
+                edges
                     .iter()
                     .find(|edge| edge.id == *edge_id)
+                    .copied()
                     .and_then(edge_way_id)
                     == Some(way_id)
             })
@@ -1452,12 +1704,14 @@ pub fn validate_mandatory_lap(
         .iter()
         .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
     {
+        validate_segment_hash(segment)?;
         let source = &segment.ordered_edge_ids;
-        if edge_ids.len() <= source.len()
-            && source
-                .windows(edge_ids.len())
-                .any(|window| window == edge_ids)
-        {
+        let is_contiguous = edge_ids.len() <= source.len()
+            && (0..source.len()).any(|start| {
+                (0..edge_ids.len())
+                    .all(|offset| source[(start + offset) % source.len()] == edge_ids[offset])
+            });
+        if is_contiguous {
             matches += 1;
         }
     }
@@ -1476,6 +1730,11 @@ pub fn validate_directed_junction_mandatory_lap(
     anchor: &DirectedJunctionAnchor,
     mandatory_lap: &MandatoryLap,
 ) -> Result<(), RouteMembershipError> {
+    if anchor.merge_node_id == anchor.branch_node_id {
+        return Err(RouteMembershipError::Validation(
+            "directed junction M and B must be different nodes".into(),
+        ));
+    }
     if mandatory_lap.lap_count != 1 {
         return Err(RouteMembershipError::Validation(
             "directed mandatory lap must have lapCount=1".into(),
@@ -1516,114 +1775,362 @@ pub fn validate_directed_junction_mandatory_lap(
                 anchor.branch_initial_edge_id
             ))
         })?;
-    if merge_terminal.to != anchor.merge_node_id || branch_initial.from != anchor.branch_node_id {
+    if merge_terminal.kind != EdgeKind::Shutoko
+        || branch_initial.kind != EdgeKind::Shutoko
+        || merge_terminal.to != anchor.merge_node_id
+        || branch_initial.from != anchor.branch_node_id
+    {
         return Err(RouteMembershipError::Validation(
             "directed junction M/B boundaries do not match their terminal edges".into(),
         ));
     }
 
+    let connector_edge_ids =
+        resolve_excluded_short_connector(graph, &anchor.excluded_short_connector)?;
+    let connector_set: HashSet<&str> = connector_edge_ids.iter().map(String::as_str).collect();
     let mut matches = Vec::new();
     for segment in membership
         .segments
         .iter()
         .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
     {
-        let first = segment
-            .ordered_edge_ids
+        validate_segment_hash(segment)?;
+        let Ok(lap_edge_ids) = relation_lap_edge_ids(
+            graph,
+            segment,
+            &mandatory_lap.first_edge_id,
+            &mandatory_lap.last_edge_id,
+            &anchor.merge_node_id,
+            &anchor.branch_node_id,
+        ) else {
+            continue;
+        };
+        if lap_edge_ids
             .iter()
-            .position(|edge_id| edge_id == &mandatory_lap.first_edge_id);
-        let last = segment
-            .ordered_edge_ids
-            .iter()
-            .position(|edge_id| edge_id == &mandatory_lap.last_edge_id);
-        if let (Some(first), Some(last)) = (first, last) {
-            if first < last {
-                matches.push((segment, first, last));
-            }
-        }
-    }
-    if matches.len() != 1 {
-        return Err(RouteMembershipError::Validation(format!(
-            "directed mandatory lap boundaries must occur once in forward relationMainline order (matches={})",
-            matches.len()
-        )));
-    }
-    let (segment, first, last) = matches[0];
-    let lap_edge_ids = segment.ordered_edge_ids[first..=last].to_vec();
-    validate_mandatory_lap(
-        graph,
-        route_memberships,
-        &mandatory_lap.membership_id,
-        &lap_edge_ids,
-        &[],
-        Some(anchor.excluded_short_connector.osm_way_id),
-    )?;
-    let first_edge = graph
-        .edges
-        .iter()
-        .find(|edge| edge.id == segment.ordered_edge_ids[first])
-        .ok_or_else(|| {
-            RouteMembershipError::Validation("mandatory lap first edge is absent".into())
-        })?;
-    let last_edge = graph
-        .edges
-        .iter()
-        .find(|edge| edge.id == segment.ordered_edge_ids[last])
-        .ok_or_else(|| {
-            RouteMembershipError::Validation("mandatory lap last edge is absent".into())
-        })?;
-    if first_edge.from != anchor.merge_node_id || last_edge.to != anchor.branch_node_id {
-        return Err(RouteMembershipError::Validation(
-            "mandatory lap does not run from M to B on the declared arm".into(),
-        ));
-    }
-
-    let connector_candidates = graph
-        .edges
-        .iter()
-        .filter(|edge| {
-            edge_way_id(edge) == Some(anchor.excluded_short_connector.osm_way_id)
-                && edge.from == anchor.excluded_short_connector.from_node_id
-                && edge.to == anchor.excluded_short_connector.to_node_id
-        })
-        .collect::<Vec<_>>();
-    let connector_distance = connector_candidates
-        .iter()
-        .map(|edge| edge.distance_meters)
-        .sum::<u64>();
-    if connector_candidates.len() != anchor.excluded_short_connector.edge_count as usize
-        || connector_distance != anchor.excluded_short_connector.distance_meters
-    {
-        return Err(RouteMembershipError::Validation(format!(
-            "excluded short connector evidence does not match graph (edges={}, distance={})",
-            connector_candidates.len(),
-            connector_distance
-        )));
-    }
-    let mut current_node = anchor.excluded_short_connector.from_node_id.clone();
-    let mut visited = HashSet::new();
-    while let Some(edge) = connector_candidates
-        .iter()
-        .find(|edge| edge.from == current_node)
-    {
-        if !visited.insert(edge.id.as_str()) {
-            return Err(RouteMembershipError::Validation(
-                "excluded short connector is not an acyclic directed path".into(),
-            ));
-        }
-        if lap_edge_ids.iter().any(|edge_id| edge_id == &edge.id) {
+            .any(|edge_id| connector_set.contains(edge_id.as_str()))
+        {
             return Err(RouteMembershipError::Segment(
                 "mandatory lap uses an excluded short connector".into(),
             ));
         }
-        current_node = edge.to.clone();
+        matches.push((segment, lap_edge_ids));
     }
-    if current_node != anchor.excluded_short_connector.to_node_id {
+    if matches.len() != 1 {
+        return Err(RouteMembershipError::Validation(format!(
+            "directed mandatory lap boundaries must resolve to one M-to-B relationMainline path (matches={})",
+            matches.len()
+        )));
+    }
+    let (_segment, lap_edge_ids) = &matches[0];
+    validate_mandatory_lap(
+        graph,
+        route_memberships,
+        &mandatory_lap.membership_id,
+        lap_edge_ids,
+        &connector_edge_ids,
+        None,
+    )?;
+    if lap_edge_ids.len() <= connector_edge_ids.len() {
+        return Err(RouteMembershipError::Segment(
+            "ordinary long arc is not longer than the excluded short connector".into(),
+        ));
+    }
+    let lap_distance = graph
+        .edges
+        .iter()
+        .filter(|edge| lap_edge_ids.contains(&edge.id))
+        .map(|edge| edge.distance_meters)
+        .sum::<u64>();
+    if lap_distance <= anchor.excluded_short_connector.distance_meters {
+        return Err(RouteMembershipError::Segment(
+            "ordinary long arc is not longer than the excluded short connector".into(),
+        ));
+    }
+    if contains_forbidden_transition(lap_edge_ids, &graph.forbidden_transitions) {
         return Err(RouteMembershipError::Validation(
-            "excluded short connector is disconnected".into(),
+            "mandatory lap contains a forbidden transition".into(),
         ));
     }
     Ok(())
+}
+
+pub fn generate_route_plan_lap_v1(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    anchor: &DirectedJunctionAnchor,
+) -> Result<RoutePlanLapV1, RouteMembershipError> {
+    let membership =
+        find_matching_membership(route_memberships, &anchor.route_id, &anchor.direction)?;
+    let connector_edge_ids =
+        resolve_excluded_short_connector(graph, &anchor.excluded_short_connector)?;
+    let connector_set: HashSet<&str> = connector_edge_ids.iter().map(String::as_str).collect();
+    let mut candidates: Vec<(&RouteMembershipSegment, Vec<String>, u64)> = Vec::new();
+    for segment in membership
+        .segments
+        .iter()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+    {
+        let edges = validate_ordered_edges(graph, &segment.ordered_edge_ids, &segment.segment_id)?;
+        let first_edges: Vec<&Edge> = edges
+            .iter()
+            .filter(|edge| edge.from == anchor.merge_node_id)
+            .copied()
+            .collect();
+        let last_edges: Vec<&Edge> = edges
+            .iter()
+            .filter(|edge| edge.to == anchor.branch_node_id)
+            .copied()
+            .collect();
+        for first in &first_edges {
+            for last in &last_edges {
+                let Ok(edge_ids) = relation_lap_edge_ids(
+                    graph,
+                    segment,
+                    &first.id,
+                    &last.id,
+                    &anchor.merge_node_id,
+                    &anchor.branch_node_id,
+                ) else {
+                    continue;
+                };
+                if edge_ids
+                    .iter()
+                    .any(|edge_id| connector_set.contains(edge_id.as_str()))
+                    || edge_ids.len() <= connector_edge_ids.len()
+                    || contains_forbidden_transition(&edge_ids, &graph.forbidden_transitions)
+                {
+                    continue;
+                }
+                let distance = edge_ids
+                    .iter()
+                    .filter_map(|edge_id| {
+                        graph
+                            .edges
+                            .iter()
+                            .find(|edge| edge.id == *edge_id)
+                            .map(|edge| edge.distance_meters)
+                    })
+                    .sum();
+                candidates.push((segment, edge_ids, distance));
+            }
+        }
+    }
+    if candidates.is_empty() {
+        return Err(RouteMembershipError::Validation(
+            "no ordinary long relationMainline arc resolves from M to B".into(),
+        ));
+    }
+    candidates.sort_by(|left, right| {
+        right
+            .1
+            .len()
+            .cmp(&left.1.len())
+            .then_with(|| right.2.cmp(&left.2))
+            .then_with(|| left.0.segment_id.cmp(&right.0.segment_id))
+    });
+    if candidates.len() > 1
+        && candidates[0].1.len() == candidates[1].1.len()
+        && candidates[0].2 == candidates[1].2
+    {
+        return Err(RouteMembershipError::Validation(
+            "M-to-B ordinary long arc is ambiguous".into(),
+        ));
+    }
+    let (segment, edge_ids, _) = &candidates[0];
+    let mandatory_lap = MandatoryLap {
+        membership_id: membership.membership_id.clone(),
+        first_edge_id: edge_ids.first().cloned().unwrap_or_default(),
+        last_edge_id: edge_ids.last().cloned().unwrap_or_default(),
+        lap_count: 1,
+    };
+    validate_directed_junction_mandatory_lap(graph, route_memberships, anchor, &mandatory_lap)?;
+    let edge_ids_sha256 = ordered_edge_ids_sha256(edge_ids)
+        .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
+    Ok(RoutePlanLapV1 {
+        merge_node_id: anchor.merge_node_id.clone(),
+        branch_node_id: anchor.branch_node_id.clone(),
+        route_id: anchor.route_id.clone(),
+        direction: anchor.direction.clone(),
+        first_edge_id: mandatory_lap.first_edge_id,
+        last_edge_id: mandatory_lap.last_edge_id,
+        lap_count: 1,
+        source_segment_id: segment.segment_id.clone(),
+        edge_ids: edge_ids.clone(),
+        edge_ids_sha256,
+    })
+}
+
+pub fn generate_directed_mandatory_lap(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    anchor: &DirectedJunctionAnchor,
+) -> Result<RoutePlanLapV1, RouteMembershipError> {
+    generate_route_plan_lap_v1(graph, route_memberships, anchor)
+}
+
+fn source_sequences_match(
+    source_segments: &[&RouteMembershipSegment],
+    source_index: usize,
+    edge_ids: &[String],
+    edge_cursor: usize,
+) -> bool {
+    if source_index == source_segments.len() {
+        return edge_cursor == edge_ids.len();
+    }
+    let source = &source_segments[source_index].ordered_edge_ids;
+    if source.is_empty() {
+        return false;
+    }
+    for start in 0..source.len() {
+        for length in 1..=source.len() {
+            let end = edge_cursor.saturating_add(length);
+            if end > edge_ids.len() {
+                continue;
+            }
+            if (0..length).all(|offset| {
+                source[(start + offset) % source.len()] == edge_ids[edge_cursor + offset]
+            }) && source_sequences_match(source_segments, source_index + 1, edge_ids, end)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn source_segment_by_id<'a>(
+    membership: &'a RouteMembershipIndex,
+    segment_id: &str,
+) -> Result<&'a RouteMembershipSegment, RouteMembershipError> {
+    membership
+        .segments
+        .iter()
+        .find(|segment| segment.segment_id == segment_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "route plan references unknown source segment {}",
+                segment_id
+            ))
+        })
+}
+
+pub fn validate_resolved_route_plan_segments(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    resolved_segments: &[ResolvedRouteSegment],
+) -> Result<(), RouteMembershipError> {
+    let mut resolved_ids = HashSet::new();
+    for resolved in resolved_segments {
+        if resolved.resolved_segment_id.is_empty()
+            || !resolved_ids.insert(resolved.resolved_segment_id.as_str())
+        {
+            return Err(RouteMembershipError::Validation(
+                "resolved route segment IDs must be non-empty and unique".into(),
+            ));
+        }
+        if resolved.source_segment_ids.is_empty() || resolved.edge_ids.is_empty() {
+            return Err(RouteMembershipError::Segment(
+                "resolved route segment requires source segment IDs and edge IDs".into(),
+            ));
+        }
+        let expected_hash = ordered_edge_ids_sha256(&resolved.edge_ids)
+            .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
+        if resolved.edge_ids_sha256 != expected_hash {
+            return Err(RouteMembershipError::Segment(format!(
+                "{} edgeIdsSha256 does not match its edge list",
+                resolved.resolved_segment_id
+            )));
+        }
+        let edges =
+            validate_ordered_edges(graph, &resolved.edge_ids, &resolved.resolved_segment_id)?;
+        if edges
+            .iter()
+            .map(|edge| edge.id.as_str())
+            .collect::<HashSet<_>>()
+            .len()
+            != resolved.edge_ids.len()
+        {
+            return Err(RouteMembershipError::Segment(format!(
+                "{} repeats an edge inside one resolved segment",
+                resolved.resolved_segment_id
+            )));
+        }
+        let membership = route_memberships
+            .iter()
+            .find(|membership| membership.membership_id == resolved.membership_id)
+            .ok_or_else(|| {
+                RouteMembershipError::Validation(format!(
+                    "resolved route segment {} references unknown membership {}",
+                    resolved.resolved_segment_id, resolved.membership_id
+                ))
+            })?;
+        let source_segments = resolved
+            .source_segment_ids
+            .iter()
+            .map(|segment_id| source_segment_by_id(membership, segment_id))
+            .collect::<Result<Vec<_>, _>>()?;
+        for source in &source_segments {
+            validate_segment_hash(source)?;
+        }
+        if !source_sequences_match(&source_segments, 0, &resolved.edge_ids, 0) {
+            return Err(RouteMembershipError::Segment(format!(
+                "{} is not an ordered subpath of its source segments",
+                resolved.resolved_segment_id
+            )));
+        }
+        if resolved.role == RoutePlanSegmentRole::MandatoryLap
+            && (source_segments.len() != 1
+                || source_segments[0].source_kind != RouteMembershipSourceKind::RelationMainline)
+        {
+            return Err(RouteMembershipError::Validation(
+                "mandatory lap must resolve from exactly one relationMainline segment".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_resolved_route_plan(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    resolved_segments: &[ResolvedRouteSegment],
+) -> Result<(), RouteMembershipError> {
+    validate_resolved_route_plan_segments(graph, route_memberships, resolved_segments)?;
+    let expected_roles = [
+        RoutePlanSegmentRole::EntryApproach,
+        RoutePlanSegmentRole::MandatoryLap,
+        RoutePlanSegmentRole::ReturnCorridor,
+        RoutePlanSegmentRole::ExitApproach,
+    ];
+    if resolved_segments.len() != expected_roles.len()
+        || resolved_segments
+            .iter()
+            .zip(expected_roles)
+            .any(|(resolved, expected)| resolved.role != expected)
+    {
+        return Err(RouteMembershipError::Validation(
+            "resolved route plan must contain entry, lap, return, and exit legs in order".into(),
+        ));
+    }
+    for pair in resolved_segments.windows(2) {
+        let left = validate_ordered_edges(graph, &pair[0].edge_ids, &pair[0].resolved_segment_id)?;
+        let right = validate_ordered_edges(graph, &pair[1].edge_ids, &pair[1].resolved_segment_id)?;
+        if left.last().map(|edge| edge.to.as_str()) != right.first().map(|edge| edge.from.as_str())
+        {
+            return Err(RouteMembershipError::Segment(
+                "resolved route plan legs are not continuous at a segment boundary".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_route_plan_segments(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    resolved_segments: &[ResolvedRouteSegment],
+) -> Result<(), RouteMembershipError> {
+    validate_resolved_route_plan_segments(graph, route_memberships, resolved_segments)
 }
 
 fn bound_ramp_segment_for_exit<'a>(
@@ -1685,15 +2192,175 @@ fn relation_sequences(membership: &RouteMembershipIndex) -> Vec<&RouteMembership
         .collect()
 }
 
-pub fn find_first_exit_on_corridor_with_budget(
+fn corridor_membership<'a>(
+    route_memberships: &'a [RouteMembershipIndex],
+    membership_id: &str,
+) -> Result<&'a RouteMembershipIndex, RouteMembershipError> {
+    route_memberships
+        .iter()
+        .find(|membership| membership.membership_id == membership_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!("unknown route membership {}", membership_id))
+        })
+}
+
+fn corridor_sequence_for_initial_edge(
+    membership: &RouteMembershipIndex,
+    initial_edge_id: &str,
+) -> Result<Vec<String>, RouteMembershipError> {
+    let sequences = relation_sequences(membership);
+    let matching: Vec<&&RouteMembershipSegment> = sequences
+        .iter()
+        .filter(|segment| {
+            segment
+                .ordered_edge_ids
+                .iter()
+                .any(|edge_id| edge_id == initial_edge_id)
+        })
+        .collect();
+    if matching.len() != 1 {
+        return Err(RouteMembershipError::Validation(format!(
+            "initial edge {} must occur in exactly one relationMainline segment of {}",
+            initial_edge_id, membership.membership_id
+        )));
+    }
+    let sequence = &matching[0].ordered_edge_ids;
+    let start = sequence
+        .iter()
+        .position(|edge_id| edge_id == initial_edge_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(
+                "initial edge is absent from its relation segment".into(),
+            )
+        })?;
+    Ok(sequence[start..].to_vec())
+}
+
+fn corridor_sequence_from_source_segments(
+    membership: &RouteMembershipIndex,
+    source_segment_ids: &[String],
+    initial_edge_id: &str,
+) -> Result<Vec<String>, RouteMembershipError> {
+    if source_segment_ids.is_empty() {
+        return Err(RouteMembershipError::InvalidInput(
+            "corridor source segment IDs must not be empty".into(),
+        ));
+    }
+    let mut result = Vec::new();
+    for (source_index, source_segment_id) in source_segment_ids.iter().enumerate() {
+        let segment = source_segment_by_id(membership, source_segment_id)?;
+        if segment.source_kind != RouteMembershipSourceKind::RelationMainline {
+            return Err(RouteMembershipError::Validation(format!(
+                "corridor source segment {} is not relationMainline",
+                source_segment_id
+            )));
+        }
+        if source_index == 0 {
+            let start = segment
+                .ordered_edge_ids
+                .iter()
+                .position(|edge_id| edge_id == initial_edge_id)
+                .ok_or_else(|| {
+                    RouteMembershipError::Validation(format!(
+                        "initial edge {} is absent from first corridor source segment",
+                        initial_edge_id
+                    ))
+                })?;
+            result.extend_from_slice(&segment.ordered_edge_ids[start..]);
+        } else {
+            result.extend(segment.ordered_edge_ids.iter().cloned());
+        }
+    }
+    if result.is_empty() {
+        return Err(RouteMembershipError::Segment(
+            "corridor source segments produce an empty edge sequence".into(),
+        ));
+    }
+    Ok(result)
+}
+
+fn exit_ramp_candidates<'a>(
+    graph: &'a Graph,
+    membership: &RouteMembershipIndex,
+    split_node_id: &str,
+) -> Vec<(&'a Edge, &'a Ramp)> {
+    let mut candidates = graph
+        .edges
+        .iter()
+        .filter(|edge| edge.kind == EdgeKind::Exit && edge.from == split_node_id)
+        .flat_map(|edge| {
+            graph.ramps.iter().filter_map(move |ramp| {
+                (ramp.kind == RampKind::GeneralExit
+                    && ramp.edge_id == edge.id
+                    && ramp.mainline_node_id == edge.from
+                    && ramp.node_id == edge.to
+                    && ramp.route == membership.route_id
+                    && ramp.direction == membership.direction)
+                    .then_some((edge, ramp))
+            })
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        left.0
+            .id
+            .cmp(&right.0.id)
+            .then_with(|| left.1.id.cmp(&right.1.id))
+    });
+    candidates
+}
+
+fn support_state_label(state: EndpointSupportState) -> &'static str {
+    match state {
+        EndpointSupportState::VerifiedBound => "verified_bound",
+        EndpointSupportState::Unresolved => "unresolved",
+        EndpointSupportState::Unsupported => "unsupported",
+    }
+}
+
+fn validate_declared_exit_candidate(
+    graph: &Graph,
+    candidate: &DirectedEndpointSegment,
+) -> Result<(), RouteMembershipError> {
+    if candidate.from_node_id.is_empty()
+        || candidate.to_node_id.is_empty()
+        || candidate.edge_ids.is_empty()
+    {
+        return Err(RouteMembershipError::RampBinding(
+            "declared Exit candidate has incomplete evidence".into(),
+        ));
+    }
+    let edges = validate_ordered_edges(graph, &candidate.edge_ids, &candidate.segment_id)?;
+    if edges.first().map(|edge| edge.from.as_str()) != Some(candidate.from_node_id.as_str())
+        || edges.last().map(|edge| edge.to.as_str()) != Some(candidate.to_node_id.as_str())
+    {
+        return Err(RouteMembershipError::RampBinding(format!(
+            "{} endpoints do not match its declared Exit candidate edges",
+            candidate.segment_id
+        )));
+    }
+    let expected_hash = ordered_edge_ids_sha256(&candidate.edge_ids)
+        .map_err(|error| RouteMembershipError::RampBinding(error.to_string()))?;
+    if candidate.edge_ids_sha256 != expected_hash {
+        return Err(RouteMembershipError::RampBinding(format!(
+            "{} edgeIdsSha256 does not match its declared Exit candidate",
+            candidate.segment_id
+        )));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_first_exit_on_sequence_with_budget(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
-    membership_id: &str,
+    membership: &RouteMembershipIndex,
+    sequence: &[String],
     start_node_id: &str,
-    initial_edge_id: &str,
     expected_ramp_id: &str,
+    exact_directed_binding: EndpointSupportState,
+    declared_candidates: &[DirectedEndpointSegment],
     state_budget: usize,
-) -> Result<CorridorExit, RouteMembershipError> {
+) -> Result<CorridorFirstExitResolution, RouteMembershipError> {
     if state_budget == 0 {
         return Err(RouteMembershipError::InvalidInput(
             "corridor state budget must be positive".into(),
@@ -1704,78 +2371,41 @@ pub fn find_first_exit_on_corridor_with_budget(
             "expected ramp id must not be empty".into(),
         ));
     }
-    let membership = route_memberships
-        .iter()
-        .find(|membership| membership.membership_id == membership_id)
-        .ok_or_else(|| {
-            RouteMembershipError::Validation(format!("unknown route membership {}", membership_id))
-        })?;
-    let source_snapshot_sha256 = membership
-        .segments
-        .first()
-        .map(|segment| segment.source_snapshot_sha256.as_str())
-        .ok_or_else(|| {
-            RouteMembershipError::Validation(format!(
-                "route membership {} has no segments",
-                membership_id
-            ))
-        })?;
-    validate_route_membership_structure(graph, route_memberships, source_snapshot_sha256)?;
-    let sequences = relation_sequences(membership);
-    let matching_sequences: Vec<&&RouteMembershipSegment> = sequences
-        .iter()
-        .filter(|segment| {
-            segment
-                .ordered_edge_ids
-                .iter()
-                .any(|id| id == initial_edge_id)
-        })
-        .collect();
-    if matching_sequences.len() != 1 {
-        return Err(RouteMembershipError::Validation(format!(
-            "initial edge {} must occur in exactly one relationMainline segment of {}",
-            initial_edge_id, membership_id
-        )));
+    if sequence.is_empty() {
+        return Err(RouteMembershipError::Segment(
+            "corridor edge sequence is empty".into(),
+        ));
     }
-    let sequence = &matching_sequences[0].ordered_edge_ids;
-    let start_position = sequence
-        .iter()
-        .position(|id| id == initial_edge_id)
-        .ok_or_else(|| {
-            RouteMembershipError::Validation(
-                "initial edge is absent from its relation segment".into(),
-            )
-        })?;
+    for candidate in declared_candidates {
+        validate_declared_exit_candidate(graph, candidate)?;
+    }
     let first_edge = graph
         .edges
         .iter()
-        .find(|edge| edge.id == *initial_edge_id)
+        .find(|edge| edge.id == sequence[0])
         .ok_or_else(|| {
             RouteMembershipError::Validation(format!(
                 "initial edge {} is absent from graph",
-                initial_edge_id
+                sequence[0]
             ))
         })?;
     if first_edge.kind != EdgeKind::Shutoko || first_edge.from != start_node_id {
         return Err(RouteMembershipError::Validation(format!(
             "initial edge {} is not a mainline edge leaving {}",
-            initial_edge_id, start_node_id
+            first_edge.id, start_node_id
         )));
     }
-    let mut position = start_position;
+    validate_ordered_edge_sequence_allowing_repeats(graph, sequence, "return corridor")?;
     let mut path = Vec::new();
     let mut mainline = Vec::new();
-    let mut distance = 0u64;
-    let mut states = 0usize;
-    loop {
-        if states >= state_budget {
+    let mut distance = 0_u64;
+    for (state, edge_id) in sequence.iter().enumerate() {
+        if state >= state_budget {
             return Err(RouteMembershipError::BudgetExceeded(format!(
-                "corridor search exceeded {} states before finding a verified exit",
+                "corridor search exceeded {} states before finding a general Exit",
                 state_budget
             )));
         }
-        states += 1;
-        let edge_id = &sequence[position];
         let edge = graph
             .edges
             .iter()
@@ -1792,93 +2422,274 @@ pub fn find_first_exit_on_corridor_with_budget(
                 edge.id
             )));
         }
-        if let Some(previous_id) = path.last() {
-            let previous = graph
-                .edges
-                .iter()
-                .find(|candidate| candidate.id == *previous_id)
-                .ok_or_else(|| {
-                    RouteMembershipError::Validation(format!(
-                        "corridor edge {} is absent from graph",
-                        previous_id
-                    ))
-                })?;
-            if previous.to != edge.from {
-                return Err(RouteMembershipError::Validation(
-                    "corridor relation segment has a node discontinuity".into(),
-                ));
-            }
-        }
         path.push(edge.id.clone());
         mainline.push(edge.id.clone());
         distance = distance.saturating_add(edge.distance_meters);
-
-        let mut exit_edges = graph
-            .edges
-            .iter()
-            .filter(|candidate| candidate.kind == EdgeKind::Exit && candidate.from == edge.to)
-            .collect::<Vec<_>>();
-        if !exit_edges.is_empty() {
-            exit_edges.sort_by(|left, right| left.id.cmp(&right.id));
-            let first_exit = exit_edges[0];
-            let (bound_segment, ramp) = bound_ramp_segment_for_exit(
-                graph,
-                route_memberships,
-                membership,
-                expected_ramp_id,
-                &first_exit.id,
-            )?;
-            let ramp_edges = validate_ordered_edges(
-                graph,
-                &bound_segment.ordered_edge_ids,
-                &bound_segment.segment_id,
-            )?;
-            let mut full_path = path.clone();
-            full_path.extend(bound_segment.ordered_edge_ids.iter().cloned());
-            if contains_forbidden_transition(&full_path, &graph.forbidden_transitions) {
-                return Err(RouteMembershipError::Validation(
-                    "first corridor Exit contains a forbidden transition".into(),
-                ));
-            }
-            distance = distance.saturating_add(
-                ramp_edges
-                    .iter()
-                    .map(|edge| edge.distance_meters)
-                    .sum::<u64>(),
-            );
-            return Ok(CorridorExit {
-                distance_meters: distance,
-                exit_edge_id: ramp_edges[0].id.clone(),
-                ramp_id: ramp.id.clone(),
-                edge_ids: full_path,
-                mainline_edge_ids: mainline,
-            });
-        }
-
-        if position + 1 >= sequence.len() {
-            return Err(RouteMembershipError::ExitNotFound(format!(
-                "corridor ended without a bound general Exit for {}",
-                expected_ramp_id
-            )));
-        }
-        let next = &sequence[position + 1];
-        let next_edge = graph
-            .edges
-            .iter()
-            .find(|candidate| candidate.id == *next)
-            .ok_or_else(|| {
-                RouteMembershipError::Validation(format!(
-                    "corridor edge {} is absent from graph",
-                    next
-                ))
-            })?;
-        if edge.to != next_edge.from {
+        if contains_forbidden_transition(&path, &graph.forbidden_transitions) {
             return Err(RouteMembershipError::Validation(
-                "corridor cannot continue to the next relation edge".into(),
+                "return corridor contains a forbidden transition".into(),
             ));
         }
-        position += 1;
+
+        let candidates = exit_ramp_candidates(graph, membership, &edge.to);
+        let declared_hits: Vec<&DirectedEndpointSegment> = declared_candidates
+            .iter()
+            .filter(|candidate| candidate.from_node_id == edge.to)
+            .collect();
+        if declared_hits.len() > 1 {
+            return Err(RouteMembershipError::RampBinding(format!(
+                "return corridor has {} declared Exit candidates at {}",
+                declared_hits.len(),
+                edge.to
+            )));
+        }
+        if candidates.is_empty() {
+            if let Some(candidate) = declared_hits.first() {
+                if exact_directed_binding == EndpointSupportState::VerifiedBound {
+                    return Err(RouteMembershipError::RampBinding(format!(
+                        "declared Exit candidate {} is not a verified binding",
+                        candidate.segment_id
+                    )));
+                }
+                return Ok(CorridorFirstExitResolution {
+                    exact_directed_binding,
+                    exit: None,
+                    blocked_exit_edge_id: candidate.edge_ids.first().cloned(),
+                    blocked_ramp_id: Some(expected_ramp_id.to_string()),
+                });
+            }
+            continue;
+        }
+        if candidates.len() != 1 {
+            return Err(RouteMembershipError::RampBinding(format!(
+                "return corridor has {} same-route general Exit bindings at {}",
+                candidates.len(),
+                edge.to
+            )));
+        }
+        let (exit_edge, ramp) = candidates[0];
+        if ramp.id != expected_ramp_id {
+            if exact_directed_binding == EndpointSupportState::VerifiedBound {
+                return Err(RouteMembershipError::RampBinding(format!(
+                    "first general Exit is {} at {}, expected {}",
+                    ramp.id, exit_edge.id, expected_ramp_id
+                )));
+            }
+            return Ok(CorridorFirstExitResolution {
+                exact_directed_binding,
+                exit: None,
+                blocked_exit_edge_id: Some(exit_edge.id.clone()),
+                blocked_ramp_id: Some(ramp.id.clone()),
+            });
+        }
+        if exact_directed_binding != EndpointSupportState::VerifiedBound {
+            return Ok(CorridorFirstExitResolution {
+                exact_directed_binding,
+                exit: None,
+                blocked_exit_edge_id: Some(exit_edge.id.clone()),
+                blocked_ramp_id: Some(ramp.id.clone()),
+            });
+        }
+        let (bound_segment, exact_ramp) = bound_ramp_segment_for_exit(
+            graph,
+            route_memberships,
+            membership,
+            expected_ramp_id,
+            &exit_edge.id,
+        )?;
+        let ramp_edges = validate_ordered_edges(
+            graph,
+            &bound_segment.ordered_edge_ids,
+            &bound_segment.segment_id,
+        )?;
+        let mut full_path = path.clone();
+        full_path.extend(bound_segment.ordered_edge_ids.iter().cloned());
+        if contains_forbidden_transition(&full_path, &graph.forbidden_transitions) {
+            return Err(RouteMembershipError::Validation(
+                "first corridor Exit contains a forbidden transition".into(),
+            ));
+        }
+        distance = distance.saturating_add(
+            ramp_edges
+                .iter()
+                .map(|edge| edge.distance_meters)
+                .sum::<u64>(),
+        );
+        return Ok(CorridorFirstExitResolution {
+            exact_directed_binding,
+            exit: Some(CorridorExit {
+                distance_meters: distance,
+                exit_edge_id: exact_ramp.edge_id.clone(),
+                ramp_id: exact_ramp.id.clone(),
+                edge_ids: full_path,
+                mainline_edge_ids: mainline,
+            }),
+            blocked_exit_edge_id: None,
+            blocked_ramp_id: None,
+        });
     }
+    if exact_directed_binding != EndpointSupportState::VerifiedBound {
+        return Ok(CorridorFirstExitResolution {
+            exact_directed_binding,
+            exit: None,
+            blocked_exit_edge_id: None,
+            blocked_ramp_id: None,
+        });
+    }
+    Err(RouteMembershipError::ExitNotFound(format!(
+        "corridor ended without a general Exit for {} (exactDirectedBinding={})",
+        expected_ramp_id,
+        support_state_label(exact_directed_binding)
+    )))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn find_first_exit_on_corridor_with_binding_budget(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+    start_node_id: &str,
+    initial_edge_id: &str,
+    expected_ramp_id: &str,
+    exact_directed_binding: EndpointSupportState,
+    state_budget: usize,
+) -> Result<CorridorFirstExitResolution, RouteMembershipError> {
+    let membership = corridor_membership(route_memberships, membership_id)?;
+    let source_snapshot_sha256 = membership
+        .segments
+        .first()
+        .map(|segment| segment.source_snapshot_sha256.as_str())
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "route membership {} has no segments",
+                membership_id
+            ))
+        })?;
+    validate_route_membership_structure(graph, route_memberships, source_snapshot_sha256)?;
+    let sequence = corridor_sequence_for_initial_edge(membership, initial_edge_id)?;
+    resolve_first_exit_on_sequence_with_budget(
+        graph,
+        route_memberships,
+        membership,
+        &sequence,
+        start_node_id,
+        expected_ramp_id,
+        exact_directed_binding,
+        &[],
+        state_budget,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn find_first_exit_on_corridor_on_segments_with_binding_budget(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+    start_node_id: &str,
+    initial_edge_id: &str,
+    expected_ramp_id: &str,
+    exact_directed_binding: EndpointSupportState,
+    source_segment_ids: &[String],
+    state_budget: usize,
+) -> Result<CorridorFirstExitResolution, RouteMembershipError> {
+    let membership = corridor_membership(route_memberships, membership_id)?;
+    let source_snapshot_sha256 = membership
+        .segments
+        .first()
+        .map(|segment| segment.source_snapshot_sha256.as_str())
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "route membership {} has no segments",
+                membership_id
+            ))
+        })?;
+    validate_route_membership_structure(graph, route_memberships, source_snapshot_sha256)?;
+    let sequence =
+        corridor_sequence_from_source_segments(membership, source_segment_ids, initial_edge_id)?;
+    resolve_first_exit_on_sequence_with_budget(
+        graph,
+        route_memberships,
+        membership,
+        &sequence,
+        start_node_id,
+        expected_ramp_id,
+        exact_directed_binding,
+        &[],
+        state_budget,
+    )
+}
+
+pub fn find_first_exit_on_corridor_with_budget(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+    start_node_id: &str,
+    initial_edge_id: &str,
+    expected_ramp_id: &str,
+    state_budget: usize,
+) -> Result<CorridorExit, RouteMembershipError> {
+    let resolution = find_first_exit_on_corridor_with_binding_budget(
+        graph,
+        route_memberships,
+        membership_id,
+        start_node_id,
+        initial_edge_id,
+        expected_ramp_id,
+        EndpointSupportState::VerifiedBound,
+        state_budget,
+    )?;
+    resolution.exit.ok_or_else(|| {
+        RouteMembershipError::RampBinding(format!(
+            "first general Exit {} has exactDirectedBinding={}",
+            expected_ramp_id,
+            support_state_label(resolution.exact_directed_binding)
+        ))
+    })
+}
+
+pub fn find_first_exit_on_corridor_with_binding(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+    start_node_id: &str,
+    initial_edge_id: &str,
+    expected_ramp_id: &str,
+    exact_directed_binding: EndpointSupportState,
+) -> Result<CorridorFirstExitResolution, RouteMembershipError> {
+    find_first_exit_on_corridor_with_binding_budget(
+        graph,
+        route_memberships,
+        membership_id,
+        start_node_id,
+        initial_edge_id,
+        expected_ramp_id,
+        exact_directed_binding,
+        CORRIDOR_EXIT_STATE_BUDGET,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn find_first_exit_on_corridor_on_segments_with_binding(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+    start_node_id: &str,
+    initial_edge_id: &str,
+    expected_ramp_id: &str,
+    exact_directed_binding: EndpointSupportState,
+    source_segment_ids: &[String],
+) -> Result<CorridorFirstExitResolution, RouteMembershipError> {
+    find_first_exit_on_corridor_on_segments_with_binding_budget(
+        graph,
+        route_memberships,
+        membership_id,
+        start_node_id,
+        initial_edge_id,
+        expected_ramp_id,
+        exact_directed_binding,
+        source_segment_ids,
+        CORRIDOR_EXIT_STATE_BUDGET,
+    )
 }
 
 pub fn find_first_exit_on_corridor(
@@ -1898,6 +2709,132 @@ pub fn find_first_exit_on_corridor(
         expected_ramp_id,
         CORRIDOR_EXIT_STATE_BUDGET,
     )
+}
+
+fn resolve_directed_route_plan_with_candidates(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    route_plan: &DiagnosticRoutePlan,
+    declared_candidates: &[DirectedEndpointSegment],
+) -> Result<DirectedRoutePlanResolution, RouteMembershipError> {
+    let lap = generate_route_plan_lap_v1(graph, route_memberships, &route_plan.anchor)?;
+    if route_plan.mandatory_lap.membership_id
+        != route_memberships
+            .iter()
+            .find(|membership| {
+                membership.route_id == route_plan.anchor.route_id
+                    && membership.direction == route_plan.anchor.direction
+            })
+            .map(|membership| membership.membership_id.as_str())
+            .unwrap_or_default()
+        || route_plan.mandatory_lap.first_edge_id != lap.first_edge_id
+        || route_plan.mandatory_lap.last_edge_id != lap.last_edge_id
+        || route_plan.mandatory_lap.lap_count != 1
+    {
+        return Err(RouteMembershipError::Validation(
+            "declared mandatory lap does not match the generated routePlanLapV1".into(),
+        ));
+    }
+    if route_plan.entry_corridor.merge_node_id != route_plan.anchor.merge_node_id
+        || route_plan.entry_corridor.terminal_edge_id != route_plan.anchor.merge_terminal_edge_id
+        || route_plan.return_corridor.start_node_id != route_plan.anchor.branch_node_id
+        || route_plan.return_corridor.initial_edge_id != route_plan.anchor.branch_initial_edge_id
+    {
+        return Err(RouteMembershipError::Validation(
+            "route plan corridors do not meet the directed junction M/B boundaries".into(),
+        ));
+    }
+    let entry_membership =
+        corridor_membership(route_memberships, &route_plan.entry_corridor.membership_id)?;
+    if !entry_membership.segments.iter().any(|segment| {
+        segment
+            .ordered_edge_ids
+            .iter()
+            .any(|edge_id| edge_id == &route_plan.entry_corridor.terminal_edge_id)
+    }) {
+        return Err(RouteMembershipError::Validation(
+            "entry corridor terminal edge is not present in its membership".into(),
+        ));
+    }
+    let return_membership =
+        corridor_membership(route_memberships, &route_plan.return_corridor.membership_id)?;
+    let initial_edge = graph
+        .edges
+        .iter()
+        .find(|edge| edge.id == route_plan.return_corridor.initial_edge_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "return initial edge {} is absent from graph",
+                route_plan.return_corridor.initial_edge_id
+            ))
+        })?;
+    if initial_edge.kind != EdgeKind::Shutoko
+        || initial_edge.from != route_plan.anchor.branch_node_id
+    {
+        return Err(RouteMembershipError::Validation(
+            "return corridor initial edge does not leave branch node B".into(),
+        ));
+    }
+    let return_sequence = corridor_sequence_for_initial_edge(
+        return_membership,
+        &route_plan.return_corridor.initial_edge_id,
+    )?;
+    if return_sequence.first() != Some(&route_plan.return_corridor.initial_edge_id) {
+        return Err(RouteMembershipError::Validation(
+            "return corridor initial edge is not the first resolved edge".into(),
+        ));
+    }
+    let first_exit = resolve_first_exit_on_sequence_with_budget(
+        graph,
+        route_memberships,
+        return_membership,
+        &return_sequence,
+        &route_plan.anchor.branch_node_id,
+        &route_plan
+            .return_corridor
+            .first_general_exit
+            .expected_ramp_id,
+        route_plan
+            .return_corridor
+            .first_general_exit
+            .exact_directed_binding,
+        declared_candidates,
+        CORRIDOR_EXIT_STATE_BUDGET,
+    )?;
+    Ok(DirectedRoutePlanResolution { lap, first_exit })
+}
+
+pub fn resolve_directed_route_plan(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    route_plan: &DiagnosticRoutePlan,
+) -> Result<DirectedRoutePlanResolution, RouteMembershipError> {
+    resolve_directed_route_plan_with_candidates(graph, route_memberships, route_plan, &[])
+}
+
+pub fn resolve_diagnostic_radial_route_plan(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    seed: &RadialReturnBillingPairSeed,
+) -> Result<DirectedRoutePlanResolution, RouteMembershipError> {
+    let declared_candidates = declared_exit_candidates(&seed.exit_endpoint);
+    resolve_directed_route_plan_with_candidates(
+        graph,
+        route_memberships,
+        &seed.route_plan,
+        &declared_candidates,
+    )
+}
+
+fn declared_exit_candidates(endpoint: &DiagnosticEndpoint) -> Vec<DirectedEndpointSegment> {
+    match endpoint.support_state {
+        EndpointSupportState::VerifiedBound => endpoint.directed_segments.clone(),
+        EndpointSupportState::Unresolved | EndpointSupportState::Unsupported => endpoint
+            .binding_candidates
+            .iter()
+            .flat_map(|candidate| candidate.directed_segments.iter().cloned())
+            .collect(),
+    }
 }
 
 pub fn find_first_exit_on_corridor_from_edge(
@@ -2254,6 +3191,302 @@ mod tests {
             &lap
         )
         .is_err());
+    }
+
+    #[test]
+    fn generates_the_long_arc_and_rejects_the_short_connector() {
+        let (response, graph, snapshot) = synthetic();
+        let memberships = build_route_membership_indices(
+            &response,
+            &graph,
+            &RouteMembershipBuildOptions {
+                source_snapshot_sha256: snapshot,
+                relation_ids: None,
+                bound_ramp_evidence: evidence(),
+            },
+        )
+        .unwrap();
+        let anchor = DirectedJunctionAnchor {
+            anchor_kind: crate::seed::AnchorKind::DirectedJunction,
+            route_id: "R1".into(),
+            direction: "forward".into(),
+            merge_node_id: "n:2".into(),
+            branch_node_id: "n:4".into(),
+            merge_terminal_edge_id: "e:w101:0:f".into(),
+            branch_initial_edge_id: "e:w999:1:f".into(),
+            arc_policy: crate::seed::ArcPolicy::OrdinaryLongArc,
+            excluded_short_connector: crate::seed::ExcludedShortConnector {
+                from_node_id: "n:4".into(),
+                to_node_id: "n:2".into(),
+                osm_way_id: 999,
+                edge_count: 1,
+                distance_meters: 100,
+            },
+        };
+        let mut graph = graph;
+        graph
+            .edges
+            .push(edge("e:w999:0:f", "n:4", "n:2", EdgeKind::Shutoko));
+        graph
+            .edges
+            .push(edge("e:w999:1:f", "n:4", "n:5", EdgeKind::Shutoko));
+        graph.nodes.push(node("n:5"));
+        let lap = generate_route_plan_lap_v1(&graph, &memberships, &anchor).unwrap();
+        assert_eq!(lap.merge_node_id, "n:2");
+        assert_eq!(lap.branch_node_id, "n:4");
+        assert_eq!(lap.first_edge_id, "e:w102:0:f");
+        assert_eq!(lap.last_edge_id, "e:w103:0:f");
+        assert_eq!(lap.lap_count, 1);
+        assert_eq!(lap.edge_ids, vec!["e:w102:0:f", "e:w103:0:f"]);
+        assert_eq!(
+            lap.edge_ids_sha256,
+            ordered_edge_ids_sha256(&lap.edge_ids).unwrap()
+        );
+        let mut connector_lap = MandatoryLap {
+            membership_id: "route:R1:forward".into(),
+            first_edge_id: "e:w999:0:f".into(),
+            last_edge_id: "e:w999:0:f".into(),
+            lap_count: 1,
+        };
+        assert!(validate_directed_junction_mandatory_lap(
+            &graph,
+            &memberships,
+            &anchor,
+            &connector_lap
+        )
+        .is_err());
+        connector_lap.lap_count = 2;
+        assert!(validate_directed_junction_mandatory_lap(
+            &graph,
+            &memberships,
+            &anchor,
+            &connector_lap
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn generates_a_wrap_around_long_arc_from_a_cyclic_relation_segment() {
+        let graph = Graph {
+            schema_version: 2,
+            release_id: "wrap".into(),
+            vehicle_profile: "passenger-car-etc".into(),
+            nodes: vec![
+                node("n:0"),
+                node("n:1"),
+                node("n:2"),
+                node("n:3"),
+                node("n:4"),
+                node("n:5"),
+            ],
+            edges: vec![
+                edge("e:w900:0:f", "n:2", "n:3", EdgeKind::Shutoko),
+                edge("e:w901:0:f", "n:3", "n:4", EdgeKind::Shutoko),
+                edge("e:w901:1:f", "n:4", "n:0", EdgeKind::Shutoko),
+                edge("e:w902:0:f", "n:0", "n:1", EdgeKind::Shutoko),
+                edge("e:w902:1:f", "n:1", "n:2", EdgeKind::Shutoko),
+                edge("e:w903:0:f", "n:3", "n:5", EdgeKind::Shutoko),
+            ],
+            billing_pairs: Vec::new(),
+            forbidden_transitions: Vec::new(),
+            ramps: Vec::new(),
+            od_tariffs: Vec::new(),
+        };
+        let sequence = vec![
+            "e:w900:0:f".to_string(),
+            "e:w901:0:f".to_string(),
+            "e:w901:1:f".to_string(),
+            "e:w902:0:f".to_string(),
+            "e:w902:1:f".to_string(),
+        ];
+        let segment = RouteMembershipSegment {
+            segment_id: "relation:wrap:forward:0".into(),
+            source_kind: RouteMembershipSourceKind::RelationMainline,
+            source_relation_id: Some("wrap".into()),
+            source_snapshot_sha256: compute_sha256(b"wrap-snapshot"),
+            binding_evidence_id: None,
+            ordered_edge_ids_sha256: ordered_edge_ids_sha256(&sequence).unwrap(),
+            ordered_edge_ids: sequence,
+        };
+        let memberships = vec![RouteMembershipIndex {
+            membership_id: "route:loop:forward".into(),
+            route_id: "loop".into(),
+            direction: "forward".into(),
+            direction_mapping_version: ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION.into(),
+            segments: vec![segment],
+        }];
+        let anchor = DirectedJunctionAnchor {
+            anchor_kind: crate::seed::AnchorKind::DirectedJunction,
+            route_id: "loop".into(),
+            direction: "forward".into(),
+            merge_node_id: "n:0".into(),
+            branch_node_id: "n:3".into(),
+            merge_terminal_edge_id: "e:w901:1:f".into(),
+            branch_initial_edge_id: "e:w903:0:f".into(),
+            arc_policy: crate::seed::ArcPolicy::OrdinaryLongArc,
+            excluded_short_connector: crate::seed::ExcludedShortConnector {
+                from_node_id: "n:3".into(),
+                to_node_id: "n:0".into(),
+                osm_way_id: 901,
+                edge_count: 2,
+                distance_meters: 200,
+            },
+        };
+        let lap = generate_route_plan_lap_v1(&graph, &memberships, &anchor).unwrap();
+        assert_eq!(lap.first_edge_id, "e:w902:0:f");
+        assert_eq!(lap.last_edge_id, "e:w900:0:f");
+        assert_eq!(lap.edge_ids, vec!["e:w902:0:f", "e:w902:1:f", "e:w900:0:f"]);
+        assert_eq!(graph.edges.len(), 6);
+        let resolved = ResolvedRouteSegment {
+            resolved_segment_id: "resolved-lap".into(),
+            role: RoutePlanSegmentRole::MandatoryLap,
+            membership_id: "route:loop:forward".into(),
+            source_segment_ids: vec![memberships[0].segments[0].segment_id.clone()],
+            edge_ids_sha256: ordered_edge_ids_sha256(&lap.edge_ids).unwrap(),
+            edge_ids: lap.edge_ids.clone(),
+        };
+        validate_resolved_route_plan_segments(&graph, &memberships, &[resolved]).unwrap();
+    }
+
+    #[test]
+    fn preserves_first_exit_binding_state_and_does_not_skip_a_same_route_exit() {
+        let (response, mut graph, snapshot) = synthetic();
+        graph
+            .edges
+            .push(edge("e:w900:0:f", "n:2", "n:8", EdgeKind::Exit));
+        graph.nodes.push(node("n:8"));
+        graph.ramps.push(Ramp {
+            id: "ramp:earlier".into(),
+            facility_id: "earlier".into(),
+            name: "earlier".into(),
+            route: "R1".into(),
+            direction: "forward".into(),
+            kind: RampKind::GeneralExit,
+            edge_id: "e:w900:0:f".into(),
+            node_id: "n:8".into(),
+            mainline_node_id: "n:2".into(),
+            restrictions: Vec::new(),
+        });
+        let memberships = build_route_membership_indices(
+            &response,
+            &graph,
+            &RouteMembershipBuildOptions {
+                source_snapshot_sha256: snapshot,
+                relation_ids: None,
+                bound_ramp_evidence: evidence(),
+            },
+        )
+        .unwrap();
+        let unresolved = find_first_exit_on_corridor_with_binding_budget(
+            &graph,
+            &memberships,
+            "route:R1:forward",
+            "n:1",
+            "e:w101:0:f",
+            "ramp:exit",
+            EndpointSupportState::Unresolved,
+            CORRIDOR_EXIT_STATE_BUDGET,
+        )
+        .unwrap();
+        assert_eq!(
+            unresolved.exact_directed_binding,
+            EndpointSupportState::Unresolved
+        );
+        assert!(unresolved.exit.is_none());
+        assert_eq!(
+            unresolved.blocked_exit_edge_id.as_deref(),
+            Some("e:w900:0:f")
+        );
+        assert_eq!(unresolved.blocked_ramp_id.as_deref(), Some("ramp:earlier"));
+        assert!(find_first_exit_on_corridor_with_budget(
+            &graph,
+            &memberships,
+            "route:R1:forward",
+            "n:1",
+            "e:w101:0:f",
+            "ramp:exit",
+            CORRIDOR_EXIT_STATE_BUDGET,
+        )
+        .is_err());
+        let mut c1_graph = graph.clone();
+        c1_graph.edges.retain(|edge| edge.id != "e:w900:0:f");
+        c1_graph.ramps.retain(|ramp| ramp.id != "ramp:earlier");
+        c1_graph
+            .edges
+            .push(edge("e:w901:0:f", "n:2", "n:8", EdgeKind::Exit));
+        c1_graph.ramps.push(Ramp {
+            id: "ramp:c1-exit".into(),
+            facility_id: "c1-exit".into(),
+            name: "C1 exit".into(),
+            route: "C1".into(),
+            direction: "inner".into(),
+            kind: RampKind::GeneralExit,
+            edge_id: "e:w901:0:f".into(),
+            node_id: "n:8".into(),
+            mainline_node_id: "n:2".into(),
+            restrictions: Vec::new(),
+        });
+        let c1_exit = find_first_exit_on_corridor_with_budget(
+            &c1_graph,
+            &memberships,
+            "route:R1:forward",
+            "n:1",
+            "e:w101:0:f",
+            "ramp:exit",
+            CORRIDOR_EXIT_STATE_BUDGET,
+        )
+        .unwrap();
+        assert_eq!(c1_exit.exit_edge_id, "e:w202:0:f");
+    }
+
+    #[test]
+    fn allows_repetition_between_segments_but_rejects_repetition_inside_one() {
+        let (response, graph, snapshot) = synthetic();
+        let memberships = build_route_membership_indices(
+            &response,
+            &graph,
+            &RouteMembershipBuildOptions {
+                source_snapshot_sha256: snapshot,
+                relation_ids: None,
+                bound_ramp_evidence: evidence(),
+            },
+        )
+        .unwrap();
+        let source_id = memberships[0].segments[0].segment_id.clone();
+        let first_edges = vec!["e:w101:0:f".to_string(), "e:w102:0:f".to_string()];
+        let second_edges = vec!["e:w102:0:f".to_string(), "e:w103:0:f".to_string()];
+        let segments = vec![
+            ResolvedRouteSegment {
+                resolved_segment_id: "entry".into(),
+                role: RoutePlanSegmentRole::EntryApproach,
+                membership_id: "route:R1:forward".into(),
+                source_segment_ids: vec![source_id.clone()],
+                edge_ids_sha256: ordered_edge_ids_sha256(&first_edges).unwrap(),
+                edge_ids: first_edges,
+            },
+            ResolvedRouteSegment {
+                resolved_segment_id: "return".into(),
+                role: RoutePlanSegmentRole::ReturnCorridor,
+                membership_id: "route:R1:forward".into(),
+                source_segment_ids: vec![source_id],
+                edge_ids_sha256: ordered_edge_ids_sha256(&second_edges).unwrap(),
+                edge_ids: second_edges,
+            },
+        ];
+        validate_resolved_route_plan_segments(&graph, &memberships, &segments).unwrap();
+        let repeated = vec![
+            segments[0].edge_ids[0].clone(),
+            segments[0].edge_ids[0].clone(),
+        ];
+        let invalid = ResolvedRouteSegment {
+            resolved_segment_id: "invalid".into(),
+            role: RoutePlanSegmentRole::ReturnCorridor,
+            membership_id: "route:R1:forward".into(),
+            source_segment_ids: vec![memberships[0].segments[0].segment_id.clone()],
+            edge_ids_sha256: ordered_edge_ids_sha256(&repeated).unwrap(),
+            edge_ids: repeated,
+        };
+        assert!(validate_resolved_route_plan_segments(&graph, &memberships, &[invalid]).is_err());
     }
 
     #[test]

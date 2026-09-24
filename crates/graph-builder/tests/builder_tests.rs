@@ -1,8 +1,10 @@
 use serde_json::json;
 use shutoko_graph_builder::{
-    build_topology, build_topology_with_report, haversine_distance_meters, ordered_edge_ids_sha256,
-    to_deterministic_json, EdgeKind, OverpassResponse, TopologyConfig, LOCAL_SPEED_KMH,
-    RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
+    bound_ramp_evidence_from_inventory, build_route_membership_indices, build_topology,
+    build_topology_with_report, generate_route_plan_lap_v1, haversine_distance_meters,
+    ordered_edge_ids_sha256, to_deterministic_json, EdgeKind, OverpassResponse,
+    RouteMembershipBuildOptions, TopologyConfig, LOCAL_SPEED_KMH, RAMP_SPEED_KMH,
+    SHUTOKO_SPEED_KMH,
 };
 
 #[test]
@@ -4210,6 +4212,99 @@ fn test_cli_with_full_fixtures() {
     }));
 
     let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let osm_path = manifest_dir.join("../../fixtures/osm/shutoko-all.json");
+    if !osm_path.exists() {
+        return;
+    }
+    let osm: OverpassResponse =
+        serde_json::from_str(&std::fs::read_to_string(&osm_path).unwrap()).unwrap();
+    let (mut graph, _snap) = build_topology(&osm, &TopologyConfig::default()).unwrap();
+    let inventory: shutoko_graph_builder::RampInventoryFile = serde_json::from_str(
+        &std::fs::read_to_string(manifest_dir.join("../../data/ramp-inventory.json")).unwrap(),
+    )
+    .unwrap();
+    let bindings: shutoko_graph_builder::OsmRampBindingsFile = serde_json::from_str(
+        &std::fs::read_to_string(manifest_dir.join("../../data/osm-ramp-bindings.json")).unwrap(),
+    )
+    .unwrap();
+    shutoko_graph_builder::validate_ramp_inventory(&inventory).unwrap();
+    shutoko_graph_builder::validate_osm_ramp_bindings(&bindings, &inventory).unwrap();
+    let (ramps, _artifact, _notes) =
+        shutoko_graph_builder::bind_ramps_to_graph(&graph, &inventory, &bindings);
+    graph.ramps = ramps;
+    let source_snapshot_sha256 = compute_sha256(&std::fs::read(&osm_path).unwrap());
+    let evidence = bound_ramp_evidence_from_inventory(&graph, &inventory, &bindings).unwrap();
+    let memberships = build_route_membership_indices(
+        &osm,
+        &graph,
+        &RouteMembershipBuildOptions {
+            source_snapshot_sha256,
+            relation_ids: Some(vec![4256008, 4256339]),
+            bound_ramp_evidence: evidence,
+        },
+    )
+    .unwrap();
+    let seed = parse_billing_pairs_seed(include_str!(
+        "../../../fixtures/seed-v2/diagnostic-radial-v2.json"
+    ))
+    .unwrap();
+    let generated_plans =
+        shutoko_graph_builder::generate_diagnostic_radial_route_plans(&graph, &memberships, &seed);
+    assert_eq!(generated_plans.len(), 2);
+    assert!(generated_plans.iter().all(|plan| plan.error.is_none()));
+    assert!(generated_plans.iter().all(|plan| plan
+        .resolution
+        .as_ref()
+        .unwrap()
+        .first_exit
+        .exit
+        .is_none()));
+    let radial_pairs = seed.radial_pairs();
+    assert_eq!(radial_pairs.len(), 2);
+    for pair in radial_pairs {
+        let lap =
+            generate_route_plan_lap_v1(&graph, &memberships, &pair.route_plan.anchor).unwrap();
+        assert_eq!(lap.merge_node_id, pair.route_plan.anchor.merge_node_id);
+        assert_eq!(lap.branch_node_id, pair.route_plan.anchor.branch_node_id);
+        assert_eq!(lap.route_id, pair.route_plan.anchor.route_id);
+        assert_eq!(lap.direction, pair.route_plan.anchor.direction);
+        assert_eq!(
+            lap.first_edge_id,
+            pair.route_plan.mandatory_lap.first_edge_id
+        );
+        assert_eq!(lap.last_edge_id, pair.route_plan.mandatory_lap.last_edge_id);
+        assert_eq!(lap.lap_count, 1);
+        let expected_length = if pair.route_plan.anchor.direction == "inner" {
+            527
+        } else {
+            546
+        };
+        assert_eq!(lap.edge_ids.len(), expected_length);
+        let resolution = shutoko_graph_builder::resolve_directed_route_plan(
+            &graph,
+            &memberships,
+            &pair.route_plan,
+        )
+        .unwrap();
+        assert_eq!(
+            resolution.first_exit.exact_directed_binding,
+            pair.route_plan
+                .return_corridor
+                .first_general_exit
+                .exact_directed_binding
+        );
+        assert!(resolution.first_exit.exit.is_none());
+        assert_eq!(
+            resolution.first_exit.exact_directed_binding,
+            shutoko_graph_builder::EndpointSupportState::Unsupported
+        );
+        assert!(resolution.first_exit.blocked_ramp_id.is_none());
+    }
 }
 
 #[test]

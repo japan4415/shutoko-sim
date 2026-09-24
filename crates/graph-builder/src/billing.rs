@@ -9,6 +9,9 @@
 //! and satisfy all graph routing restrictions.
 
 use crate::model::{BillingPair, Edge, EdgeKind, Graph, Price, VerificationStatus};
+use crate::route_membership::{
+    resolve_diagnostic_radial_route_plan, DirectedRoutePlanResolution, RouteMembershipIndex,
+};
 use crate::seed::{
     BillingPairSeed, BillingPairSeedEntry, BillingPairsSeedFile, ParsedBillingPairsSeed,
 };
@@ -87,6 +90,38 @@ pub struct RejectedSeedRecord {
 pub struct BillingGenerationReport {
     pub valid_pairs: Vec<BillingPair>,
     pub rejected_pairs: Vec<RejectedSeedRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RadialRoutePlanGeneration {
+    pub seed_id: String,
+    pub resolution: Option<DirectedRoutePlanResolution>,
+    pub error: Option<String>,
+}
+
+pub fn generate_diagnostic_radial_route_plans(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    seed_file: &ParsedBillingPairsSeed,
+) -> Vec<RadialRoutePlanGeneration> {
+    seed_file
+        .radial_pairs()
+        .into_iter()
+        .map(
+            |seed| match resolve_diagnostic_radial_route_plan(graph, route_memberships, seed) {
+                Ok(resolution) => RadialRoutePlanGeneration {
+                    seed_id: seed.id.clone(),
+                    resolution: Some(resolution),
+                    error: None,
+                },
+                Err(error) => RadialRoutePlanGeneration {
+                    seed_id: seed.id.clone(),
+                    resolution: None,
+                    error: Some(error.to_string()),
+                },
+            },
+        )
+        .collect()
 }
 
 /// Dijkstra search state for deterministic simple path finding.

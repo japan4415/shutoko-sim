@@ -527,7 +527,7 @@ schema 4 の manifest は `billingPairsVersion=v2`、graph schema 4、route plan
 
 ### 3.3 `RouteMembershipIndex` は本線 relation と ramp binding を別々に証明する
 
-Issue #63 で graph-builder にこのデータ型と生成・検証処理を追加した。`--graph-schema 4` を明示した場合だけ `graph.json` の top-level に `routeMemberships[]` を出力し、既定の schema 2 / `fixtures/generated/*` は変更しない。OSM relation の `relationMainline` と、正規ランプ台帳の exact directed binding に由来する `boundRamp` は同じ route/direction の membership 内でも別 segment として保持する。各 segment の `orderedEdgeIdsSha256`、source snapshot hash、way/node/Edge 連続性を builder が検証する。relation member は graph 上の端点連続性から directed path として再構成し、並び替えを無検証な断片にしない。`directionMappingVersion=osm-relation-role/v1` を記録し、route 2 の OSM `forward` / `backward` を `outbound` / `inbound` に正規化する。CLI の schema 4 opt-in は現在の実 snapshot に C1 relation `4256008` と route 2 relation `4256339` が揃う場合だけ relation ID を固定し、合成 snapshot では入力中の route relation を処理する。固定対象以外の relation は bound ramp evidence としてのみ保持する。schema 4 reader、manifest への route membership hash 統合、公開 release の切替は #65/#66 の範囲である。`find_first_exits_from_anchor` は C1 legacy のまま保存し、membership 制約付きの基本処理として `find_first_exit_on_corridor` を新設した。
+Issue #63 で graph-builder にこのデータ型と生成・検証処理を追加し、Issue #64 で `routePlanLapV1` の directed mandatory lap と return-corridor First Exit を同じ membership index 上で生成・検証する処理を追加した。`--graph-schema 4` を明示した場合だけ `graph.json` の top-level に `routeMemberships[]` を出力し、既定の schema 2 / `fixtures/generated/*` は変更しない。OSM relation の `relationMainline` と、正規ランプ台帳の exact directed binding に由来する `boundRamp` は同じ route/direction の membership 内でも別 segment として保持する。各 segment の `orderedEdgeIdsSha256`、source snapshot hash、way/node/Edge 連続性を builder が検証する。relation member は graph 上の端点連続性から directed path として再構成し、並び替えを無検証な断片にしない。`directionMappingVersion=osm-relation-role/v1` を記録し、route 2 の OSM `forward` / `backward` を `outbound` / `inbound` に正規化する。CLI の schema 4 opt-in は現在の実 snapshot に C1 relation `4256008` と route 2 relation `4256339` が揃う場合だけ relation ID を固定し、合成 snapshot では入力中の route relation を処理する。固定対象以外の relation は bound ramp evidence としてのみ保持する。schema 4 reader、manifest への route membership hash 統合、公開 release の切替は #65/#66 の範囲である。`find_first_exits_from_anchor` は C1 legacy のまま保存し、membership 制約付きの `find_first_exit_on_corridor` は B と return corridor の initial edge から relationMainline の順序どおりに一般 Exit を探す。declared candidate の exact binding が `unresolved` / `unsupported` の場合は次の supported Exit へ進まず、その状態を返す。
 
 OSM route relation は mainline を列挙し、一般入口・出口の ramp way を含まない。目黒 entry way `207535708` や天現寺 exit candidate way `172358461` / `422023171` を mainline relation の member として扱い続けると、正しい ramp binding を relation の連続 Edge 列へ不正に対応させる。したがって、graph schema 4 の top-level `routeMemberships[]` は次の二層構造にする。
 
@@ -620,7 +620,7 @@ OSM route relation は mainline を列挙し、一般入口・出口の ramp way
 
 route planのlegは`sourceSegmentIds[]`でmainlineとrampの由来を明示し、その順番に`edgeIds`を連結する。連続性の検証対象を分ける。`mandatory_lap` は必ず1つの `relationMainline` segment の連続部分列でなければならない。entry、return、exit は複数の `relationMainline` と `boundRamp` segment を連結できるが、各 segment 内部の順序・hash・binding 証拠を個別に満たす。relation を持たない ramp を「例外」として無検証で許さない。
 
-`find_first_exit_on_corridor` は、次の条件をすべて満たす場合だけ一般 Exit を返す。
+`find_first_exit_on_corridor` は、Issue #64 の graph-builder 実装で次の条件をすべて満たす場合だけ一般 Exit を返す。
 
 1. mandatory lap の B を出発点とし、return corridor の `initialEdgeId` から探索を始める。
 2. B から Exit split までの mainline Edge は指定 relation の `relationMainline` segment に順番どおり所属する。
@@ -628,7 +628,7 @@ route planのlegは`sourceSegmentIds[]`でmainlineとrampの由来を明示し�
 4. 候補は return corridor 内の一般 Exitだけで、C1 の Exit、entry approach 中の Exit、boundary JCT を数えない。
 5. 禁止遷移を満たし、探索予算を明示して処理する。
 
-B から全グラフの最短 Exit を選ぶ処理は使わない。実データでは B から C1 芝公園 Exit が1,306m、天現寺候補の開始点が1,972mであり、route constraint なしで Exit を選ぶと誤る。天現寺候補が未解決なら`firstGeneralExit.exactDirectedBinding=unresolved`または`unsupported`を保持し、次のsupported Exitへskipしない。First Exit の幾何探索が成功しても、端点 support や pair eligibility の証拠にはしない。
+B から全グラフの最短 Exit を選ぶ処理は使わない。実データでは B から C1 芝公園 Exit が1,306m、天現寺候補の開始点が1,972mであり、route constraint なしで Exit を選ぶと誤る。graph-builder の `resolve_diagnostic_radial_route_plan` は seed の declared candidate を検証し、天現寺候補が未解決なら `firstGeneralExit.exactDirectedBinding=unresolved` または `unsupported` を保持したまま次の supported Exit へ skip しない。候補の探索予算が尽きた場合は `ExitNotFound` ではなく `BudgetExceeded` を返す。First Exit の幾何探索が成功しても、端点 support や pair eligibility の証拠にはしない。
 
 実装テストには次を含める。
 
@@ -644,7 +644,7 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 
 ### 3.4 2号計画の診断用データと公開 BillingPair を分ける
 
-本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、parser test と snapshot で同じ wire shape を確認している。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
+本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、parser test と snapshot で同じ wire shape を確認している。Issue #64 では同じ fixture を graph-builder の diagnostic route-plan resolver に渡し、inner / outer の M→B 長弧と return corridor の状態を検証する。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
 
 binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。binding が解けた後に、route membership、First Exit、全 segment の完全分割を再検証し、graph schema 4 の `radialReturn` として昇格する。昇格後も Issue #41 までは `amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced` を維持する。
 

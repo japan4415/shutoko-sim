@@ -28,7 +28,7 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 
 `anchorNodeId` は入口の合流後から直接区間へ進む本線上の基準状態（ノード）。ここへ一周後に戻り、出口へ進む道路列を定義できるペアを登録する。料金規則の前提は原案に従い、個別ペアの登録ではその適用条件とデータ根拠を確認する。
 
-本節は現行 seed schema 1 / generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の opt-in schema 4 に `RouteMembershipIndex` を追加した。schema 4 の membership は `directionMappingVersion` を持ち、relation mainline と bound ramp の endpoint・順序・hash を個別に検証する。`legacyRing` / `radialReturn` の graph reader、diagnostic plan から公開 BillingPair への昇移、core/WASM/Web の schema 4 consumer は #65/#66 の範囲で未実装である。仕様の正本は[実データ生成パイプライン](data-pipeline.md)とし、既存 C1 8要素の raw seed は変更しない。
+本節は現行 seed schema 1 / generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の opt-in schema 4 に `RouteMembershipIndex` を追加し、Issue #64 で `routePlanLapV1` と return-corridor First Exit の builder 側解決を追加した。schema 4 の membership は `directionMappingVersion` を持ち、relation mainline と bound ramp の endpoint・順序・hash を個別に検証する。`legacyRing` / `radialReturn` の graph reader、diagnostic plan から公開 BillingPair への昇移、core/WASM/Web の schema 4 consumer は #65/#66 の範囲で未実装である。仕様の正本は[実データ生成パイプライン](data-pipeline.md)とし、既存 C1 8要素の raw seed は変更しない。
 
 ## Workers の HTTP 境界
 
@@ -181,7 +181,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 - `HANDOFF_WAYPOINTS_UNVERIFIED`: Google Maps 引き継ぎ経由地選定ルールが暫定であり実機検証未了であることを示す（#8 完了まで常時付与）。2026-09 に Android Chrome + Google マップアプリ「あり」で代表1系列の周回維持を確認したが、アプリ「なし」・iOS Safari・経由地点0〜3点の系列網羅・URL 長上限は未検証のため引き続き付与する（[検証記録](delivery.md) 参照）
 - `STATIC_TRAVEL_TIME`: 渋滞・規制を含まない静的制限速度に基づく推定時間であることを示す
 
-### Issue #42 後の Candidate v2（設計・未実装）
+### Issue #42 後の Candidate v2（builder 側 route-plan 解決は実装済み・reader / consumer は未実装）
 
 graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy outputと区別する。
 
@@ -195,7 +195,7 @@ graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy output�
 - `distanceMeters`はhighway + surface access + surface returnの推定距離、`shutokoDistanceMeters`はhighway Edge距離とする。
 - radialの`handoff`は`{ enabled: false, legUrls: [] }`で返し、device verification gate通過後だけ`enabled=true`と検証済みleg URLを持たせる。
 
-`edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。
+`edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。graph-builder は `routePlanLapV1` の順序付き Edge 列と hash、return corridor の declared Exit candidate を検証し、unresolved / unsupported binding を公開候補に昇格させない。
 
 以下はreader fixture用のwire-level Candidateである。IDと座標はsynthetic valueで、公開可能な2号bindingや料金を表さない。`toll`に`chargedSectionCount`はなく、4 legのindex、segment hash、距離式が一致する。
 

@@ -171,6 +171,8 @@ C1 `LegacyCandidate`は後方互換のため`distanceMeters`と`shutokoDistanceM
 
 `geometry`は首都高Edgeに対応する線分を連結したもので、Webが推定する一般道区間は含めない。地図と詳細画面には`entry_approach → mandatory_lap → return_corridor → exit_approach`を番号とテキストで示す。色だけで順序を示さず、surface access / returnはEdge付き経路に含めず、推定距離と時間として別に表示する。
 
+Issue #70でWeb UIと地図を実装した。`RadialCandidate`は4区間を1〜4の番号、名称、「実線・点線・破線・一点鎖線」の線種で示し、地図の4本にも対応する線種を割り当てる。`surface_access`と`surface_return`は別セクションに推定距離・時間を出し、地図の線には含めない。距離は`distanceMeters`を「総距離」、`shutokoDistanceMeters`を「首都高距離」として同じ定義で表示する。`TopologyOnlyCandidate`は4 roleを捏造せず、一般道アクセス・首都高の道路形状・一般道帰路という3段の順序を色と線種だけに依存せず表示する。`unpriced` radialと`topology_only`は「1区間」「最低料金」を表示せず、商品対象外を明示する。
+
 ### Google Maps URL は道路・方向を保証しない
 
 Google Maps の URL は origin、destination、waypoint を渡せるが、近接 JCT の arm や C1 の道路・向きを強制できない。Waypoint の順序だけを示しても、Google が M/B へ正しく snap し、長弧を維持することは保証されない。この制約を正式に採用し、放射線候補の公開 handoff は既定で無効とする。
@@ -215,7 +217,7 @@ graph schema 4 は reader/consumer と `all-real-v3` の atomic activation ま�
 | 6 | 天現寺 exact directed binding | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。候補から一意な`directedSegments[]`だけ昇格し、way順・node接続・Edge順・hashを固定する。解決できなければ根拠付きunresolved / unsupportedのままにする。 | なし |
 | 7 | 2号 inner / outer radial pair 統合 | schema適合fixtureとC1 non-regressionが通る。exact binding未完ならdiagnostic planのみとする。完了時だけGraph radial pairとpublic eligibilityへ昇格し、#41までtariffは未算出とする。 | 3, 5, 6 |
 | 8 | Candidate route legs と商品・tariff状態（#69実装済み） | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。dynamic ODは`TopologyOnlyCandidate`として`chargedSectionCount` / `ONE_SECTION_TOLL`を撤去し、radialにも同じ項目を出さない。 | 4 |
-| 9 | Web の順序表示 | entry / lap / return / exitを番号・線種・テキストで提示し、surface概算とhighway経路を混同しない。総距離とhighway距離を同じ定義で表示し、unpriced / topology_onlyへ「1区間料金」を出さない。C1 UI regressionを維持する。 | 5, 8 |
+| 9 | Web の順序表示（#70実装済み） | entry / lap / return / exitを番号・線種・テキストで提示し、surface概算とhighway経路を混同しない。総距離とhighway距離を同じ定義で表示し、unpriced / topology_onlyへ「1区間料金」を出さない。C1 UI regressionを維持する。 | 5, 8 |
 | 10 | split Maps URL 生成 | 3 waypoint / 2,048文字制限、legごとの手動継続、URL builder unit / E2Eを実装する。道路・向きを強制できないため、実機gate通過までpublic handoffを無効にする。 | 8 |
 | 11 | Maps 実機検証と release gate | Android / iOS × Web / appの必要matrixをmanifestへ記録する。失敗・期限切れでradial public departureを無効にし、C1への副作用がないことを確認する。device未接続でもcode issue 10は完了可能とする。 | 10 |
 | 12 | Issue #41 後の tariff 統合 | 公式billing distance、車種、税率、単価、最低・上限、丸め、effective intervalを版管理し、C1 8件と2号代表pairを再検証する。OSM distance fallbackとradialの`time_per_yen`無効状態を維持しない。 | #41, 7, 8 |

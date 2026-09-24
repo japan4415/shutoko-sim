@@ -109,6 +109,12 @@ describe("deriveSegments", () => {
       [139.106, 35.106],
       [139.107, 35.107],
     ]);
+    expect(segments.routeLegs.map((leg) => [leg.role, leg.coords.length])).toEqual([
+      ["entry_approach", 4],
+      ["mandatory_lap", 3],
+      ["return_corridor", 2],
+      ["exit_approach", 2],
+    ]);
     expect(segments.charged).toHaveLength(8);
   });
 
@@ -130,6 +136,7 @@ describe("deriveSegments", () => {
     delete value.edgeRouteLegs;
     const segments = deriveSegments(value as unknown as TopologyOnlyCandidate);
     expect(segments.loop).toHaveLength(3);
+    expect(segments.routeLegs).toEqual([]);
     expect(segments.charged).toEqual([]);
   });
 
@@ -199,7 +206,7 @@ describe("deriveSegments", () => {
     const segments = deriveSegments(
       sampleCandidate({ geometry: { type: "LineString", coordinates: [] } }),
     );
-    expect(segments).toEqual({ access: [], loop: [], return: [], charged: [], main: [] });
+    expect(segments).toEqual({ access: [], loop: [], return: [], charged: [], routeLegs: [], main: [] });
   });
 
   it("exit index < entry index なら charged のみ空、他は分解する", () => {

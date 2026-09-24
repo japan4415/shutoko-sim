@@ -1291,6 +1291,104 @@ function renderResult(result: SearchResult): void {
   }
 }
 
+function routeLine(lineStyle: string, lineStyleText: string): HTMLSpanElement {
+  const line = document.createElement("span");
+  line.className = `route-line route-line--${lineStyle}`;
+  line.setAttribute("aria-hidden", "true");
+  line.title = lineStyleText;
+  return line;
+}
+
+function renderRouteOrder(model: CardModel): HTMLElement | null {
+  if (model.routeLegs.length === 0 && model.routeOverview.length === 0) {
+    return null;
+  }
+  const section = document.createElement("section");
+  section.className = "route-order";
+  const heading = document.createElement("h3");
+  heading.textContent = model.routeLegs.length > 0 ? "首都高の経路順序" : "経路の順序（商品対象外）";
+  section.appendChild(heading);
+  if (model.pathSummary !== null) {
+    const summary = document.createElement("p");
+    summary.className = "route-summary";
+    summary.textContent = model.pathSummary;
+    section.appendChild(summary);
+  }
+  const list = document.createElement("ol");
+  list.className = "route-order-list";
+  if (model.routeLegs.length > 0) {
+    for (const leg of model.routeLegs) {
+      const item = document.createElement("li");
+      item.dataset.routeRole = leg.role;
+      const number = document.createElement("span");
+      number.className = "route-step-number";
+      number.textContent = String(leg.number);
+      const copy = document.createElement("span");
+      copy.className = "route-step-copy";
+      const label = document.createElement("strong");
+      label.textContent = leg.label;
+      const style = document.createElement("span");
+      style.className = "route-step-style";
+      style.textContent = leg.lineStyleText;
+      copy.append(label, style);
+      item.append(number, routeLine(leg.lineStyle, leg.lineStyleText), copy);
+      list.appendChild(item);
+    }
+  } else {
+    for (const step of model.routeOverview) {
+      const item = document.createElement("li");
+      const number = document.createElement("span");
+      number.className = "route-step-number";
+      number.textContent = String(step.number);
+      const copy = document.createElement("span");
+      copy.className = "route-step-copy";
+      const label = document.createElement("strong");
+      label.textContent = step.label;
+      const style = document.createElement("span");
+      style.className = "route-step-style";
+      style.textContent = step.lineStyleText;
+      copy.append(label, style);
+      if (step.detail !== "") {
+        const detail = document.createElement("span");
+        detail.className = "route-step-detail";
+        detail.textContent = step.detail;
+        copy.appendChild(detail);
+      }
+      item.append(number, routeLine(step.lineStyle, step.lineStyleText), copy);
+      list.appendChild(item);
+    }
+  }
+  section.appendChild(list);
+  return section;
+}
+
+function renderEstimatedLegs(model: CardModel): HTMLElement | null {
+  if (model.estimatedLegs.length === 0) {
+    return null;
+  }
+  const section = document.createElement("section");
+  section.className = "estimated-legs";
+  const heading = document.createElement("h3");
+  heading.textContent = "一般道の概算区間";
+  const note = document.createElement("p");
+  note.textContent = "一般道の推定区間は地図の線に含めていません。";
+  const list = document.createElement("ul");
+  for (const leg of model.estimatedLegs) {
+    const item = document.createElement("li");
+    const label = document.createElement("span");
+    label.className = "estimated-leg-label";
+    label.textContent = leg.label;
+    const value = document.createElement("span");
+    value.className = "estimated-leg-value";
+    value.textContent = `推定 ${String(leg.distanceKm)} km / 約${String(leg.durationMinutes)}分`;
+    item.dataset.estimatedRole = leg.role;
+    item.append(label, value);
+    list.appendChild(item);
+  }
+  section.append(heading, note, list);
+  return section;
+}
+
 function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
   const card = document.createElement("article");
   card.className = "card";
@@ -1352,14 +1450,35 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
   card.appendChild(charging);
 
   const distance = document.createElement("p");
-  distance.className = "distance";
-  distance.textContent = `実走行距離: ${String(model.distanceKm)} km`;
+  distance.className = "distance distance--total";
+  distance.textContent = `総距離: ${String(model.distanceKm)} km`;
   card.appendChild(distance);
+
+  const shutokoDistance = document.createElement("p");
+  shutokoDistance.className = "distance distance--shutoko";
+  shutokoDistance.textContent = `首都高距離: ${String(model.shutokoDistanceKm)} km`;
+  card.appendChild(shutokoDistance);
+
+  if (model.estimatedLegs.length > 0) {
+    const distanceNote = document.createElement("p");
+    distanceNote.className = "distance-note";
+    distanceNote.textContent = "総距離には一般道の推定距離を含みます。";
+    card.appendChild(distanceNote);
+  }
 
   const accessDist = document.createElement("p");
   accessDist.className = "access-distance";
   accessDist.textContent = `入口まで（直線）: ${String(Number((candidate.snappedOrigin.distanceMeters / 1000).toFixed(1)))} km`;
   card.appendChild(accessDist);
+
+  const routeOrder = renderRouteOrder(model);
+  if (routeOrder !== null) {
+    card.appendChild(routeOrder);
+  }
+  const estimatedLegs = renderEstimatedLegs(model);
+  if (estimatedLegs !== null) {
+    card.appendChild(estimatedLegs);
+  }
 
   // 円当たり効率は金額が算出できたときだけ示す（docs/requirements.md:24）。
   if (model.timePerYen !== null) {

@@ -198,6 +198,8 @@ WASM / Webの`Candidate` unionは`LegacyCandidate | TopologyOnlyCandidate | Radi
 
 `edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。`edgeRouteLegs`と`routePlan`は`RadialCandidate`専用で、`TopologyOnlyCandidate`は宣言済みmandatory lapを意味付けないため持たない。graph-builder は `routePlanLapV1` の順序付き Edge 列と hash、return corridor の declared Exit candidate を検証し、unresolved / unsupported binding を公開候補に昇格させない。
 
+Issue #70でWeb consumerの表示を実装した。radialは4 roleを契約順に番号・名称・線種で提示し、地図も各roleを別の線種で描く。`estimatedLegs`は「一般道の概算区間」として推定距離と時間を別に提示し、地図の線には追加しない。カードと地図は`distanceMeters`を「総距離」、`shutokoDistanceMeters`を「首都高距離」として扱う。`TopologyOnlyCandidate`はedge route legを作らず、商品対象外の道路形状として3段の経路順序を表示する。unpriced radialとtopology-onlyは1区間の商品名・最低料金・円あたり効率を表示しない。
+
 以下はreader fixture用のwire-level Candidateである。IDと座標はsynthetic valueで、公開可能な2号bindingや料金を表さない。`toll`に`chargedSectionCount`はなく、4 legのindex、segment hash、距離式が一致する。
 
 ```json

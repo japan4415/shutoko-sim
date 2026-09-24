@@ -523,13 +523,36 @@ describe("toCardModel", () => {
     expect(model.toll).toBe("料金額: 未算出");
   });
 
-  it("radialReturn は handoff 無効、1区間表現と lap edge を使う", () => {
+  it("radialReturn は4区間・一般道概算・距離定義を分けて表示する", () => {
     const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
     const model = toCardModel(radial);
     expect(model.mapsUrl).toBe("");
     expect(model.chargedSection).toBe("首都高区間: 入口 → 周回 → 戻り");
     expect(model.loopEdgeIds).toEqual(["fixture:edge:lap:1", "fixture:edge:lap:2"]);
     expect(model.tollShort).toBe("未算出");
+    expect(model.routeLegs.map((leg) => [leg.number, leg.role, leg.lineStyle, leg.edgeCount])).toEqual([
+      [1, "entry_approach", "solid", 3],
+      [2, "mandatory_lap", "dotted", 2],
+      [3, "return_corridor", "dashed", 1],
+      [4, "exit_approach", "dash-dot", 1],
+    ]);
+    expect(model.estimatedLegs).toEqual([
+      { role: "surface_access", label: "出発地 → 入口", distanceKm: 1.2, durationMinutes: 4 },
+      { role: "surface_return", label: "出口 → 出発地", distanceKm: 0.8, durationMinutes: 3 },
+    ]);
+    expect(model.pathSummary).toContain("首都高4区間");
+    expect(model.distanceKm).toBe(25.4);
+    expect(model.shutokoDistanceKm).toBe(23.4);
+  });
+
+  it("unpriced radial は1区間文案と円あたり効率を表示しない", () => {
+    const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
+    radial.reasons = ["ONE_SECTION_TOLL"];
+    const model = toCardModel(radial);
+    expect(radial.tariffStatus).toBe("unpriced");
+    expect(model.reasons).toEqual([]);
+    expect(model.timePerYen).toBeNull();
+    expect(model.chargedSection).not.toContain("1区間");
   });
 
   it("topologyOnly は商品対象外として参考料金だけを表示する", () => {
@@ -567,6 +590,14 @@ describe("toCardModel", () => {
     expect(model.chargedSection).not.toContain("1区間");
     expect(model.toll).toBe("参考料金: 500 円");
     expect(model.timePerYen).toBeNull();
+    expect(model.routeLegs).toEqual([]);
+    expect(model.routeOverview.map((step) => [step.number, step.label, step.lineStyle])).toEqual([
+      [1, "一般道アクセス（推定）", "dashed"],
+      [2, "首都高の道路形状", "solid"],
+      [3, "一般道帰路（推定）", "dashed"],
+    ]);
+    expect(model.pathSummary).toContain("首都高の道路形状");
+    expect(model.estimatedLegs).toHaveLength(2);
     expect(recommendedLabel(candidate)).toBeNull();
   });
 
@@ -586,6 +617,11 @@ describe("toCardModel の新フィールド", () => {
     expect(model.returnMinutes).toBe(2); // 120s
     expect(model.bufferMinutes).toBe(2); // 121s → 2 分
     expect(model.distanceKm).toBe(8); // 8000m → 8 km（小数 1 桁）
+    expect(model.shutokoDistanceKm).toBe(5);
+    expect(model.routeLegs).toEqual([]);
+    expect(model.estimatedLegs).toEqual([]);
+    expect(model.routeOverview).toEqual([]);
+    expect(model.pathSummary).toBeNull();
     expect(model.tollShort).toBe("300 円");
     expect(model.timePerYen).toBe("1 円あたり 約 0.08 分");
     expect(model.reasons).toEqual(["時間あたりの料金効率が最良", "1区間料金（最低料金）"]);

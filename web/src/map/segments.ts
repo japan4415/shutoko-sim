@@ -1,9 +1,14 @@
 // 候補の走行エッジ列から地図描画用のセグメント（座標列）を導出する純粋関数。
 // Leaflet に依存しないため Vitest（node env）で検証できる。
-import type { Candidate } from "../worker/types";
+import type { Candidate, RoutePlanSegmentRole } from "../worker/types";
 
 /** GeoJSON と同じ [経度, 緯度] の順。 */
 export type Coords = [number, number];
+
+export interface RouteSegment {
+  role: RoutePlanSegmentRole;
+  coords: Coords[];
+}
 
 /** セグメント種別ごとの座標列。各区間は連続した座標ラン。 */
 export interface DerivedSegments {
@@ -23,6 +28,7 @@ export interface DerivedSegments {
   return: Coords[];
   /** 課金対象の 1 区間（入口エッジ〜出口エッジ）。 */
   charged: Coords[];
+  routeLegs: RouteSegment[];
   /** セグメント分解できなかった全経路（フォールバック描画用）。 */
   main: Coords[];
 }
@@ -43,13 +49,28 @@ export interface DerivedSegments {
  */
 export function deriveSegments(candidate: Candidate): DerivedSegments {
   const all = candidate.geometry.coordinates as Coords[];
-  const empty: DerivedSegments = { access: [], loop: [], return: [], charged: [], main: [] };
+  const empty: DerivedSegments = {
+    access: [],
+    loop: [],
+    return: [],
+    charged: [],
+    routeLegs: [],
+    main: [],
+  };
   const edgeIds = candidate.edgeIds;
 
   // 座標数とエッジ数の整合（coordinates.length === edgeIds.length + 1）を検証する。
   if (edgeIds.length + 1 !== all.length || all.length < 2) {
     return { ...empty, main: all.slice() };
   }
+
+  const routeLegs =
+    candidate.pairKind === "radialReturn"
+      ? candidate.edgeRouteLegs.map((leg) => ({
+          role: leg.role,
+          coords: sliceEdges(all, leg.startEdgeIndex, leg.endEdgeIndexExclusive),
+        }))
+      : [];
 
   let loopStart: number | null;
   let loopEndExclusive: number;
@@ -62,7 +83,7 @@ export function deriveSegments(candidate: Candidate): DerivedSegments {
     loopEndExclusive = loopStart === null ? -1 : loopStart + candidate.loop.edgeIds.length;
   }
   if (loopStart === null || loopEndExclusive <= loopStart) {
-    return { ...empty, main: all.slice() };
+    return { ...empty, routeLegs, main: all.slice() };
   }
 
   // 課金区間は entry エッジから exit エッジまで（entry/exit は loop に含まれる）。
@@ -81,6 +102,7 @@ export function deriveSegments(candidate: Candidate): DerivedSegments {
     loop: sliceEdges(all, loopStart, loopEndExclusive),
     return: sliceEdges(all, loopEndExclusive, edgeIds.length),
     charged,
+    routeLegs,
     main: all.slice(),
   };
 }

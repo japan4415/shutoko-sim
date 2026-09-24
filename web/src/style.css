@@ -408,10 +408,153 @@ button.chip {
 }
 
 .card .distance,
+.card .distance-note,
 .card .breakdown,
 .card .efficiency {
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+.card .distance--total {
+  color: #33383f;
+  font-weight: 600;
+}
+
+.card .route-order,
+.card .estimated-legs {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #b8c7d9;
+  border-left: 4px solid #173f68;
+  border-radius: 8px;
+  background: #f7f9fc;
+  color: #1c1e21;
+}
+
+.card .route-order h3,
+.card .estimated-legs h3 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  color: #173f68;
+}
+
+.card .route-summary,
+.card .estimated-legs > p {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #444b53;
+}
+
+.card .route-order-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card .route-order-list li {
+  display: grid;
+  grid-template-columns: 28px 32px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 0;
+  border-top: 1px solid #d5dde7;
+}
+
+.card .route-order-list li:first-child {
+  border-top: 0;
+}
+
+.card .route-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #173f68;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.card .route-line {
+  display: block;
+  width: 30px;
+  border-top: 3px solid #1c1e21;
+}
+
+.card .route-line--dotted {
+  border-top-style: dotted;
+}
+
+.card .route-line--dashed {
+  border-top-style: dashed;
+}
+
+.card .route-line--dash-dot {
+  height: 4px;
+  border-top: 0;
+  background: repeating-linear-gradient(
+    to right,
+    #1c1e21 0,
+    #1c1e21 8px,
+    transparent 8px,
+    transparent 11px,
+    #1c1e21 11px,
+    #1c1e21 13px,
+    transparent 13px,
+    transparent 16px
+  );
+}
+
+.card .route-step-copy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.card .route-step-copy strong {
+  font-size: 0.85rem;
+}
+
+.card .route-step-style,
+.card .route-step-detail {
+  color: #444b53;
+  overflow-wrap: anywhere;
+}
+
+.card .estimated-legs ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card .estimated-legs li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 32px;
+  padding-top: 6px;
+  border-top: 1px solid #d5dde7;
+  font-size: 0.8rem;
+}
+
+.card .estimated-leg-label {
+  font-weight: 600;
+}
+
+.card .estimated-leg-value {
+  color: #444b53;
+  font-variant-numeric: tabular-nums;
 }
 
 .card .roads {

@@ -61,8 +61,8 @@ pub use device_verification::{
     evaluate_device_verification_gate, parse_device_verification_manifest,
     DeviceVerificationClient, DeviceVerificationGateBlocker, DeviceVerificationGateDecision,
     DeviceVerificationLeg, DeviceVerificationManifest, DeviceVerificationManifestError,
-    DeviceVerificationOs, DeviceVerificationRecord, DeviceVerificationResult,
-    DEVICE_VERIFICATION_MANIFEST_SCHEMA_VERSION,
+    DeviceVerificationOs, DeviceVerificationRecord, DeviceVerificationReleaseConfig,
+    DeviceVerificationResult, DEVICE_VERIFICATION_MANIFEST_SCHEMA_VERSION,
 };
 pub use handoff::{
     maps_url_sha256, MapsHandoffError, MapsHandoffLeg, MapsHandoffLegRole, MapsHandoffLegWire,
@@ -280,6 +280,8 @@ pub struct SearchLimits {
     /// Excludes small JCT connectors, ramps, and spiral loops (e.g. Ohashi JCT ~1.1km).
     /// Defaults to 5,000m (5.0 km).
     pub min_loop_meters: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_verification: Option<DeviceVerificationReleaseConfig>,
 }
 impl Default for SearchLimits {
     fn default() -> Self {
@@ -296,6 +298,7 @@ impl Default for SearchLimits {
             // 30 km: beyond this the engine is outside its operational area.
             max_access_distance_meters: 30_000.0,
             min_loop_meters: 5_000,
+            device_verification: None,
         }
     }
 }
@@ -3133,15 +3136,18 @@ fn build_radial_candidate(
             "radial split Maps URL generation failed: {error:?}"
         ))
     })?;
+    let release_device_verification = pg.limits.device_verification.as_ref();
     let device_verification_gate = device_verification::evaluate_device_verification_gate(
-        None,
+        release_device_verification.map(|config| config.manifest_json.as_str()),
         pair.id.as_str(),
         r.release_id.as_str(),
         &generated_handoff,
-        r.pricing_at.as_str(),
+        release_device_verification.map(|config| config.evaluated_at.as_str()),
     );
     let radial_handoff = CandidateV2Handoff::from_device_verification_gate(
         &generated_handoff,
+        pair.id.as_str(),
+        r.release_id.as_str(),
         &device_verification_gate,
     )
     .map_err(|error| {
@@ -4026,6 +4032,8 @@ pub fn search(
     search_prepared(&pg, r)
 }
 
+const MAX_SEARCH_LIMITS_JSON_BYTES: usize = 2 * 1024 * 1024;
+
 /// Parse and validate strict JSON, then serialize the search response.
 ///
 /// Internally uses [`prepare`] + [`search_prepared`] to avoid cloning the
@@ -4040,7 +4048,7 @@ pub fn search_json(
     const MAX_GRAPH_JSON_BYTES: usize = 512 * 1024 * 1024;
     if graph_json.len() > MAX_GRAPH_JSON_BYTES
         || request_json.len() > 16 * 1024
-        || limits_json.len() > 4096
+        || limits_json.len() > MAX_SEARCH_LIMITS_JSON_BYTES
     {
         return Err(invalid("JSON payload exceeds prototype size limit"));
     }
@@ -4066,7 +4074,7 @@ pub fn search_json(
 /// [`search_prepared_json`] (or [`search_prepared`]) for fast repeated search.
 pub fn prepare_json(graph_json: &str, limits_json: &str) -> Result<PreparedGraph, RoutingError> {
     const MAX_GRAPH_JSON_BYTES: usize = 512 * 1024 * 1024;
-    if graph_json.len() > MAX_GRAPH_JSON_BYTES || limits_json.len() > 4096 {
+    if graph_json.len() > MAX_GRAPH_JSON_BYTES || limits_json.len() > MAX_SEARCH_LIMITS_JSON_BYTES {
         return Err(invalid("JSON payload exceeds prototype size limit"));
     }
     let parsed_graph = graph_v4::read_graph_json(graph_json)?;

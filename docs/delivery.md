@@ -91,10 +91,10 @@ Issue #8（Google マップ引き継ぎの実機成立性検証）に関する�
 1. 端末のOS version、Webならbrowser名とversion、appならapp名とversionを、画面表示のAbout等地から控える。`passed`のrecordへ`unverified`を残さない。
 2. `surface_access`、`loop_transfer`、`surface_return`をこの順で手動継続する。各Maps URLのSHA-256がmanifestの値と一致し、画面が`expectedRoad`と`expectedDirection`を満たすことを確認する。短絡、反対方向、誤ったarm、意図しない入口・出口への変更があれば`failed`とする。
 3. UTC RFC3339の`verifiedAt`と、それより後の`expiresAt`を記録する。未着手または未検証は`verifiedAt=null`、`expiresAt=null`、`result=missing`とする。期限切れを検出した系列は再検証し、新しい`verifiedAt`と`expiresAt`を記録して古い`passed`を残さない。
-4. release gateの判定時刻をUTCで固定する。4系列がすべて`passed`で、判定時刻が各`[verifiedAt, expiresAt)`にあり、route plan、release、builder version、3 leg hashのbindingも一致した場合だけ公開handoffを許可する。1件でもmissing、failed、未開始、期限切れ、manifest欠落・不正、binding不一致なら`enabled=false`、`legUrls=[]`を維持する。
+4. release gateの判定時刻をUTCで固定し、`prepare` / `search`のリリース設定`deviceVerification.evaluatedAt`へ渡す。検索要求の`pricingAt`はgate判定には使わない。4系列がすべて`passed`で、判定時刻が各`[verifiedAt, expiresAt)`にあり、route plan、release、builder version、3 leg hashのbindingも一致した場合だけ公開handoffを許可する。1件でもmissing、failed、未開始、期限切れ、manifest欠落・不正、binding不一致なら`enabled=false`、`legUrls=[]`を維持する。
 5. C1 legacyについて既存のURL生成、handoff、`HANDOFF_WAYPOINTS_UNVERIFIED`が変わらないことを既存contract testで確認する。
 
-Issue #72のコード実装、物理端末の4系列検証、公開handoffの有効化は分離して扱う。現時点はコードと手順だけが存在し、物理検証と公開handoffの有効化はユーザー作業待ちである。
+Issue #72のコード実装、release設定、物理端末の4系列検証、公開handoffの有効化は分離して扱う。現時点では明示設定で検証済みmanifestを接続できるが、物理検証と公開handoffの有効化はユーザー作業待ちである。
 
 ## 未決事項と判断時点
 

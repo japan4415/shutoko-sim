@@ -57,6 +57,7 @@ pub enum MapsHandoffError {
     InvalidLegCount,
     InvalidLegOrder,
     MapsUrlMismatch,
+    DeviceVerificationBindingMismatch,
 }
 
 pub fn maps_url_sha256(maps_url: &str) -> String {

@@ -16,6 +16,11 @@ export interface SearchRequest {
   pricingAt: string;
 }
 
+export interface DeviceVerificationReleaseConfig {
+  manifestJson: string;
+  evaluatedAt: string;
+}
+
 export interface SearchLimits {
   maxExpandedStates?: number;
   beamWidth?: number;
@@ -43,6 +48,7 @@ export interface SearchLimits {
   maxGraphNodes?: number;
   /** Maximum number of edges allowed in the graph. Default: 3,000,000. */
   maxGraphEdges?: number;
+  deviceVerification?: DeviceVerificationReleaseConfig;
 }
 
 export interface SnappedOrigin {
@@ -343,11 +349,17 @@ export interface MapsHandoffLegWire {
   urlSha256: string;
 }
 
-export interface RadialHandoff {
-  enabled: false;
-  legUrls: MapsHandoffLegWire[];
-  disabledReason: "device_verification_pending";
-}
+export type RadialHandoff =
+  | {
+      enabled: true;
+      legUrls: [MapsHandoffLegWire, MapsHandoffLegWire, MapsHandoffLegWire];
+      disabledReason: null;
+    }
+  | {
+      enabled: false;
+      legUrls: [];
+      disabledReason: "device_verification_pending";
+    };
 
 export type DeviceVerificationOs = "android" | "ios";
 export type DeviceVerificationClient = "web" | "app";

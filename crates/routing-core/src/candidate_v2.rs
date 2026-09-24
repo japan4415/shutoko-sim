@@ -115,10 +115,15 @@ pub struct CandidateV2Handoff {
 impl CandidateV2Handoff {
     pub fn from_device_verification_gate(
         generated: &SplitMapsHandoff,
+        route_plan_id: &str,
+        release_id: &str,
         decision: &DeviceVerificationGateDecision,
     ) -> Result<Self, MapsHandoffError> {
         let wire_legs = generated.wire_legs()?;
         if decision.public_departure_enabled() {
+            if !decision.matches_binding(route_plan_id, release_id, generated) {
+                return Err(MapsHandoffError::DeviceVerificationBindingMismatch);
+            }
             return Ok(Self {
                 enabled: true,
                 leg_urls: wire_legs,

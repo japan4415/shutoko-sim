@@ -189,9 +189,11 @@ Issue #71でdevice verification manifestの形式を確定した。正式なJSON
 
 `legs`は`surface_access`、`loop_transfer`、`surface_return`の固定順で、各legの`urlSha256`、検証時点で期待する`expectedRoad`と`expectedDirection`を記録する。`verifications`はAndroid / iOS × Web / appの4組み合わせを重複なく持ち、各recordに`os`、OS version、client、Webならbrowser名・version、appならapp名・versionとなる`clientName` / `clientVersion`、`verifiedAt`、`result`、`expiresAt`を記録する。`result`は`passed`、`failed`、`missing`、`expired`のみ許可し、`missing`だけは`verifiedAt`と`expiresAt`を`null`にする。ほかの値はUTC RFC3339で、`verifiedAt < expiresAt`であることを必須とする。
 
-Rust validatorは型の未知fieldを拒否し、3 legのrole順とSHA-256形式、4環境の一意な完全matrix、時刻、builder versionを検証する。`validate_binding(routePlanId, releaseId, handoff)`はmanifestのroute plan ID、release ID、URL builder version、3 legのURL SHA-256を実際のsplit handoffと照合する。現在のradial探索ではbilling pair IDを`routePlanId`として判定し、manifestを渡さないため常にgateを閉じる。
+Rust validatorは型の未知fieldを拒否し、3 legのrole順とSHA-256形式、4環境の一意な完全matrix、時刻、builder versionを検証する。`passed` recordのOS / client versionに`unverified`、`unknown`、`n/a`、`not verified`を拒否し、Android Webは`chrome`、iOS Webは`safari`、両OSのappは`google_maps`のclient nameも契約化する。`validate_binding(routePlanId, releaseId, handoff)`はmanifestのroute plan ID、release ID、URL builder version、3 legのURL SHA-256を実際のsplit handoffと照合する。radial探索ではbilling pair IDを`routePlanId`として判定する。
 
-Issue #72で`evaluate_device_verification_gate(manifest, routePlanId, releaseId, handoff, evaluatedAt)`を実装した。判定はmanifestのparse / schema検証、route plan・release・builder・3 leg hashの完全binding、4 recordの`passed`、および`verifiedAt <= evaluatedAt < expiresAt`をすべて満たす場合だけ公開を許可する。manifest欠落、schema不正、binding不一致、時刻不正、`missing`、`failed`、未開始、`expired`はいずれもfail-closedで、`CandidateV2Handoff`は`enabled=false`、`legUrls=[]`を返す。gate判定をwebへ渡すWASM / `SearchResult`契約は追加しておらず、現行の既定出力も変更しない。
+Issue #72で`evaluate_device_verification_gate(manifest, routePlanId, releaseId, handoff, evaluatedAt)`を実装した。判定はmanifestのparse / schema検証、route plan・release・builder・3 leg hashの完全binding、4 recordの`passed`、および`verifiedAt <= evaluatedAt < expiresAt`をすべて満たす場合だけ公開を許可する。manifest欠落、schema不正、binding不一致、時刻不正、`missing`、`failed`、未開始、`expired`はいずれもfail-closedで、`CandidateV2Handoff`は`enabled=false`、`legUrls=[]`を返す。open decisionにはroute plan ID、release ID、builder version、3 legのURLとhashを保存し、handoff生成時に同じbindingを再照合するため、別routeや別handoffへdecisionを再利用できない。
+
+リリースでdevice manifestを使う場合、`prepare` / `search`的第3引数JSONに`deviceVerification: { manifestJson, evaluatedAt }`を含める。`evaluatedAt`はrelease時刻として固定したUTC値で、検索要求の料金判定用`pricingAt`とは独立させる。設定省略時の既定はmanifest欠落としてgateを閉じる。WASM / Web型とreaderは明示設定で`enabled=true`、固定順3 leg、URLとSHA-256一致まで受理するが、現行releaseの既定出力は引き続き`enabled=false`で変更しない。
 
 ### Issue #41 までは1区間の商品状態と金額を分離する
 

@@ -6,19 +6,19 @@
   "legs": [
     {
       "role": "surface_access",
-      "urlSha256": "313da8968f106abcc8621e983f97bde4954ad6939fe2f92882bd4165bb3e1d36",
+      "urlSha256": "8790daed7cbd88dcf1edbe954cff52c41ff3904ddd8a0f56c814de40691aa4ae",
       "expectedRoad": "首都高速道路",
       "expectedDirection": "目黒入口から2号線外回りへ"
     },
     {
       "role": "loop_transfer",
-      "urlSha256": "fc5f8d5f4b79166ae1baa6d9acf59e97af700bed455d06cb5e19134d57d9f995",
+      "urlSha256": "8119da24106c10c0a9a6356d764daa1019538e21264c20b77d2e8bfad018c621",
       "expectedRoad": "首都高速2号線",
       "expectedDirection": "2号線外回りで天現寺JCTまで"
     },
     {
       "role": "surface_return",
-      "urlSha256": "732547520bdb5095faa437dc8c6c294362577cbc7b8922cfcd184da43f651844",
+      "urlSha256": "157b37796922a72a9f633bc9002c85813f9d0f2dd1bada9b4300bfbb0a462bd7",
       "expectedRoad": "首都高速道路",
       "expectedDirection": "天現寺出口から出発地点へ"
     }

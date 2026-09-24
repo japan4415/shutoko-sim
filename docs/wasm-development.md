@@ -2,7 +2,7 @@
 
 ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、schema 2 / 3 / 4 の対応表、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。schema 4 では `routeMemberships` と `billingPairs[].pairKind` / anchor kind も必須にする。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
 
-ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65でschema 4 pair unionとCandidate readerを追加し、Issue #69で`LegacyCandidate | TopologyOnlyCandidate | RadialCandidate`の3種類、dynamic topology-only、synthetic radial検索を追加した。Issue #71でradial handoffの`disabledReason`と将来gate用の`MapsHandoffLegWire` wire型を追加したため`contractVersion=4`へ更新した。device verification manifestのTypeScript型も追加したが、`SearchResult`の既定出力へ載せない独立contractなので`contractVersion`は4のままである。Issue #72のrelease gateはrouting-coreのmanifest評価とhandoff決定だけで、WASM境界・`SearchResult`・既定公開成果物を変更しない。`graphSchemaVersion=4`と`supportedGraphSchemaVersions=[2,3,4]`は変わらない。公開artifactとC1 releaseの互換性維持のためengine package versionと`engineVersion=0.1.0`は据え置き、公開graphの既定schemaも#66まで2のままである。
+ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65でschema 4 pair unionとCandidate readerを追加し、Issue #69で`LegacyCandidate | TopologyOnlyCandidate | RadialCandidate`の3種類、dynamic topology-only、synthetic radial検索を追加した。Issue #71でradial handoffの`disabledReason`と将来gate用の`MapsHandoffLegWire` wire型を追加したため`contractVersion=4`へ更新した。Issue #72では`SearchLimits.deviceVerification`をリリース時固定のmanifest / 判定時刻の入力として追加し、`RadialHandoff`をenabled / disabledの判別可能な型へ修正した。search requestや`SearchResult`の既定shapeは変えず、設定なしでは radial handoffが閉じるため`contractVersion`は4のままである。`graphSchemaVersion=4`と`supportedGraphSchemaVersions=[2,3,4]`は変わらない。公開artifactとC1 releaseの互換性維持のためengine package versionと`engineVersion=0.1.0`は据え置き、公開graphの既定schemaも#66まで2のままである。
 
 ## 今回の実装範囲
 
@@ -37,14 +37,14 @@ node scripts/test-wasm.mjs
 `dist/wasm/` に `.wasm`、ES module の JS glue、および TypeScript 型定義を生成する。
 - TypeScript 正典型定義: `crates/routing-wasm/types/index.d.ts`
 - ビルドスクリプト（`scripts/build-wasm.sh`）がビルド完了時に `dist/wasm/index.d.ts` へコピーし、npm パッケージ / Web Worker から直接型参照可能にする。
-- 定義される主要型: `SearchRequest`, `SearchLimits`, `SearchResult`, `LegacyCandidate`, `TopologyOnlyCandidate`, `RadialCandidate`, `Candidate`, `GraphBillingPairV2`, `RouteMembershipIndex`, `EdgeRouteLeg`, `EstimatedLeg`, `Handoff`, `MapsHandoffLegWire`, `RadialHandoff`, `DeviceVerificationManifest`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
+- 定義される主要型: `SearchRequest`, `SearchLimits`, `DeviceVerificationReleaseConfig`, `SearchResult`, `LegacyCandidate`, `TopologyOnlyCandidate`, `RadialCandidate`, `Candidate`, `GraphBillingPairV2`, `RouteMembershipIndex`, `EdgeRouteLeg`, `EstimatedLeg`, `Handoff`, `MapsHandoffLegWire`, `RadialHandoff`, `DeviceVerificationManifest`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
 
 `test-wasm.mjs` は配信用と同じ `--target web` の glue と WASM を Node.js でロードし、以下を自動検証する:
 1. graph schema 2 / 4 の prepare、schema 4 `legacyRing` / `radialReturn` と `sameNode` / `directedJunction` の reader 契約
 2. 合成グラフに対する `originNodeId` 探索および期待されるエッジ列・時間・料金の算出
 3. 決定論性（同一入力による連続実行でバイト完全一致）
 4. 候補の新フィールド構造（GeoJSON `LineString` 幾何、`mapsUrl` 形式および長さ ≤ 2,048、`snappedOrigin`、`warnings` への `HANDOFF_WAYPOINTS_UNVERIFIED` の包含）
-5. schema 4のsynthetic radial pairから4 highway leg / 2 surface leg / 距離式を持つ`RadialCandidate`と、`chargedSectionCount`を持たない`TopologyOnlyCandidate`の生成。radial handoffは`enabled=false`、`legUrls=[]`、`disabledReason=device_verification_pending`で固定する
+5. schema 4のsynthetic radial pairから4 highway leg / 2 surface leg / 距離式を持つ`RadialCandidate`と、`chargedSectionCount`を持たない`TopologyOnlyCandidate`の生成。device verification設定なしではradial handoffを`enabled=false`、`legUrls=[]`、`disabledReason=device_verification_pending`に固定し、明示したtest manifestでは固定順3 legとURL hashを検証して`enabled=true`にする
 6. 座標入力（`origin: { lat, lon }`）による空間スナップ探索
 7. 200m 超過座標における接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
 8. 異常入力の拒否と JavaScript Error（Error の `message` に `RoutingErrorPayload { code: "INVALID_INPUT", message }` の JSON 文字列）のスロー検証
@@ -59,7 +59,7 @@ await init();
 const result = JSON.parse(search(graphJson, requestJson, '{}'));
 ```
 
-引数は順にグラフ JSON、検索条件 JSON、探索上限 JSON の文字列。`{}` は既定の探索上限を選ぶ。入力不備は JavaScript `Error`（`message` に `RoutingErrorPayload` JSON 文字列）としてスローされるため、呼び出し元で捕捉する。戻り値も JSON 文字列で、候補なしや探索打ち切りは正常な探索結果として扱う。
+引数は順にグラフ JSON、検索条件 JSON、探索上限兼release設定 JSON の文字列。`{}` は既定の探索上限を選び、device verification gateも閉じる。リリースで検証済みmanifestを使う場合だけ、このJSONへ`{"deviceVerification":{"manifestJson":"...","evaluatedAt":"..."}}`を含める。`evaluatedAt`はリリース時刻のUTC値であり、検索条件の`pricingAt`から補わない。入力不備は JavaScript `Error`（`message` に `RoutingErrorPayload` JSON 文字列）としてスローされるため、呼び出し元で捕捉する。戻り値も JSON 文字列で、候補なしや探索打ち切りは正常な探索結果として扱う。
 
 Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `search_json` を利用できる。動作する入力例は [人工グラフ](../fixtures/synthetic-graph.json) と [検索条件](../fixtures/synthetic-request.json) を参照する。
 

@@ -479,6 +479,8 @@ const ROUTE_ROLES: RoutePlanSegmentRole[] = [
   "exit_approach",
 ];
 
+const MAPS_HANDOFF_ROLES = ["surface_access", "loop_transfer", "surface_return"] as const;
+
 function assertStringArray(value: unknown, label: string): asserts value is string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
     throw contractMismatch(`${label} が非空文字列配列ではありません`);
@@ -572,6 +574,48 @@ function validateTariffStatus(
       toll.billingDistanceMeters != null)
   ) {
     throw contractMismatch(`${label} tariffStatus が toll と一致しません`);
+  }
+}
+
+async function validateRadialHandoff(value: unknown): Promise<void> {
+  if (
+    !isRecord(value) ||
+    typeof value.enabled !== "boolean" ||
+    !Array.isArray(value.legUrls) ||
+    !(value.disabledReason === null || typeof value.disabledReason === "string")
+  ) {
+    throw contractMismatch("radialReturn handoff の device verification 状態드가不正です");
+  }
+  if (value.enabled === false) {
+    if (value.legUrls.length !== 0 || value.disabledReason !== "device_verification_pending") {
+      throw contractMismatch("radialReturn handoff が device verification 待ちで無効ではありません");
+    }
+    return;
+  }
+  if (value.disabledReason !== null || value.legUrls.length !== MAPS_HANDOFF_ROLES.length) {
+    throw contractMismatch("radialReturn handoff の enabled 状態と device verification が不一致です");
+  }
+  for (let index = 0; index < MAPS_HANDOFF_ROLES.length; index += 1) {
+    const leg = value.legUrls[index];
+    if (
+      !isRecord(leg) ||
+      Object.keys(leg).length !== 3 ||
+      Object.keys(leg).some((field) => !["role", "mapsUrl", "urlSha256"].includes(field)) ||
+      leg.role !== MAPS_HANDOFF_ROLES[index] ||
+      typeof leg.mapsUrl !== "string" ||
+      !leg.mapsUrl.startsWith("https://www.google.com/maps/dir/?api=1&origin=") ||
+      leg.mapsUrl.length > 2048 ||
+      leg.mapsUrl.includes("nav=") ||
+      leg.mapsUrl.includes("launch=") ||
+      leg.mapsUrl.includes("dir_action=")
+    ) {
+      throw contractMismatch("radialReturn handoff の Maps leg が不正です");
+    }
+    assertSha256(leg.urlSha256, `radialReturn handoff.legUrls[${String(index)}].urlSha256`);
+    const digest = await hexDigest(new TextEncoder().encode(leg.mapsUrl).buffer as ArrayBuffer);
+    if (digest !== leg.urlSha256) {
+      throw contractMismatch("radialReturn handoff の URL と SHA-256 が一致しません");
+    }
   }
 }
 
@@ -700,15 +744,7 @@ async function validateRadialCandidate(candidate: unknown): Promise<void> {
     throw contractMismatch("radialReturn toll に chargedSectionCount があります");
   }
   validateTariffStatus(candidate, "radialReturn", true);
-  if (
-    !isRecord(candidate.handoff) ||
-    candidate.handoff.enabled !== false ||
-    !Array.isArray(candidate.handoff.legUrls) ||
-    candidate.handoff.legUrls.length !== 0 ||
-    candidate.handoff.disabledReason !== "device_verification_pending"
-  ) {
-    throw contractMismatch("radialReturn handoff が device verification 待ちで無効ではありません");
-  }
+  await validateRadialHandoff(candidate.handoff);
 }
 
 /**

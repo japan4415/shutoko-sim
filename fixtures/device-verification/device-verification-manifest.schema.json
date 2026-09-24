@@ -190,6 +190,74 @@
               }
             }
           ]
+        },
+        {
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "os": { "const": "android" },
+                  "client": { "const": "web" }
+                },
+                "required": ["os", "client"]
+              },
+              "then": {
+                "properties": { "clientName": { "const": "chrome" } }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "os": { "const": "android" },
+                  "client": { "const": "app" }
+                },
+                "required": ["os", "client"]
+              },
+              "then": {
+                "properties": { "clientName": { "const": "google_maps" } }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "os": { "const": "ios" },
+                  "client": { "const": "web" }
+                },
+                "required": ["os", "client"]
+              },
+              "then": {
+                "properties": { "clientName": { "const": "safari" } }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "os": { "const": "ios" },
+                  "client": { "const": "app" }
+                },
+                "required": ["os", "client"]
+              },
+              "then": {
+                "properties": { "clientName": { "const": "google_maps" } }
+              }
+            },
+            {
+              "if": {
+                "properties": { "result": { "const": "passed" } },
+                "required": ["result"]
+              },
+              "then": {
+                "properties": {
+                  "osVersion": {
+                    "not": { "enum": ["unverified", "unknown", "n/a", "not verified"] }
+                  },
+                  "clientVersion": {
+                    "not": { "enum": ["unverified", "unknown", "n/a", "not verified"] }
+                  }
+                }
+              }
+            }
+          ]
         }
       ]
     },

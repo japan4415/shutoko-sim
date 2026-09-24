@@ -133,6 +133,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 - `max_pairs`: 課金ペア探索対象上限（デフォルト 10）。座標検索（入口 tier 探索）では各 tier 内で評価する検証済み課金ペア数の上限として tier 単位に適用される。従来のノード検索（`originNodeId`）や、`origin` 座標を伴わない片側ランプ指定では全体の課金ペア探索対象上限として機能する。`origin` 座標と片側ランプ指定を併用した場合は座標検索として tier 単位に適用される。入口・出口双方を指定する明示OD探索には適用しない
 - `max_access_distance_meters`: 最大アクセス距離（デフォルト 30,000m）
 - `max_access_entries`: 最大アクセス入口数（デフォルト 0 = 無制限）
+- `device_verification`: リリース時固定の`manifestJson`とUTCの`evaluatedAt`。省略時はdevice verification gateを閉じ、検索要求の`pricingAt`を判定時刻に代用しない
 
 ### 探索結果の status と reason コード
 結果は `requestId`、`releaseId`、`status`（`ok` / `no_candidates` / `truncated`）、`reason`、`rankingMode`、`expandedStates`、`candidates`、`nearestAccess`、`minPlanSeconds` を持つ。`reason` は該当時のみ以下のコードをとる:
@@ -382,9 +383,9 @@ radial用のsplit builderは`surface_access` → `loop_transfer` → `surface_re
 
 Google Maps URLはwaypointの順序を示しても、近接JCTの正しいarm、首都高の道路、radialの往路・復路を強制できない。Issue #71では独立したdevice verification manifestを`schemaVersion=1`で定義する。JSON Schemaの正本は`fixtures/device-verification/device-verification-manifest.schema.json`、リポジトリ内の未検証記録は`data/device-verification-manifest.json`、Rust / TypeScript型の`DeviceVerificationManifest`は両者に一致させる。manifestは`routePlanId`、`releaseId`、`urlBuilderVersion`、固定順3 legの`urlSha256` / `expectedRoad` / `expectedDirection`、Android / iOS × Web / appの4要素の`verifications`を必須とする。
 
-各verification recordはOS version、`client=web`ならbrowser、`client=app`ならappの名称・versionを表す`clientName` / `clientVersion`、`verifiedAt`、`result`、`expiresAt`を持つ。`result`は`passed`、`failed`、`missing`、`expired`だけで、`missing`では2つの時刻を`null`にする。Rust validatorは未知field、3 legの順序とSHA-256、4環境の一意な完全matrix、UTC RFC3339と`verifiedAt < expiresAt`、URL builder versionを検証し、`validate_binding`でroute plan ID、release ID、builder version、実際の3 leg URL hashとの一致を検証する。
+各verification recordはOS version、`client=web`ならbrowser、`client=app`ならappの名称・versionを表す`clientName` / `clientVersion`、`verifiedAt`、`result`、`expiresAt`を持つ。`result`は`passed`、`failed`、`missing`、`expired`だけで、`missing`では2つの時刻を`null`にする。Rust validatorは未知field、3 legの順序とSHA-256、4環境の一意な完全matrix、UTC RFC3339と`verifiedAt < expiresAt`、URL builder versionを検証する。`passed` recordではplaceholder versionを拒否し、Android WebはChrome、iOS WebはSafari、appはGoogle Mapsの名称を要求する。`validate_binding`はroute plan ID、release ID、builder version、実際の3 leg URL hashとの一致を検証する。
 
-Issue #72のrelease gateは上記bindingと4 recordがすべて`passed`で、判定時刻が各`[verifiedAt, expiresAt)`にある場合だけ公開を許可する。manifest欠落・不正、binding不一致、判定時刻不正、`missing`、`failed`、未開始、`expired`のいずれか1件でも`enabled=false`と空`legUrls`へ閉じる。現在のリポジトリ内manifestは4系列とも`missing`で、実機検証と公開handoffの有効化は未実施である。manifestは`SearchResult`の既定出力schemaへ追加しない。C1 legacyのURL、handoff、`HANDOFF_WAYPOINTS_UNVERIFIED`はgate処理の前後で変更しない。詳細は[ルート探索設計](routing.md)を正本とする。
+Issue #72のrelease gateは上記bindingと4 recordがすべて`passed`で、リリース時の`evaluatedAt`が各`[verifiedAt, expiresAt)`にある場合だけ公開を許可する。manifest欠落・不正、binding不一致、判定時刻不正、`missing`、`failed`、未開始、`expired`のいずれか1件でも`enabled=false`と空`legUrls`へ閉じる。open判定はroute plan ID、release ID、builder version、3 legのURLとhashへ結び付け、handoff生成時に再照合する。リリース設定は`prepare` / `search`の`SearchLimits` JSON内の`deviceVerification`へ`manifestJson`と`evaluatedAt`を指定し、検索要求の`pricingAt`はgate判定に使わない。設定省略時はmanifest欠落として閉じる。現在のリポジトリ内manifestも4系列とも`missing`で、実機検証と公開handoffの有効化は未実施である。WASM / Web readerは明示設定時の`enabled=true`と3 legの順序・URL hashを検証するが、`SearchResult`の既定出力schemaは変更しない。C1 legacyのURL、handoff、`HANDOFF_WAYPOINTS_UNVERIFIED`はgate処理の前後で変更しない。詳細は[ルート探索設計](routing.md)を正本とする。
 
 ## 地図・住所検索のデータ利用
 

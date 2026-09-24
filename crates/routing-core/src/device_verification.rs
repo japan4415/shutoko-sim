@@ -1,4 +1,6 @@
-use crate::handoff::{MapsHandoffError, MapsHandoffLegRole, SplitMapsHandoff, URL_BUILDER_VERSION};
+use crate::handoff::{
+    MapsHandoffError, MapsHandoffLegRole, MapsHandoffLegWire, SplitMapsHandoff, URL_BUILDER_VERSION,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -6,6 +8,13 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 pub const DEVICE_VERIFICATION_MANIFEST_SCHEMA_VERSION: u8 = 1;
 const MAX_MANIFEST_BYTES: usize = 256 * 1024;
 const MAX_TEXT_LENGTH: usize = 256;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeviceVerificationReleaseConfig {
+    pub manifest_json: String,
+    pub evaluated_at: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -44,9 +53,43 @@ pub enum DeviceVerificationGateBlocker {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeviceVerificationGateBinding {
+    route_plan_id: String,
+    release_id: String,
+    builder_version: String,
+    legs: Vec<MapsHandoffLegWire>,
+}
+
+impl DeviceVerificationGateBinding {
+    fn new(
+        route_plan_id: &str,
+        release_id: &str,
+        handoff: &SplitMapsHandoff,
+    ) -> Result<Self, MapsHandoffError> {
+        Ok(Self {
+            route_plan_id: route_plan_id.to_owned(),
+            release_id: release_id.to_owned(),
+            builder_version: handoff.builder_version.clone(),
+            legs: handoff.wire_legs()?,
+        })
+    }
+
+    fn matches(&self, route_plan_id: &str, release_id: &str, handoff: &SplitMapsHandoff) -> bool {
+        let Ok(legs) = handoff.wire_legs() else {
+            return false;
+        };
+        self.route_plan_id == route_plan_id
+            && self.release_id == release_id
+            && self.builder_version == handoff.builder_version
+            && self.legs == legs
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceVerificationGateDecision {
     public_departure_enabled: bool,
     blocked_by: Option<DeviceVerificationGateBlocker>,
+    binding: Option<DeviceVerificationGateBinding>,
 }
 
 impl DeviceVerificationGateDecision {
@@ -58,10 +101,22 @@ impl DeviceVerificationGateDecision {
         self.blocked_by
     }
 
-    fn open() -> Self {
+    pub(crate) fn matches_binding(
+        &self,
+        route_plan_id: &str,
+        release_id: &str,
+        handoff: &SplitMapsHandoff,
+    ) -> bool {
+        self.binding
+            .as_ref()
+            .is_some_and(|binding| binding.matches(route_plan_id, release_id, handoff))
+    }
+
+    fn open(binding: DeviceVerificationGateBinding) -> Self {
         Self {
             public_departure_enabled: true,
             blocked_by: None,
+            binding: Some(binding),
         }
     }
 
@@ -69,6 +124,7 @@ impl DeviceVerificationGateDecision {
         Self {
             public_departure_enabled: false,
             blocked_by: Some(blocked_by),
+            binding: None,
         }
     }
 }
@@ -141,7 +197,7 @@ pub fn evaluate_device_verification_gate(
     route_plan_id: &str,
     release_id: &str,
     handoff: &SplitMapsHandoff,
-    evaluated_at: &str,
+    evaluated_at: Option<&str>,
 ) -> DeviceVerificationGateDecision {
     let Some(manifest_json) = manifest_json else {
         return DeviceVerificationGateDecision::closed(
@@ -169,7 +225,7 @@ pub fn evaluate_device_verification_gate(
             DeviceVerificationGateBlocker::BindingMismatch,
         );
     }
-    let Some(evaluated_at) = parse_utc(evaluated_at) else {
+    let Some(evaluated_at) = evaluated_at.and_then(parse_utc) else {
         return DeviceVerificationGateDecision::closed(
             DeviceVerificationGateBlocker::EvaluationTimeInvalid,
         );
@@ -232,7 +288,12 @@ pub fn evaluate_device_verification_gate(
             DeviceVerificationGateBlocker::VerificationExpired,
         );
     }
-    DeviceVerificationGateDecision::open()
+    match DeviceVerificationGateBinding::new(route_plan_id, release_id, handoff) {
+        Ok(binding) => DeviceVerificationGateDecision::open(binding),
+        Err(_) => {
+            DeviceVerificationGateDecision::closed(DeviceVerificationGateBlocker::HandoffInvalid)
+        }
+    }
 }
 
 impl DeviceVerificationManifest {
@@ -281,6 +342,10 @@ impl DeviceVerificationManifest {
             if !valid_text(&record.os_version)
                 || !valid_text(&record.client_name)
                 || !valid_text(&record.client_version)
+                || (record.result == DeviceVerificationResult::Passed
+                    && (!valid_verified_version(&record.os_version)
+                        || !valid_verified_version(&record.client_version)
+                        || !valid_client_name(record)))
             {
                 return Err(DeviceVerificationManifestError::InvalidEnvironmentVersion);
             }
@@ -350,6 +415,29 @@ fn valid_text(value: &str) -> bool {
     !value.is_empty()
         && value.chars().count() <= MAX_TEXT_LENGTH
         && !value.chars().any(char::is_control)
+}
+
+fn valid_verified_version(value: &str) -> bool {
+    valid_text(value)
+        && !matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "unverified" | "unknown" | "n/a" | "not verified"
+        )
+}
+
+fn valid_client_name(record: &DeviceVerificationRecord) -> bool {
+    match (record.os, record.client) {
+        (DeviceVerificationOs::Android, DeviceVerificationClient::Web) => {
+            record.client_name == "chrome"
+        }
+        (DeviceVerificationOs::Ios, DeviceVerificationClient::Web) => {
+            record.client_name == "safari"
+        }
+        (
+            DeviceVerificationOs::Android | DeviceVerificationOs::Ios,
+            DeviceVerificationClient::App,
+        ) => record.client_name == "google_maps",
+    }
 }
 
 fn valid_sha256(value: &str) -> bool {

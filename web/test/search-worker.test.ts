@@ -120,17 +120,7 @@ describe("search-worker: 並行リリース切り替え時のライフサイク�
             reason: null,
             nearestAccess: null,
             minPlanSeconds: null,
-            candidates: [
-              {
-                edgeIds: ["e1"],
-                duration: { baseSeconds: 100, planSeconds: 120 },
-                toll: { amountYen: 300, chargedSectionCount: 1 },
-                geometry: { type: "LineString", coordinates: [] },
-                handoff: { mapsUrl: "https://maps.example.com" },
-                snappedOrigin: { nodeId: "n1", distanceMeters: 0 },
-                warnings: [],
-              },
-            ],
+            candidates: [],
           });
         },
       };
@@ -384,17 +374,7 @@ describe("search-worker: 並行リリース切り替え時のライフサイク�
             reason: null,
             nearestAccess: null,
             minPlanSeconds: null,
-            candidates: [
-              {
-                edgeIds: ["e1"],
-                duration: { baseSeconds: 100, planSeconds: 120 },
-                toll: { amountYen: 300, chargedSectionCount: 1 },
-                geometry: { type: "LineString", coordinates: [] },
-                handoff: { mapsUrl: "https://maps.example.com" },
-                snappedOrigin: { nodeId: "n1", distanceMeters: 0 },
-                warnings: [],
-              },
-            ],
+            candidates: [],
           });
         },
       };

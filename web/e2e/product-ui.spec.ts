@@ -117,7 +117,7 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
 
 async function stubWorkerWithRadialCandidate(
   page: Page,
-  variant: "radial" | "topologyOnly" | "pricedIneligible" = "radial",
+  variant: "radial" | "radialEnabled" | "topologyOnly" | "pricedIneligible" = "radial",
 ): Promise<void> {
   await page.addInitScript((variant) => {
     const candidate = {
@@ -254,7 +254,29 @@ async function stubWorkerWithRadialCandidate(
       loop: unknown;
       handoff: unknown;
     };
-    if (variant === "topologyOnly") {
+    if (variant === "radialEnabled") {
+      candidate.handoff = {
+        enabled: true,
+        legUrls: [
+          {
+            role: "surface_access",
+            mapsUrl: "https://www.google.com/maps/dir/?api=1&origin=35.100000,139.100000&destination=35.200000,139.200000&travelmode=driving",
+            urlSha256: "0".repeat(64),
+          },
+          {
+            role: "loop_transfer",
+            mapsUrl: "https://www.google.com/maps/dir/?api=1&origin=35.200000,139.200000&destination=35.400000,139.400000&travelmode=driving",
+            urlSha256: "1".repeat(64),
+          },
+          {
+            role: "surface_return",
+            mapsUrl: "https://www.google.com/maps/dir/?api=1&origin=35.400000,139.400000&destination=35.100000,139.100000&travelmode=driving",
+            urlSha256: "2".repeat(64),
+          },
+        ],
+        disabledReason: null,
+      };
+    } else if (variant === "topologyOnly") {
       candidate.id = "fixture-candidate-topology";
       candidate.pairKind = "topologyOnly";
       candidate.eligibilityStatus = "topology_only";
@@ -1618,6 +1640,20 @@ test("(71) radialReturn は Maps ボタンを出さず実機検証待ちの理�
   );
 });
 
+test("(72) 実機確認済みの radialReturn は3区間順の Maps ボタンを描画する", async ({ page }) => {
+  await stubWorkerWithRadialCandidate(page, "radialEnabled");
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const card = page.locator("#results .card").first();
+  await expect(card.locator(".maps-legs .maps-leg-depart")).toHaveCount(3);
+  await expect(card.locator(".maps-legs .maps-leg-depart").nth(0)).toContainText("出発地 → 入口");
+  await expect(card.locator(".maps-legs .maps-leg-depart").nth(1)).toContainText("入口 → 周回 → 戻り");
+  await expect(card.locator(".maps-legs .maps-leg-depart").nth(2)).toContainText("出口 → 出発地");
+  await expect(card.locator(".maps-handoff-notice")).toHaveCount(0);
+});
+
 test("(44) topologyOnly は1区間文言と課金区間のオーバーレイを描画しない", async ({ page }) => {
   await stubWorkerWithRadialCandidate(page, "topologyOnly");
   await openApp(page);
@@ -1655,6 +1691,9 @@ test("(45) 目黒座標のTopologyOnly候補は区間順序と商品対象外を
   await expect(card).not.toContainText("1区間");
   await expect(card).not.toContainText("最低料金");
   await expect(card.locator(".depart")).toHaveCount(0);
+  await expect(card.locator(".maps-handoff-notice")).toHaveText(
+    "この候補は道路形状のみの参考経路のため、Google マップへの引き継ぎはできません",
+  );
 });
 
 test("(46) pricedでも商品cohort外のradialは効率と最安順位を表示しない", async ({ page }) => {

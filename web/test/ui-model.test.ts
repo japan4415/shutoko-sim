@@ -6,6 +6,7 @@ import {
   MAX_PRODUCT_MINUTES,
   MAX_PRODUCT_SECONDS,
   RADIAL_HANDOFF_NOTICE,
+  TOPOLOGY_HANDOFF_NOTICE,
   SEARCH_TIMEOUT_MS,
   SUPPORTED_AREA_TEXT,
   TIMEOUT_TEXT,
@@ -530,6 +531,7 @@ describe("toCardModel", () => {
     const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
     const model = toCardModel(radial);
     expect(model.mapsUrl).toBe("");
+    expect(model.mapsLegUrls).toEqual([]);
     expect(model.mapsHandoffNotice).toBe(RADIAL_HANDOFF_NOTICE);
     expect(model.chargedSection).toBe("首都高区間: 入口 → 周回 → 戻り");
     expect(model.loopEdgeIds).toEqual(["fixture:edge:lap:1", "fixture:edge:lap:2"]);
@@ -547,6 +549,39 @@ describe("toCardModel", () => {
     expect(model.pathSummary).toContain("首都高4区間");
     expect(model.distanceKm).toBe(25.4);
     expect(model.shutokoDistanceKm).toBe(23.4);
+  });
+
+  it("実機確認済みの radial は Maps の3区間と区間名を保持する", () => {
+    const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
+    radial.handoff = {
+      enabled: true,
+      legUrls: [
+        {
+          role: "surface_access",
+          mapsUrl: "https://www.google.com/maps/dir/?api=1&origin=35.100000,139.100000&destination=35.200000,139.200000&travelmode=driving",
+          urlSha256: "0".repeat(64),
+        },
+        {
+          role: "loop_transfer",
+          mapsUrl: "https://www.google.com/maps/dir/?api=1&origin=35.200000,139.200000&destination=35.400000,139.400000&travelmode=driving",
+          urlSha256: "1".repeat(64),
+        },
+        {
+          role: "surface_return",
+          mapsUrl: "https://www.google.com/maps/dir/?api=1&origin=35.400000,139.400000&destination=35.100000,139.100000&travelmode=driving",
+          urlSha256: "2".repeat(64),
+        },
+      ],
+      disabledReason: null,
+    };
+    const model = toCardModel(radial);
+    expect(model.mapsUrl).toBe("");
+    expect(model.mapsHandoffNotice).toBeNull();
+    expect(model.mapsLegUrls.map((leg) => [leg.role, leg.label])).toEqual([
+      ["surface_access", "1. 出発地 → 入口"],
+      ["loop_transfer", "2. 入口 → 周回 → 戻り"],
+      ["surface_return", "3. 出口 → 出発地"],
+    ]);
   });
 
   it("unpriced radial は1区間文案と円あたり効率を表示しない", () => {
@@ -620,6 +655,8 @@ describe("toCardModel", () => {
     expect(model.chargedSection).not.toContain("1区間");
     expect(model.toll).toBe("参考料金: 500 円");
     expect(model.mapsUrl).toBe("");
+    expect(model.mapsLegUrls).toEqual([]);
+    expect(model.mapsHandoffNotice).toBe(TOPOLOGY_HANDOFF_NOTICE);
     expect(model.timePerYen).toBeNull();
     expect(model.routeLegs).toEqual([]);
     expect(model.routeOverview.map((step) => [step.number, step.label, step.lineStyle])).toEqual([

@@ -30,6 +30,30 @@ function validResult(overrides: Record<string, unknown> = {}): Record<string, un
   };
 }
 
+function legacyCandidateWithUrl(mapsUrl: string): Record<string, unknown> {
+  const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
+  candidate.pairKind = "legacyRing";
+  candidate.loop = {
+    anchorNodeId: "fixture:node:merge",
+    edgeIds: ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+    durationSeconds: 1200,
+    distanceMeters: 20000,
+    validated: true,
+  };
+  candidate.toll = {
+    ...(candidate.toll as Record<string, unknown>),
+    chargedSectionCount: 1,
+  };
+  candidate.handoff = {
+    origin: { lat: 35.1, lon: 139.1 },
+    destination: { lat: 35.1, lon: 139.1 },
+    waypoints: [],
+    mapsUrl,
+    verificationSetVersion: null,
+  };
+  return candidate;
+}
+
 describe("parseSearchResult の実行時検証", () => {
   it("契約を満たす結果はそのまま通す", async () => {
     const result = await parseSearchResult(JSON.stringify(validResult()));
@@ -136,9 +160,9 @@ describe("parseSearchResult の実行時検証", () => {
 
   it("radialReturn は device verification 済み handoff を受け入れ、不正形を拒否する", async () => {
     const mapsUrls = [
-      "https://www.google.com/maps/dir/?api=1&origin=35.0,139.0&destination=35.1,139.1&travelmode=driving",
-      "https://www.google.com/maps/dir/?api=1&origin=35.1,139.1&destination=35.4,139.4&travelmode=driving",
-      "https://www.google.com/maps/dir/?api=1&origin=35.4,139.4&destination=35.0,139.0&travelmode=driving",
+      "https://www.google.com/maps/dir/?api=1&origin=35.000000,139.000000&destination=35.100000,139.100000&travelmode=driving",
+      "https://www.google.com/maps/dir/?api=1&origin=35.100000,139.100000&destination=35.400000,139.400000&travelmode=driving",
+      "https://www.google.com/maps/dir/?api=1&origin=35.400000,139.400000&destination=35.000000,139.000000&travelmode=driving",
     ];
     const urlSha256 = await Promise.all(
       mapsUrls.map((mapsUrl) => hexDigest(new TextEncoder().encode(mapsUrl).buffer as ArrayBuffer)),
@@ -159,6 +183,25 @@ describe("parseSearchResult の実行時検証", () => {
         JSON.stringify(validResult({ status: "ok", reason: null, candidates: [candidate] })),
       ),
     ).resolves.toMatchObject({ candidates: [{ handoff: { enabled: true } }] });
+
+    for (const mapsUrl of [
+      "javascript:alert(1)",
+      "https://evil.example/maps/dir/?api=1&origin=35.000000,139.000000&destination=35.100000,139.100000&travelmode=driving",
+      "https://www.google.com/maps/dir/?api=1&origin=35.000000,139.000000",
+    ]) {
+      const invalid = JSON.parse(radialCandidate) as Record<string, unknown>;
+      const invalidHandoff = structuredClone(enabledHandoff) as Record<string, unknown>;
+      const invalidLeg = (invalidHandoff.legUrls as Record<string, unknown>[])[0];
+      if (invalidLeg !== undefined) {
+        invalidLeg.mapsUrl = mapsUrl;
+      }
+      invalid.handoff = invalidHandoff;
+      await expect(
+        parseSearchResult(
+          JSON.stringify(validResult({ status: "ok", reason: null, candidates: [invalid] })),
+        ),
+      ).rejects.toThrowError(/URL/);
+    }
 
     for (const mutate of [
       (handoff: Record<string, unknown>) => {
@@ -192,6 +235,40 @@ describe("parseSearchResult の実行時検証", () => {
         JSON.stringify(validResult({ status: "ok", reason: null, candidates: [invalidDisabled] })),
       ),
     ).rejects.toThrowError(/device verification/);
+  });
+
+  it("legacyRing にも Google Maps の scheme・host・path・パラメータ制限を適用する", async () => {
+    const validUrl =
+      "https://www.google.com/maps/dir/?api=1&origin=35.100000,139.100000&destination=35.100000,139.100000&travelmode=driving";
+    await expect(
+      parseSearchResult(
+        JSON.stringify(
+          validResult({
+            status: "ok",
+            reason: null,
+            candidates: [legacyCandidateWithUrl(validUrl)],
+          }),
+        ),
+      ),
+    ).resolves.toMatchObject({ candidates: [{ pairKind: "legacyRing" }] });
+
+    for (const mapsUrl of [
+      "javascript:alert(1)",
+      "https://evil.example/maps/dir/?api=1&origin=35.100000,139.100000&destination=35.100000,139.100000&travelmode=driving",
+      "https://www.google.com/maps/dir/?api=1&origin=35.100000,139.100000&destination=35.100000,139.100000",
+    ]) {
+      await expect(
+        parseSearchResult(
+          JSON.stringify(
+            validResult({
+              status: "ok",
+              reason: null,
+              candidates: [legacyCandidateWithUrl(mapsUrl)],
+            }),
+          ),
+        ),
+      ).rejects.toThrowError(/URL/);
+    }
   });
 
   it("surface leg は許可fieldと距離・時間の0同値条件を厳密に検証する", async () => {
@@ -250,7 +327,7 @@ describe("parseSearchResult の実行時検証", () => {
       origin: { lat: 35.1, lon: 139.1 },
       destination: { lat: 35.1, lon: 139.1 },
       waypoints: [],
-      mapsUrl: "https://www.google.com/maps/dir/?api=1",
+      mapsUrl: "https://www.google.com/maps/dir/?api=1&origin=35.100000,139.100000&destination=35.100000,139.100000&travelmode=driving",
       verificationSetVersion: null,
     };
     delete candidate.anchor;
@@ -271,6 +348,9 @@ describe("parseSearchResult の実行時検証", () => {
       (value: Record<string, unknown>) => {
         value.eligibilityStatus = "verified_one_section_ahead";
       },
+      (value: Record<string, unknown>) => {
+        (value.handoff as Record<string, unknown>).mapsUrl = "javascript:alert(1)";
+      },
     ]) {
       const invalid = { ...candidate };
       mutate(invalid);
@@ -278,7 +358,7 @@ describe("parseSearchResult の実行時検証", () => {
         parseSearchResult(
           JSON.stringify(validResult({ status: "ok", reason: null, candidates: [invalid] })),
         ),
-      ).rejects.toThrowError(/topologyOnly/);
+      ).rejects.toThrowError(/topologyOnly|handoff|URL/);
     }
   });
 
@@ -317,6 +397,18 @@ describe("parseSearchResult の実行時検証", () => {
         JSON.stringify(validResult({ status: "ok", reason: null, candidates: [invalid] })),
       ),
     ).rejects.toThrowError(/hash/);
+  });
+
+  it("radialReturn の base candidate 必須 field を欠落だけで拒否する", async () => {
+    for (const field of ["entryId", "exitId", "edgeIds", "geometry", "toll"]) {
+      const invalid = JSON.parse(radialCandidate) as Record<string, unknown>;
+      delete invalid[field];
+      await expect(
+        parseSearchResult(
+          JSON.stringify(validResult({ status: "ok", reason: null, candidates: [invalid] })),
+        ),
+      ).rejects.toThrowError(/field|entry|exit|geometry|toll|edgeIds/);
+    }
   });
 
   it("未知の pairKind を拒否する", async () => {

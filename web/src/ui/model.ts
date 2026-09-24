@@ -4,6 +4,7 @@ import type {
   Candidate,
   EstimatedLeg,
   GeoJsonLineString,
+  MapsHandoffLegRole,
   RoutePlanSegmentRole,
   SearchResult,
   SnappedOrigin,
@@ -611,6 +612,21 @@ export interface RouteOverviewStepModel {
 
 export const RADIAL_HANDOFF_NOTICE =
   "Google マップへの引き継ぎは、実機での確認が済むまで利用できません";
+export const TOPOLOGY_HANDOFF_NOTICE =
+  "この候補は道路形状のみの参考経路のため、Google マップへの引き継ぎはできません";
+
+export interface MapsLegModel {
+  role: MapsHandoffLegRole;
+  label: string;
+  mapsUrl: string;
+  urlSha256: string;
+}
+
+const MAPS_LEG_LABELS: Record<MapsHandoffLegRole, string> = {
+  surface_access: "1. 出発地 → 入口",
+  loop_transfer: "2. 入口 → 周回 → 戻り",
+  surface_return: "3. 出口 → 出発地",
+};
 
 /** 候補カードの描画モデル。 */
 export interface CardModel {
@@ -640,6 +656,7 @@ export interface CardModel {
   chargedSection: string;
   warnings: string[];
   mapsUrl: string;
+  mapsLegUrls: MapsLegModel[];
   mapsHandoffNotice: string | null;
   geometry: GeoJsonLineString;
   entryId: string;
@@ -786,6 +803,21 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     candidate.entry.rampId === "ramp:2-inbound:meguro-entry" &&
     candidate.exit.rampId === "ramp:2-outbound:meguro-exit";
   const mapsUrl = isRadial || suppressTopologyHandoff ? "" : candidate.handoff.mapsUrl;
+  const mapsLegUrls = isRadial && candidate.handoff.enabled
+    ? candidate.handoff.legUrls.map((leg) => ({
+        role: leg.role,
+        label: MAPS_LEG_LABELS[leg.role],
+        mapsUrl: leg.mapsUrl,
+        urlSha256: leg.urlSha256,
+      }))
+    : [];
+  const mapsHandoffNotice = isRadial
+    ? candidate.handoff.enabled
+      ? null
+      : RADIAL_HANDOFF_NOTICE
+    : suppressTopologyHandoff
+      ? TOPOLOGY_HANDOFF_NOTICE
+      : null;
   const chargedSection = isTopologyOnly
     ? "道路形状のみ（商品対象外）"
     : isRadial && !productEligible
@@ -833,7 +865,8 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     chargedSection,
     warnings: candidate.warnings.map(warningText),
     mapsUrl,
-    mapsHandoffNotice: isRadial ? RADIAL_HANDOFF_NOTICE : null,
+    mapsLegUrls,
+    mapsHandoffNotice,
     geometry: candidate.geometry,
     entryId: candidate.entryId,
     exitId: candidate.exitId,

@@ -1,10 +1,14 @@
 // パイプライン純粋関数のユニットテスト（node 環境、fetch/import はモック注入）。
 import inspector from "node:inspector";
 import { describe, expect, it } from "vitest";
+import pendingDeviceManifest from "../../data/device-verification-manifest.json?raw";
 import schema4Graph from "../../fixtures/graph-v4/graph-radial-fixture.json?raw";
 import {
   buildResultResponse,
+  buildSearchLimitsJson,
   buildSearchRequest,
+  DEVICE_VERIFICATION_EVALUATED_AT,
+  DEVICE_VERIFICATION_MANIFEST_JSON,
   hexDigest,
   loadRelease,
   MAX_ACCESS_DISTANCE_METERS,
@@ -486,6 +490,10 @@ describe("loadRelease（モック fetch）", () => {
     expect(prepareCalls[0]?.limitsJson).toBe(SEARCH_LIMITS_JSON);
     expect(JSON.parse(prepareCalls[0]?.limitsJson ?? "{}")).toEqual({
       maxAccessDistanceMeters: MAX_ACCESS_DISTANCE_METERS,
+      deviceVerification: {
+        manifestJson: DEVICE_VERIFICATION_MANIFEST_JSON,
+        evaluatedAt: DEVICE_VERIFICATION_EVALUATED_AT,
+      },
     });
     // 導出（240*60/2*(30/3.6)/1.3 ≒ 46 153.8 m）を下回り、旧既定 30km を上回ること。
     // 解析上界 46 153.8 m より小さい cap は「アクセス往復だけで製品上限に届く」地点を
@@ -493,6 +501,33 @@ describe("loadRelease（モック fetch）", () => {
     expect(MAX_ACCESS_DISTANCE_METERS).toBe(46_000);
     expect(MAX_ACCESS_DISTANCE_METERS).toBeLessThan(46_154);
     expect(MAX_ACCESS_DISTANCE_METERS).toBeGreaterThan(30_000);
+  });
+
+  it("合格した synthetic manifest を loadRelease の build-time limits に渡せる", async () => {
+    const files = await buildFiles();
+    const { fetch } = mockFetch(files);
+    const manifest = JSON.parse(pendingDeviceManifest) as Record<string, unknown>;
+    for (const record of manifest.verifications as Record<string, unknown>[]) {
+      record.osVersion = "test-os";
+      record.clientVersion = "test-client";
+      record.verifiedAt = "2026-09-24T00:00:00Z";
+      record.result = "passed";
+      record.expiresAt = "2026-10-24T00:00:00Z";
+    }
+    let limitsJson = "";
+    const glue: WasmGlueModule = {
+      default: async () => {},
+      prepare(_graphJson: string, limits: string): WasmPreparedGraphLike {
+        limitsJson = limits;
+        return { free() {} };
+      },
+      searchPrepared: () => "{}",
+    };
+    await loadRelease(fetch, "c1-real-v1", async () => glue, undefined, {
+      deviceVerificationManifestJson: JSON.stringify(manifest),
+      deviceVerificationEvaluatedAt: "2026-09-25T00:00:00Z",
+    });
+    expect(JSON.parse(limitsJson).deviceVerification.manifestJson).toBe(JSON.stringify(manifest));
   });
 
   it("graph.json 改ざん時は ARTIFACT_MISMATCH で停止し、以降の fetch を呼ばない", async () => {

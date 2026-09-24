@@ -1388,6 +1388,32 @@ function renderEstimatedLegs(model: CardModel): HTMLElement | null {
   return section;
 }
 
+function renderMapsLegs(model: CardModel): HTMLElement | null {
+  if (model.mapsLegUrls.length === 0) {
+    return null;
+  }
+  const section = document.createElement("section");
+  section.className = "maps-legs";
+  const heading = document.createElement("h3");
+  heading.textContent = "Google マップの区間を開く";
+  const list = document.createElement("div");
+  list.className = "maps-leg-list";
+  for (const leg of model.mapsLegUrls) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "depart maps-leg-depart";
+    button.dataset.mapsRole = leg.role;
+    button.textContent = `${leg.label}（Google マップを開く）`;
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      window.open(leg.mapsUrl, "_blank", "noopener");
+    });
+    list.appendChild(button);
+  }
+  section.append(heading, list);
+  return section;
+}
+
 function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
   const card = document.createElement("article");
   card.className = "card";
@@ -1530,6 +1556,11 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
     notice.className = "maps-handoff-notice";
     notice.textContent = model.mapsHandoffNotice;
     card.appendChild(notice);
+  }
+
+  const mapsLegs = renderMapsLegs(model);
+  if (mapsLegs !== null) {
+    card.appendChild(mapsLegs);
   }
 
   if (model.mapsUrl !== "") {

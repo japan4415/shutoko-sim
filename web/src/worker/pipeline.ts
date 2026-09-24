@@ -2,6 +2,7 @@
 // fetch と import は引数注入にし、Vitest からモックで決定論的に検証できるようにする。
 
 import { KNOWN_RELEASES } from "./artifact-hashes";
+import bundledDeviceVerificationManifest from "../../../data/device-verification-manifest.json?raw";
 import type {
   BenchPayload,
   GraphDocument,
@@ -34,10 +35,21 @@ export const ENGINE_SCHEMA_VERSION = 1;
  */
 export const MAX_ACCESS_DISTANCE_METERS = 46_000;
 
+export const DEVICE_VERIFICATION_MANIFEST_JSON = bundledDeviceVerificationManifest;
+export const DEVICE_VERIFICATION_EVALUATED_AT = "2026-09-25T00:00:00Z";
+
+export function buildSearchLimitsJson(
+  manifestJson: string = DEVICE_VERIFICATION_MANIFEST_JSON,
+  evaluatedAt: string = DEVICE_VERIFICATION_EVALUATED_AT,
+): string {
+  return JSON.stringify({
+    maxAccessDistanceMeters: MAX_ACCESS_DISTANCE_METERS,
+    deviceVerification: { manifestJson, evaluatedAt },
+  });
+}
+
 /** `prepare` の第 2 引数へ渡す SearchLimits JSON。 */
-export const SEARCH_LIMITS_JSON = JSON.stringify({
-  maxAccessDistanceMeters: MAX_ACCESS_DISTANCE_METERS,
-});
+export const SEARCH_LIMITS_JSON = buildSearchLimitsJson();
 /** engine.json で期待値を持つ成果物（照合対象）。 */
 export const WASM_ARTIFACT_PATH = "shutoko_routing_bg.wasm";
 export const GLUE_ARTIFACT_PATH = "shutoko_routing.js";
@@ -438,6 +450,8 @@ export interface LoadReleaseOptions {
    * 省略時は URL を一切変えない（通常経路の挙動は不変）。
    */
   cacheBust?: string;
+  deviceVerificationManifestJson?: string;
+  deviceVerificationEvaluatedAt?: string;
 }
 
 /**
@@ -527,7 +541,13 @@ export async function loadRelease(
 
   await glue.default({ module_or_path: wasmBytes });
 
-  const preparedGraph = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+  const preparedGraph = glue.prepare(
+    graphJson,
+    buildSearchLimitsJson(
+      options.deviceVerificationManifestJson,
+      options.deviceVerificationEvaluatedAt,
+    ),
+  );
 
   let refCount = 1;
   let freed = false;
@@ -577,7 +597,7 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 /** 有限かつ非負（距離・秒数は負にならない）。 */
-function assertFiniteNonNegative(value: unknown, label: string): void {
+function assertFiniteNonNegative(value: unknown, label: string): asserts value is number {
   if (!isFiniteNumber(value) || value < 0) {
     throw contractMismatch(`${label} が有限の非負数値ではありません（${String(value)}）`);
   }
@@ -638,6 +658,158 @@ function assertSha256(value: unknown, label: string): asserts value is string {
   if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) {
     throw contractMismatch(`${label} が lowercase SHA-256 ではありません`);
   }
+}
+
+function assertFiniteCoordinate(value: unknown, label: string): asserts value is number {
+  if (!isFiniteNumber(value)) {
+    throw contractMismatch(`${label} が有限数値ではありません`);
+  }
+}
+
+function assertMapsCoordinate(value: unknown, label: string): void {
+  if (typeof value !== "string") {
+    throw contractMismatch(`${label} の座標形式が不正です`);
+  }
+  const parts = value.split(",");
+  if (
+    parts.length !== 2 ||
+    !/^-?(?:0|[1-9]\d{0,2})\.\d{6}$/.test(parts[0] ?? "") ||
+    !/^-?(?:0|[1-9]\d{0,2})\.\d{6}$/.test(parts[1] ?? "")
+  ) {
+    throw contractMismatch(`${label} の座標形式が不正です`);
+  }
+  const latitude = Number(parts[0]);
+  const longitude = Number(parts[1]);
+  if (!Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) {
+    throw contractMismatch(`${label} の座標範囲が不正です`);
+  }
+}
+
+function validateMapsUrl(value: unknown, label: string): asserts value is string {
+  if (typeof value !== "string" || value.length > 2048) {
+    throw contractMismatch(`${label} の URL が不正です`);
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw contractMismatch(`${label} の URL が不正です`);
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.hostname !== "www.google.com" ||
+    parsed.port !== "" ||
+    parsed.pathname !== "/maps/dir/" ||
+    parsed.hash !== "" ||
+    parsed.username !== "" ||
+    parsed.password !== ""
+  ) {
+    throw contractMismatch(`${label} の URL 許可範囲が不正です`);
+  }
+  const params = parsed.searchParams;
+  const keys = [...params.keys()];
+  const allowed = new Set(["api", "origin", "destination", "travelmode", "waypoints"]);
+  if (keys.some((key) => !allowed.has(key)) || new Set(keys).size !== keys.length) {
+    throw contractMismatch(`${label} の URL パラメータが不正です`);
+  }
+  for (const key of ["api", "origin", "destination", "travelmode"]) {
+    if (params.getAll(key).length !== 1) {
+      throw contractMismatch(`${label} の URL パラメータが不正です`);
+    }
+  }
+  if (params.get("api") !== "1" || params.get("travelmode") !== "driving") {
+    throw contractMismatch(`${label} の URL パラメータが不正です`);
+  }
+  assertMapsCoordinate(params.get("origin"), `${label}.origin`);
+  assertMapsCoordinate(params.get("destination"), `${label}.destination`);
+  const waypoints = params.get("waypoints");
+  if (waypoints !== null) {
+    const values = waypoints.split("|");
+    if (values.length < 1 || values.length > 3) {
+      throw contractMismatch(`${label} の waypoints 数が不正です`);
+    }
+    values.forEach((point, index) => {
+      assertMapsCoordinate(point, `${label}.waypoints[${String(index)}]`);
+    });
+  }
+}
+
+async function validateSingleMapsHandoff(value: unknown, label: string): Promise<void> {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.origin) ||
+    !isRecord(value.destination) ||
+    !Array.isArray(value.waypoints) ||
+    value.waypoints.length > 3 ||
+    !(value.verificationSetVersion === null || typeof value.verificationSetVersion === "string")
+  ) {
+    throw contractMismatch(`${label} の handoff が不正です`);
+  }
+  assertFiniteCoordinate(value.origin.lat, `${label}.origin.lat`);
+  assertFiniteCoordinate(value.origin.lon, `${label}.origin.lon`);
+  assertFiniteCoordinate(value.destination.lat, `${label}.destination.lat`);
+  assertFiniteCoordinate(value.destination.lon, `${label}.destination.lon`);
+  if (value.origin.lat < -90 || value.origin.lat > 90 || value.origin.lon < -180 || value.origin.lon > 180) {
+    throw contractMismatch(`${label} の origin 座標範囲が不正です`);
+  }
+  if (value.destination.lat < -90 || value.destination.lat > 90 || value.destination.lon < -180 || value.destination.lon > 180) {
+    throw contractMismatch(`${label} の destination 座標範囲が不正です`);
+  }
+  for (const [index, point] of value.waypoints.entries()) {
+    if (!isRecord(point)) {
+      throw contractMismatch(`${label}.waypoints[${String(index)}] が不正です`);
+    }
+    assertFiniteCoordinate(point.lat, `${label}.waypoints[${String(index)}].lat`);
+    assertFiniteCoordinate(point.lon, `${label}.waypoints[${String(index)}].lon`);
+    if (point.lat < -90 || point.lat > 90 || point.lon < -180 || point.lon > 180) {
+      throw contractMismatch(`${label}.waypoints[${String(index)}] の座標範囲が不正です`);
+    }
+  }
+  validateMapsUrl(value.mapsUrl, `${label}.mapsUrl`);
+}
+
+function validateCandidateBase(candidate: Record<string, unknown>, label: string): void {
+  for (const field of ["id", "releaseId", "originNodeId", "entryId", "exitId"]) {
+    requiredString(candidate[field], `${label}.${field}`);
+  }
+  assertStringArray(candidate.edgeIds, `${label}.edgeIds`);
+  if (candidate.edgeIds.length > 20_000 || !isRecord(candidate.entry) || !isRecord(candidate.exit)) {
+    throw contractMismatch(`${label} の entry / exit が不正です`);
+  }
+  if (
+    candidate.entry.edgeId !== candidate.entryId ||
+    candidate.exit.edgeId !== candidate.exitId ||
+    !isRecord(candidate.geometry) ||
+    candidate.geometry.type !== "LineString" ||
+    !Array.isArray(candidate.geometry.coordinates) ||
+    candidate.geometry.coordinates.length !== candidate.edgeIds.length + 1
+  ) {
+    throw contractMismatch(`${label} の entry / exit / geometry が不正です`);
+  }
+  for (const [index, point] of candidate.geometry.coordinates.entries()) {
+    if (!Array.isArray(point) || point.length !== 2 || !isFiniteNumber(point[0]) || !isFiniteNumber(point[1])) {
+      throw contractMismatch(`${label}.geometry.coordinates[${String(index)}] が不正です`);
+    }
+    if (point[0] < -180 || point[0] > 180 || point[1] < -90 || point[1] > 90) {
+      throw contractMismatch(`${label}.geometry.coordinates[${String(index)}] の範囲が不正です`);
+    }
+  }
+  if (candidate.origin !== null) {
+    if (!isRecord(candidate.origin)) {
+      throw contractMismatch(`${label}.origin が不正です`);
+    }
+    assertFiniteCoordinate(candidate.origin.lat, `${label}.origin.lat`);
+    assertFiniteCoordinate(candidate.origin.lon, `${label}.origin.lon`);
+  }
+  assertStringArray(candidate.roadNames, `${label}.roadNames`);
+  assertStringArray(candidate.reasons, `${label}.reasons`);
+  assertStringArray(candidate.warnings, `${label}.warnings`);
+  if (!isRecord(candidate.toll)) {
+    throw contractMismatch(`${label}.toll が不正です`);
+  }
+  requiredString(candidate.toll.billingPairId, `${label}.toll.billingPairId`);
+  assertFiniteNonNegative(candidate.distanceMeters, `${label}.distanceMeters`);
+  assertFiniteNonNegative(candidate.shutokoDistanceMeters, `${label}.shutokoDistanceMeters`);
 }
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
@@ -731,7 +903,7 @@ async function validateRadialHandoff(value: unknown): Promise<void> {
     !Array.isArray(value.legUrls) ||
     !(value.disabledReason === null || typeof value.disabledReason === "string")
   ) {
-    throw contractMismatch("radialReturn handoff の device verification 状態드가不正です");
+    throw contractMismatch("radialReturn handoff の device verification 状態が不正です");
   }
   if (value.enabled === false) {
     if (value.legUrls.length !== 0 || value.disabledReason !== "device_verification_pending") {
@@ -748,16 +920,11 @@ async function validateRadialHandoff(value: unknown): Promise<void> {
       !isRecord(leg) ||
       Object.keys(leg).length !== 3 ||
       Object.keys(leg).some((field) => !["role", "mapsUrl", "urlSha256"].includes(field)) ||
-      leg.role !== MAPS_HANDOFF_ROLES[index] ||
-      typeof leg.mapsUrl !== "string" ||
-      !leg.mapsUrl.startsWith("https://www.google.com/maps/dir/?api=1&origin=") ||
-      leg.mapsUrl.length > 2048 ||
-      leg.mapsUrl.includes("nav=") ||
-      leg.mapsUrl.includes("launch=") ||
-      leg.mapsUrl.includes("dir_action=")
+      leg.role !== MAPS_HANDOFF_ROLES[index]
     ) {
       throw contractMismatch("radialReturn handoff の Maps leg が不正です");
     }
+    validateMapsUrl(leg.mapsUrl, `radialReturn handoff.legUrls[${String(index)}].mapsUrl`);
     assertSha256(leg.urlSha256, `radialReturn handoff.legUrls[${String(index)}].urlSha256`);
     const digest = await hexDigest(new TextEncoder().encode(leg.mapsUrl).buffer as ArrayBuffer);
     if (digest !== leg.urlSha256) {
@@ -766,7 +933,8 @@ async function validateRadialHandoff(value: unknown): Promise<void> {
   }
 }
 
-function validateTopologyOnlyCandidate(candidate: Record<string, unknown>): void {
+async function validateTopologyOnlyCandidate(candidate: Record<string, unknown>): Promise<void> {
+  validateCandidateBase(candidate, "topologyOnly");
   if (
     candidate.eligibilityStatus !== "topology_only" ||
     candidate.loopValidationStatus !== "topology_only" ||
@@ -777,8 +945,6 @@ function validateTopologyOnlyCandidate(candidate: Record<string, unknown>): void
     "edgeRouteLegs" in candidate ||
     !isRecord(candidate.toll) ||
     "chargedSectionCount" in candidate.toll ||
-    !isRecord(candidate.handoff) ||
-    typeof candidate.handoff.mapsUrl !== "string" ||
     !Array.isArray(candidate.reasons) ||
     !candidate.reasons.includes("TOPOLOGY_ONLY") ||
     candidate.reasons.some(
@@ -787,8 +953,30 @@ function validateTopologyOnlyCandidate(candidate: Record<string, unknown>): void
   ) {
     throw contractMismatch("topologyOnly candidate の status / loop / toll / reasons が不正です");
   }
+  requiredString(candidate.loop.anchorNodeId, "topologyOnly loop.anchorNodeId");
+  assertStringArray(candidate.loop.edgeIds, "topologyOnly loop.edgeIds");
+  assertFiniteNonNegative(candidate.loop.durationSeconds, "topologyOnly loop.durationSeconds");
+  assertFiniteNonNegative(candidate.loop.distanceMeters, "topologyOnly loop.distanceMeters");
   validateTariffStatus(candidate, "topologyOnly", false);
   validateEstimatedLegsAndTotals(candidate, "topologyOnly");
+  await validateSingleMapsHandoff(candidate.handoff, "topologyOnly handoff");
+}
+
+async function validateLegacyCandidate(candidate: Record<string, unknown>): Promise<void> {
+  validateCandidateBase(candidate, "legacy");
+  if (
+    !isRecord(candidate.loop) ||
+    candidate.loop.validated !== true ||
+    !isRecord(candidate.toll) ||
+    candidate.toll.chargedSectionCount !== 1
+  ) {
+    throw contractMismatch("legacy candidate の loop / toll が不正です");
+  }
+  requiredString(candidate.loop.anchorNodeId, "legacy loop.anchorNodeId");
+  assertStringArray(candidate.loop.edgeIds, "legacy loop.edgeIds");
+  assertFiniteNonNegative(candidate.loop.durationSeconds, "legacy loop.durationSeconds");
+  assertFiniteNonNegative(candidate.loop.distanceMeters, "legacy loop.distanceMeters");
+  await validateSingleMapsHandoff(candidate.handoff, "legacy handoff");
 }
 
 async function validateRadialCandidate(candidate: unknown): Promise<void> {
@@ -797,13 +985,28 @@ async function validateRadialCandidate(candidate: unknown): Promise<void> {
     candidate.routePlanVersion !== 1 ||
     !isRecord(candidate.anchor) ||
     candidate.anchor.anchorKind !== "directedJunction" ||
+    candidate.anchor.arcPolicy !== "ordinaryLongArc" ||
+    !isRecord(candidate.anchor.excludedShortConnector) ||
     !isRecord(candidate.routePlan) ||
     !Array.isArray(candidate.edgeRouteLegs) ||
     candidate.edgeRouteLegs.length !== ROUTE_ROLES.length
   ) {
     throw contractMismatch("radialReturn candidate の anchor / routePlan / edgeRouteLegs が不正です");
   }
+  validateCandidateBase(candidate, "radialReturn");
   assertStringArray(candidate.edgeIds, "radialReturn candidate.edgeIds");
+  for (const field of ["mergeNodeId", "branchNodeId", "mergeTerminalEdgeId", "branchInitialEdgeId", "routeId", "direction"]) {
+    requiredString(candidate.anchor[field], `radialReturn anchor.${field}`);
+  }
+  const connector = candidate.anchor.excludedShortConnector;
+  for (const field of ["fromNodeId", "toNodeId"]) {
+    requiredString(connector[field], `radialReturn anchor.excludedShortConnector.${field}`);
+  }
+  for (const field of ["osmWayId", "edgeCount", "distanceMeters"]) {
+    if (!isNonNegativeSafeInteger(connector[field]) || connector[field] === 0) {
+      throw contractMismatch("radialReturn anchor.excludedShortConnector が不正です");
+    }
+  }
   validateEstimatedLegsAndTotals(candidate, "radialReturn");
   const productEligible =
     candidate.eligibilityStatus === "verified_one_section_ahead" &&
@@ -825,6 +1028,9 @@ async function validateRadialCandidate(candidate: unknown): Promise<void> {
     throw contractMismatch("radialReturn candidate reasons が不正です");
   }
   assertStringArray(candidate.routePlan.membershipIds, "radialReturn routePlan.membershipIds");
+  if (new Set(candidate.routePlan.membershipIds).size !== candidate.routePlan.membershipIds.length) {
+    throw contractMismatch("radialReturn routePlan.membershipIds に重複があります");
+  }
   const resolved = candidate.routePlan.resolvedRouteSegments;
   if (!Array.isArray(resolved) || resolved.length !== ROUTE_ROLES.length) {
     throw contractMismatch("radialReturn resolvedRouteSegments は 4 件である必要があります");
@@ -843,6 +1049,9 @@ async function validateRadialCandidate(candidate: unknown): Promise<void> {
       throw contractMismatch("radialReturn resolvedRouteSegments の role / 参照が不正です");
     }
     assertStringArray(segment.sourceSegmentIds, "resolvedRouteSegment.sourceSegmentIds");
+    if (new Set(segment.sourceSegmentIds).size !== segment.sourceSegmentIds.length) {
+      throw contractMismatch("resolvedRouteSegment.sourceSegmentIds に重複があります");
+    }
     assertSha256(segment.edgeIdsSha256, "resolvedRouteSegment.edgeIdsSha256");
     resolvedById.set(segment.resolvedSegmentId, segment);
   }
@@ -927,8 +1136,10 @@ export async function parseSearchResult(resultJson: string): Promise<SearchResul
     if (value.pairKind === "radialReturn") {
       await validateRadialCandidate(value);
     } else if (value.pairKind === "topologyOnly") {
-      validateTopologyOnlyCandidate(value);
-    } else if (value.pairKind !== undefined && value.pairKind !== "legacyRing") {
+      await validateTopologyOnlyCandidate(value);
+    } else if (value.pairKind === undefined || value.pairKind === "legacyRing") {
+      await validateLegacyCandidate(value);
+    } else {
       throw contractMismatch("candidate.pairKind が未知です");
     }
   }

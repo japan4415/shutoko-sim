@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "billingPairs": [
+    {
+      "id": "fixture:legacy:unknown-field",
+      "entryOsmWayId": 1,
+      "exitOsmWayId": 2,
+      "anchorOsmNodeId": 3,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "unverified",
+      "oneSectionAheadVerified": false,
+      "provenance": {
+        "source": "https://example.com",
+        "sourceDate": "2026-09-16"
+      },
+      "prices": [],
+      "futureField": true
+    }
+  ]
+}

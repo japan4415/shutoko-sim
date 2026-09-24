@@ -9,7 +9,9 @@
 //! and satisfy all graph routing restrictions.
 
 use crate::model::{BillingPair, Edge, EdgeKind, Graph, Price, VerificationStatus};
-use crate::seed::{BillingPairSeed, BillingPairsSeedFile};
+use crate::seed::{
+    BillingPairSeed, BillingPairSeedEntry, BillingPairsSeedFile, ParsedBillingPairsSeed,
+};
 use crate::validate::{
     contains_forbidden_transition, parse_iso_date, validate_billing_pair, validate_url,
     ValidationError,
@@ -407,5 +409,48 @@ pub fn generate_and_validate_billing_pairs(
     BillingGenerationReport {
         valid_pairs,
         rejected_pairs,
+    }
+}
+
+pub fn generate_and_validate_parsed_billing_pairs(
+    graph: &Graph,
+    seed_file: &ParsedBillingPairsSeed,
+) -> BillingGenerationReport {
+    match seed_file {
+        ParsedBillingPairsSeed::Schema1(seed) => generate_and_validate_billing_pairs(graph, seed),
+        ParsedBillingPairsSeed::Schema2(seed) => {
+            let mut valid_pairs = Vec::new();
+            let mut rejected_pairs = Vec::new();
+
+            for entry in &seed.billing_pairs {
+                match entry {
+                    BillingPairSeedEntry::LegacyRing(seed) => {
+                        match generate_billing_pair(graph, seed) {
+                            Ok(pair) => valid_pairs.push(pair),
+                            Err(error) => rejected_pairs.push(RejectedSeedRecord {
+                                seed_id: seed.id.clone(),
+                                reason: error.to_string(),
+                            }),
+                        }
+                    }
+                    BillingPairSeedEntry::RadialReturn(seed) => {
+                        rejected_pairs.push(RejectedSeedRecord {
+                            seed_id: seed.id.clone(),
+                            reason:
+                                "diagnostic radialReturn pair is not publishable in graph schema 2"
+                                    .to_string(),
+                        });
+                    }
+                }
+            }
+
+            valid_pairs.sort_by(|a, b| a.id.cmp(&b.id));
+            rejected_pairs.sort_by(|a, b| a.seed_id.cmp(&b.seed_id));
+
+            BillingGenerationReport {
+                valid_pairs,
+                rejected_pairs,
+            }
+        }
     }
 }

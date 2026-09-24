@@ -5,12 +5,13 @@
 
 use shutoko_graph_builder::{
     apply_od_tariffs_to_graph, bind_ramps_to_graph, build_manifest, build_topology_with_report,
-    generate_and_validate_billing_pairs, manifest_to_deterministic_json,
-    ramps_artifact_to_deterministic_json, snap_index_to_deterministic_json, to_deterministic_json,
-    validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
-    validate_ramp_inventory, BillingPairProvenance, BillingPairsSeedFile, EdgeKind, ManifestConfig,
-    OdTariffsFile, OsmRampBindingsFile, OverpassResponse, RampInventoryFile, RampKind,
-    RampsArtifact, TopologyConfig, VerificationStatus,
+    generate_and_validate_parsed_billing_pairs, manifest_to_deterministic_json,
+    parse_billing_pairs_seed, ramps_artifact_to_deterministic_json,
+    snap_index_to_deterministic_json, to_deterministic_json, validate_od_tariffs,
+    validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm, validate_ramp_inventory,
+    BillingPairProvenance, EdgeKind, ManifestConfig, OdTariffsFile, OsmRampBindingsFile,
+    OverpassResponse, RampInventoryFile, RampKind, RampsArtifact, TopologyConfig,
+    VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -269,7 +270,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 e
             )
         })?;
-        let seed_file: BillingPairsSeedFile = serde_json::from_str(&seed_raw).map_err(|e| {
+        let seed_file = parse_billing_pairs_seed(&seed_raw).map_err(|e| {
             format!(
                 "failed to parse seed JSON {}: {}",
                 seed_file_path.display(),
@@ -277,7 +278,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             )
         })?;
 
-        let report = generate_and_validate_billing_pairs(&graph, &seed_file);
+        let report = generate_and_validate_parsed_billing_pairs(&graph, &seed_file);
 
         if !report.rejected_pairs.is_empty() {
             eprintln!(
@@ -290,9 +291,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        let legacy_seeds = seed_file.legacy_pairs();
         for pair in &report.valid_pairs {
             if pair.status == VerificationStatus::Verified {
-                if let Some(s) = seed_file.billing_pairs.iter().find(|s| s.id == pair.id) {
+                if let Some(s) = legacy_seeds.iter().find(|seed| seed.id == pair.id) {
                     billing_provenances.push(BillingPairProvenance {
                         id: s.id.clone(),
                         source: s.provenance.source.clone(),

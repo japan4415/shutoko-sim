@@ -515,10 +515,11 @@ fn test_routing_core_search_integration() {
 // =========================================================================
 
 use shutoko_graph_builder::{
-    build_manifest, compute_sha256, generate_and_validate_billing_pairs, generate_billing_pair,
-    manifest_to_deterministic_json, snap_index_to_deterministic_json, validate_billing_pair,
-    BillingError, BillingPair, BillingPairSeed, BillingPairsSeedFile, ManifestConfig, Price,
-    SeedPrice, SeedProvenance, VerificationStatus,
+    build_manifest, compute_sha256, generate_and_validate_billing_pairs,
+    generate_and_validate_parsed_billing_pairs, generate_billing_pair,
+    manifest_to_deterministic_json, parse_billing_pairs_seed, snap_index_to_deterministic_json,
+    validate_billing_pair, BillingError, BillingPair, BillingPairSeed, BillingPairsSeedFile,
+    ManifestConfig, Price, SeedPrice, SeedProvenance, VerificationStatus,
 };
 
 fn create_test_loop_graph() -> (
@@ -3378,12 +3379,18 @@ fn test_issue6_item4_invalid_dates_and_engine_version() {
 
 #[test]
 fn test_billing_pair_seed_status_and_output_match_full_network() {
-    use shutoko_graph_builder::{BillingPairsSeedFile, Graph, VerificationStatus};
+    use shutoko_graph_builder::{
+        parse_billing_pairs_seed, Graph, ParsedBillingPairsSeed, VerificationStatus,
+    };
 
     // 1. Verify that the declarative seed keeps all 8 audited billing pairs.
     let seed_str = include_str!("../../../data/billing-pairs-seed.json");
-    let seed_file: BillingPairsSeedFile =
-        serde_json::from_str(seed_str).expect("data/billing-pairs-seed.json must deserialize");
+    let parsed_seed = parse_billing_pairs_seed(seed_str)
+        .expect("data/billing-pairs-seed.json must use the supported seed parser");
+    let seed_file = match parsed_seed {
+        ParsedBillingPairsSeed::Schema1(seed) => seed,
+        ParsedBillingPairsSeed::Schema2(_) => panic!("C1 seed must use schema 1"),
+    };
     assert_eq!(
         seed_file.billing_pairs.len(),
         8,
@@ -3486,14 +3493,18 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
 
 #[test]
 fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
-    use shutoko_graph_builder::{BillingPairsSeedFile, Graph};
+    use shutoko_graph_builder::{parse_billing_pairs_seed, Graph, ParsedBillingPairsSeed};
 
     let graph_str = include_str!("../../../fixtures/generated/graph.json");
     let graph: Graph =
         serde_json::from_str(graph_str).expect("fixtures/generated/graph.json must deserialize");
     let seed_str = include_str!("../../../data/billing-pairs-seed.json");
-    let seed_file: BillingPairsSeedFile =
-        serde_json::from_str(seed_str).expect("data/billing-pairs-seed.json must deserialize");
+    let parsed_seed = parse_billing_pairs_seed(seed_str)
+        .expect("data/billing-pairs-seed.json must use the supported seed parser");
+    let seed_file = match parsed_seed {
+        ParsedBillingPairsSeed::Schema1(seed) => seed,
+        ParsedBillingPairsSeed::Schema2(_) => panic!("C1 seed must use schema 1"),
+    };
 
     // 1. All nodes must have finite, valid coordinates in Tokyo bounds
     assert!(!graph.nodes.is_empty(), "nodes must not be empty");
@@ -4072,6 +4083,29 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
 
     // Clean up
     let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_schema_v2_diagnostic_radial_pairs_are_not_published() {
+    let (graph, _snap) = create_test_loop_graph();
+    let raw = include_str!("../../../fixtures/seed-v2/diagnostic-radial-v2.json");
+    let seed = parse_billing_pairs_seed(raw).unwrap();
+    let report = generate_and_validate_parsed_billing_pairs(&graph, &seed);
+
+    assert!(report.valid_pairs.is_empty());
+    let radial_rejections: Vec<&str> = report
+        .rejected_pairs
+        .iter()
+        .filter(|rejected| rejected.reason.contains("diagnostic radialReturn"))
+        .map(|rejected| rejected.seed_id.as_str())
+        .collect();
+    assert_eq!(
+        radial_rejections,
+        vec![
+            "bp:2-inbound:meguro:c1-inner:tengenji",
+            "bp:2-inbound:meguro:c1-outer:tengenji"
+        ]
+    );
 }
 
 #[test]

@@ -5,122 +5,867 @@
 //! Because toll eligibility and accurate entrance-to-exit pairings cannot be safely
 //! deduced from OSM geometry alone, billing pairs are defined in a declarative seed
 //! file curated with human verification and authoritative tariff citations.
-//!
-//! ## JSON Schema Structure
-//! ```json
-//! {
-//!   "schemaVersion": 1,
-//!   "description": "Optional human-readable description",
-//!   "billingPairs": [
-//!     {
-//!       "id": "bp:c1-inner:shibakoen-kasumigaseki",
-//!       "entryOsmWayId": 12345678,
-//!       "exitOsmWayId": 87654321,
-//!       "anchorOsmNodeId": 999999,
-//!       "vehicleProfile": "passenger-car-etc",
-//!       "status": "verified",
-//!       "oneSectionAheadVerified": true,
-//!       "provenance": {
-//!         "source": "https://www.shutoko.jp/fee/fee-info/...",
-//!         "sourceDate": "2026-09-10",
-//!         "notes": "Verified against 2026 tariff table"
-//!       },
-//!       "prices": [
-//!         {
-//!           "amountYen": 300,
-//!           "effectiveFrom": "2026-01-01T00:00:00Z",
-//!           "effectiveTo": "2026-10-01T00:00:00Z"
-//!         }
-//!       ]
-//!     }
-//!   ]
-//! }
-//! ```
 
 use crate::model::VerificationStatus;
-use serde::{Deserialize, Serialize};
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value;
+use std::collections::HashSet;
+use std::error::Error;
+use std::fmt;
 
-/// Top-level structure for the billing pair seed file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BillingPairsSeedFile {
-    /// Schema version for the seed specification (currently 1).
     pub schema_version: u32,
-    /// Human-readable description of this seed dataset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// List of declarative billing pair seed entries.
     pub billing_pairs: Vec<BillingPairSeed>,
 }
 
-/// A single declarative billing pair seed entry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BillingPairSeed {
-    /// Unique identifier for the billing pair (max 256 bytes).
     pub id: String,
-
-    /// OSM way ID representing the entry ramp.
     pub entry_osm_way_id: i64,
-
-    /// Official (human-verified) entrance ramp name, e.g. "神田橋入口".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entry_name: Option<String>,
-
-    /// OSM way ID representing the exit ramp.
     pub exit_osm_way_id: i64,
-
-    /// Official (human-verified) exit ramp name, e.g. "宝町出口".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_name: Option<String>,
-
-    /// OSM node ID representing the loop anchor on the Shutoko mainline.
     pub anchor_osm_node_id: i64,
-
-    /// Target vehicle profile (e.g. "passenger-car-etc").
     pub vehicle_profile: String,
-
-    /// Verification status ("verified" or "unverified").
     pub status: VerificationStatus,
-
-    /// Explicit human verification that this pair is strictly the "1 section ahead" exit.
     pub one_section_ahead_verified: bool,
-
-    /// Provenance and citation data for this entry and tariff.
     pub provenance: SeedProvenance,
-
-    /// Tariff rules applicable to this pair with effective UTC intervals.
     #[serde(default)]
     pub prices: Vec<SeedPrice>,
 }
 
-/// Provenance citation verifying the source and date of the billing pair data.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SeedProvenance {
-    /// Source reference (e.g. official URL or tariff gazette).
     pub source: String,
-
-    /// Date the source data or tariff was inspected/verified (ISO 8601 YYYY-MM-DD).
     pub source_date: String,
-
-    /// Optional notes regarding the inspection or verification context.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
 }
 
-/// Price record within a seed entry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SeedPrice {
-    /// Toll amount in JPY (must be > 0).
     pub amount_yen: u64,
-
-    /// RFC 3339 UTC timestamp with "Z" suffix marking the start of validity (inclusive).
     pub effective_from: String,
-
-    /// RFC 3339 UTC timestamp with "Z" suffix marking the end of validity (exclusive),
-    /// or `None` if currently valid indefinitely.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effective_to: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BillingPairsSeedFileV2 {
+    pub schema_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub billing_pairs: Vec<BillingPairSeedEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum BillingPairSeedEntry {
+    LegacyRing(Box<BillingPairSeed>),
+    RadialReturn(Box<RadialReturnBillingPairSeed>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum ParsedBillingPairsSeed {
+    Schema1(BillingPairsSeedFile),
+    Schema2(BillingPairsSeedFileV2),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RadialReturnBillingPairSeed {
+    pub id: String,
+    pub pair_kind: PairKind,
+    pub route_plan_version: RoutePlanVersion,
+    pub vehicle_profile: String,
+    pub entry_endpoint: DiagnosticEndpoint,
+    pub exit_endpoint: DiagnosticEndpoint,
+    pub route_plan: DiagnosticRoutePlan,
+    pub routing_capability: RoutingCapability,
+    pub pair_eligibility: PairEligibility,
+    pub loop_validation: LoopValidation,
+    pub tariff: DiagnosticTariff,
+    pub provenance: SeedProvenance,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PairKind {
+    #[serde(rename = "radialReturn")]
+    RadialReturn,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoutePlanVersion {
+    V1,
+}
+
+impl Serialize for RoutePlanVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::V1 => serializer.serialize_u8(1),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for RoutePlanVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u8::deserialize(deserializer)? {
+            1 => Ok(Self::V1),
+            version => Err(D::Error::custom(format!(
+                "unsupported routePlanVersion: {}",
+                version
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiagnosticEndpoint {
+    pub ramp_id: String,
+    pub name: String,
+    pub support_state: EndpointSupportState,
+    pub directed_segments: Vec<DirectedEndpointSegment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub binding_candidates: Vec<BindingCandidate>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EndpointSupportState {
+    VerifiedBound,
+    Unresolved,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DirectedEndpointSegment {
+    pub segment_id: String,
+    pub osm_way_ids: Vec<i64>,
+    pub edge_ids: Vec<String>,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub edge_ids_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BindingCandidate {
+    pub candidate_id: String,
+    pub status: BindingCandidateStatus,
+    pub directed_segments: Vec<DirectedEndpointSegment>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BindingCandidateStatus {
+    Unresolved,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiagnosticRoutePlan {
+    pub entry_corridor: EntryCorridor,
+    pub anchor: DirectedJunctionAnchor,
+    pub mandatory_lap: MandatoryLap,
+    pub return_corridor: ReturnCorridor,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EntryCorridor {
+    pub membership_id: String,
+    pub terminal_edge_id: String,
+    pub merge_node_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DirectedJunctionAnchor {
+    pub anchor_kind: AnchorKind,
+    pub route_id: String,
+    pub direction: String,
+    pub merge_node_id: String,
+    pub branch_node_id: String,
+    pub merge_terminal_edge_id: String,
+    pub branch_initial_edge_id: String,
+    pub arc_policy: ArcPolicy,
+    pub excluded_short_connector: ExcludedShortConnector,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AnchorKind {
+    DirectedJunction,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArcPolicy {
+    OrdinaryLongArc,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExcludedShortConnector {
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub osm_way_id: i64,
+    pub edge_count: u32,
+    pub distance_meters: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MandatoryLap {
+    pub membership_id: String,
+    pub first_edge_id: String,
+    pub last_edge_id: String,
+    pub lap_count: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReturnCorridor {
+    pub membership_id: String,
+    pub start_node_id: String,
+    pub initial_edge_id: String,
+    pub first_general_exit: FirstGeneralExit,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FirstGeneralExit {
+    pub rule: FirstGeneralExitRule,
+    pub expected_ramp_id: String,
+    pub exact_directed_binding: EndpointSupportState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FirstGeneralExitRule {
+    FirstGeneralExit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutingCapability {
+    Routable,
+    StructuralNoLoop,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairEligibility {
+    pub status: PairEligibilityStatus,
+    pub one_section_ahead_verified: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PairEligibilityStatus {
+    VerifiedOneSectionAhead,
+    Unverified,
+    TopologyOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LoopValidation {
+    pub status: LoopValidationStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopValidationStatus {
+    DeclaredRouteValidated,
+    Unresolved,
+    TopologyOnly,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiagnosticTariff {
+    pub status: TariffStatus,
+    pub amount_yen: Option<u64>,
+    pub billing_distance_meters: Option<u64>,
+    pub prices: Vec<SeedPrice>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TariffStatus {
+    Priced,
+    Unpriced,
+    Expired,
+    NotApplicable,
+}
+
+#[derive(Debug)]
+pub enum BillingPairsSeedParseError {
+    Json(serde_json::Error),
+    UnsupportedSchemaVersion(u32),
+    DuplicatePairId(String),
+    InvalidPair(String),
+}
+
+impl fmt::Display for BillingPairsSeedParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Json(error) => write!(f, "invalid billing pair seed JSON: {}", error),
+            Self::UnsupportedSchemaVersion(version) => {
+                write!(
+                    f,
+                    "unsupported billing pair seed schemaVersion: {}",
+                    version
+                )
+            }
+            Self::DuplicatePairId(id) => write!(f, "duplicate billing pair id: {}", id),
+            Self::InvalidPair(message) => write!(f, "invalid billing pair seed: {}", message),
+        }
+    }
+}
+
+impl Error for BillingPairsSeedParseError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Json(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl BillingPairSeedEntry {
+    pub fn id(&self) -> &str {
+        match self {
+            Self::LegacyRing(seed) => &seed.id,
+            Self::RadialReturn(seed) => &seed.id,
+        }
+    }
+
+    pub fn as_legacy_ring(&self) -> Option<&BillingPairSeed> {
+        match self {
+            Self::LegacyRing(seed) => Some(seed.as_ref()),
+            Self::RadialReturn(_) => None,
+        }
+    }
+
+    pub fn as_radial_return(&self) -> Option<&RadialReturnBillingPairSeed> {
+        match self {
+            Self::LegacyRing(_) => None,
+            Self::RadialReturn(seed) => Some(seed.as_ref()),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for BillingPairSeedEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        let pair_kind = value.as_object().and_then(|object| object.get("pairKind"));
+
+        match pair_kind {
+            None => serde_json::from_value(value)
+                .map(|seed| Self::LegacyRing(Box::new(seed)))
+                .map_err(D::Error::custom),
+            Some(Value::String(kind)) if kind == "radialReturn" => {
+                let seed: RadialReturnBillingPairSeed =
+                    serde_json::from_value(value).map_err(D::Error::custom)?;
+                seed.validate().map_err(D::Error::custom)?;
+                Ok(Self::RadialReturn(Box::new(seed)))
+            }
+            Some(kind) => Err(D::Error::custom(format!(
+                "unsupported billing pair pairKind: {}",
+                kind
+            ))),
+        }
+    }
+}
+
+impl BillingPairsSeedFileV2 {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema_version != 2 {
+            return Err(format!(
+                "schemaVersion must be 2 for BillingPairsSeedFileV2, got {}",
+                self.schema_version
+            ));
+        }
+
+        let mut ids = HashSet::new();
+        for entry in &self.billing_pairs {
+            if !ids.insert(entry.id()) {
+                return Err(format!("duplicate billing pair id: {}", entry.id()));
+            }
+            if let Some(seed) = entry.as_radial_return() {
+                seed.validate()?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl RadialReturnBillingPairSeed {
+    pub fn validate(&self) -> Result<(), String> {
+        self.entry_endpoint.validate()?;
+        self.exit_endpoint.validate()?;
+        if self.route_plan.mandatory_lap.lap_count != 1 {
+            return Err(format!(
+                "radial pair {} must declare mandatory lap lapCount=1",
+                self.id
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl DiagnosticEndpoint {
+    fn validate(&self) -> Result<(), String> {
+        for segment in &self.directed_segments {
+            validate_directed_segment(segment)?;
+        }
+
+        match self.support_state {
+            EndpointSupportState::VerifiedBound => {
+                if self.directed_segments.is_empty() {
+                    return Err(format!(
+                        "endpoint {} with supportState=verified_bound requires non-empty directedSegments",
+                        self.ramp_id
+                    ));
+                }
+                if !self.binding_candidates.is_empty() {
+                    return Err(format!(
+                        "endpoint {} with supportState=verified_bound must not contain bindingCandidates",
+                        self.ramp_id
+                    ));
+                }
+            }
+            EndpointSupportState::Unresolved | EndpointSupportState::Unsupported => {
+                if !self.directed_segments.is_empty() {
+                    return Err(format!(
+                        "endpoint {} with supportState={} requires empty directedSegments",
+                        self.ramp_id,
+                        support_state_wire_value(self.support_state)
+                    ));
+                }
+            }
+        }
+
+        for candidate in &self.binding_candidates {
+            if candidate.directed_segments.is_empty() {
+                return Err(format!(
+                    "binding candidate {} requires non-empty directedSegments",
+                    candidate.candidate_id
+                ));
+            }
+            for segment in &candidate.directed_segments {
+                validate_directed_segment(segment)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn validate_directed_segment(segment: &DirectedEndpointSegment) -> Result<(), String> {
+    if segment.osm_way_ids.is_empty() {
+        return Err(format!(
+            "directed segment {} requires non-empty osmWayIds",
+            segment.segment_id
+        ));
+    }
+    if segment.edge_ids.is_empty() {
+        return Err(format!(
+            "directed segment {} requires non-empty edgeIds",
+            segment.segment_id
+        ));
+    }
+    Ok(())
+}
+
+fn support_state_wire_value(state: EndpointSupportState) -> &'static str {
+    match state {
+        EndpointSupportState::VerifiedBound => "verified_bound",
+        EndpointSupportState::Unresolved => "unresolved",
+        EndpointSupportState::Unsupported => "unsupported",
+    }
+}
+
+impl ParsedBillingPairsSeed {
+    pub fn schema_version(&self) -> u32 {
+        match self {
+            Self::Schema1(seed) => seed.schema_version,
+            Self::Schema2(seed) => seed.schema_version,
+        }
+    }
+
+    pub fn description(&self) -> Option<&str> {
+        match self {
+            Self::Schema1(seed) => seed.description.as_deref(),
+            Self::Schema2(seed) => seed.description.as_deref(),
+        }
+    }
+
+    pub fn legacy_pairs(&self) -> Vec<&BillingPairSeed> {
+        match self {
+            Self::Schema1(seed) => seed.billing_pairs.iter().collect(),
+            Self::Schema2(seed) => seed
+                .billing_pairs
+                .iter()
+                .filter_map(BillingPairSeedEntry::as_legacy_ring)
+                .collect(),
+        }
+    }
+
+    pub fn radial_pairs(&self) -> Vec<&RadialReturnBillingPairSeed> {
+        match self {
+            Self::Schema1(_) => Vec::new(),
+            Self::Schema2(seed) => seed
+                .billing_pairs
+                .iter()
+                .filter_map(BillingPairSeedEntry::as_radial_return)
+                .collect(),
+        }
+    }
+}
+
+pub fn parse_billing_pairs_seed(
+    raw: &str,
+) -> Result<ParsedBillingPairsSeed, BillingPairsSeedParseError> {
+    #[derive(Deserialize)]
+    struct SchemaVersionHeader {
+        #[serde(rename = "schemaVersion")]
+        schema_version: u32,
+    }
+
+    let header: SchemaVersionHeader =
+        serde_json::from_str(raw).map_err(BillingPairsSeedParseError::Json)?;
+    match header.schema_version {
+        1 => {
+            let seed: BillingPairsSeedFile =
+                serde_json::from_str(raw).map_err(BillingPairsSeedParseError::Json)?;
+            validate_unique_ids(seed.billing_pairs.iter().map(|pair| pair.id.as_str()))?;
+            Ok(ParsedBillingPairsSeed::Schema1(seed))
+        }
+        2 => {
+            let seed: BillingPairsSeedFileV2 =
+                serde_json::from_str(raw).map_err(BillingPairsSeedParseError::Json)?;
+            seed.validate()
+                .map_err(BillingPairsSeedParseError::InvalidPair)?;
+            Ok(ParsedBillingPairsSeed::Schema2(seed))
+        }
+        version => Err(BillingPairsSeedParseError::UnsupportedSchemaVersion(
+            version,
+        )),
+    }
+}
+
+fn validate_unique_ids<'a>(
+    ids: impl IntoIterator<Item = &'a str>,
+) -> Result<(), BillingPairsSeedParseError> {
+    let mut seen = HashSet::new();
+    for id in ids {
+        if !seen.insert(id) {
+            return Err(BillingPairsSeedParseError::DuplicatePairId(id.to_string()));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    const VALID_DIAGNOSTIC_SEED: &str =
+        include_str!("../../../fixtures/seed-v2/diagnostic-radial-v2.json");
+    const DIAGNOSTIC_SEED_SNAPSHOT: &str =
+        include_str!("../../../fixtures/seed-v2/diagnostic-radial-v2.snapshot.json");
+    const UNKNOWN_VERSION: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-unknown-version.json");
+    const LEGACY_UNKNOWN_FIELD: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-legacy-unknown-field.json");
+    const LEGACY_MISSING_ANCHOR: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-legacy-missing-anchor.json");
+    const RADIAL_UNKNOWN_FIELD: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-radial-unknown-field.json");
+    const MISSING_PAIR_KIND: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-radial-missing-pair-kind.json");
+    const MISSING_ROUTE_PLAN_VERSION: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-radial-missing-route-plan-version.json");
+    const UNKNOWN_PAIR_KIND: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-radial-unknown-pair-kind.json");
+    const UNKNOWN_ROUTE_PLAN_VERSION: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-radial-unknown-route-plan-version.json");
+    const VERIFIED_BOUND_EMPTY: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-verified-bound-empty.json");
+    const UNRESOLVED_WITH_SEGMENT: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-unresolved-directed-segment.json");
+    const UNSUPPORTED_WITH_SEGMENT: &str =
+        include_str!("../../../fixtures/seed-v2/invalid-unsupported-directed-segment.json");
+
+    #[test]
+    fn parses_schema_v2_diagnostic_seed_and_matches_snapshot() {
+        let parsed = parse_billing_pairs_seed(VALID_DIAGNOSTIC_SEED).unwrap();
+        let seed = match &parsed {
+            ParsedBillingPairsSeed::Schema2(seed) => seed,
+            ParsedBillingPairsSeed::Schema1(_) => panic!("expected schema 2"),
+        };
+
+        assert_eq!(parsed.schema_version(), 2);
+        assert_eq!(seed.billing_pairs.len(), 3);
+        assert!(matches!(
+            seed.billing_pairs[0],
+            BillingPairSeedEntry::LegacyRing(_)
+        ));
+        assert_eq!(
+            seed.billing_pairs[1].id(),
+            "bp:2-inbound:meguro:c1-inner:tengenji"
+        );
+        assert_eq!(
+            seed.billing_pairs[2].id(),
+            "bp:2-inbound:meguro:c1-outer:tengenji"
+        );
+        assert_eq!(parsed.legacy_pairs().len(), 1);
+        assert_eq!(parsed.radial_pairs().len(), 2);
+
+        let mut serialized = serde_json::to_string_pretty(&parsed).unwrap();
+        serialized.push('\n');
+        assert_eq!(serialized, DIAGNOSTIC_SEED_SNAPSHOT);
+    }
+
+    #[test]
+    fn rejects_version_kind_required_field_and_unknown_field_fixtures() {
+        match parse_billing_pairs_seed(UNKNOWN_VERSION) {
+            Err(BillingPairsSeedParseError::UnsupportedSchemaVersion(3)) => {}
+            other => panic!("expected unsupported schemaVersion error, got {:?}", other),
+        }
+
+        for raw in [
+            LEGACY_UNKNOWN_FIELD,
+            LEGACY_MISSING_ANCHOR,
+            RADIAL_UNKNOWN_FIELD,
+            MISSING_PAIR_KIND,
+            MISSING_ROUTE_PLAN_VERSION,
+            UNKNOWN_PAIR_KIND,
+            UNKNOWN_ROUTE_PLAN_VERSION,
+        ] {
+            assert!(
+                parse_billing_pairs_seed(raw).is_err(),
+                "invalid fixture was accepted: {}",
+                raw
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_endpoint_support_invariants() {
+        for raw in [
+            VERIFIED_BOUND_EMPTY,
+            UNRESOLVED_WITH_SEGMENT,
+            UNSUPPORTED_WITH_SEGMENT,
+        ] {
+            assert!(
+                parse_billing_pairs_seed(raw).is_err(),
+                "invalid support fixture was accepted: {}",
+                raw
+            );
+        }
+
+        for state in [
+            EndpointSupportState::Unresolved,
+            EndpointSupportState::Unsupported,
+        ] {
+            let mut value: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+            value["billingPairs"][1]["exitEndpoint"]["supportState"] =
+                json!(support_state_wire_value(state));
+            let raw = serde_json::to_string(&value).unwrap();
+            assert!(parse_billing_pairs_seed(&raw).is_ok());
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_fields_in_every_nested_seed_object() {
+        let paths: &[&[&str]] = &[
+            &["billingPairs", "0", "provenance"],
+            &["billingPairs", "0", "prices", "0"],
+            &["billingPairs", "1", "entryEndpoint"],
+            &[
+                "billingPairs",
+                "1",
+                "entryEndpoint",
+                "directedSegments",
+                "0",
+            ],
+            &[
+                "billingPairs",
+                "1",
+                "exitEndpoint",
+                "bindingCandidates",
+                "0",
+            ],
+            &["billingPairs", "1", "routePlan"],
+            &["billingPairs", "1", "routePlan", "entryCorridor"],
+            &["billingPairs", "1", "routePlan", "anchor"],
+            &[
+                "billingPairs",
+                "1",
+                "routePlan",
+                "anchor",
+                "excludedShortConnector",
+            ],
+            &["billingPairs", "1", "routePlan", "mandatoryLap"],
+            &["billingPairs", "1", "routePlan", "returnCorridor"],
+            &[
+                "billingPairs",
+                "1",
+                "routePlan",
+                "returnCorridor",
+                "firstGeneralExit",
+            ],
+            &["billingPairs", "1", "pairEligibility"],
+            &["billingPairs", "1", "loopValidation"],
+            &["billingPairs", "1", "tariff"],
+            &["billingPairs", "1", "provenance"],
+        ];
+
+        for path in paths {
+            let mut value: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+            add_unknown_field(&mut value, path);
+            let raw = serde_json::to_string(&value).unwrap();
+            let error = parse_billing_pairs_seed(&raw).unwrap_err().to_string();
+            assert!(
+                error.contains("unknown field"),
+                "path {:?} produced unexpected error: {}",
+                path,
+                error
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_top_level_fields_and_schema_v2_pair_fields_in_schema_v1() {
+        let mut schema1: Value =
+            serde_json::from_str(include_str!("../../../data/billing-pairs-seed.json")).unwrap();
+        add_unknown_field(&mut schema1, &[]);
+        let error = parse_billing_pairs_seed(&schema1.to_string())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown field"));
+
+        let mut schema2: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+        add_unknown_field(&mut schema2, &[]);
+        let error = parse_billing_pairs_seed(&schema2.to_string())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown field"));
+
+        let diagnostic_pair = &schema2["billingPairs"][1];
+        let schema1_with_radial = json!({
+            "schemaVersion": 1,
+            "billingPairs": [diagnostic_pair]
+        });
+        assert!(parse_billing_pairs_seed(&schema1_with_radial.to_string()).is_err());
+    }
+
+    #[test]
+    fn schema_1_preserves_c1_seed_data_and_legacy_generation_contract() {
+        let raw = include_str!("../../../data/billing-pairs-seed.json");
+        let parsed = parse_billing_pairs_seed(raw).unwrap();
+        let original: Value = serde_json::from_str(raw).unwrap();
+        let serialized = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(serialized, original);
+
+        let seed = match &parsed {
+            ParsedBillingPairsSeed::Schema1(seed) => seed,
+            ParsedBillingPairsSeed::Schema2(_) => panic!("expected schema 1"),
+        };
+        assert_eq!(seed.billing_pairs.len(), 8);
+        assert_eq!(
+            seed.billing_pairs
+                .iter()
+                .filter(|pair| pair.status == VerificationStatus::Verified)
+                .count(),
+            2
+        );
+        assert_eq!(
+            seed.billing_pairs
+                .iter()
+                .filter(|pair| pair.status == VerificationStatus::Unverified)
+                .count(),
+            6
+        );
+        assert!(seed.billing_pairs.iter().all(|pair| {
+            pair.prices.len() == 2 && pair.prices.iter().all(|price| price.amount_yen == 300)
+        }));
+    }
+
+    #[test]
+    fn rejects_duplicate_ids_in_both_schema_versions() {
+        let pair = json!({
+            "id": "fixture:duplicate",
+            "entryOsmWayId": 1,
+            "exitOsmWayId": 2,
+            "anchorOsmNodeId": 3,
+            "vehicleProfile": "passenger-car-etc",
+            "status": "unverified",
+            "oneSectionAheadVerified": false,
+            "provenance": {
+                "source": "https://example.com",
+                "sourceDate": "2026-09-16"
+            },
+            "prices": []
+        });
+
+        let schema1 = json!({
+            "schemaVersion": 1,
+            "billingPairs": [pair, pair]
+        });
+        assert!(parse_billing_pairs_seed(&schema1.to_string()).is_err());
+
+        let schema2 = json!({
+            "schemaVersion": 2,
+            "billingPairs": [pair, pair]
+        });
+        assert!(parse_billing_pairs_seed(&schema2.to_string()).is_err());
+    }
+
+    fn add_unknown_field(value: &mut Value, path: &[&str]) {
+        let mut current = value;
+        for component in path {
+            current = match component.parse::<usize>() {
+                Ok(index) => current.as_array_mut().unwrap().get_mut(index).unwrap(),
+                Err(_) => current
+                    .as_object_mut()
+                    .unwrap()
+                    .get_mut(*component)
+                    .unwrap(),
+            };
+        }
+        current
+            .as_object_mut()
+            .unwrap()
+            .insert("futureField".into(), Value::Bool(true));
+    }
 }

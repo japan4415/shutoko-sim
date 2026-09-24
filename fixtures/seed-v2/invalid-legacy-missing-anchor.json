@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 2,
+  "billingPairs": [
+    {
+      "id": "fixture:legacy:missing-anchor",
+      "entryOsmWayId": 1,
+      "exitOsmWayId": 2,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "unverified",
+      "oneSectionAheadVerified": false,
+      "provenance": {
+        "source": "https://example.com",
+        "sourceDate": "2026-09-16"
+      },
+      "prices": []
+    }
+  ]
+}

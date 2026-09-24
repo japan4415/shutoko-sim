@@ -21,8 +21,8 @@ pub use inventory::{
 };
 
 pub use billing::{
-    generate_and_validate_billing_pairs, generate_billing_pair, BillingError,
-    BillingGenerationReport, RejectedSeedRecord,
+    generate_and_validate_billing_pairs, generate_and_validate_parsed_billing_pairs,
+    generate_billing_pair, BillingError, BillingGenerationReport, RejectedSeedRecord,
 };
 pub use manifest::{
     build_manifest, compute_sha256, manifest_to_deterministic_json, BillingPairProvenance,
@@ -33,7 +33,16 @@ pub use model::{
     VerificationStatus,
 };
 pub use osm::{OsmElement, OsmMember, OverpassResponse};
-pub use seed::{BillingPairSeed, BillingPairsSeedFile, SeedPrice, SeedProvenance};
+pub use seed::{
+    parse_billing_pairs_seed, AnchorKind, ArcPolicy, BillingPairSeed, BillingPairSeedEntry,
+    BillingPairsSeedFile, BillingPairsSeedFileV2, BillingPairsSeedParseError, BindingCandidate,
+    BindingCandidateStatus, DiagnosticEndpoint, DiagnosticRoutePlan, DiagnosticTariff,
+    DirectedEndpointSegment, DirectedJunctionAnchor, EndpointSupportState, EntryCorridor,
+    ExcludedShortConnector, FirstGeneralExit, FirstGeneralExitRule, LoopValidation,
+    LoopValidationStatus, MandatoryLap, PairEligibility, PairEligibilityStatus, PairKind,
+    ParsedBillingPairsSeed, ReturnCorridor, RoutePlanVersion, RoutingCapability, SeedPrice,
+    SeedProvenance, TariffStatus,
+};
 pub use topology::{
     build_topology, build_topology_with_report, duration_seconds, haversine_distance_meters,
     is_shutoko_motorway, parse_oneway, snap_index_to_deterministic_json, to_deterministic_json,

@@ -494,6 +494,30 @@ export function formatRank(allPriced: boolean, index: number): string | null {
   return allPriced ? `最安順位 ${String(index)} 位` : null;
 }
 
+export function isProductEligible(candidate: Candidate): boolean {
+  if (candidate.pairKind === "topologyOnly") {
+    return false;
+  }
+  if (candidate.pairKind === "radialReturn") {
+    return (
+      candidate.eligibilityStatus === "verified_one_section_ahead" &&
+      candidate.loopValidationStatus === "declared_route_validated"
+    );
+  }
+  return true;
+}
+
+export function canRankByPrice(
+  rankingMode: SearchResult["rankingMode"],
+  candidates: readonly Candidate[],
+): boolean {
+  return (
+    rankingMode === "time_per_yen" &&
+    candidates.length > 0 &&
+    candidates.every((candidate) => isProductEligible(candidate) && candidate.toll.amountYen !== null)
+  );
+}
+
 /** 推薦ラベル。BEST_* 系の理由を持つ先頭候補にのみ付ける。 */
 export function recommendedLabel(candidate: { reasons: string[] }): string | null {
   return candidate.reasons.some((code) => code === "BEST_TIME_PER_YEN" || code === "BEST_SHUTOKO_TIME")
@@ -728,7 +752,7 @@ function referenceTollText(toll: Toll): string {
  * 「1区間の料金で首都高を約 s 分走る」の比較値をカードに添えるための文字列。
  */
 function timePerYenText(candidate: Candidate): string | null {
-  if (candidate.pairKind === "topologyOnly") {
+  if (!isProductEligible(candidate)) {
     return null;
   }
   if ("tariffStatus" in candidate && candidate.tariffStatus !== "priced") {
@@ -752,12 +776,15 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
   const exit = rampName(candidate, "exit");
   const isRadial = candidate.pairKind === "radialReturn";
   const isTopologyOnly = candidate.pairKind === "topologyOnly";
+  const productEligible = isProductEligible(candidate);
   const mapsUrl = isRadial ? "" : candidate.handoff.mapsUrl;
   const chargedSection = isTopologyOnly
     ? "道路形状のみ（商品対象外）"
-    : isRadial
-      ? "首都高区間: 入口 → 周回 → 戻り"
-      : `課金対象: ${entry} → ${exit} の1区間`;
+    : isRadial && !productEligible
+      ? "首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）"
+      : isRadial
+        ? "首都高区間: 入口 → 周回 → 戻り"
+        : `課金対象: ${entry} → ${exit} の1区間`;
   const loopEdgeIds = isRadial
     ? candidate.edgeRouteLegs
         .filter((leg) => leg.role === "mandatory_lap")

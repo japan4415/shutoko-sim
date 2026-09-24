@@ -11,6 +11,7 @@ import {
   SEARCH_TIMEOUT_MS,
   SUPPORTED_AREA_TEXT,
   VEHICLE_PROFILE,
+  canRankByPrice,
   classifyNoCandidates,
   coordinateLabel,
   errorMessage,
@@ -1262,12 +1263,10 @@ function renderResult(result: SearchResult): void {
 
   clearRecovery();
   // 料金確定状況は集合全体で判定する。1 件でも未算出なら順位を出さない。
-  const allPriced = candidates.every(
-    (candidate) => candidate.pairKind !== "topologyOnly" && candidate.toll.amountYen !== null,
-  );
+  const canRank = canRankByPrice(result.rankingMode, candidates);
   const models = candidates.map((candidate, i) => {
     const model = toCardModel(candidate, i + 1);
-    model.rankLabel = formatRank(allPriced, i + 1);
+    model.rankLabel = formatRank(canRank, i + 1);
     return model;
   });
 

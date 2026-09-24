@@ -26,7 +26,7 @@ export interface DerivedSegments {
    * 現在は常に空配列になる。将来の拡張用に残している。
    */
   return: Coords[];
-  /** 課金対象の 1 区間（入口エッジ〜出口エッジ）。 */
+  /** legacyRing の課金対象の 1 区間（入口エッジ〜出口エッジ）。 */
   charged: Coords[];
   routeLegs: RouteSegment[];
   /** セグメント分解できなかった全経路（フォールバック描画用）。 */
@@ -90,6 +90,7 @@ export function deriveSegments(candidate: Candidate): DerivedSegments {
   const entryIndex = edgeIds.indexOf(candidate.entryId);
   const exitIndex = edgeIds.indexOf(candidate.exitId);
   const charged =
+    candidate.pairKind !== "radialReturn" &&
     candidate.pairKind !== "topologyOnly" &&
     entryIndex !== -1 &&
     exitIndex !== -1 &&

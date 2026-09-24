@@ -11,6 +11,7 @@ import {
   accessMinutesFromMeters,
   accessSecondsFromMeters,
   baseSecondsFromPlanSeconds,
+  canRankByPrice,
   classifyNoCandidates,
   coordinateLabel,
   distanceText,
@@ -553,6 +554,24 @@ describe("toCardModel", () => {
     expect(model.reasons).toEqual([]);
     expect(model.timePerYen).toBeNull();
     expect(model.chargedSection).not.toContain("1区間");
+  });
+
+  it("pricedでも商品cohort外のradialは効率・最安順位を表示しない", () => {
+    const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
+    radial.eligibilityStatus = "unverified";
+    radial.loopValidationStatus = "unresolved";
+    radial.tariffStatus = "priced";
+    radial.toll.amountYen = 500;
+    radial.toll.effectiveFrom = "2026-01-01T00:00:00Z";
+
+    const model = toCardModel(radial);
+
+    expect(model.toll).toBe("料金額: 500 円");
+    expect(model.timePerYen).toBeNull();
+    expect(model.chargedSection).toBe("首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）");
+    expect(canRankByPrice("time_per_yen", [radial])).toBe(false);
+    expect(canRankByPrice("shutoko_time", [sampleCandidate()])).toBe(false);
+    expect(canRankByPrice("time_per_yen", [sampleCandidate()])).toBe(true);
   });
 
   it("topologyOnly は商品対象外として参考料金だけを表示する", () => {

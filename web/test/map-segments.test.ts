@@ -95,7 +95,7 @@ describe("deriveSegments", () => {
     expect(segments.main).toEqual(sampleCandidate().geometry.coordinates);
   });
 
-  it("radialReturn は mandatory_lap leg を loop として扱う", () => {
+  it("radialReturn は4 roleを描くため全経路のcharged overlayを作らない", () => {
     const candidate = JSON.parse(radialCandidateJson) as RadialCandidate;
     const segments = deriveSegments(candidate);
     expect(segments.access).toHaveLength(4);
@@ -115,7 +115,7 @@ describe("deriveSegments", () => {
       ["return_corridor", 2],
       ["exit_approach", 2],
     ]);
-    expect(segments.charged).toHaveLength(8);
+    expect(segments.charged).toEqual([]);
   });
 
   it("topologyOnly は道路形状を描画しても課金区間のオーバーレイを生成しない", () => {

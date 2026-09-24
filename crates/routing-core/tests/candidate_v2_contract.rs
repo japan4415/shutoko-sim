@@ -215,6 +215,8 @@ fn priced_radial_candidates_rank_by_time_per_yen_before_shutoko_time() {
             "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
             "bindingEvidenceId": null,
             "orderedEdgeIds": long_lap_edges,
+            "memberIndexes": [0, 1, 2],
+            "memberOrderMatchesRelation": true,
             "orderedEdgeIdsSha256": long_lap_hash
         }));
 

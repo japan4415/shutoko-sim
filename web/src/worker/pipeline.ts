@@ -219,6 +219,26 @@ function canonicalRouteMemberships(value: unknown): string {
         if (fieldValue === undefined || fieldValue === null) return null;
         return requiredString(fieldValue, `routeMemberships segment ${field}`);
       };
+      const optionalNumberArray = (field: string): number[] | undefined => {
+        const fieldValue = segment[field];
+        if (fieldValue === undefined || fieldValue === null) return undefined;
+        if (!Array.isArray(fieldValue) || fieldValue.some((item) => !Number.isSafeInteger(item))) {
+          throw graphContractMismatch(
+            `routeMemberships segment ${field} が非空整数配列ではありません`,
+          );
+        }
+        return fieldValue;
+      };
+      const optionalBoolean = (field: string): boolean | undefined => {
+        const fieldValue = segment[field];
+        if (fieldValue === undefined || fieldValue === null) return undefined;
+        if (typeof fieldValue !== "boolean") {
+          throw graphContractMismatch(`routeMemberships segment ${field} が boolean ではありません`);
+        }
+        return fieldValue;
+      };
+      const memberIndexes = optionalNumberArray("memberIndexes");
+      const memberOrderMatchesRelation = optionalBoolean("memberOrderMatchesRelation");
       return {
         segmentId: requiredString(segment.segmentId, "routeMemberships segmentId"),
         sourceKind: requiredString(segment.sourceKind, "routeMemberships sourceKind"),
@@ -236,6 +256,10 @@ function canonicalRouteMemberships(value: unknown): string {
           segment.orderedEdgeIdsSha256,
           "routeMemberships orderedEdgeIdsSha256",
         ),
+        ...(memberIndexes === undefined ? {} : { memberIndexes }),
+        ...(memberOrderMatchesRelation === undefined
+          ? {}
+          : { memberOrderMatchesRelation }),
       };
     });
     return {

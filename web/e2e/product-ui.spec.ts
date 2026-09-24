@@ -241,7 +241,11 @@ async function stubWorkerWithRadialCandidate(page: Page, topologyOnly = false): 
       },
       reasons: [],
       warnings: [],
-      handoff: { enabled: false, legUrls: [] },
+      handoff: {
+        enabled: false,
+        legUrls: [],
+        disabledReason: "device_verification_pending",
+      },
     } as unknown as Record<string, unknown> & {
       toll: { amountYen: number | null; effectiveFrom: string | null };
       loop: unknown;
@@ -795,9 +799,9 @@ test("(18) 八王子駅は最近接の横浜青葉入口 tier から 15〜240 �
   const firstCard = page.locator("#results .card").first();
   await expect(firstCard).toBeVisible();
   await expect(page.locator("#results .card")).toHaveCount(1);
-  await expect(firstCard).toContainText("横浜青葉");
-  // 動的 OD は料金額が未算出（amountYen=null）。
-  await expect(firstCard).toContainText("料金額: 未算出");
+  await expect(await firstCard.getAttribute("data-candidate-id")).toContain("yokohama-aoba-entry");
+  await expect(firstCard).toContainText("道路形状のみ（商品対象外）");
+  await expect(firstCard).toContainText("参考料金: 未算出");
 });
 
 test("(19) 奥多摩（cap 超）は対応範囲外と最寄り入口の距離を示す", async ({ page }) => {
@@ -1547,6 +1551,20 @@ test("(43) radialReturn カードへ legacy の1区間文言を出さない", as
   await expect(card).toBeVisible();
   await expect(card.locator(".charging")).toHaveText("首都高区間: 入口 → 周回 → 戻り");
   await expect(card).not.toContainText("1区間");
+});
+
+test("(71) radialReturn は Maps ボタンを出さず実機検証待ちの理由を表示する", async ({ page }) => {
+  await stubWorkerWithRadialCandidate(page);
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const card = page.locator("#results .card").first();
+  await expect(card).toBeVisible();
+  await expect(card.locator(".depart")).toHaveCount(0);
+  await expect(card.locator(".maps-handoff-notice")).toHaveText(
+    "Google マップへの引き継ぎは、実機での確認が済むまで利用できません",
+  );
 });
 
 test("(44) topologyOnly は1区間文言と課金区間のオーバーレイを描画しない", async ({ page }) => {

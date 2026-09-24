@@ -5,6 +5,7 @@ import {
   MAX_ACCESS_DISTANCE_METERS,
   MAX_PRODUCT_MINUTES,
   MAX_PRODUCT_SECONDS,
+  RADIAL_HANDOFF_NOTICE,
   SEARCH_TIMEOUT_MS,
   SUPPORTED_AREA_TEXT,
   TIMEOUT_TEXT,
@@ -489,6 +490,7 @@ describe("toCardModel", () => {
       "静的速度に基づく推定（渋滞・規制は未反映）",
     ]);
     expect(model.mapsUrl.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);
+    expect(model.mapsHandoffNotice).toBeNull();
   });
 
   it("4 桁以上の料金は 3 桁区切りで表示する（design-review-002 C3）", () => {
@@ -527,6 +529,7 @@ describe("toCardModel", () => {
     const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
     const model = toCardModel(radial);
     expect(model.mapsUrl).toBe("");
+    expect(model.mapsHandoffNotice).toBe(RADIAL_HANDOFF_NOTICE);
     expect(model.chargedSection).toBe("首都高区間: 入口 → 周回 → 戻り");
     expect(model.loopEdgeIds).toEqual(["fixture:edge:lap:1", "fixture:edge:lap:2"]);
     expect(model.tollShort).toBe("未算出");

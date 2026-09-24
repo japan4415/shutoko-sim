@@ -133,6 +133,34 @@ describe("parseSearchResult の実行時検証", () => {
     expect(result.candidates[0]?.pairKind).toBe("radialReturn");
   });
 
+  it("radialReturn は実機検証待ち以外の公開 handoff を拒否する", async () => {
+    for (const mutate of [
+      (handoff: Record<string, unknown>) => {
+        handoff.enabled = true;
+      },
+      (handoff: Record<string, unknown>) => {
+        handoff.disabledReason = "other";
+      },
+      (handoff: Record<string, unknown>) => {
+        handoff.legUrls = [
+          {
+            role: "surface_access",
+            mapsUrl: "https://www.google.com/maps/dir/?api=1",
+            urlSha256: "0".repeat(64),
+          },
+        ];
+      },
+    ]) {
+      const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
+      mutate(candidate.handoff as Record<string, unknown>);
+      await expect(
+        parseSearchResult(
+          JSON.stringify(validResult({ status: "ok", reason: null, candidates: [candidate] })),
+        ),
+      ).rejects.toThrowError(/device verification/);
+    }
+  });
+
   it("surface leg は許可fieldと距離・時間の0同値条件を厳密に検証する", async () => {
     const zeroLegs = JSON.parse(radialCandidate) as Record<string, unknown>;
     for (const leg of zeroLegs.estimatedLegs as Record<string, unknown>[]) {

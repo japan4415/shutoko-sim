@@ -30,6 +30,11 @@ assert.equal(radialCandidate.duration.shutokoSeconds, 1440);
 assert.equal(radialCandidate.shutokoDistanceMeters, 23400);
 assert.equal(radialCandidate.edgeRouteLegs.length, 4);
 assert.equal(radialCandidate.estimatedLegs.length, 2);
+assert.deepEqual(radialCandidate.handoff, {
+  enabled: false,
+  legUrls: [],
+  disabledReason: 'device_verification_pending',
+});
 assert.equal(
   radialCandidate.distanceMeters,
   radialCandidate.shutokoDistanceMeters +

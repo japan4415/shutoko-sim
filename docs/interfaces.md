@@ -194,7 +194,7 @@ WASM / Webの`Candidate` unionは`LegacyCandidate | TopologyOnlyCandidate | Radi
 - `toll.chargedSectionCount`と`ONE_SECTION_TOLL`を出さない。`legacyRing` adapterだけが両者を維持する。
 - `time_per_yen`は商品比較対象のtariffが全件`priced`のときだけ使う。unpricedが混在する集合は`shutoko_time`、`topology_only`は商品推薦から外す。
 - `distanceMeters`はhighway + surface access + surface returnの推定距離、`shutokoDistanceMeters`はhighway Edge距離とする。
-- radialの`handoff`は`{ enabled: false, legUrls: [] }`で返し、device verification gate通過後だけ`enabled=true`と検証済みleg URLを持たせる。
+- radialの`handoff`は`{ enabled: false, legUrls: [], disabledReason: "device_verification_pending" }`で返し、device verification gate通過後だけ`enabled=true`と検証済み`legUrls`を持たせる。
 
 `edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。`edgeRouteLegs`と`routePlan`は`RadialCandidate`専用で、`TopologyOnlyCandidate`は宣言済みmandatory lapを意味付けないため持たない。graph-builder は `routePlanLapV1` の順序付き Edge 列と hash、return corridor の declared Exit candidate を検証し、unresolved / unsupported binding を公開候補に昇格させない。
 
@@ -362,7 +362,8 @@ WASM / Webの`Candidate` unionは`LegacyCandidate | TopologyOnlyCandidate | Radi
   "warnings": ["STATIC_TRAVEL_TIME", "HANDOFF_WAYPOINTS_UNVERIFIED"],
   "handoff": {
     "enabled": false,
-    "legUrls": []
+    "legUrls": [],
+    "disabledReason": "device_verification_pending"
   }
 }
 ```
@@ -373,15 +374,13 @@ core、WASM型、Web Workerはgraph schema 2 / 3 / 4を読む。schema 2 / 3の`
 
 ## Google マップへの引き継ぎ
 
-公式 Maps URLs を使い、`https://www.google.com/maps/dir/` に `api=1`、`origin`、`destination`（出発地点）、`travelmode=driving`、`waypoints` を設定する。出発ボタンは経路の確認画面を開く意味とし、自動的にナビを開始する保証はしない。
+C1 legacyは互換URLとして公式 Maps URLsを使い、`https://www.google.com/maps/dir/`に`api=1`、`origin`、`destination`、`travelmode=driving`、`waypoints`を設定する。既存のwaypoint選定、単一URL、`HANDOFF_WAYPOINTS_UNVERIFIED`は変更しない。出発ボタンは経路確認画面を開く意味であり、自動的にナビを開始する保証はしない。
 
-URL は座標のみの固定形式を `format!` で組み立て（区切りは `%7C`）、2,048文字以内にする。モバイルブラウザの上限に合わせ最大3経由地点とする。経由地点が非対応の製品もある。[Google Maps URLs](https://developers.google.com/maps/documentation/urls/get-started)
+radial用のsplit builderは`surface_access` → `loop_transfer` → `surface_return`の順に3 legを生成する。内部の`MapsHandoffLeg`は`role`、`origin`、`destination`、`waypoints`、`mapsUrl`を持ち、各waypointは3点以下、URLは2,048文字以下、座標は小数6桁、区切りは`%7C`とする。自動ナビ用パラメータは付けず、legごとの確認と手動継続を前提にする。
 
-本線上の座標が別道路や停車地点に解釈される可能性を先行検証する。一周を省略せず入口・主要通過点・出口を最大3点で表現でき、代表端末で確認済みの経路系列だけを初期の公開候補とする。入口と1区間先の出口だけでは周回を省略した短い経路になり得るため、周回の再現を必ず確認する。上限超過時に黙って地点を削除したり、走行中の手動区間切替を要求したりしない。
+`URL_BUILDER_VERSION`は`google-maps-split/v1`で固定する。`mapsUrl`のSHA-256はURL bytesを小文字hexで表し、`urlSha256`とする。将来gateが開いた時の`legUrls`要素は`MapsHandoffLegWire = { role, mapsUrl, urlSha256 }`だけとし、Rust・WASM/TypeScriptの型を一致させる。gateが開く前の公開Candidateでは`enabled=false`、`legUrls=[]`、`disabledReason="device_verification_pending"`を返し、WebにMaps遷移ボタンを出さない。
 
-任意出発地点について外部経路の完全一致を事前保証できないため、検証済み系列でも利用者に最終確認を促す。Google の再計算結果を取得して自動比較する機能は含めない。再現不能な系列を除外すると企画価値を満たせない場合は、公開を進めず連携方式を再設計する。
-
-Google Maps URL は waypoint の順序を示しても、近接 JCT の正しい arm、首都高の道路、radial の往路・復路を強制できない。放射線の公開 handoff は、URL 分割だけでは有効にしない。device verification manifest に `routePlanId`、`releaseId`、URL builder version、leg URL hash、期待する道路・向き、OS / browser / app version、検証日時、結果、期限を記録し、Android / iOS × Web / app の必要条件が1件でも `missing`、`failed`、`expired` なら public departure を無効にする。manifest と release gate の詳細は[ルート探索設計](routing.md)を正本とする。
+Google Maps URLはwaypointの順序を示しても、近接JCTの正しいarm、首都高の道路、radialの往路・復路を強制できない。device verification manifestとAndroid / iOS × Web / appのrelease gateはIssue #72で定義する。manifestには`routePlanId`、`releaseId`、URL builder version、leg URL hash、期待する道路・向き、OS / browser / app version、検証日時、結果、期限を記録し、必要条件が1件でも`missing`、`failed`、`expired`ならpublic departureを無効にする。詳細は[ルート探索設計](routing.md)を正本とする。
 
 ## 地図・住所検索のデータ利用
 

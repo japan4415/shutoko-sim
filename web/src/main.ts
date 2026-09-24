@@ -1407,6 +1407,13 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
     card.appendChild(ul);
   }
 
+  if (model.mapsHandoffNotice !== null) {
+    const notice = document.createElement("p");
+    notice.className = "maps-handoff-notice";
+    notice.textContent = model.mapsHandoffNotice;
+    card.appendChild(notice);
+  }
+
   if (model.mapsUrl !== "") {
     const button = document.createElement("button");
     button.type = "button";

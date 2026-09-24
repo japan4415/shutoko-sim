@@ -700,8 +700,14 @@ async function validateRadialCandidate(candidate: unknown): Promise<void> {
     throw contractMismatch("radialReturn toll に chargedSectionCount があります");
   }
   validateTariffStatus(candidate, "radialReturn", true);
-  if (!isRecord(candidate.handoff) || candidate.handoff.enabled !== false) {
-    throw contractMismatch("radialReturn handoff が無効ではありません");
+  if (
+    !isRecord(candidate.handoff) ||
+    candidate.handoff.enabled !== false ||
+    !Array.isArray(candidate.handoff.legUrls) ||
+    candidate.handoff.legUrls.length !== 0 ||
+    candidate.handoff.disabledReason !== "device_verification_pending"
+  ) {
+    throw contractMismatch("radialReturn handoff が device verification 待ちで無効ではありません");
   }
 }
 

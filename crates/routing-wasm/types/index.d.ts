@@ -335,9 +335,18 @@ export interface Handoff {
   verificationSetVersion: string | null;
 }
 
+export type MapsHandoffLegRole = "surface_access" | "loop_transfer" | "surface_return";
+
+export interface MapsHandoffLegWire {
+  role: MapsHandoffLegRole;
+  mapsUrl: string;
+  urlSha256: string;
+}
+
 export interface RadialHandoff {
   enabled: false;
-  legUrls: string[];
+  legUrls: MapsHandoffLegWire[];
+  disabledReason: "device_verification_pending";
 }
 
 interface CandidateBase {

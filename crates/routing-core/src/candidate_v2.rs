@@ -1,4 +1,5 @@
 use crate::{
+    handoff::{self, MapsHandoffError, MapsHandoffLegWire, SplitMapsHandoff},
     invalid, utc, ArcPolicy, Duration, GeoJsonLineString, Handoff, LatLng, Loop,
     LoopValidationStatus, PairEligibilityStatus, PairKind, RampInfo, RouteAnchor,
     RoutePlanSegmentRole, RoutingError, SnappedOrigin, TariffStatus,
@@ -103,7 +104,21 @@ pub struct TopologyOnlyCandidate {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CandidateV2Handoff {
     pub enabled: bool,
-    pub leg_urls: Vec<String>,
+    pub leg_urls: Vec<MapsHandoffLegWire>,
+    pub disabled_reason: Option<String>,
+}
+
+impl CandidateV2Handoff {
+    pub(crate) fn disabled_pending_device_verification(
+        generated: &SplitMapsHandoff,
+    ) -> Result<Self, MapsHandoffError> {
+        let _validated_wire_legs = generated.wire_legs()?;
+        Ok(Self {
+            enabled: false,
+            leg_urls: Vec::new(),
+            disabled_reason: Some(handoff::DEVICE_VERIFICATION_PENDING.to_owned()),
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -160,6 +175,8 @@ pub fn validate_radial_return_candidate(
         || candidate.toll.billing_pair_id.is_empty()
         || candidate.handoff.enabled
         || !candidate.handoff.leg_urls.is_empty()
+        || candidate.handoff.disabled_reason.as_deref()
+            != Some(handoff::DEVICE_VERIFICATION_PENDING)
         || candidate
             .reasons
             .iter()

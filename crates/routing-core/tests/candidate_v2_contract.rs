@@ -91,6 +91,26 @@ fn rejects_unknown_version_kind_anchor_and_legacy_charge_field() {
 }
 
 #[test]
+fn rejects_public_radial_handoff_before_device_verification() {
+    for mutate in [
+        |value: &mut Value| value["handoff"]["enabled"] = Value::from(true),
+        |value: &mut Value| value["handoff"]["disabledReason"] = Value::from("other"),
+        |value: &mut Value| {
+            value["handoff"]["legUrls"] = json!([{
+                "role": "surface_access",
+                "mapsUrl": "https://www.google.com/maps/dir/?api=1",
+                "urlSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+            }]);
+        },
+    ] {
+        let mut value = valid();
+        mutate(&mut value);
+        let candidate = parse(&value).unwrap();
+        assert!(validate_radial_return_candidate(&candidate).is_err());
+    }
+}
+
+#[test]
 fn rejects_hashes_that_do_not_match_their_leg_slice() {
     let mut value = valid();
     value["routePlan"]["resolvedRouteSegments"][1]["edgeIdsSha256"] =
@@ -141,6 +161,14 @@ fn schema4_radial_pair_search_builds_complete_radial_candidate() {
         .all(|reason| reason != "ONE_SECTION_TOLL"));
     assert_eq!(candidate["edgeRouteLegs"].as_array().unwrap().len(), 4);
     assert_eq!(candidate["estimatedLegs"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        candidate["handoff"],
+        json!({
+            "enabled": false,
+            "legUrls": [],
+            "disabledReason": "device_verification_pending"
+        })
+    );
     let surface_distance = candidate["estimatedLegs"]
         .as_array()
         .unwrap()

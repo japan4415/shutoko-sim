@@ -25,6 +25,8 @@ export type {
   LegacyToll,
   Loop,
   LoopValidationStatus,
+  MapsHandoffLegRole,
+  MapsHandoffLegWire,
   PairEligibility,
   PairEligibilityStatus,
   PairKind,

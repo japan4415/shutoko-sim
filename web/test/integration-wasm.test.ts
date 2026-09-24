@@ -136,7 +136,7 @@ function fileURLToPathSafe(url: URL): string {
 describe("実 WASM 統合（fetch モック → loadRelease → search）", () => {
   it("旧graph契約のbuild metadataをstaleとして判定する", () => {
     const current: WasmBuildContract = {
-      contractVersion: 3,
+      contractVersion: 4,
       engineVersion: "0.1.0",
       graphSchemaVersion: 4,
       supportedGraphSchemaVersions: [2, 3, 4],

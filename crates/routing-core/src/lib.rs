@@ -56,6 +56,11 @@ mod graph_v4;
 pub mod grid;
 pub mod handoff;
 
+pub use handoff::{
+    maps_url_sha256, MapsHandoffError, MapsHandoffLeg, MapsHandoffLegRole, MapsHandoffLegWire,
+    SplitMapsHandoff, DEVICE_VERIFICATION_PENDING, MAX_MAPS_WAYPOINTS, URL_BUILDER_VERSION,
+};
+
 pub use candidate_v2::{
     validate_radial_return_candidate, validate_topology_only_candidate,
     CandidateResolvedRouteSegment, CandidateRoutePlan, CandidateV2Handoff, CandidateV2Toll,
@@ -3090,6 +3095,44 @@ fn build_radial_candidate(
 
     let entry_edge = pg.edge(pair.entry_id.as_str());
     let exit_edge = pg.edge(pair.exit_id.as_str());
+    let RouteAnchor::DirectedJunction(anchor) = &pair.route_plan.anchor else {
+        return Err(invalid("radial candidate requires directedJunction"));
+    };
+    let mandatory_lap_leg = edge_route_legs
+        .iter()
+        .find(|leg| leg.role == RoutePlanSegmentRole::MandatoryLap)
+        .ok_or_else(|| invalid("radial candidate requires mandatory lap"))?;
+    let mandatory_lap_edges = highway
+        [mandatory_lap_leg.start_edge_index..mandatory_lap_leg.end_edge_index_exclusive]
+        .to_vec();
+    let generated_handoff = handoff::build_split_maps_handoff(
+        origin_ll,
+        entry_edge.from.as_str(),
+        anchor.merge_node_id.as_str(),
+        &mandatory_lap_edges,
+        anchor.branch_node_id.as_str(),
+        exit_edge.to.as_str(),
+        |node_id| {
+            let node = pg.node(node_id);
+            Some(LatLng {
+                lat: node.lat,
+                lon: node.lon,
+            })
+        },
+    )
+    .map_err(|error| {
+        invalid(format!(
+            "radial split Maps URL generation failed: {error:?}"
+        ))
+    })?;
+    let radial_handoff = CandidateV2Handoff::disabled_pending_device_verification(
+        &generated_handoff,
+    )
+    .map_err(|error| {
+        invalid(format!(
+            "radial split Maps handoff validation failed: {error:?}"
+        ))
+    })?;
     let entry_node = pg.node(entry_edge.from.as_str());
     let exit_node = pg.node(exit_edge.to.as_str());
     let entry_distance =
@@ -3243,10 +3286,7 @@ fn build_radial_candidate(
             "STATIC_TRAVEL_TIME".into(),
             "HANDOFF_WAYPOINTS_UNVERIFIED".into(),
         ],
-        handoff: CandidateV2Handoff {
-            enabled: false,
-            leg_urls: Vec::new(),
-        },
+        handoff: radial_handoff,
     };
     validate_radial_return_candidate(&candidate)?;
     Ok(candidate)

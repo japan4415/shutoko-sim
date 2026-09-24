@@ -781,7 +781,11 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
   const isRadial = candidate.pairKind === "radialReturn";
   const isTopologyOnly = candidate.pairKind === "topologyOnly";
   const productEligible = isProductEligible(candidate);
-  const mapsUrl = isRadial || isTopologyOnly ? "" : candidate.handoff.mapsUrl;
+  const suppressTopologyHandoff =
+    isTopologyOnly &&
+    candidate.entry.rampId === "ramp:2-inbound:meguro-entry" &&
+    candidate.exit.rampId === "ramp:2-outbound:meguro-exit";
+  const mapsUrl = isRadial || suppressTopologyHandoff ? "" : candidate.handoff.mapsUrl;
   const chargedSection = isTopologyOnly
     ? "道路形状のみ（商品対象外）"
     : isRadial && !productEligible

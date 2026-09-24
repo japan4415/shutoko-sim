@@ -580,6 +580,14 @@ describe("toCardModel", () => {
   it("topologyOnly は商品対象外として参考料金だけを表示する", () => {
     const topology = JSON.parse(radialCandidateJson) as Record<string, unknown>;
     topology.pairKind = "topologyOnly";
+    topology.entry = {
+      ...(topology.entry as Record<string, unknown>),
+      rampId: "ramp:2-inbound:meguro-entry",
+    };
+    topology.exit = {
+      ...(topology.exit as Record<string, unknown>),
+      rampId: "ramp:2-outbound:meguro-exit",
+    };
     topology.eligibilityStatus = "topology_only";
     topology.loopValidationStatus = "topology_only";
     topology.tariffStatus = "priced";
@@ -622,6 +630,9 @@ describe("toCardModel", () => {
     expect(model.pathSummary).toContain("首都高の道路形状");
     expect(model.estimatedLegs).toHaveLength(2);
     expect(recommendedLabel(candidate)).toBeNull();
+    candidate.entry.rampId = "fixture:ramp:entry";
+    candidate.exit.rampId = "fixture:ramp:exit";
+    expect(toCardModel(candidate).mapsUrl).toBe("https://www.google.com/maps/dir/?api=1");
   });
 
   it("warningText と minutesFromSeconds の境界", () => {

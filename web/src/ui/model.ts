@@ -455,6 +455,8 @@ export function reasonText(code: string): string {
       return "首都高滞在時間が最長";
     case "ONE_SECTION_TOLL":
       return "1区間料金（最低料金）";
+    case "TOPOLOGY_ONLY":
+      return "商品対象外（道路形状のみ）";
     default:
       return code;
   }
@@ -596,6 +598,9 @@ function tollShortText(toll: Toll): string {
  * 「1区間の料金で首都高を約 s 分走る」の比較値をカードに添えるための文字列。
  */
 function timePerYenText(candidate: Candidate): string | null {
+  if (candidate.pairKind === "topologyOnly") {
+    return null;
+  }
   const amount = candidate.toll.amountYen;
   if (amount === null || amount <= 0) {
     return null;

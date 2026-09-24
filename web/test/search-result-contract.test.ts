@@ -133,6 +133,55 @@ describe("parseSearchResult の実行時検証", () => {
     expect(result.candidates[0]?.pairKind).toBe("radialReturn");
   });
 
+  it("topologyOnly Candidate v2 を受け取り商品cohort外れを固定する", async () => {
+    const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
+    candidate.pairKind = "topologyOnly";
+    candidate.eligibilityStatus = "topology_only";
+    candidate.loopValidationStatus = "topology_only";
+    candidate.reasons = ["TOPOLOGY_ONLY"];
+    candidate.loop = {
+      anchorNodeId: "fixture:node:merge",
+      edgeIds: ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+      durationSeconds: 1200,
+      distanceMeters: 20000,
+      validated: false,
+    };
+    candidate.handoff = {
+      origin: { lat: 35.1, lon: 139.1 },
+      destination: { lat: 35.1, lon: 139.1 },
+      waypoints: [],
+      mapsUrl: "https://www.google.com/maps/dir/?api=1",
+      verificationSetVersion: null,
+    };
+    delete candidate.anchor;
+    delete candidate.routePlan;
+    delete candidate.edgeRouteLegs;
+    const result = await parseSearchResult(
+      JSON.stringify(validResult({ status: "ok", reason: null, candidates: [candidate] })),
+    );
+    expect(result.candidates[0]?.pairKind).toBe("topologyOnly");
+
+    for (const mutate of [
+      (value: Record<string, unknown>) => {
+        value.toll = { ...(value.toll as Record<string, unknown>), chargedSectionCount: 1 };
+      },
+      (value: Record<string, unknown>) => {
+        value.reasons = ["TOPOLOGY_ONLY", "ONE_SECTION_TOLL"];
+      },
+      (value: Record<string, unknown>) => {
+        value.eligibilityStatus = "verified_one_section_ahead";
+      },
+    ]) {
+      const invalid = { ...candidate };
+      mutate(invalid);
+      await expect(
+        parseSearchResult(
+          JSON.stringify(validResult({ status: "ok", reason: null, candidates: [invalid] })),
+        ),
+      ).rejects.toThrowError(/topologyOnly/);
+    }
+  });
+
   it("edgeRouteLegs の重複・欠落と legacy 残存フィールドを拒否する", async () => {
     const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
     for (const fragment of [duplicateLegs, missingLegs]) {

@@ -508,9 +508,12 @@ fn test_routing_core_search_integration() {
     let res = search(&graph, &req, &limits).expect("search should succeed");
     assert_eq!(res.status, "ok");
     assert!(!res.candidates.is_empty(), "expected candidates found");
-    assert_eq!(res.candidates[0].entry_id, "e:w2:0:f");
-    assert_eq!(res.candidates[0].exit_id, "e:w6:0:f");
-    assert_eq!(res.candidates[0].toll.amount_yen, Some(300));
+    let candidate = res.candidates[0]
+        .as_legacy()
+        .expect("seed-backed search must return LegacyCandidate");
+    assert_eq!(candidate.entry_id, "e:w2:0:f");
+    assert_eq!(candidate.exit_id, "e:w6:0:f");
+    assert_eq!(candidate.toll.amount_yen, Some(300));
 }
 
 // =========================================================================
@@ -652,7 +655,14 @@ fn test_billing_pair_seed_and_pathfinding_success() {
     };
     let res = shutoko_routing_core::search(&graph, &req, &limits).expect("search should succeed");
     assert_eq!(res.status, "ok");
-    assert_eq!(res.candidates[0].toll.amount_yen, Some(300));
+    assert_eq!(
+        res.candidates[0]
+            .as_legacy()
+            .expect("seed-backed search must return LegacyCandidate")
+            .toll
+            .amount_yen,
+        Some(300)
+    );
 }
 
 #[test]

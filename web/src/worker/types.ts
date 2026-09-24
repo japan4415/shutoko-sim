@@ -24,7 +24,9 @@ export type {
   LegacyRingBillingPairV2,
   LegacyToll,
   Loop,
+  LoopValidationStatus,
   PairEligibility,
+  PairEligibilityStatus,
   PairKind,
   RampInfo,
   RadialCandidate,
@@ -40,7 +42,10 @@ export type {
   SearchRequest,
   SnappedOrigin,
   Tariff,
+  TariffStatus,
   Toll,
+  TopologyOnlyCandidate,
+  TopologyOnlyToll,
 } from "../../../crates/routing-wasm/types/index.d";
 
 /**

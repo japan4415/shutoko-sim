@@ -21,7 +21,7 @@
 
 ## Issue #42: Directed Route-Plan Lap v1（route membership・mandatory lap・return First Exit 実装済み）
 
-本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路を設計したもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型を実装し、Issue #63 で graph-builder 内限定の `RouteMembershipIndex`、relation mainline / bound ramp の生成・検証を実装した。Issue #64 で `routePlanLapV1` の M→B 長弧生成、cyclic relation segment の wrap-around、short connector 除外、return corridor 制約付き `find_first_exit_on_corridor`、未解決 binding の保持、route-plan segment の反復規則を実装した。Issue #65 で schema 2 / 3 / 4 dispatch、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の fail-closed reader と WASM/Web consumer 契約を追加した。`--graph-schema 4` を明示した場合だけ `graph.json` の最上位に `routeMemberships[]` を含める。公開 release への反映は #66 の範囲であり、現行 C1 8 ペアの挙動は変えない。
+本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路を設計したもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型を実装し、Issue #63 で graph-builder 内限定の `RouteMembershipIndex`、relation mainline / bound ramp の生成・検証を実装した。Issue #64 で `routePlanLapV1` の M→B 長弧生成、cyclic relation segment の wrap-around、short connector 除外、return corridor 制約付き `find_first_exit_on_corridor`、未解決 binding の保持、route-plan segment の反復規則を実装した。Issue #65 で schema 2 / 3 / 4 dispatch、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の fail-closed reader と WASM/Web consumer 契約を追加した。Issue #69 で `LegacyCandidate` / `RadialCandidate` / `TopologyOnlyCandidate` の3種類、schema 4 radial pair のcore検索、4 highway leg・2 surface leg・商品 / tariff statusの生成を実装した。`--graph-schema 4` を明示した場合だけ `graph.json` の最上位に `routeMemberships[]` を含める。公開 release への反映は #66 の範囲であり、現行 C1 8 ペアの挙動は変えない。
 
 ### 採用案は「指定 route の長弧を1周する」
 
@@ -127,7 +127,7 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 
 この2件は、wire-level schemaとroute shapeを確定した課金ペア設計である。Issue #62でschema適合のinner / outer diagnostic fixture、parser test、snapshot、C1非回帰テストを追加した。天現寺exact directed bindingが解決し、route/direction、First Exit、全端点がすべて通ったときだけ`Graph.billingPairs`の`radialReturn`として昇格する。解決前のplanをpublic candidateとして出さない。
 
-目黒入口 → 目黒出口の現行dynamic ODは別分類にする。entry Edgeは`e:w207535708:0:f`、exit Edgeは`e:w207535709:0:f`で、routing topology上は到達可能である。しかし物理的には天現寺Exitが先であり、exact bindingがなければ目黒を「1区間先」にできない。routing v2では`topology_only`とし、「1区間先」「最低料金」、`time_per_yen`の対象から外す。`routingCapability=routable`は道路を追跡できることを示すが、商品eligibilityの証拠ではない。現行pre-v2 outputは後述の互換fieldをdynamic ODにも残しているため、公開契約への移行完了まではこの節の`topology_only`を実装済みと読まない。
+目黒入口 → 目黒出口のdynamic ODは別分類にする。entry Edgeは`e:w207535708:0:f`、exit Edgeは`e:w207535709:0:f`で、routing topology上は到達可能である。しかし物理的には天現寺Exitが先であり、exact bindingがなければ目黒を「1区間先」にできない。Issue #69以降は`TopologyOnlyCandidate`として`topology_only`を返し、「1区間先」「最低料金」、`time_per_yen`の対象から外す。`routingCapability=routable`は道路を追跡できることを示すが、商品eligibilityの証拠ではない。
 
 天現寺・荏原・戸越入口については、現行support dataでentry / exitのexact directed bindingが未解決である。候補wayや施設名をnearest nodeへ割り当てて補わない。天現寺binding issueは、multi-way ramp候補を順序付き`osmWayIds`と`edgeIds`で表し、ground ↔ mainline接続、ramp IDの逆引き、公式施設順、node接続とhashを同じevidence modelで扱う。`supportState=verified_bound`では解決した`directedSegments[]`を必須とし、`unresolved` / `unsupported`では空配列と`bindingCandidates[]`だけを許す。
 
@@ -164,9 +164,10 @@ Candidate v2は高速道路の区間と一般道の概算区間を別配列に�
 - `shutokoDistanceMeters`は`edgeIds`に対応する首都高Edge距離の合計とする。
 - `distanceMeters`は`shutokoDistanceMeters`に`surface_access`と`surface_return`の`distanceMeters`を加えた利用者側の総距離とする。
 - `duration.shutokoSeconds`は4つの`edgeRouteLegs`に対応するEdge時間の合計、`accessSeconds`と`returnSeconds`は各`estimatedLegs.durationSeconds`と一致させる。
+- `estimatedLegs.distanceMeters`は直線距離に迂回係数1.3を掛けて切り上げる。`durationSeconds`は同じ推定距離÷30km/hを切り上げる。
 - `duration.baseSeconds=accessSeconds+shutokoSeconds+returnSeconds`とし、bufferとplan timeは現行式を保つ。
 
-現行pre-v2 Candidateは`distanceMeters`と`shutokoDistanceMeters`をどちらも首都高Edge距離へ設定し、surface距離と時間をDurationだけで表現する。routing v2への移行では、上の定義へ揃えたcore回帰testとUI表示を同時に更新する。
+C1 `LegacyCandidate`は後方互換のため`distanceMeters`と`shutokoDistanceMeters`をどちらも首都高Edge距離へ設定する。Issue #69で実装した`RadialCandidate`と`TopologyOnlyCandidate`では、上式の`distanceMeters`と`shutokoDistanceMeters`を分け、surface access / returnの推定距離と時間を両variantの`estimatedLegs`から再計算できる。
 
 `geometry`は首都高Edgeに対応する線分を連結したもので、Webが推定する一般道区間は含めない。地図と詳細画面には`entry_approach → mandatory_lap → return_corridor → exit_approach`を番号とテキストで示す。色だけで順序を示さず、surface access / returnはEdge付き経路に含めず、推定距離と時間として別に表示する。
 
@@ -188,7 +189,7 @@ device verification manifest には `routePlanId`、`releaseId`、URL builder ve
 
 新routing contractでは`eligibilityStatus`、`amountYen`、`billingDistanceMeters`、`tariffStatus`を正本にする。`chargedSectionCount=1`と`ONE_SECTION_TOLL`は、`legacyRing` adapterだけで維持し、radial outputには出さない。「1区間先関係」と「料金制度上の1区間」を同じ表示にしない。
 
-現行pre-v2 dynamic ODは、seed由来かどうかに関係なく`chargedSectionCount=1`と`ONE_SECTION_TOLL`を生成し、`status=ok`、`rankingMode=shutoko_time`で返す。UIも全候補を「1区間料金」と表示する。これは商品eligibilityの証拠ではなく、移行前の互換fieldである。routing v2ではdynamic ODを`eligibilityStatus=topology_only`へ移し、reason、charged section、UI表示を撤去する。移行を完了するまで現行挙動を設計済みと読まない。
+Issue #69でdynamic ODを`TopologyOnlyCandidate`へ移行した。`eligibilityStatus`と`loopValidationStatus`をともに`topology_only`へ固定し、商品推薦のreasonは`TOPOLOGY_ONLY`だけとする。`toll.chargedSectionCount`と`ONE_SECTION_TOLL`は生成せず、料金データがあれば`tariffStatus`と金額だけを反映する。dynamic ODは結果から削除せず、商品推薦の対象外として返す。
 
 Issue #41で公式billing distanceと版管理済み料金規則を確定するまでは、次の規律を適用する。
 
@@ -213,7 +214,7 @@ graph schema 4 は reader/consumer まで実装したが、公開 release への
 | 5 | graph schema 4 の atomic release activation | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
 | 6 | 天現寺 exact directed binding | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。候補から一意な`directedSegments[]`だけ昇格し、way順・node接続・Edge順・hashを固定する。解決できなければ根拠付きunresolved / unsupportedのままにする。 | なし |
 | 7 | 2号 inner / outer radial pair 統合 | schema適合fixtureとC1 non-regressionが通る。exact binding未完ならdiagnostic planのみとする。完了時だけGraph radial pairとpublic eligibilityへ昇格し、#41までtariffは未算出とする。 | 3, 5, 6 |
-| 8 | Candidate route legs と product / tariff 状態 | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。pre-v2 dynamic ODのcharged section / reasonを撤去し、radialに`chargedSectionCount`と`ONE_SECTION_TOLL`を出さない。 | 4 |
+| 8 | Candidate route legs と商品・tariff状態（#69実装済み） | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。dynamic ODは`TopologyOnlyCandidate`として`chargedSectionCount` / `ONE_SECTION_TOLL`を撤去し、radialにも同じ項目を出さない。 | 4 |
 | 9 | Web の順序表示 | entry / lap / return / exitを番号・線種・テキストで提示し、surface概算とhighway経路を混同しない。総距離とhighway距離を同じ定義で表示し、unpriced / topology_onlyへ「1区間料金」を出さない。C1 UI regressionを維持する。 | 5, 8 |
 | 10 | split Maps URL 生成 | 3 waypoint / 2,048文字制限、legごとの手動継続、URL builder unit / E2Eを実装する。道路・向きを強制できないため、実機gate通過までpublic handoffを無効にする。 | 8 |
 | 11 | Maps 実機検証と release gate | Android / iOS × Web / appの必要matrixをmanifestへ記録する。失敗・期限切れでradial public departureを無効にし、C1への副作用がないことを確認する。device未接続でもcode issue 10は完了可能とする。 | 10 |
@@ -223,7 +224,7 @@ Issue #42 の設計完了は、この節と seed / graph の wire-level schema �
 
 ## 時間条件（現行 C1 legacy と routing v2 の共通式）
 
-この節以降の探索と検証の中心は、現行pre-v2 C1 / dynamic OD契約である。routing v2が引き継ぐのは、時間予算、buffer、一般道access / returnの概算方法だけである。現行の`anchor`、一周、`T_entry_to_anchor`という語をradial designへそのまま適用しない。
+この節以降の探索と検証では、C1 `LegacyCandidate`とdynamic `TopologyOnlyCandidate`の共通式を使う。`RadialCandidate`は4 legのEdge時間を同じ時間予算へ合計する。現行の`anchor`、一周、`T_entry_to_anchor`という語をradial designへそのまま適用しない。
 
 内部では秒を使う。
 
@@ -267,9 +268,9 @@ T_plan = T_base + buffer
 3. **帰路の経路特定**: 出口から出発地点への経路は1本に確定せず、時間も概算値になる。
 4. **`snappedOrigin` の一意性**: 入口アクセス地点は最大 `SearchLimits.max_access_entries`（デフォルト 0 = 無制限、全 Entry アクセス地点）件あり、候補ごとに異なる入口アクセス地点を持ちうる。
 
-## 現行 pre-v2 の探索手順
+## C1 legacy / topology-only dynamic の探索手順
 
-この手順は現行graph schema 2、C1 legacy pair、最近接入口tier、dynamic ODを前提とする。routing v2では、手順3のanchor / SCC閉路カタログを`routePlan`、`resolvedRouteSegments`、route / direction proofへ置き換え、手順4の分解を4つの正規legで行う。時間予算、access / returnの概算、最近接入口の診断は共通する。
+この手順はC1 legacy pair、最近接入口tier、dynamic ODを前提とする。`RadialCandidate`では、手順3のanchor / SCC閉路カタログを`routePlan`、`resolvedRouteSegments`、route / direction proofへ置き換え、手順4の分解を4つの正規legで行う。時間予算、access / returnの概算、最近接入口の診断は共通する。
 
 1. **入口アクセス地点の選定**: リクエストが座標（`origin: { lat, lon }`）の場合、WASM 内で Entry エッジの from ノード（入口アクセス地点）を対象に等距円筒近似（Equirectangular approximation、東京付近 `cos(lat)` 補正）で距離を計算し、近い順に最大 `SearchLimits.max_access_entries`（デフォルト 0 = 無制限、全 Entry アクセス地点）件を選ぶ。最寄りの入口アクセス地点が `SearchLimits.max_access_distance_meters`（デフォルト 30,000 m、0 は無制限）を超える場合も探索を行わず `status: "no_candidates"`, `reason: "NO_CONNECTION"` を返す。入口アクセス地点が1件も得られない場合、および従来の検証済み課金ペア探索において `max_access_entries` の制限で課金ペアの入口がいずれも選ばれない場合も同じ `NO_CONNECTION` を返す。`originNodeId` が直接指定された場合はその Entry エッジの from ノードを単一の入口アクセス地点として採用する。
    - 候補の有無にかかわらず、座標入力では最近接の入口アクセス地点を `nearestAccess`（`{ nodeId, lat, lon, distanceMeters }`）として返す。
@@ -319,7 +320,7 @@ Google マップ上でのナビゲーションにおいて、一周を短絡（�
 
 ## コスパの評価（現行 ranking と v2 の分離）
 
-この節では、現行C1 pairとdynamic ODのrankingを説明する。routing v2のradial候補は`eligibilityStatus=verified_one_section_ahead`だけを商品cohortへ入れ、`unverified`と`topology_only`を除外する。金額比較の規則は同じだが、legacy / radial adapterの混在を許さない。
+この節では、C1 pairとtopology-only dynamicのrankingを説明する。`RadialCandidate`は`eligibilityStatus=verified_one_section_ahead`かつ`loopValidationStatus=declared_route_validated`だけを商品cohortへ入れ、`unverified`と`topology_only`を除外する。`TopologyOnlyCandidate`は結果に残すが商品推薦せず、`rankingMode=shutoko_time`とする。
 
 最初に「一周後に1区間先で退出」という必須条件で絞る。1区間だからすべての入出口ペアが同額とは仮定しない。
 
@@ -333,6 +334,6 @@ Google マップ上でのナビゲーションにおいて、一周を短絡（�
 
 現行C1 / dynamic ODは、人工グラフで空閉路、anchorへの帰還、帰還時の禁止遷移、入口から出口への短絡、間違った1区間先、二周、途中退出・再入場、マイクロループ排除を検出する。接続区間と一周部分の重複を誤って落とさないことも確認する。小規模では全列挙した閉路と比較し、探索打ち切りによる候補欠落と不正経路を区別する。
 
-routing v2は別に、4 legのindex完全被覆、segment内反復、relation / ramp由来、multi-way binding、First Exit exact binding、`distanceMeters`の距離式、unpriced / topology_onlyの非表示、pre-v2 dynamic compatibility fieldの撤去を検証する。Issue #64 の builder 側では、routePlanLapV1 の M/B・route/direction・wrap-around・short connector、return corridor の declared Exit candidate、exact binding state、`CORRIDOR_EXIT_STATE_BUDGET` を synthetic contract test と real schema4 opt-in test で検証する。
+routing v2は別に、4 legのindex完全被覆、segment内反復、relation / ramp由来、multi-way binding、First Exit exact binding、`distanceMeters`の距離式、unverified / topology_onlyの商品推薦除外、dynamic compatibility fieldの撤去を検証する。Issue #69ではsynthetic schema 4 graphから`RadialCandidate`を生成し、同じgraphを動的ODへ変更したfixtureから`TopologyOnlyCandidate`を生成する。Issue #64 の builder 側では、routePlanLapV1 の M/B・route/direction・wrap-around・short connector、return corridor の declared Exit candidate、exact binding state、`CORRIDOR_EXIT_STATE_BUDGET` を synthetic contract test と real schema4 opt-in test で検証する。
 
 実データでは方向別入出口ペア、一周の道路列、JCT、高架、データ境界を人手でも検証する。通行可能性と課金ペアの確認は別項目とし、どちらかが未確認なら公開候補に使わない。

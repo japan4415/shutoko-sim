@@ -90,7 +90,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
    デプロイ完了時に表示される `https://<worker>.<subdomain>.workers.dev` が配信 URL です。
 4. **疎通確認**: `GET /releases/{releaseId}/manifest.json` と `GET /releases/{releaseId}/engine.json` が `200`・`application/json`・`Cache-Control: max-age=300` で返ること、`GET /releases/{releaseId}/graph.json` が `immutable` キャッシュと `ETag` 付きで返り本文の `sha256` が `manifest.json` と一致すること、存在しない release / 二重スラッシュが `404` になること、`POST /api/geocode` が正常クエリで `200`、空クエリで `400 INVALID_QUERY` を返すことを確認する。
 
-現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-17 `all-real-v2` デプロイ, wrangler 4.131.0）。`all-real-v3` は本次の atomic activation 候補であり、runbook の read-back 確認と本番デプロイが完了するまで本番参照には切り替えない。
+現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-17 `all-real-v2` デプロイ, wrangler 4.131.0）。`all-real-v3` は今回の atomic activation 候補であり、runbook の read-back 確認と本番デプロイが完了するまで本番参照には切り替えない。
 
 > **レート制限の本番挙動に関する注記**: `wrangler.toml` の `[[ratelimits]]`（IP: 10 req/60s、Global: 600 req/60s）は Cloudflare Workers Rate Limiting binding のベストエフォート仕様であり、`wrangler dev --local` の決定論的シミュレーションと異なり本番環境では正確な即時遮断を保証しない（同一 IP から短時間に 15 リクエストを送っても `429` が発生しない場合がある）。アプリケーション側の防御としては機能するが、厳密なレート保証が必要な用途には追加の対策を検討すること。
 

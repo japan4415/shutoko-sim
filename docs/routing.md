@@ -89,12 +89,12 @@ mandatory lap自身のfirst / last Edgeは`routePlan.mandatoryLap.firstEdgeId` /
 
 1つの`RouteMembershipIndex`は`membershipId`、`routeId`、`direction`、`directionMappingVersion`、`segments[]`を持つ。direction mapping は `osm-relation-role/v1` の固定バージョンを出力し、OSM relation の `forward` / `backward` を路線 2 では `outbound` / `inbound` に正規化し、C1 の `inner` / `outer` は保持する。各`RouteMembershipSegment`は`sourceKind`で由来を分ける。
 
-- `sourceKind=relationMainline`: OSM route relationのway memberの並び順とindexを保持し、各wayのnode順からgraph Edgeへ写像する。`sourceRelationId`とsnapshot hashを必須にする。graph 上に存在し、route ref または relation name が一致する `motorway` / `motorway_link` だけを受け入れ、名前で明示された入口・出口や別 route の ref/nat_ref を持つ link は除外する。member順を基準に端点連続するdirected pathを連結し、非連続部分は別segmentとして保持する。way IDソートや逆方向fallbackでrelationの並び替えや逆順を隠さない。
+- `sourceKind=relationMainline`: 所属の正本は OSM route relation とし、そのrelationとroleの要求方向に属するwayだけを使う。各wayのnode順をgraph Edgeへ写像し、順序の正本は relation 所属way間の要求方向の有向接続とする。各接続で後続がちょうど1つであることを要求し、way IDのソート、member順、graph上の別pathによる並べ替えや補完は行わない。分岐・行き止まりはsegment境界として切り出すかfail-closedで拒否し、onewayや要求directionに逆らったfallbackは拒否する。各segmentにはRelationMemberEdgesの`memberIndexes`と、graph順序がrelation member順と一致したかを示す`memberOrderMatchesRelation`を記録する。`sourceRelationId`とsnapshot hashを必須にする。graph 上に存在し、route ref または relation name が一致する `motorway` / `motorway_link` だけを受け入れ、名前で明示された入口・出口や別 route の ref/nat_ref を持つ link は除外する。
 - `sourceKind=boundRamp`: 正規ランプ台帳とexact directed bindingから、wayをまたぐ順序付きEdge列を作る。`bindingEvidenceId`、`fromNodeId`、`toNodeId`、`edgeIdsSha256` を保持し、graph の端点・way順・Edge順・hashを個別に照合する。relation memberであることを求めない。
 
 OSM route relationのmainline候補にはJCT linkやway tagの欠落が混在するため、builderはroute identity、relation member、wayのノード順、graphのShutoko Edgeでmainline候補を確定する。目黒entry way `207535708`や天現寺exit候補way `172358461` / `422023171` / `931759044` / `172358460` / `172358466`を無検証なrelation連続Edge列へ強制しない。rampをrelationの連続Edge列へ強制すると、正しいbindingを誤って無検証にする。mainlineとrampを同じ`sourceKind`へ混ぜない。
 
-route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を明示する。`mandatory_lap` は 1 つの `relationMainline` の連続部分列でなければならない。graph-builder は `generate_route_plan_lap_v1` で M→B の通常の長弧を生成し、relation segment の終端をまたぐ場合は directed order の wrap-around として继续保持する。`validate_directed_junction_mandatory_lap` は anchor の M/B、route/direction、first/last Edge、lapCount=1、arm-boundary、除外 short connector の way/Edge数/距離を一并に検証する。entry、return、exit は `relationMainline` と `boundRamp` を順番に連結できるが、各 segment 内部の Edge 順、node 接続、hash、binding 証拠を個別に検証する。return corridor は初期Edgeからdeclared First Exit候補の`fromNodeId`までrelation membershipの複数segmentとoffsetを横断して探索し、候補へ到達できなければ`ExitNotFound`、予算超過なら`BudgetExceeded`とする。resolved segment 内の Edge 反復は拒否し、別 segment として宣言された反復は接続性と hash を満たす限り許可する。Edge ごとに route metadata を複製せず、index から検索・検証する。名前や最接近 node だけで所属を補わない。
+route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を明示する。`mandatory_lap` は 1 つの `relationMainline` の連続部分列でなければならない。graph-builder は `generate_route_plan_lap_v1` で M→B の通常の長弧を生成し、relation segment の終端をまたぐ場合は directed order の wrap-around として继续保持する。`validate_directed_junction_mandatory_lap` は anchor の M/B、route/direction、first/last Edge、lapCount=1、arm-boundary、除外 short connector の way/Edge数/距離をまとめて検証する。entry、return、exit は `relationMainline` と `boundRamp` を順番に連結できるが、各 segment 内部の Edge 順、node 接続、hash、binding 証拠を個別に検証する。return corridor は初期Edgeからdeclared First Exit候補の`fromNodeId`までrelation membershipの複数segmentとoffsetを横断して探索し、候補へ到達できなければ`ExitNotFound`、予算超過なら`BudgetExceeded`とする。resolved segment 内の Edge 反復は拒否し、別 segment として宣言された反復は接続性と hash を満たす限り許可する。Edge ごとに route metadata を複製せず、index から検索・検証する。名前や最接近 node だけで所属を補わない。
 
 次の異常系は graph-builder の synthetic fixture と Issue #63 実装で検証する。
 
@@ -105,7 +105,7 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 - multi-way rampのway順、node接続、Edge順、from/to endpoint、hashを検証し、終点前に別の一般道nodeがあれば`boundRamp`へ昇格しない。
 - 同名または近接した別JCTのEdgeを使う。
 - excluded short connectorをmandatory lapとして選ぶ。
-- relationの並び替えや逆順を、端点連続性を確認しない無検証な断片として受理しない。
+- relationのmember順とgraphの有向接続順の不一致は、memberOrderMatchesRelation=falseの診断として記録し、接続順序をmember順に補完しない。GitHub issue #63 の「relationの順序と逆順のたどりを拒否する」完了条件は、onewayとroleに逆らう有向接続を拒否することで満たす。
 
 ### 2号目黒線の課金ペア形状（seed統合・診断 route plan 実装済み・公開昇格はbinding unresolved）
 

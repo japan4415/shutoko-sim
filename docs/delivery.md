@@ -10,7 +10,7 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
 
 **重要: `all-real-v3` の R2 投入とread-backが完了するまで、v3をmergeしない。manifestは全artifactのread-back後に最後に投入する。**
 
-Issue #66 のコード変更だけでは本番の release は切り替わらない。`all-real-v3` を公開参加会议する承認済み Manager が、次の順序で単一の R2 seed プロセスを実行する。今回の実装作業では R2 への upload、Wrangler deploy、Cloudflare への書き込みを行わない。release artifactの投入完了・read-back・manifestの最終投入がmergeとproduction deployの前提となる。
+Issue #66 のコード変更だけでは本番の release は切り替わらない。`all-real-v3` の公開を承認済みの Manager が、次の順序で単一の R2 seed プロセスを実行する。今回の実装作業では R2 への upload、Wrangler deploy、Cloudflare への書き込みを行わない。release artifactの投入完了・read-back・manifestの最終投入がmergeとproduction deployの前提となる。
 
 1. **同一入力で成果物を生成する**:
    ```bash
@@ -28,7 +28,7 @@ Issue #66 のコード変更だけでは本番の release は切り替わらな�
    npm --prefix workers run typecheck
    npm --prefix workers test
    ```
-   `dist/wasm/` の実ファイルから `engine.json` の hash を作ること mutable な固定 hash を源代码へ追加しない。
+   `engine.json` の hash は実ファイルから生成し、変更されうる固定 hash をソースコードへ追加しない。
 3. **未使用の versioned ID に本番 R2 を投入する**:
    ```bash
    node workers/scripts/seed-local-r2.mjs --remote

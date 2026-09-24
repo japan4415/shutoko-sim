@@ -1,5 +1,5 @@
 use serde_json::Value;
-use shutoko_routing_core::handoff::build_split_maps_handoff;
+use shutoko_routing_core::handoff::{build_split_maps_handoff, format_maps_leg_url};
 use shutoko_routing_core::{
     evaluate_device_verification_gate, parse_device_verification_manifest, search_json,
     validate_radial_return_candidate, CandidateV2Handoff, DeviceVerificationGateBlocker,
@@ -269,6 +269,19 @@ fn binding_mismatches_are_rejected() {
         Err(DeviceVerificationManifestError::LegUrlHashMismatch)
     );
 
+    let origin_independent = parse_device_verification_manifest(VALID_MANIFEST).unwrap();
+    let different_origin = split_fixture_with_origin(LatLng {
+        lat: 36.0,
+        lon: 140.0,
+    });
+    origin_independent
+        .validate_binding(
+            "fixture:route-plan:radial:2-outbound",
+            "graph-v4-fixture-v1",
+            &different_origin,
+        )
+        .unwrap();
+
     let mut invalid_builder = split_fixture();
     invalid_builder.builder_version = "google-maps-split/v2".to_owned();
     let manifest = parse_device_verification_manifest(VALID_MANIFEST).unwrap();
@@ -412,9 +425,29 @@ fn open_decision_cannot_be_reused_for_another_handoff_or_identity() {
         lat: 36.0,
         lon: 140.0,
     });
+    let public = public_handoff(
+        &other,
+        "fixture:route-plan:radial:2-outbound",
+        "graph-v4-fixture-v1",
+        &decision,
+    )
+    .unwrap();
+    assert!(public.enabled);
+
+    let mut different_loop = other.clone();
+    different_loop.legs[1].waypoints[0] = LatLng {
+        lat: 35.25,
+        lon: 139.25,
+    };
+    different_loop.legs[1].maps_url = format_maps_leg_url(
+        &different_loop.legs[1].origin,
+        &different_loop.legs[1].destination,
+        &different_loop.legs[1].waypoints,
+    )
+    .unwrap();
     assert_eq!(
         public_handoff(
-            &other,
+            &different_loop,
             "fixture:route-plan:radial:2-outbound",
             "graph-v4-fixture-v1",
             &decision,

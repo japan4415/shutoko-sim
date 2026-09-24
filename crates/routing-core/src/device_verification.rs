@@ -1,6 +1,4 @@
-use crate::handoff::{
-    MapsHandoffError, MapsHandoffLegRole, MapsHandoffLegWire, SplitMapsHandoff, URL_BUILDER_VERSION,
-};
+use crate::handoff::{MapsHandoffError, MapsHandoffLegRole, SplitMapsHandoff, URL_BUILDER_VERSION};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -57,7 +55,7 @@ pub(crate) struct DeviceVerificationGateBinding {
     route_plan_id: String,
     release_id: String,
     builder_version: String,
-    legs: Vec<MapsHandoffLegWire>,
+    loop_transfer_url_sha256: String,
 }
 
 impl DeviceVerificationGateBinding {
@@ -66,11 +64,16 @@ impl DeviceVerificationGateBinding {
         release_id: &str,
         handoff: &SplitMapsHandoff,
     ) -> Result<Self, MapsHandoffError> {
+        let legs = handoff.wire_legs()?;
+        let loop_transfer = legs
+            .iter()
+            .find(|leg| leg.role == MapsHandoffLegRole::LoopTransfer)
+            .ok_or(MapsHandoffError::InvalidLegOrder)?;
         Ok(Self {
             route_plan_id: route_plan_id.to_owned(),
             release_id: release_id.to_owned(),
             builder_version: handoff.builder_version.clone(),
-            legs: handoff.wire_legs()?,
+            loop_transfer_url_sha256: loop_transfer.url_sha256.clone(),
         })
     }
 
@@ -78,10 +81,16 @@ impl DeviceVerificationGateBinding {
         let Ok(legs) = handoff.wire_legs() else {
             return false;
         };
+        let Some(loop_transfer) = legs
+            .iter()
+            .find(|leg| leg.role == MapsHandoffLegRole::LoopTransfer)
+        else {
+            return false;
+        };
         self.route_plan_id == route_plan_id
             && self.release_id == release_id
             && self.builder_version == handoff.builder_version
-            && self.legs == legs
+            && self.loop_transfer_url_sha256 == loop_transfer.url_sha256
     }
 }
 
@@ -373,14 +382,17 @@ impl DeviceVerificationManifest {
         let wire_legs = handoff
             .wire_legs()
             .map_err(DeviceVerificationManifestError::InvalidHandoff)?;
-        if self.legs.len() != wire_legs.len() {
+        let manifest_loop = self
+            .legs
+            .iter()
+            .find(|leg| leg.role == MapsHandoffLegRole::LoopTransfer)
+            .ok_or(DeviceVerificationManifestError::InvalidLegs)?;
+        let wire_loop = wire_legs
+            .iter()
+            .find(|leg| leg.role == MapsHandoffLegRole::LoopTransfer)
+            .ok_or(DeviceVerificationManifestError::LegUrlHashMismatch)?;
+        if manifest_loop.url_sha256 != wire_loop.url_sha256 {
             return Err(DeviceVerificationManifestError::LegUrlHashMismatch);
-        }
-        for (manifest_leg, wire_leg) in self.legs.iter().zip(&wire_legs) {
-            if manifest_leg.role != wire_leg.role || manifest_leg.url_sha256 != wire_leg.url_sha256
-            {
-                return Err(DeviceVerificationManifestError::LegUrlHashMismatch);
-            }
         }
         Ok(())
     }

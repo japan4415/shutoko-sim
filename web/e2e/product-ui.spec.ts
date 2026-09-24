@@ -115,6 +115,160 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
   });
 }
 
+async function stubWorkerWithRadialCandidate(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const candidate = {
+      id: "fixture-candidate-radial",
+      releaseId: "all-real-v2",
+      pairKind: "radialReturn",
+      routePlanVersion: 1,
+      origin: { lat: 35.6896727, lon: 139.7644248 },
+      originNodeId: "fixture-origin",
+      snappedOrigin: {
+        nodeId: "fixture-origin",
+        lat: 35.6896727,
+        lon: 139.7644248,
+        distanceMeters: 500,
+      },
+      entry: {
+        edgeId: "fixture-entry",
+        name: "目黒入口",
+        rampId: "fixture-entry",
+        route: "2号",
+        direction: "上り",
+      },
+      exit: {
+        edgeId: "fixture-exit",
+        name: "天現寺出口",
+        rampId: "fixture-exit",
+        route: "2号",
+        direction: "下り",
+      },
+      entryId: "fixture-entry",
+      exitId: "fixture-exit",
+      roadNames: ["C1 都心環状線"],
+      edgeIds: ["fixture-entry", "fixture-lap", "fixture-return", "fixture-exit"],
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [139.76, 35.68],
+          [139.77, 35.69],
+          [139.78, 35.7],
+          [139.79, 35.71],
+          [139.8, 35.72],
+        ],
+      },
+      anchor: {
+        anchorKind: "directedJunction",
+        mergeNodeId: "fixture-merge",
+        branchNodeId: "fixture-branch",
+        mergeTerminalEdgeId: "fixture-entry",
+        branchInitialEdgeId: "fixture-return",
+        routeId: "C1",
+        direction: "inner",
+        arcPolicy: "ordinaryLongArc",
+        excludedShortConnector: {
+          fromNodeId: "fixture-branch",
+          toNodeId: "fixture-merge",
+          osmWayId: 1,
+          edgeCount: 1,
+          distanceMeters: 100,
+        },
+      },
+      routePlan: {
+        membershipIds: ["route:2:inbound", "route:C1:inner", "route:2:outbound"],
+        resolvedRouteSegments: [
+          {
+            resolvedSegmentId: "fixture-resolved-entry",
+            role: "entry_approach",
+            membershipId: "route:2:inbound",
+            sourceSegmentIds: ["fixture-entry-binding"],
+            edgeIdsSha256: "0".repeat(64),
+          },
+          {
+            resolvedSegmentId: "fixture-resolved-lap",
+            role: "mandatory_lap",
+            membershipId: "route:C1:inner",
+            sourceSegmentIds: ["fixture-lap-relation"],
+            edgeIdsSha256: "1".repeat(64),
+          },
+          {
+            resolvedSegmentId: "fixture-resolved-return",
+            role: "return_corridor",
+            membershipId: "route:2:outbound",
+            sourceSegmentIds: ["fixture-return-relation"],
+            edgeIdsSha256: "2".repeat(64),
+          },
+          {
+            resolvedSegmentId: "fixture-resolved-exit",
+            role: "exit_approach",
+            membershipId: "route:2:outbound",
+            sourceSegmentIds: ["fixture-exit-binding"],
+            edgeIdsSha256: "3".repeat(64),
+          },
+        ],
+      },
+      edgeRouteLegs: [
+        { role: "entry_approach", resolvedSegmentId: "fixture-resolved-entry", startEdgeIndex: 0, endEdgeIndexExclusive: 1 },
+        { role: "mandatory_lap", resolvedSegmentId: "fixture-resolved-lap", startEdgeIndex: 1, endEdgeIndexExclusive: 2 },
+        { role: "return_corridor", resolvedSegmentId: "fixture-resolved-return", startEdgeIndex: 2, endEdgeIndexExclusive: 3 },
+        { role: "exit_approach", resolvedSegmentId: "fixture-resolved-exit", startEdgeIndex: 3, endEdgeIndexExclusive: 4 },
+      ],
+      estimatedLegs: [
+        { role: "surface_access", estimated: true, distanceMeters: 500, durationSeconds: 60 },
+        { role: "surface_return", estimated: true, distanceMeters: 500, durationSeconds: 60 },
+      ],
+      duration: {
+        accessSeconds: 60,
+        shutokoSeconds: 1200,
+        returnSeconds: 60,
+        baseSeconds: 1320,
+        bufferSeconds: 300,
+        planSeconds: 1620,
+      },
+      distanceMeters: 12500,
+      shutokoDistanceMeters: 11500,
+      eligibilityStatus: "verified_one_section_ahead",
+      loopValidationStatus: "declared_route_validated",
+      tariffStatus: "unpriced",
+      toll: {
+        billingPairId: "fixture-radial-pair",
+        amountYen: null,
+        pricingAt: "2026-09-16T00:00:00Z",
+        effectiveFrom: null,
+        effectiveTo: null,
+        billingDistanceMeters: null,
+      },
+      reasons: [],
+      warnings: [],
+      handoff: { enabled: false, legUrls: [] },
+    };
+    const result = {
+      requestId: "",
+      releaseId: "all-real-v2",
+      status: "ok",
+      reason: null,
+      rankingMode: "time_per_yen",
+      expandedStates: 1,
+      candidates: [candidate],
+      nearestAccess: null,
+      minPlanSeconds: 1620,
+    };
+    class FixtureWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      constructor() {
+        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v2" } } as MessageEvent), 0);
+      }
+      postMessage(message: { requestId: string }): void {
+        const response = { type: "result", requestId: message.requestId, result: { ...result, requestId: message.requestId } };
+        setTimeout(() => this.onmessage?.({ data: response } as MessageEvent), 0);
+      }
+      terminate(): void {}
+    }
+    Object.defineProperty(window, "Worker", { configurable: true, value: FixtureWorker });
+  });
+}
+
 /** getCurrentPosition を決定論的にスタブする。呼び出し回数は __geoCallCount で数える。 */
 async function stubGeolocationSuccess(
   page: Page,
@@ -1350,4 +1504,16 @@ test("(42) 2候補fixtureでクリック・Enter選択、aria-current、地図�
   await cards.nth(1).locator(".depart").click();
   const calls = await page.evaluate(() => (window as unknown as { __openCalls: string[][] }).__openCalls);
   expect(calls[0]?.[0]).toContain("candidate=fixture-candidate-2");
+});
+
+test("(43) radialReturn カードへ legacy の1区間文言を出さない", async ({ page }) => {
+  await stubWorkerWithRadialCandidate(page);
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const card = page.locator("#results .card").first();
+  await expect(card).toBeVisible();
+  await expect(card.locator(".charging")).toHaveText("首都高区間: 入口 → 周回 → 戻り");
+  await expect(card).not.toContainText("1区間");
 });

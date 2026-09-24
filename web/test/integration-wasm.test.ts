@@ -248,7 +248,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
     };
 
     const started = performance.now();
-    const result = parseSearchResult(state.searchPrepared(JSON.stringify(buildSearchRequest(msg))));
+    const result = await parseSearchResult(state.searchPrepared(JSON.stringify(buildSearchRequest(msg))));
     const elapsedMs = performance.now() - started;
 
     expect(result.status).toBe("ok");
@@ -321,7 +321,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         maxMinutes: 240,
         vehicleProfile: "passenger-car-etc",
       };
-      const result = parseSearchResult(
+      const result = await parseSearchResult(
         glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
       );
       expect(result.status).toBe("ok");
@@ -360,7 +360,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       const first = glue.searchPrepared(pg, requestJson);
       const second = glue.searchPrepared(pg, requestJson);
       expect(second).toBe(first);
-      const result = parseSearchResult(first);
+      const result = await parseSearchResult(first);
       expect(result.status).toBe("ok");
       expect(result.reason).toBeNull();
       expect(result.expandedStates).toBeLessThan(100_000);
@@ -396,7 +396,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         maxMinutes: 60,
         vehicleProfile: "passenger-car-etc",
       };
-      const result = parseSearchResult(
+      const result = await parseSearchResult(
         glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
       );
       // Issue #57: 立川駅の最近接入口 tier (4号高井戸) は完全評価され、合法周回を
@@ -447,7 +447,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         const second = glue.searchPrepared(pg, requestJson);
         // 同一入力の再実行はバイト完全一致（決定論）。
         expect(second).toBe(first);
-        const result = parseSearchResult(first);
+        const result = await parseSearchResult(first);
         expect(result.status).toBe("ok");
         expect(result.candidates.length).toBeGreaterThan(0);
         expect(result.expandedStates).toBeLessThanOrEqual(100_000);

@@ -1,4 +1,5 @@
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use shutoko_routing_core::prepare_json;
 
 fn full_graph() -> Value {
@@ -42,6 +43,38 @@ fn with_fragment(name: &str) -> Value {
     let mut graph = full_graph();
     graph["billingPairs"] = fragment(name)["billingPairs"].clone();
     graph
+}
+
+fn string_list(value: &Value) -> Vec<String> {
+    value
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.as_str().unwrap().to_owned())
+        .collect()
+}
+
+fn edge_hash(edge_ids: &[String]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(serde_json::to_vec(edge_ids).unwrap());
+    format!("{:x}", hasher.finalize())
+}
+
+fn refresh_edge_hashes(graph: &mut Value) {
+    for membership in graph["routeMemberships"].as_array_mut().unwrap() {
+        for segment in membership["segments"].as_array_mut().unwrap() {
+            let edge_ids = string_list(&segment["orderedEdgeIds"]);
+            segment["orderedEdgeIdsSha256"] = Value::from(edge_hash(&edge_ids));
+        }
+    }
+    for pair in graph["billingPairs"].as_array_mut().unwrap() {
+        if pair["pairKind"].as_str() == Some("radialReturn") {
+            for segment in pair["resolvedRouteSegments"].as_array_mut().unwrap() {
+                let edge_ids = string_list(&segment["edgeIds"]);
+                segment["edgeIdsSha256"] = Value::from(edge_hash(&edge_ids));
+            }
+        }
+    }
 }
 
 #[test]
@@ -122,4 +155,171 @@ fn schema_4_rejects_unknown_kinds_versions_and_partial_data() {
         serde_json::from_str(include_str!("../../../fixtures/synthetic-graph.json")).unwrap();
     schema_2["routeMemberships"] = Value::Null;
     assert!(prepare_json(&schema_2.to_string(), "{}").is_err());
+}
+
+#[test]
+fn schema_4_rejects_non_terminal_merge_and_non_initial_branch_edges() {
+    let mut merge = with_fragment("radial");
+    let merge_extra = "fixture:edge:merge:extra";
+    merge["edges"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "id": merge_extra,
+            "from": "fixture:node:merge",
+            "to": "fixture:node:merge",
+            "kind": "shutoko",
+            "durationSeconds": 30,
+            "distanceMeters": 300
+        }));
+    let mut membership_edges =
+        string_list(&merge["routeMemberships"][1]["segments"][1]["orderedEdgeIds"]);
+    membership_edges.push(merge_extra.to_owned());
+    merge["routeMemberships"][1]["segments"][1]["orderedEdgeIds"] =
+        serde_json::to_value(membership_edges).unwrap();
+    let mut resolved_edges =
+        string_list(&merge["billingPairs"][0]["resolvedRouteSegments"][0]["edgeIds"]);
+    resolved_edges.push(merge_extra.to_owned());
+    merge["billingPairs"][0]["resolvedRouteSegments"][0]["edgeIds"] =
+        serde_json::to_value(resolved_edges).unwrap();
+    refresh_edge_hashes(&mut merge);
+    assert!(prepare_json(&merge.to_string(), "{}").is_err());
+
+    let mut branch = with_fragment("radial");
+    let branch_extra = "fixture:edge:branch:extra";
+    branch["edges"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "id": branch_extra,
+            "from": "fixture:node:branch",
+            "to": "fixture:node:branch",
+            "kind": "shutoko",
+            "durationSeconds": 30,
+            "distanceMeters": 300
+        }));
+    let mut membership_edges =
+        string_list(&branch["routeMemberships"][3]["segments"][0]["orderedEdgeIds"]);
+    membership_edges.insert(0, branch_extra.to_owned());
+    branch["routeMemberships"][3]["segments"][0]["orderedEdgeIds"] =
+        serde_json::to_value(membership_edges).unwrap();
+    let mut resolved_edges =
+        string_list(&branch["billingPairs"][0]["resolvedRouteSegments"][2]["edgeIds"]);
+    resolved_edges.insert(0, branch_extra.to_owned());
+    branch["billingPairs"][0]["resolvedRouteSegments"][2]["edgeIds"] =
+        serde_json::to_value(resolved_edges).unwrap();
+    refresh_edge_hashes(&mut branch);
+    assert!(prepare_json(&branch.to_string(), "{}").is_err());
+}
+
+#[test]
+fn schema_4_mandatory_lap_is_one_contiguous_relation_mainline_subpath() {
+    let mut contiguous = with_fragment("radial");
+    let prefix = "fixture:edge:lap:prefix";
+    contiguous["edges"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "id": prefix,
+            "from": "fixture:node:merge",
+            "to": "fixture:node:merge",
+            "kind": "shutoko",
+            "durationSeconds": 30,
+            "distanceMeters": 300
+        }));
+    let mut source_edges = vec![prefix.to_owned()];
+    source_edges.extend(string_list(
+        &contiguous["routeMemberships"][2]["segments"][0]["orderedEdgeIds"],
+    ));
+    contiguous["routeMemberships"][2]["segments"][0]["orderedEdgeIds"] =
+        serde_json::to_value(source_edges).unwrap();
+    refresh_edge_hashes(&mut contiguous);
+    assert!(prepare_json(&contiguous.to_string(), "{}").is_ok());
+
+    let mut non_contiguous = contiguous;
+    let skipped = "fixture:edge:lap:skipped";
+    non_contiguous["edges"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "id": skipped,
+            "from": "fixture:node:lap:mid",
+            "to": "fixture:node:lap:mid",
+            "kind": "shutoko",
+            "durationSeconds": 30,
+            "distanceMeters": 300
+        }));
+    let mut source_edges =
+        string_list(&non_contiguous["routeMemberships"][2]["segments"][0]["orderedEdgeIds"]);
+    source_edges.insert(2, skipped.to_owned());
+    non_contiguous["routeMemberships"][2]["segments"][0]["orderedEdgeIds"] =
+        serde_json::to_value(source_edges).unwrap();
+    refresh_edge_hashes(&mut non_contiguous);
+    assert!(prepare_json(&non_contiguous.to_string(), "{}").is_err());
+
+    let mut multiple = with_fragment("radial");
+    multiple["routeMemberships"][2]["segments"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "segmentId": "fixture:relation:loop:forward:second",
+            "sourceKind": "relationMainline",
+            "sourceRelationId": "fixture:relation:loop",
+            "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+            "bindingEvidenceId": null,
+            "orderedEdgeIds": ["fixture:edge:lap:2"],
+            "orderedEdgeIdsSha256": ""
+        }));
+    multiple["billingPairs"][0]["resolvedRouteSegments"][1]["sourceSegmentIds"] =
+        serde_json::json!([
+            "fixture:relation:loop:forward:main",
+            "fixture:relation:loop:forward:second"
+        ]);
+    refresh_edge_hashes(&mut multiple);
+    assert!(prepare_json(&multiple.to_string(), "{}").is_err());
+}
+
+#[test]
+fn schema_4_rejects_inconsistent_radial_capability_and_statuses() {
+    for status in ["unverified", "topology_only"] {
+        let mut graph = with_fragment("radial");
+        graph["billingPairs"][0]["pairEligibility"]["status"] = Value::from(status);
+        graph["billingPairs"][0]["pairEligibility"]["oneSectionAheadVerified"] = Value::from(false);
+        assert!(prepare_json(&graph.to_string(), "{}").is_ok(), "{status}");
+    }
+
+    for (status, verified) in [
+        ("verified_one_section_ahead", false),
+        ("unverified", true),
+        ("topology_only", true),
+    ] {
+        let mut graph = with_fragment("radial");
+        graph["billingPairs"][0]["pairEligibility"]["status"] = Value::from(status);
+        graph["billingPairs"][0]["pairEligibility"]["oneSectionAheadVerified"] =
+            Value::from(verified);
+        assert!(prepare_json(&graph.to_string(), "{}").is_err(), "{status}");
+    }
+
+    for capability in ["structural_no_loop", "unsupported"] {
+        let mut graph = with_fragment("radial");
+        graph["billingPairs"][0]["routingCapability"] = Value::from(capability);
+        assert!(
+            prepare_json(&graph.to_string(), "{}").is_err(),
+            "{capability}"
+        );
+    }
+
+    for status in ["unresolved", "topology_only"] {
+        let mut graph = with_fragment("radial");
+        graph["billingPairs"][0]["loopValidation"]["status"] = Value::from(status);
+        assert!(prepare_json(&graph.to_string(), "{}").is_err(), "{status}");
+    }
+
+    let mut contradictory = with_fragment("radial");
+    contradictory["billingPairs"][0]["routingCapability"] = Value::from("unsupported");
+    contradictory["billingPairs"][0]["pairEligibility"]["status"] = Value::from("unverified");
+    contradictory["billingPairs"][0]["pairEligibility"]["oneSectionAheadVerified"] =
+        Value::from(true);
+    contradictory["billingPairs"][0]["loopValidation"]["status"] = Value::from("unresolved");
+    assert!(prepare_json(&contradictory.to_string(), "{}").is_err());
 }

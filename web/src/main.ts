@@ -1346,7 +1346,7 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
   // 入口・出口は「課金対象」と重複するため 1 行に統合する（restraint）。
   const charging = document.createElement("p");
   charging.className = "charging";
-  charging.textContent = `課金対象: ${model.route} の1区間`;
+  charging.textContent = model.chargedSection;
   card.appendChild(charging);
 
   const distance = document.createElement("p");

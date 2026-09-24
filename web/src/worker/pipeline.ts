@@ -491,7 +491,7 @@ function assertSha256(value: unknown, label: string): asserts value is string {
   }
 }
 
-function validateRadialCandidate(candidate: unknown): void {
+async function validateRadialCandidate(candidate: unknown): Promise<void> {
   if (
     !isRecord(candidate) ||
     candidate.routePlanVersion !== 1 ||
@@ -547,6 +547,15 @@ function validateRadialCandidate(candidate: unknown): void {
     ) {
       throw contractMismatch("edgeRouteLegs に重複・欠落があります");
     }
+    const expectedHash = segment.edgeIdsSha256;
+    assertSha256(expectedHash, "resolvedRouteSegment.edgeIdsSha256");
+    const bytes = new TextEncoder().encode(
+      JSON.stringify(candidate.edgeIds.slice(leg.startEdgeIndex, leg.endEdgeIndexExclusive)),
+    );
+    const actualHash = await hexDigest(bytes.buffer as ArrayBuffer);
+    if (actualHash !== expectedHash) {
+      throw contractMismatch("edgeRouteLegs の edgeIds スライスと hash が一致しません");
+    }
     for (let edgeIndex = leg.startEdgeIndex; edgeIndex < leg.endEdgeIndexExclusive; edgeIndex += 1) {
       if (covered.has(edgeIndex)) {
         throw contractMismatch("edgeRouteLegs に重複があります");
@@ -571,7 +580,7 @@ function validateRadialCandidate(candidate: unknown): void {
  * 必須診断フィールドを実行時検証し、欠落・型違いは RESULT_CONTRACT_MISMATCH で停止する
  * （http レイヤの ARTIFACT_MISMATCH と同様、部分データを UI に流さない）。
  */
-export function parseSearchResult(resultJson: string): SearchResult {
+export async function parseSearchResult(resultJson: string): Promise<SearchResult> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(resultJson);
@@ -597,7 +606,7 @@ export function parseSearchResult(resultJson: string): SearchResult {
       throw contractMismatch("candidate がオブジェクトではありません");
     }
     if (value.pairKind === "radialReturn") {
-      validateRadialCandidate(value);
+      await validateRadialCandidate(value);
     } else if (value.pairKind !== undefined && value.pairKind !== "legacyRing") {
       throw contractMismatch("candidate.pairKind が未知です");
     }

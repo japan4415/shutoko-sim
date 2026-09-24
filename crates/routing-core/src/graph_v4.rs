@@ -802,6 +802,23 @@ pub(crate) fn validate_radial_return_pair(
         EdgeKind::Exit,
         RampKind::GeneralExit,
     )?;
+    let eligibility_consistent = matches!(
+        (
+            pair.pair_eligibility.status,
+            pair.pair_eligibility.one_section_ahead_verified
+        ),
+        (PairEligibilityStatus::VerifiedOneSectionAhead, true)
+            | (PairEligibilityStatus::Unverified, false)
+            | (PairEligibilityStatus::TopologyOnly, false)
+    );
+    if pair.routing_capability != RoutingCapability::Routable
+        || !eligibility_consistent
+        || pair.loop_validation.status != LoopValidationStatus::DeclaredRouteValidated
+    {
+        return Err(invalid(
+            "radialReturn capability and status contract is inconsistent",
+        ));
+    }
     let RouteAnchor::DirectedJunction(anchor) = &pair.route_plan.anchor else {
         return Err(invalid("radialReturn requires directedJunction anchor"));
     };
@@ -943,16 +960,14 @@ pub(crate) fn validate_radial_return_pair(
         || return_segment.membership_id != return_membership.membership_id
         || exit.membership_id != return_membership.membership_id
         || entry_edges.last().map(|edge| edge.to.as_str()) != Some(anchor.merge_node_id.as_str())
+        || entry_edges.last().map(|edge| edge.id.as_str())
+            != Some(anchor.merge_terminal_edge_id.as_str())
         || lap_edges.first().map(|edge| edge.from.as_str()) != Some(anchor.merge_node_id.as_str())
         || lap_edges.last().map(|edge| edge.to.as_str()) != Some(anchor.branch_node_id.as_str())
         || return_edges.first().map(|edge| edge.from.as_str())
             != Some(anchor.branch_node_id.as_str())
-        || !entry_edges
-            .iter()
-            .any(|edge| edge.id == anchor.merge_terminal_edge_id)
-        || !return_edges
-            .iter()
-            .any(|edge| edge.id == anchor.branch_initial_edge_id)
+        || return_edges.first().map(|edge| edge.id.as_str())
+            != Some(anchor.branch_initial_edge_id.as_str())
         || lap_edges.first().map(|edge| edge.id.as_str())
             != Some(pair.route_plan.mandatory_lap.first_edge_id.as_str())
         || lap_edges.last().map(|edge| edge.id.as_str())
@@ -971,21 +986,47 @@ fn validate_resolved_segment_sources(
     membership: &RouteMembershipIndex,
     resolved: &ResolvedRouteSegment,
 ) -> Result<(), RoutingError> {
-    let mut edge_ids = Vec::new();
-    for source_id in &resolved.source_segment_ids {
-        let source = membership
-            .segments
-            .iter()
-            .find(|segment| &segment.segment_id == source_id)
-            .ok_or_else(|| invalid("resolved route source segment is missing"))?;
-        edge_ids.extend(source.ordered_edge_ids.iter().cloned());
+    let sources = resolved
+        .source_segment_ids
+        .iter()
+        .map(|source_id| {
+            membership
+                .segments
+                .iter()
+                .find(|segment| &segment.segment_id == source_id)
+                .ok_or_else(|| invalid("resolved route source segment is missing"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if resolved.role == RoutePlanSegmentRole::MandatoryLap {
+        if sources.len() != 1
+            || sources[0].source_kind != RouteMembershipSourceKind::RelationMainline
+            || !contains_contiguous_subsequence(&sources[0].ordered_edge_ids, &resolved.edge_ids)
+        {
+            return Err(invalid(
+                "mandatory lap must resolve from one contiguous relationMainline subpath",
+            ));
+        }
+        return Ok(());
     }
+    let edge_ids = sources
+        .iter()
+        .flat_map(|source| source.ordered_edge_ids.iter().cloned())
+        .collect::<Vec<_>>();
     if edge_ids != resolved.edge_ids {
         return Err(invalid(
             "resolved route source segments do not match edgeIds",
         ));
     }
     Ok(())
+}
+
+fn contains_contiguous_subsequence(source: &[String], candidate: &[String]) -> bool {
+    !candidate.is_empty()
+        && candidate.len() <= source.len()
+        && (0..source.len()).any(|start| {
+            (0..candidate.len())
+                .all(|offset| source[(start + offset) % source.len()] == candidate[offset])
+        })
 }
 
 fn validate_endpoint_membership_binding(

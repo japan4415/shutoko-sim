@@ -349,6 +349,46 @@ export interface RadialHandoff {
   disabledReason: "device_verification_pending";
 }
 
+export type DeviceVerificationOs = "android" | "ios";
+export type DeviceVerificationClient = "web" | "app";
+export type DeviceVerificationResult = "passed" | "failed" | "missing" | "expired";
+
+export interface DeviceVerificationLeg {
+  role: MapsHandoffLegRole;
+  urlSha256: string;
+  expectedRoad: string;
+  expectedDirection: string;
+}
+
+interface DeviceVerificationRecordBase {
+  os: DeviceVerificationOs;
+  osVersion: string;
+  client: DeviceVerificationClient;
+  clientName: string;
+  clientVersion: string;
+}
+
+export type DeviceVerificationRecord =
+  | (DeviceVerificationRecordBase & {
+      verifiedAt: string;
+      result: Exclude<DeviceVerificationResult, "missing">;
+      expiresAt: string;
+    })
+  | (DeviceVerificationRecordBase & {
+      verifiedAt: null;
+      result: Extract<DeviceVerificationResult, "missing">;
+      expiresAt: null;
+    });
+
+export interface DeviceVerificationManifest {
+  schemaVersion: 1;
+  routePlanId: string;
+  releaseId: string;
+  urlBuilderVersion: "google-maps-split/v1";
+  legs: DeviceVerificationLeg[];
+  verifications: DeviceVerificationRecord[];
+}
+
 interface CandidateBase {
   id: string;
   releaseId: string;

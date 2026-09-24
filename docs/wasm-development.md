@@ -2,7 +2,7 @@
 
 ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、schema 2 / 3 / 4 の対応表、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。schema 4 では `routeMemberships` と `billingPairs[].pairKind` / anchor kind も必須にする。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
 
-ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65でschema 4 pair unionとCandidate readerを追加し、Issue #69で`LegacyCandidate | TopologyOnlyCandidate | RadialCandidate`の3種類、dynamic topology-only、synthetic radial検索を追加した。Issue #71でradial handoffの`disabledReason`と将来gate用の`MapsHandoffLegWire` wire型を追加したため`contractVersion=4`へ更新した。`graphSchemaVersion=4`と`supportedGraphSchemaVersions=[2,3,4]`は変わらない。公開artifactとC1 releaseの互換性維持のためengine package versionと`engineVersion=0.1.0`は据え置き、公開graphの既定schemaも#66まで2のままである。
+ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65でschema 4 pair unionとCandidate readerを追加し、Issue #69で`LegacyCandidate | TopologyOnlyCandidate | RadialCandidate`の3種類、dynamic topology-only、synthetic radial検索を追加した。Issue #71でradial handoffの`disabledReason`と将来gate用の`MapsHandoffLegWire` wire型を追加したため`contractVersion=4`へ更新した。device verification manifestのTypeScript型も追加したが、`SearchResult`の既定出力へ載せない独立contractなので`contractVersion`は4のままである。`graphSchemaVersion=4`と`supportedGraphSchemaVersions=[2,3,4]`は変わらない。公開artifactとC1 releaseの互換性維持のためengine package versionと`engineVersion=0.1.0`は据え置き、公開graphの既定schemaも#66まで2のままである。
 
 ## 今回の実装範囲
 
@@ -37,7 +37,7 @@ node scripts/test-wasm.mjs
 `dist/wasm/` に `.wasm`、ES module の JS glue、および TypeScript 型定義を生成する。
 - TypeScript 正典型定義: `crates/routing-wasm/types/index.d.ts`
 - ビルドスクリプト（`scripts/build-wasm.sh`）がビルド完了時に `dist/wasm/index.d.ts` へコピーし、npm パッケージ / Web Worker から直接型参照可能にする。
-- 定義される主要型: `SearchRequest`, `SearchLimits`, `SearchResult`, `LegacyCandidate`, `TopologyOnlyCandidate`, `RadialCandidate`, `Candidate`, `GraphBillingPairV2`, `RouteMembershipIndex`, `EdgeRouteLeg`, `EstimatedLeg`, `Handoff`, `MapsHandoffLegWire`, `RadialHandoff`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
+- 定義される主要型: `SearchRequest`, `SearchLimits`, `SearchResult`, `LegacyCandidate`, `TopologyOnlyCandidate`, `RadialCandidate`, `Candidate`, `GraphBillingPairV2`, `RouteMembershipIndex`, `EdgeRouteLeg`, `EstimatedLeg`, `Handoff`, `MapsHandoffLegWire`, `RadialHandoff`, `DeviceVerificationManifest`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
 
 `test-wasm.mjs` は配信用と同じ `--target web` の glue と WASM を Node.js でロードし、以下を自動検証する:
 1. graph schema 2 / 4 の prepare、schema 4 `legacyRing` / `radialReturn` と `sameNode` / `directedJunction` の reader 契約

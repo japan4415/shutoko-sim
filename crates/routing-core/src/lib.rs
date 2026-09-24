@@ -52,10 +52,17 @@ fn estimated_access_seconds(dist_m: f64) -> u64 {
 }
 
 mod candidate_v2;
+mod device_verification;
 mod graph_v4;
 pub mod grid;
 pub mod handoff;
 
+pub use device_verification::{
+    parse_device_verification_manifest, DeviceVerificationClient, DeviceVerificationLeg,
+    DeviceVerificationManifest, DeviceVerificationManifestError, DeviceVerificationOs,
+    DeviceVerificationRecord, DeviceVerificationResult,
+    DEVICE_VERIFICATION_MANIFEST_SCHEMA_VERSION,
+};
 pub use handoff::{
     maps_url_sha256, MapsHandoffError, MapsHandoffLeg, MapsHandoffLegRole, MapsHandoffLegWire,
     SplitMapsHandoff, DEVICE_VERIFICATION_PENDING, MAX_MAPS_WAYPOINTS, URL_BUILDER_VERSION,

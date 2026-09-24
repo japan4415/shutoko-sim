@@ -2,6 +2,8 @@
 import inspector from "node:inspector";
 import { describe, expect, it } from "vitest";
 import pendingDeviceManifest from "../../data/device-verification-manifest.json?raw";
+import generatedGraph from "../../fixtures/generated/graph.json?raw";
+import generatedManifest from "../../fixtures/generated/manifest.json?raw";
 import schema4Graph from "../../fixtures/graph-v4/graph-radial-fixture.json?raw";
 import {
   buildResultResponse,
@@ -129,6 +131,14 @@ describe("parseGraphDocument", () => {
     expect(graph.schemaVersion).toBe(4);
     expect(graph.billingPairs).toHaveLength(2);
     expect(graph.routeMemberships).toHaveLength(4);
+  });
+
+  it("生成済み graph と manifest の route membership hash が一致する", async () => {
+    const graph = JSON.parse(generatedGraph) as { routeMemberships: unknown };
+    const manifest = JSON.parse(generatedManifest) as { routeMembershipsSha256: string };
+    expect(await routeMembershipsSha256(graph.routeMemberships)).toBe(
+      manifest.routeMembershipsSha256,
+    );
   });
 
   it("未知 version、未知 pairKind、routeMemberships 欠落を拒否する", () => {

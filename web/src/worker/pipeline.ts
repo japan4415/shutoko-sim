@@ -219,12 +219,15 @@ function canonicalRouteMemberships(value: unknown): string {
         if (fieldValue === undefined || fieldValue === null) return null;
         return requiredString(fieldValue, `routeMemberships segment ${field}`);
       };
-      const optionalNumberArray = (field: string): number[] | undefined => {
+      const optionalNonNegativeIntegerArray = (field: string): number[] | undefined => {
         const fieldValue = segment[field];
         if (fieldValue === undefined || fieldValue === null) return undefined;
-        if (!Array.isArray(fieldValue) || fieldValue.some((item) => !Number.isSafeInteger(item))) {
+        if (
+          !Array.isArray(fieldValue) ||
+          fieldValue.some((item) => !Number.isSafeInteger(item) || item < 0)
+        ) {
           throw graphContractMismatch(
-            `routeMemberships segment ${field} が非空整数配列ではありません`,
+            `routeMemberships segment ${field} が非負整数配列ではありません`,
           );
         }
         return fieldValue;
@@ -237,7 +240,7 @@ function canonicalRouteMemberships(value: unknown): string {
         }
         return fieldValue;
       };
-      const memberIndexes = optionalNumberArray("memberIndexes");
+      const memberIndexes = optionalNonNegativeIntegerArray("memberIndexes");
       const memberOrderMatchesRelation = optionalBoolean("memberOrderMatchesRelation");
       return {
         segmentId: requiredString(segment.segmentId, "routeMemberships segmentId"),

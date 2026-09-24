@@ -4,6 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "vitest";
+import generatedGraph from "../../fixtures/generated/graph.json?raw";
+import generatedManifest from "../../fixtures/generated/manifest.json?raw";
 import { routeMembershipsSha256, seedR2 } from "../scripts/seed-local-r2.mjs";
 
 const FIXTURE_NAMES = ["graph.json", "snap-index.json"];
@@ -193,6 +195,14 @@ test("schema 4 release metadata and route membership hash are verified before se
     () => seedR2({ repoRoot, runCommand: () => assert.fail("must not publish"), log: quiet }),
     /routeMembershipsSha256 mismatch/,
   );
+});
+
+test("generated graph and manifest use the same route membership hash", () => {
+  const graph = JSON.parse(generatedGraph);
+  const manifest = JSON.parse(generatedManifest);
+  assert.equal(graph.schemaVersion, 4);
+  assert.match(manifest.routeMembershipsSha256, /^[0-9a-f]{64}$/);
+  assert.equal(routeMembershipsSha256(graph.routeMemberships), manifest.routeMembershipsSha256);
 });
 
 test("all four engine artifacts are required in local and remote modes", (t) => {

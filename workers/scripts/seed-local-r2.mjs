@@ -88,6 +88,22 @@ function optionalString(value, label) {
   return requiredString(value, label);
 }
 
+function optionalNonNegativeIntegerArray(value, label) {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value) || value.some((item) => !Number.isSafeInteger(item) || item < 0)) {
+    throw new Error(`${label} must be a non-negative integer array`);
+  }
+  return value;
+}
+
+function optionalBoolean(value, label) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "boolean") {
+    throw new Error(`${label} must be a boolean`);
+  }
+  return value;
+}
+
 export function canonicalRouteMemberships(value) {
   if (!Array.isArray(value)) {
     throw new Error("graph.routeMemberships must be an array");
@@ -110,6 +126,14 @@ export function canonicalRouteMemberships(value) {
             `graph.routeMemberships[${membershipIndex}].segments[${segmentIndex}] is invalid`,
           );
         }
+        const memberIndexes = optionalNonNegativeIntegerArray(
+          segment.memberIndexes,
+          "routeMemberships.memberIndexes",
+        );
+        const memberOrderMatchesRelation = optionalBoolean(
+          segment.memberOrderMatchesRelation,
+          "routeMemberships.memberOrderMatchesRelation",
+        );
         return {
           segmentId: requiredString(segment.segmentId, "routeMemberships.segmentId"),
           sourceKind: requiredString(segment.sourceKind, "routeMemberships.sourceKind"),
@@ -133,6 +157,10 @@ export function canonicalRouteMemberships(value) {
             segment.orderedEdgeIdsSha256,
             "routeMemberships.orderedEdgeIdsSha256",
           ),
+          ...(memberIndexes === undefined ? {} : { memberIndexes }),
+          ...(memberOrderMatchesRelation === undefined
+            ? {}
+            : { memberOrderMatchesRelation }),
         };
       }),
     };

@@ -501,15 +501,19 @@ function validateEstimatedLegsAndTotals(candidate: Record<string, unknown>, labe
     throw contractMismatch(`${label} estimatedLegs が 2 件ではありません`);
   }
   const expectedRoles = ["surface_access", "surface_return"];
+  const allowedFields = new Set(["role", "estimated", "distanceMeters", "durationSeconds"]);
   let surfaceDistance = 0;
   for (let index = 0; index < estimated.length; index += 1) {
     const leg = estimated[index];
     if (
       !isRecord(leg) ||
+      Object.keys(leg).length !== allowedFields.size ||
+      Object.keys(leg).some((field) => !allowedFields.has(field)) ||
       leg.role !== expectedRoles[index] ||
       leg.estimated !== true ||
       !isNonNegativeSafeInteger(leg.distanceMeters) ||
-      !isNonNegativeSafeInteger(leg.durationSeconds)
+      !isNonNegativeSafeInteger(leg.durationSeconds) ||
+      (leg.distanceMeters === 0) !== (leg.durationSeconds === 0)
     ) {
       throw contractMismatch(`${label} estimatedLegs[${String(index)}] が不正です`);
     }

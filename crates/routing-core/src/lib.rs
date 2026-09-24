@@ -2970,25 +2970,33 @@ fn radial_pair_search(
         candidates.push(candidate);
     }
 
-    candidates.sort_by(|a, b| {
-        b.duration
-            .shutoko_seconds
-            .cmp(&a.duration.shutoko_seconds)
-            .then_with(|| {
-                (a.duration.access_seconds + a.duration.return_seconds)
-                    .cmp(&(b.duration.access_seconds + b.duration.return_seconds))
-            })
-            .then_with(|| a.id.cmp(&b.id))
-    });
-    candidates.truncate(pg.limits.max_candidates);
     let product_cohort =
         !candidates.is_empty() && candidates.iter().all(radial_candidate_is_product_eligible);
     let all_priced = candidates
         .iter()
         .all(|candidate| candidate.tariff_status == TariffStatus::Priced);
+    let time_per_yen = product_cohort && all_priced;
+    candidates.sort_by(|a, b| {
+        let primary = if time_per_yen {
+            let a_amount = a.toll.amount_yen.unwrap_or(0) as u128;
+            let b_amount = b.toll.amount_yen.unwrap_or(0) as u128;
+            (b.duration.shutoko_seconds as u128 * a_amount)
+                .cmp(&(a.duration.shutoko_seconds as u128 * b_amount))
+        } else {
+            b.duration.shutoko_seconds.cmp(&a.duration.shutoko_seconds)
+        };
+        primary
+            .then_with(|| b.duration.shutoko_seconds.cmp(&a.duration.shutoko_seconds))
+            .then_with(|| {
+                (b.duration.access_seconds + b.duration.return_seconds)
+                    .cmp(&(a.duration.access_seconds + a.duration.return_seconds))
+            })
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    candidates.truncate(pg.limits.max_candidates);
     for (index, candidate) in candidates.iter_mut().enumerate() {
         if product_cohort && index == 0 {
-            candidate.reasons = vec![if all_priced {
+            candidate.reasons = vec![if time_per_yen {
                 "BEST_TIME_PER_YEN"
             } else {
                 "BEST_SHUTOKO_TIME"
@@ -3012,7 +3020,7 @@ fn radial_pair_search(
         release_id: r.release_id.clone(),
         status: status.into(),
         reason: reason.map(str::to_owned),
-        ranking_mode: if product_cohort && all_priced {
+        ranking_mode: if time_per_yen {
             "time_per_yen"
         } else {
             "shutoko_time"
@@ -3121,16 +3129,34 @@ fn build_radial_candidate(
             }
         }
     }
-    let active_price = pair.tariff.prices.iter().find(|price| {
-        utc(&price.effective_from).is_ok_and(|from| from <= now)
-            && price
-                .effective_to
-                .as_deref()
-                .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
-    });
-    let amount_yen = active_price
-        .map(|price| price.amount_yen)
-        .or(pair.tariff.amount_yen);
+    let (tariff_status, active_price) = match pair.tariff.status {
+        TariffStatus::Priced => {
+            let active_price = pair.tariff.prices.iter().find(|price| {
+                utc(&price.effective_from).is_ok_and(|from| from <= now)
+                    && price
+                        .effective_to
+                        .as_deref()
+                        .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
+            });
+            let status = if active_price.is_some() {
+                TariffStatus::Priced
+            } else if pair
+                .tariff
+                .prices
+                .iter()
+                .any(|price| utc(&price.effective_from).is_ok_and(|from| from <= now))
+            {
+                TariffStatus::Expired
+            } else {
+                TariffStatus::Unpriced
+            };
+            (status, active_price)
+        }
+        status @ (TariffStatus::Unpriced | TariffStatus::Expired | TariffStatus::NotApplicable) => {
+            (status, None)
+        }
+    };
+    let amount_yen = active_price.map(|price| price.amount_yen);
     let candidate_id = std::iter::once(pair.id.as_str())
         .chain(edge_ids.iter().map(String::as_str))
         .map(|value| format!("{}:{}", value.len(), value))
@@ -3202,14 +3228,14 @@ fn build_radial_candidate(
         shutoko_distance_meters: shutoko_distance,
         eligibility_status: pair.pair_eligibility.status,
         loop_validation_status: pair.loop_validation.status,
-        tariff_status: pair.tariff.status,
+        tariff_status,
         toll: CandidateV2Toll {
             billing_pair_id: pair.id.clone(),
             amount_yen,
             pricing_at: r.pricing_at.clone(),
             effective_from: active_price.map(|price| price.effective_from.clone()),
             effective_to: active_price.and_then(|price| price.effective_to.clone()),
-            billing_distance_meters: pair.tariff.billing_distance_meters,
+            billing_distance_meters: active_price.and(pair.tariff.billing_distance_meters),
             toll_source: None,
         },
         reasons: Vec::new(),

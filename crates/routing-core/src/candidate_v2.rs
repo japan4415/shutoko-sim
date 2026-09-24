@@ -167,23 +167,13 @@ pub fn validate_radial_return_candidate(
     {
         return Err(invalid("invalid radialReturn candidate base contract"));
     }
-    let tariff_consistent = match candidate.tariff_status {
-        TariffStatus::Priced => candidate.toll.amount_yen.is_some(),
-        TariffStatus::Unpriced => {
-            candidate.toll.amount_yen.is_none() && candidate.toll.billing_distance_meters.is_none()
-        }
-        TariffStatus::Expired | TariffStatus::NotApplicable => candidate.toll.amount_yen.is_none(),
-    };
-    if !tariff_consistent {
-        return Err(invalid("radialReturn tariff status is inconsistent"));
-    }
     let RouteAnchor::DirectedJunction(anchor) = &candidate.anchor else {
         return Err(invalid("radialReturn candidate requires directedJunction"));
     };
     if anchor.arc_policy != ArcPolicy::OrdinaryLongArc {
         return Err(invalid("invalid radialReturn candidate anchor"));
     }
-    utc(&candidate.toll.pricing_at)?;
+    let pricing_at = utc(&candidate.toll.pricing_at)?;
     let effective_from = candidate
         .toll
         .effective_from
@@ -196,11 +186,29 @@ pub fn validate_radial_return_candidate(
         .as_deref()
         .map(utc)
         .transpose()?;
-    if effective_from
+    let interval_valid = effective_from
         .zip(effective_to)
-        .is_some_and(|(from, to)| to <= from)
-    {
-        return Err(invalid("candidate tariff interval is invalid"));
+        .is_none_or(|(from, to)| from < to);
+    let tariff_consistent = match candidate.tariff_status {
+        TariffStatus::Priced => {
+            candidate.toll.amount_yen.is_some_and(|amount| amount > 0)
+                && effective_from.is_some_and(|from| from <= pricing_at)
+                && effective_to.is_none_or(|to| pricing_at < to)
+        }
+        TariffStatus::Unpriced => {
+            candidate.toll.amount_yen.is_none()
+                && candidate.toll.billing_distance_meters.is_none()
+                && effective_from.is_none()
+                && effective_to.is_none()
+        }
+        TariffStatus::Expired | TariffStatus::NotApplicable => {
+            candidate.toll.amount_yen.is_none()
+                && effective_from.is_none()
+                && effective_to.is_none()
+        }
+    };
+    if !interval_valid || !tariff_consistent {
+        return Err(invalid("radialReturn tariff status is inconsistent"));
     }
     let expected_roles = [
         RoutePlanSegmentRole::EntryApproach,

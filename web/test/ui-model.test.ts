@@ -532,13 +532,17 @@ describe("toCardModel", () => {
     expect(model.tollShort).toBe("未算出");
   });
 
-  it("topologyOnly は商品推薦と円あたり効率を出さない", () => {
+  it("topologyOnly は商品対象外として参考料金だけを表示する", () => {
     const topology = JSON.parse(radialCandidateJson) as Record<string, unknown>;
     topology.pairKind = "topologyOnly";
     topology.eligibilityStatus = "topology_only";
     topology.loopValidationStatus = "topology_only";
-    topology.tariffStatus = "unpriced";
-    topology.toll = { ...(topology.toll as Record<string, unknown>), amountYen: null };
+    topology.tariffStatus = "priced";
+    topology.toll = {
+      ...(topology.toll as Record<string, unknown>),
+      amountYen: 500,
+      effectiveFrom: "2026-01-01T00:00:00Z",
+    };
     topology.reasons = ["TOPOLOGY_ONLY"];
     topology.loop = {
       anchorNodeId: "fixture:node:merge",
@@ -558,7 +562,11 @@ describe("toCardModel", () => {
     delete topology.routePlan;
     delete topology.edgeRouteLegs;
     const candidate = topology as unknown as TopologyOnlyCandidate;
-    expect(toCardModel(candidate).timePerYen).toBeNull();
+    const model = toCardModel(candidate);
+    expect(model.chargedSection).toBe("道路形状のみ（商品対象外）");
+    expect(model.chargedSection).not.toContain("1区間");
+    expect(model.toll).toBe("参考料金: 500 円");
+    expect(model.timePerYen).toBeNull();
     expect(recommendedLabel(candidate)).toBeNull();
   });
 

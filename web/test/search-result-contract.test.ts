@@ -133,6 +133,45 @@ describe("parseSearchResult の実行時検証", () => {
     expect(result.candidates[0]?.pairKind).toBe("radialReturn");
   });
 
+  it("surface leg は許可fieldと距離・時間の0同値条件を厳密に検証する", async () => {
+    const zeroLegs = JSON.parse(radialCandidate) as Record<string, unknown>;
+    for (const leg of zeroLegs.estimatedLegs as Record<string, unknown>[]) {
+      leg.distanceMeters = 0;
+      leg.durationSeconds = 0;
+    }
+    zeroLegs.duration = {
+      accessSeconds: 0,
+      shutokoSeconds: 1440,
+      returnSeconds: 0,
+      baseSeconds: 1440,
+      bufferSeconds: 300,
+      planSeconds: 1740,
+    };
+    zeroLegs.distanceMeters = zeroLegs.shutokoDistanceMeters;
+    await expect(
+      parseSearchResult(
+        JSON.stringify(validResult({ status: "ok", reason: null, candidates: [zeroLegs] })),
+      ),
+    ).resolves.toMatchObject({ candidates: [{ pairKind: "radialReturn" }] });
+
+    for (const mutate of [
+      (candidate: Record<string, unknown>) => {
+        (candidate.estimatedLegs as Record<string, unknown>[])[0].startEdgeIndex = 0;
+      },
+      (candidate: Record<string, unknown>) => {
+        (candidate.estimatedLegs as Record<string, unknown>[])[0].durationSeconds = 0;
+      },
+    ]) {
+      const invalid = JSON.parse(radialCandidate) as Record<string, unknown>;
+      mutate(invalid);
+      await expect(
+        parseSearchResult(
+          JSON.stringify(validResult({ status: "ok", reason: null, candidates: [invalid] })),
+        ),
+      ).rejects.toThrowError(/estimatedLegs/);
+    }
+  });
+
   it("topologyOnly Candidate v2 を受け取り商品cohort外れを固定する", async () => {
     const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
     candidate.pairKind = "topologyOnly";

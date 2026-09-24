@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import radialCandidateJson from "../../fixtures/candidate-v2/radial-valid.json?raw";
 import { boundsOf, deriveSegments } from "../src/map/segments";
-import type { LegacyCandidate, RadialCandidate } from "../src/worker/types";
+import type { LegacyCandidate, RadialCandidate, TopologyOnlyCandidate } from "../src/worker/types";
 
 /**
  * 4 エッジ・5 座標のサンプル。edgeIds は access(e:acc) → loop(e:L1,e:L2) → return(e:ret)。
@@ -110,6 +110,27 @@ describe("deriveSegments", () => {
       [139.107, 35.107],
     ]);
     expect(segments.charged).toHaveLength(8);
+  });
+
+  it("topologyOnly は道路形状を描画しても課金区間のオーバーレイを生成しない", () => {
+    const value = JSON.parse(radialCandidateJson) as Record<string, unknown>;
+    value.pairKind = "topologyOnly";
+    value.eligibilityStatus = "topology_only";
+    value.loopValidationStatus = "topology_only";
+    value.loop = {
+      anchorNodeId: "fixture:node:merge",
+      edgeIds: ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+      durationSeconds: 1200,
+      distanceMeters: 20000,
+      validated: false,
+    };
+    value.reasons = ["TOPOLOGY_ONLY"];
+    delete value.anchor;
+    delete value.routePlan;
+    delete value.edgeRouteLegs;
+    const segments = deriveSegments(value as unknown as TopologyOnlyCandidate);
+    expect(segments.loop).toHaveLength(3);
+    expect(segments.charged).toEqual([]);
   });
 
   it("loop が先頭・末尾でも境界が成立する", () => {

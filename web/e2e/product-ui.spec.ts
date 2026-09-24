@@ -115,8 +115,8 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
   });
 }
 
-async function stubWorkerWithRadialCandidate(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+async function stubWorkerWithRadialCandidate(page: Page, topologyOnly = false): Promise<void> {
+  await page.addInitScript((isTopologyOnly) => {
     const candidate = {
       id: "fixture-candidate-radial",
       releaseId: "all-real-v2",
@@ -242,7 +242,38 @@ async function stubWorkerWithRadialCandidate(page: Page): Promise<void> {
       reasons: [],
       warnings: [],
       handoff: { enabled: false, legUrls: [] },
+    } as unknown as Record<string, unknown> & {
+      toll: { amountYen: number | null; effectiveFrom: string | null };
+      loop: unknown;
+      handoff: unknown;
     };
+    if (isTopologyOnly) {
+      candidate.id = "fixture-candidate-topology";
+      candidate.pairKind = "topologyOnly";
+      candidate.eligibilityStatus = "topology_only";
+      candidate.loopValidationStatus = "topology_only";
+      candidate.tariffStatus = "priced";
+      candidate.toll.amountYen = 500;
+      candidate.toll.effectiveFrom = "2026-01-01T00:00:00Z";
+      candidate.reasons = ["TOPOLOGY_ONLY"];
+      candidate.loop = {
+        anchorNodeId: "fixture-merge",
+        edgeIds: ["fixture-lap"],
+        durationSeconds: 1200,
+        distanceMeters: 20000,
+        validated: false,
+      };
+      candidate.handoff = {
+        origin: { lat: 35.6896727, lon: 139.7644248 },
+        destination: { lat: 35.6896727, lon: 139.7644248 },
+        waypoints: [],
+        mapsUrl: "https://www.google.com/maps/dir/?api=1&candidate=topology",
+        verificationSetVersion: "fixture",
+      };
+      Reflect.deleteProperty(candidate, "anchor");
+      Reflect.deleteProperty(candidate, "routePlan");
+      Reflect.deleteProperty(candidate, "edgeRouteLegs");
+    }
     const result = {
       requestId: "",
       releaseId: "all-real-v2",
@@ -266,7 +297,7 @@ async function stubWorkerWithRadialCandidate(page: Page): Promise<void> {
       terminate(): void {}
     }
     Object.defineProperty(window, "Worker", { configurable: true, value: FixtureWorker });
-  });
+  }, topologyOnly);
 }
 
 /** getCurrentPosition を決定論的にスタブする。呼び出し回数は __geoCallCount で数える。 */
@@ -1516,4 +1547,18 @@ test("(43) radialReturn カードへ legacy の1区間文言を出さない", as
   await expect(card).toBeVisible();
   await expect(card.locator(".charging")).toHaveText("首都高区間: 入口 → 周回 → 戻り");
   await expect(card).not.toContainText("1区間");
+});
+
+test("(44) topologyOnly は1区間文言と課金区間のオーバーレイを描画しない", async ({ page }) => {
+  await stubWorkerWithRadialCandidate(page, true);
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const card = page.locator("#results .card").first();
+  await expect(card).toBeVisible();
+  await expect(card.locator(".charging")).toHaveText("道路形状のみ（商品対象外）");
+  await expect(card.locator(".toll")).toHaveText("参考料金: 500 円");
+  await expect(card).not.toContainText("1区間");
+  await expect(page.locator("#map .leaflet-overlay-pane path")).toHaveCount(3);
 });

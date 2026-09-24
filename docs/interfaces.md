@@ -183,7 +183,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 
 ### Issue #42 後の Candidate v2（設計・未実装）
 
-graph schema 4 / routing v2のCandidateは、現行C1 legacy outputと次の点で区別する。
+graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy outputと区別する。
 
 - `pairKind="radialReturn"`、`routePlanVersion=1`、`anchor.anchorKind="directedJunction"`とM / Bを持つ。`anchorNodeId`と旧`loop`objectは不要。
 - `routePlan.membershipIds[]`と`routePlan.resolvedRouteSegments[]`で、mainline relationとbound rampの由来を保つ。

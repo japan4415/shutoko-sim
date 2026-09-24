@@ -321,7 +321,7 @@ Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在
 }
 ```
 
-endpoint は単一 OSM way を仮定しない。`supportState=verified_bound` では `directedSegments[]` に、解釈确定した順に連続する `osmWayIds` と `edgeIds` を必ず記録する。way をまたぐ場合も1つの directed segment にまとめ、各要素の接続と順序を検証する。`supportState=unresolved` / `unsupported` では `directedSegments` を空にし、監査した候補だけを `bindingCandidates[]` に置く。候補は `eligibilityStatus=verified_one_section_ahead` へ昇移できず、目黒出口や別施設 ID で補完しない。
+endpoint は単一 OSM way を仮定しない。`supportState=verified_bound` では `directedSegments[]` に、解釈が確定した順に連続する `osmWayIds` と `edgeIds` を必ず記録する。way をまたぐ場合も1つの directed segment にまとめ、各要素の接続と順序を検証する。`supportState=unresolved` / `unsupported` では `directedSegments` を空にし、監査した候補だけを `bindingCandidates[]` に置く。候補は `eligibilityStatus=verified_one_section_ahead` へ昇移できず、目黒出口や別施設 ID で補完しない。
 
 `edgeIdsSha256` は、順序を保った `edgeIds` を空白なしの JSON array へ直列化し、その UTF-8 バイト列を SHA-256 にした値とする。outer も同じ形を使い、`anchor.direction=outer`、M=`n:31297008`、B=`n:31297000`、mandatory lap の first / last Edge=`e:w24039737:24:f` / `e:w24039737:3:f`、除外 connector は way `24039737`、20 edges、461m、return initial Edge は `e:w4853805:0:f` とする。
 
@@ -340,7 +340,7 @@ mandatory lap 自身の境界は `routePlan.mandatoryLap.firstEdgeId` / `lastEdg
 | --- | --- | --- |
 | `pairKind` なし | `pairKind="legacyRing"` | seed では省略を許す。graph schema 4 では明示する。 |
 | `anchorOsmNodeId` | `anchor.anchorKind="sameNode"`, `anchor.nodeId` | 値と意味を変えない。 |
-| schema 1 にない route / direction | `anchor.routeId`, `anchor.direction` | graph build で entry・anchor・exit の Edge 列为解ける一意な route membership から導出する。0件または複数候補なら graph 4 への昇格を拒否する。 |
+| schema 1 にない route / direction | `anchor.routeId`, `anchor.direction` | graph build で entry・anchor・exit の Edge 列として解ける一意な route membership から導出する。0件または複数候補なら graph 4 への昇格を拒否する。 |
 | schema 1 にない arc policy | `anchor.arcPolicy="sameNodeLoop"` | legacy adapter の固定値。raw seed は変更しない。 |
 | `entryOsmWayId` / `entryName` | `entryId` と `entryEndpoint` | graph Edge ID は build で解決し、way 変更として seed へ書き戻さない。 |
 | `exitOsmWayId` / `exitName` | `exitId` と `exitEndpoint` | 同上。 |
@@ -538,7 +538,7 @@ OSM route relation は mainline を列挙し、一般入口・出口の ramp way
 
 `relationMainline` は `sourceRelationId` と `bindingEvidenceId=null` を要求し、relation の ordered member と way のノード順を graph Edge へ写像する。`boundRamp` は `sourceRelationId=null` と非 null の `bindingEvidenceId` を要求し、正規ランプ台帳と exact directed binding の順序付き Edge 列を使う。どちらも `orderedEdgeIdsSha256` を必須にする。
 
-次の synthetic fragment は、1つの entry approach と return corridor が mainline segment と bound ramp segment を組み合わせるwire shapeを示す。
+次の synthetic fragment は、1つの entry approach と return corridor が mainline segment と bound ramp segment を組み合わせた wire shape を示す。
 
 ```json
 {

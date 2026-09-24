@@ -223,7 +223,7 @@ Issue #42 の設計完了は、この節と seed / graph の wire-level schema �
 
 ## 時間条件（現行 C1 legacy と routing v2 の共通式）
 
-この節以降、探索と検証的主体は現行pre-v2 C1 / dynamic OD契約である。routing v2が引き継ぐのは、時間予算、buffer、一般道access / returnの概算方法だけである。現行の`anchor`、一周、`T_entry_to_anchor`という語をradial designへそのまま適用しない。
+この節以降の探索と検証の中心は、現行pre-v2 C1 / dynamic OD契約である。routing v2が引き継ぐのは、時間予算、buffer、一般道access / returnの概算方法だけである。現行の`anchor`、一周、`T_entry_to_anchor`という語をradial designへそのまま適用しない。
 
 内部では秒を使う。
 
@@ -254,7 +254,7 @@ T_plan = T_base + buffer
 
 出発地点から入口へのアクセスおよび出口から出発地点への帰路は、一般道経路探索では求めず「直線距離 × 迂回係数 1.3 ÷ 30 km/h」で概算し、時間予算に含める。入口アクセス地点（Entry エッジの from ノード）が1件も得られない場合は対応範囲外とする。投影前後の位置を表示し、建物内や私有地から道路までの移動が未モデル化であることを確認できるようにする。
 
-正しく解釈できない時間依存・複雑な通行制限を持つ区間は初期データから除外する。現行Edgeには時間依存モデルを持たず、Edge kindごとの固定速度で静的時間を決める。Shutokoは60 km/h、Entry / Exitランプは40 km/hで、manifestの`timeModelVersion=v1-static-speeds`が成果物全体を 나타す。現行Graph / Edgeに道路種別別の欠損fallback値、欠損flag、Edgeごとのmodel versionは存在しない。
+正しく解釈できない時間依存・複雑な通行制限を持つ区間は初期データから除外する。現行Edgeには時間依存モデルを持たず、Edge kindごとの固定速度で静的時間を決める。Shutokoは60 km/h、Entry / Exitランプは40 km/hで、manifestの`timeModelVersion=v1-static-speeds`が成果物全体を表す。現行Graph / Edgeに道路種別別の欠損fallback値、欠損flag、Edgeごとのmodel versionは存在しない。
 
 将来、時間帯・車種・道路種別ごとの欠損fallbackを追加する場合は、manifestのglobal versionだけで差分を証明せず、Edgeごとの`timeModelVersion`、`estimated` / `missing` provenance、fallback根拠を必須にする。制限速度だけを実所要時間と断定しない。
 
@@ -319,7 +319,7 @@ Google マップ上でのナビゲーションにおいて、一周を短絡（�
 
 ## コスパの評価（現行 ranking と v2 の分離）
 
-この節の現行節は、現行C1 pairとdynamic ODのrankingを説明する。routing v2のradial候補は`eligibilityStatus=verified_one_section_ahead`だけを商品cohortへ入れ、`unverified`と`topology_only`を除外する。金額比較の規則は同じだが、legacy / radial adapterの混在を許さない。
+この節では、現行C1 pairとdynamic ODのrankingを説明する。routing v2のradial候補は`eligibilityStatus=verified_one_section_ahead`だけを商品cohortへ入れ、`unverified`と`topology_only`を除外する。金額比較の規則は同じだが、legacy / radial adapterの混在を許さない。
 
 最初に「一周後に1区間先で退出」という必須条件で絞る。1区間だからすべての入出口ペアが同額とは仮定しない。
 

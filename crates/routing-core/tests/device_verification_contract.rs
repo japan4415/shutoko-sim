@@ -1,11 +1,15 @@
 use serde_json::Value;
 use shutoko_routing_core::handoff::build_split_maps_handoff;
 use shutoko_routing_core::{
-    parse_device_verification_manifest, DeviceVerificationManifestError, Edge, EdgeKind, LatLng,
-    SplitMapsHandoff, DEVICE_VERIFICATION_MANIFEST_SCHEMA_VERSION, URL_BUILDER_VERSION,
+    evaluate_device_verification_gate, parse_device_verification_manifest, search_json,
+    validate_radial_return_candidate, CandidateV2Handoff, DeviceVerificationGateBlocker,
+    DeviceVerificationManifestError, DeviceVerificationResult, Edge, EdgeKind, LatLng,
+    RadialReturnCandidate, SplitMapsHandoff, DEVICE_VERIFICATION_MANIFEST_SCHEMA_VERSION,
+    URL_BUILDER_VERSION,
 };
 
 const VALID_MANIFEST: &str = include_str!("../../../fixtures/device-verification/valid.json");
+const PENDING_MANIFEST: &str = include_str!("../../../data/device-verification-manifest.json");
 const INVALID_EXPIRY: &str =
     include_str!("../../../fixtures/device-verification/invalid-expiry.json");
 const INVALID_MISSING_ENVIRONMENT: &str =
@@ -51,6 +55,15 @@ fn split_fixture() -> SplitMapsHandoff {
         },
     )
     .unwrap()
+}
+
+fn radial_candidate_with_handoff(handoff: CandidateV2Handoff) -> RadialReturnCandidate {
+    let mut value: Value = serde_json::from_str(include_str!(
+        "../../../fixtures/candidate-v2/radial-valid.json"
+    ))
+    .unwrap();
+    value["handoff"] = serde_json::to_value(handoff).unwrap();
+    serde_json::from_value(value).unwrap()
 }
 
 #[test]
@@ -175,6 +188,224 @@ fn binding_mismatches_are_rejected() {
         ),
         Err(DeviceVerificationManifestError::BuilderVersionMismatch)
     );
+}
+
+#[test]
+fn passing_unexpired_manifest_opens_exact_bound_radial_handoff() {
+    let generated = split_fixture();
+    let decision = evaluate_device_verification_gate(
+        Some(VALID_MANIFEST),
+        "fixture:route-plan:radial:2-outbound",
+        "graph-v4-fixture-v1",
+        &generated,
+        "2026-09-25T00:00:00Z",
+    );
+    assert!(decision.public_departure_enabled());
+    assert_eq!(decision.blocked_by(), None);
+
+    let public = CandidateV2Handoff::from_device_verification_gate(&generated, &decision).unwrap();
+    assert!(public.enabled);
+    assert_eq!(public.leg_urls, generated.wire_legs().unwrap());
+    assert_eq!(public.disabled_reason, None);
+    validate_radial_return_candidate(&radial_candidate_with_handoff(public)).unwrap();
+}
+
+#[test]
+fn checked_in_pending_manifest_keeps_public_handoff_closed() {
+    let manifest = parse_device_verification_manifest(PENDING_MANIFEST).unwrap();
+    assert!(manifest
+        .verifications
+        .iter()
+        .all(|record| record.result == DeviceVerificationResult::Missing));
+
+    let generated = split_fixture();
+    let decision = evaluate_device_verification_gate(
+        Some(PENDING_MANIFEST),
+        "fixture:radial",
+        "graph-v4-fixture-v1",
+        &generated,
+        "2026-09-25T00:00:00Z",
+    );
+    assert!(!decision.public_departure_enabled());
+    assert_eq!(
+        decision.blocked_by(),
+        Some(DeviceVerificationGateBlocker::VerificationMissing)
+    );
+
+    let public = CandidateV2Handoff::from_device_verification_gate(&generated, &decision).unwrap();
+    assert!(!public.enabled);
+    assert!(public.leg_urls.is_empty());
+    assert_eq!(
+        public.disabled_reason.as_deref(),
+        Some("device_verification_pending")
+    );
+}
+
+#[test]
+fn missing_failed_expired_and_not_yet_valid_records_close_the_gate() {
+    let mut failed: Value = serde_json::from_str(VALID_MANIFEST).unwrap();
+    failed["verifications"][0]["result"] = Value::from("failed");
+
+    let mut explicitly_expired: Value = serde_json::from_str(VALID_MANIFEST).unwrap();
+    explicitly_expired["verifications"][0]["result"] = Value::from("expired");
+
+    let mut missing: Value = serde_json::from_str(VALID_MANIFEST).unwrap();
+    missing["verifications"][0]["result"] = Value::from("missing");
+    missing["verifications"][0]["verifiedAt"] = Value::Null;
+    missing["verifications"][0]["expiresAt"] = Value::Null;
+
+    let cases = [
+        (
+            failed.to_string(),
+            "2026-09-25T00:00:00Z",
+            DeviceVerificationGateBlocker::VerificationFailed,
+        ),
+        (
+            explicitly_expired.to_string(),
+            "2026-09-25T00:00:00Z",
+            DeviceVerificationGateBlocker::VerificationExpired,
+        ),
+        (
+            missing.to_string(),
+            "2026-09-25T00:00:00Z",
+            DeviceVerificationGateBlocker::VerificationMissing,
+        ),
+        (
+            VALID_MANIFEST.to_owned(),
+            "2026-09-23T23:59:59Z",
+            DeviceVerificationGateBlocker::VerificationNotYetValid,
+        ),
+        (
+            VALID_MANIFEST.to_owned(),
+            "2026-10-24T00:00:00Z",
+            DeviceVerificationGateBlocker::VerificationExpired,
+        ),
+    ];
+    let generated = split_fixture();
+    for (manifest, evaluated_at, expected_blocker) in cases {
+        let decision = evaluate_device_verification_gate(
+            Some(&manifest),
+            "fixture:route-plan:radial:2-outbound",
+            "graph-v4-fixture-v1",
+            &generated,
+            evaluated_at,
+        );
+        assert!(!decision.public_departure_enabled());
+        assert_eq!(decision.blocked_by(), Some(expected_blocker));
+        let public =
+            CandidateV2Handoff::from_device_verification_gate(&generated, &decision).unwrap();
+        assert!(!public.enabled);
+        assert!(public.leg_urls.is_empty());
+        assert_eq!(
+            public.disabled_reason.as_deref(),
+            Some("device_verification_pending")
+        );
+    }
+
+    let missing_manifest = evaluate_device_verification_gate(
+        None,
+        "fixture:route-plan:radial:2-outbound",
+        "graph-v4-fixture-v1",
+        &generated,
+        "2026-09-25T00:00:00Z",
+    );
+    assert!(!missing_manifest.public_departure_enabled());
+    assert_eq!(
+        missing_manifest.blocked_by(),
+        Some(DeviceVerificationGateBlocker::ManifestMissing)
+    );
+    let public =
+        CandidateV2Handoff::from_device_verification_gate(&generated, &missing_manifest).unwrap();
+    assert!(!public.enabled);
+    assert!(public.leg_urls.is_empty());
+}
+
+#[test]
+fn invalid_manifest_binding_or_evaluation_time_fails_closed() {
+    let generated = split_fixture();
+    let invalid_manifest = evaluate_device_verification_gate(
+        Some("not-json"),
+        "fixture:route-plan:radial:2-outbound",
+        "graph-v4-fixture-v1",
+        &generated,
+        "2026-09-25T00:00:00Z",
+    );
+    assert_eq!(
+        invalid_manifest.blocked_by(),
+        Some(DeviceVerificationGateBlocker::ManifestInvalid)
+    );
+    let public =
+        CandidateV2Handoff::from_device_verification_gate(&generated, &invalid_manifest).unwrap();
+    assert!(!public.enabled);
+    assert!(public.leg_urls.is_empty());
+
+    let binding_mismatch = evaluate_device_verification_gate(
+        Some(VALID_MANIFEST),
+        "other-route-plan",
+        "graph-v4-fixture-v1",
+        &generated,
+        "2026-09-25T00:00:00Z",
+    );
+    assert_eq!(
+        binding_mismatch.blocked_by(),
+        Some(DeviceVerificationGateBlocker::BindingMismatch)
+    );
+
+    let invalid_time = evaluate_device_verification_gate(
+        Some(VALID_MANIFEST),
+        "fixture:route-plan:radial:2-outbound",
+        "graph-v4-fixture-v1",
+        &generated,
+        "2026-09-25T00:00:00+09:00",
+    );
+    assert_eq!(
+        invalid_time.blocked_by(),
+        Some(DeviceVerificationGateBlocker::EvaluationTimeInvalid)
+    );
+
+    let mut invalid_handoff = split_fixture();
+    invalid_handoff.legs[0].maps_url.push('0');
+    let invalid_handoff = evaluate_device_verification_gate(
+        Some(VALID_MANIFEST),
+        "fixture:route-plan:radial:2-outbound",
+        "graph-v4-fixture-v1",
+        &invalid_handoff,
+        "2026-09-25T00:00:00Z",
+    );
+    assert_eq!(
+        invalid_handoff.blocked_by(),
+        Some(DeviceVerificationGateBlocker::HandoffInvalid)
+    );
+}
+
+#[test]
+fn closed_radial_gate_does_not_change_c1_handoff_or_warning() {
+    let graph = include_str!("../../../fixtures/synthetic-graph.json");
+    let request = include_str!("../../../fixtures/synthetic-request.json");
+    let before: Value = serde_json::from_str(&search_json(graph, request, "{}").unwrap()).unwrap();
+    let generated = split_fixture();
+    let decision = evaluate_device_verification_gate(
+        None,
+        "fixture:radial",
+        "graph-v4-fixture-v1",
+        &generated,
+        "2026-09-25T00:00:00Z",
+    );
+    let public = CandidateV2Handoff::from_device_verification_gate(&generated, &decision).unwrap();
+    assert!(!public.enabled);
+    let after: Value = serde_json::from_str(&search_json(graph, request, "{}").unwrap()).unwrap();
+    assert_eq!(before, after);
+
+    let candidate = &after["candidates"][0];
+    assert!(candidate["handoff"]["mapsUrl"]
+        .as_str()
+        .unwrap()
+        .starts_with("https://www.google.com/maps/dir/?api=1&origin="));
+    assert!(candidate["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|warning| warning == "HANDOFF_WAYPOINTS_UNVERIFIED"));
 }
 
 #[test]

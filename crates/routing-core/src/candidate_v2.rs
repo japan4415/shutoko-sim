@@ -1,5 +1,9 @@
 use crate::{
-    handoff::{self, MapsHandoffError, MapsHandoffLegWire, SplitMapsHandoff},
+    device_verification::DeviceVerificationGateDecision,
+    handoff::{
+        self, maps_url_sha256, MapsHandoffError, MapsHandoffLegRole, MapsHandoffLegWire,
+        SplitMapsHandoff, MAX_MAPS_URL_LENGTH,
+    },
     invalid, utc, ArcPolicy, Duration, GeoJsonLineString, Handoff, LatLng, Loop,
     LoopValidationStatus, PairEligibilityStatus, PairKind, RampInfo, RouteAnchor,
     RoutePlanSegmentRole, RoutingError, SnappedOrigin, TariffStatus,
@@ -109,10 +113,18 @@ pub struct CandidateV2Handoff {
 }
 
 impl CandidateV2Handoff {
-    pub(crate) fn disabled_pending_device_verification(
+    pub fn from_device_verification_gate(
         generated: &SplitMapsHandoff,
+        decision: &DeviceVerificationGateDecision,
     ) -> Result<Self, MapsHandoffError> {
-        let _validated_wire_legs = generated.wire_legs()?;
+        let wire_legs = generated.wire_legs()?;
+        if decision.public_departure_enabled() {
+            return Ok(Self {
+                enabled: true,
+                leg_urls: wire_legs,
+                disabled_reason: None,
+            });
+        }
         Ok(Self {
             enabled: false,
             leg_urls: Vec::new(),
@@ -173,10 +185,6 @@ pub fn validate_radial_return_candidate(
         || candidate.geometry.r#type != "LineString"
         || candidate.geometry.coordinates.len() != candidate.edge_ids.len() + 1
         || candidate.toll.billing_pair_id.is_empty()
-        || candidate.handoff.enabled
-        || !candidate.handoff.leg_urls.is_empty()
-        || candidate.handoff.disabled_reason.as_deref()
-            != Some(handoff::DEVICE_VERIFICATION_PENDING)
         || candidate
             .reasons
             .iter()
@@ -184,6 +192,7 @@ pub fn validate_radial_return_candidate(
     {
         return Err(invalid("invalid radialReturn candidate base contract"));
     }
+    validate_radial_handoff(&candidate.handoff)?;
     let RouteAnchor::DirectedJunction(anchor) = &candidate.anchor else {
         return Err(invalid("radialReturn candidate requires directedJunction"));
     };
@@ -375,6 +384,40 @@ pub fn validate_topology_only_candidate(
         candidate.distance_meters,
         candidate.shutoko_distance_meters,
     )
+}
+
+fn validate_radial_handoff(handoff: &CandidateV2Handoff) -> Result<(), RoutingError> {
+    if !handoff.enabled {
+        if !handoff.leg_urls.is_empty()
+            || handoff.disabled_reason.as_deref() != Some(handoff::DEVICE_VERIFICATION_PENDING)
+        {
+            return Err(invalid("invalid disabled radial handoff"));
+        }
+        return Ok(());
+    }
+    if handoff.disabled_reason.is_some() || handoff.leg_urls.len() != 3 {
+        return Err(invalid("invalid enabled radial handoff"));
+    }
+    let expected_roles = [
+        MapsHandoffLegRole::SurfaceAccess,
+        MapsHandoffLegRole::LoopTransfer,
+        MapsHandoffLegRole::SurfaceReturn,
+    ];
+    for (leg, expected_role) in handoff.leg_urls.iter().zip(expected_roles) {
+        if leg.role != expected_role
+            || !leg
+                .maps_url
+                .starts_with("https://www.google.com/maps/dir/?api=1&origin=")
+            || leg.maps_url.len() > MAX_MAPS_URL_LENGTH
+            || leg.maps_url.contains("nav=")
+            || leg.maps_url.contains("launch=")
+            || leg.maps_url.contains("dir_action=")
+            || leg.url_sha256 != maps_url_sha256(&leg.maps_url)
+        {
+            return Err(invalid("invalid enabled radial handoff leg"));
+        }
+    }
+    Ok(())
 }
 
 fn validate_estimated_legs(legs: &[EstimatedLeg]) -> Result<(), RoutingError> {

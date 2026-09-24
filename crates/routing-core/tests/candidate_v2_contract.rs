@@ -91,7 +91,7 @@ fn rejects_unknown_version_kind_anchor_and_legacy_charge_field() {
 }
 
 #[test]
-fn rejects_public_radial_handoff_before_device_verification() {
+fn rejects_malformed_disabled_or_enabled_radial_handoff() {
     for mutate in [
         |value: &mut Value| value["handoff"]["enabled"] = Value::from(true),
         |value: &mut Value| value["handoff"]["disabledReason"] = Value::from("other"),

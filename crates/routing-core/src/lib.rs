@@ -58,9 +58,10 @@ pub mod grid;
 pub mod handoff;
 
 pub use device_verification::{
-    parse_device_verification_manifest, DeviceVerificationClient, DeviceVerificationLeg,
-    DeviceVerificationManifest, DeviceVerificationManifestError, DeviceVerificationOs,
-    DeviceVerificationRecord, DeviceVerificationResult,
+    evaluate_device_verification_gate, parse_device_verification_manifest,
+    DeviceVerificationClient, DeviceVerificationGateBlocker, DeviceVerificationGateDecision,
+    DeviceVerificationLeg, DeviceVerificationManifest, DeviceVerificationManifestError,
+    DeviceVerificationOs, DeviceVerificationRecord, DeviceVerificationResult,
     DEVICE_VERIFICATION_MANIFEST_SCHEMA_VERSION,
 };
 pub use handoff::{
@@ -3132,8 +3133,16 @@ fn build_radial_candidate(
             "radial split Maps URL generation failed: {error:?}"
         ))
     })?;
-    let radial_handoff = CandidateV2Handoff::disabled_pending_device_verification(
+    let device_verification_gate = device_verification::evaluate_device_verification_gate(
+        None,
+        pair.id.as_str(),
+        r.release_id.as_str(),
         &generated_handoff,
+        r.pricing_at.as_str(),
+    );
+    let radial_handoff = CandidateV2Handoff::from_device_verification_gate(
+        &generated_handoff,
+        &device_verification_gate,
     )
     .map_err(|error| {
         invalid(format!(

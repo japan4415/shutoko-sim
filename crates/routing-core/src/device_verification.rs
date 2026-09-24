@@ -30,6 +30,49 @@ pub enum DeviceVerificationResult {
     Expired,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceVerificationGateBlocker {
+    ManifestMissing,
+    ManifestInvalid,
+    EvaluationTimeInvalid,
+    HandoffInvalid,
+    BindingMismatch,
+    VerificationMissing,
+    VerificationFailed,
+    VerificationNotYetValid,
+    VerificationExpired,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceVerificationGateDecision {
+    public_departure_enabled: bool,
+    blocked_by: Option<DeviceVerificationGateBlocker>,
+}
+
+impl DeviceVerificationGateDecision {
+    pub fn public_departure_enabled(&self) -> bool {
+        self.public_departure_enabled
+    }
+
+    pub fn blocked_by(&self) -> Option<DeviceVerificationGateBlocker> {
+        self.blocked_by
+    }
+
+    fn open() -> Self {
+        Self {
+            public_departure_enabled: true,
+            blocked_by: None,
+        }
+    }
+
+    fn closed(blocked_by: DeviceVerificationGateBlocker) -> Self {
+        Self {
+            public_departure_enabled: false,
+            blocked_by: Some(blocked_by),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeviceVerificationLeg {
@@ -91,6 +134,105 @@ pub fn parse_device_verification_manifest(
         serde_json::from_str(input).map_err(|_| DeviceVerificationManifestError::InvalidJson)?;
     manifest.validate()?;
     Ok(manifest)
+}
+
+pub fn evaluate_device_verification_gate(
+    manifest_json: Option<&str>,
+    route_plan_id: &str,
+    release_id: &str,
+    handoff: &SplitMapsHandoff,
+    evaluated_at: &str,
+) -> DeviceVerificationGateDecision {
+    let Some(manifest_json) = manifest_json else {
+        return DeviceVerificationGateDecision::closed(
+            DeviceVerificationGateBlocker::ManifestMissing,
+        );
+    };
+    let manifest = match parse_device_verification_manifest(manifest_json) {
+        Ok(manifest) => manifest,
+        Err(_) => {
+            return DeviceVerificationGateDecision::closed(
+                DeviceVerificationGateBlocker::ManifestInvalid,
+            );
+        }
+    };
+    if handoff.validate().is_err() {
+        return DeviceVerificationGateDecision::closed(
+            DeviceVerificationGateBlocker::HandoffInvalid,
+        );
+    }
+    if manifest
+        .validate_binding(route_plan_id, release_id, handoff)
+        .is_err()
+    {
+        return DeviceVerificationGateDecision::closed(
+            DeviceVerificationGateBlocker::BindingMismatch,
+        );
+    }
+    let Some(evaluated_at) = parse_utc(evaluated_at) else {
+        return DeviceVerificationGateDecision::closed(
+            DeviceVerificationGateBlocker::EvaluationTimeInvalid,
+        );
+    };
+
+    let mut missing = false;
+    let mut failed = false;
+    let mut not_yet_valid = false;
+    let mut expired = false;
+    for record in &manifest.verifications {
+        match record.result {
+            DeviceVerificationResult::Missing => {
+                missing = true;
+                continue;
+            }
+            DeviceVerificationResult::Failed => {
+                failed = true;
+                continue;
+            }
+            DeviceVerificationResult::Expired => {
+                expired = true;
+                continue;
+            }
+            DeviceVerificationResult::Passed => {}
+        }
+        let Some(verified_at) = record.verified_at.as_deref().and_then(parse_utc) else {
+            return DeviceVerificationGateDecision::closed(
+                DeviceVerificationGateBlocker::ManifestInvalid,
+            );
+        };
+        let Some(expires_at) = record.expires_at.as_deref().and_then(parse_utc) else {
+            return DeviceVerificationGateDecision::closed(
+                DeviceVerificationGateBlocker::ManifestInvalid,
+            );
+        };
+        if evaluated_at < verified_at {
+            not_yet_valid = true;
+        }
+        if evaluated_at >= expires_at {
+            expired = true;
+        }
+    }
+    if missing {
+        return DeviceVerificationGateDecision::closed(
+            DeviceVerificationGateBlocker::VerificationMissing,
+        );
+    }
+    if failed {
+        return DeviceVerificationGateDecision::closed(
+            DeviceVerificationGateBlocker::VerificationFailed,
+        );
+    }
+    if not_yet_valid {
+        return DeviceVerificationGateDecision::closed(
+            DeviceVerificationGateBlocker::VerificationNotYetValid,
+        );
+    }
+    if expired {
+        return DeviceVerificationGateDecision::closed(
+            DeviceVerificationGateBlocker::VerificationExpired,
+        );
+    }
+    DeviceVerificationGateDecision::open()
 }
 
 impl DeviceVerificationManifest {

@@ -108,6 +108,10 @@ pub struct RouteMembershipSegment {
     pub binding_evidence_id: Option<String>,
     pub ordered_edge_ids: Vec<String>,
     pub ordered_edge_ids_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member_indexes: Option<Vec<usize>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member_order_matches_relation: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -825,7 +829,21 @@ pub(crate) fn validate_route_memberships(
                             .is_some_and(valid_id_value)
                 }
             };
-            if !bound {
+            let relation_metadata_valid = match segment.source_kind {
+                RouteMembershipSourceKind::RelationMainline => {
+                    segment.member_indexes.as_ref().is_some_and(|indexes| {
+                        !indexes.is_empty()
+                            && indexes.iter().collect::<HashSet<_>>().len() == indexes.len()
+                            && segment.member_order_matches_relation
+                                == Some(indexes.windows(2).all(|pair| pair[1] == pair[0] + 1))
+                    })
+                }
+                RouteMembershipSourceKind::BoundRamp => {
+                    segment.member_indexes.is_none()
+                        && segment.member_order_matches_relation.is_none()
+                }
+            };
+            if !bound || !relation_metadata_valid {
                 return Err(invalid("invalid route membership source binding"));
             }
             let mut edge_ids = HashSet::new();

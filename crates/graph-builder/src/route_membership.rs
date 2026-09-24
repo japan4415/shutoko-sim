@@ -504,6 +504,7 @@ struct RelationMemberEdges {
     member_index: usize,
     reverse: bool,
     way_id: i64,
+    is_link: bool,
     from_node_id: String,
     to_node_id: String,
     ordered_edge_ids: Vec<String>,
@@ -670,17 +671,16 @@ fn build_relation_segments(
         return Ok(Vec::new());
     }
 
-    let reject_reversed = !matches!(normalized(direction).as_str(), "inbound" | "outbound");
-    let paths = build_relation_member_paths(
-        relation.id,
-        direction,
-        true,
-        reject_reversed,
-        mapped_members,
-    )?;
+    let paths = build_relation_member_paths(graph, relation.id, direction, mapped_members)?;
 
     let mut result = Vec::with_capacity(paths.len());
     for (index, path) in paths.into_iter().enumerate() {
+        let member_indexes = path
+            .iter()
+            .map(|member| member.member_index)
+            .collect::<Vec<_>>();
+        let member_order_matches_relation =
+            member_indexes.windows(2).all(|pair| pair[1] == pair[0] + 1);
         let ordered_edge_ids = path
             .iter()
             .flat_map(|member| member.ordered_edge_ids.iter().cloned())
@@ -696,6 +696,8 @@ fn build_relation_segments(
             binding_evidence_id: None,
             ordered_edge_ids,
             ordered_edge_ids_sha256,
+            member_indexes: Some(member_indexes),
+            member_order_matches_relation: Some(member_order_matches_relation),
         });
     }
     Ok(result)
@@ -815,6 +817,7 @@ fn map_relation_way_edges(
         member_index,
         reverse,
         way_id: member.ref_id,
+        is_link: way.get_tag("highway") == Some("motorway_link"),
         from_node_id: first.from.clone(),
         to_node_id: last.to.clone(),
         ordered_edge_ids,
@@ -856,10 +859,9 @@ fn map_relation_way_from_response(
 }
 
 fn build_relation_member_paths(
+    graph: &Graph,
     relation_id: i64,
     direction: &str,
-    topology_reconstruct: bool,
-    reject_reversed: bool,
     mapped_members: Vec<RelationMemberEdges>,
 ) -> Result<Vec<Vec<RelationMemberEdges>>, RouteMembershipError> {
     let mut groups = Vec::<Vec<RelationMemberEdges>>::new();
@@ -872,194 +874,123 @@ fn build_relation_member_paths(
         }
         groups.push(vec![member]);
     }
-    if topology_reconstruct && reject_reversed {
-        for pair in groups.windows(2) {
-            if pair[1][0].member_index != pair[0][0].member_index + 1 {
-                continue;
-            }
-            let forward = pair[0].iter().any(|previous| {
-                pair[1]
-                    .iter()
-                    .any(|current| previous.to_node_id == current.from_node_id)
-            });
-            let reverse_shared = pair[0].iter().any(|previous| {
-                pair[1].iter().any(|current| {
-                    previous.from_node_id == current.to_node_id
-                        || previous.from_node_id == current.from_node_id
-                        || previous.to_node_id == current.to_node_id
-                })
-            });
-            if !forward && reverse_shared {
-                return Err(RouteMembershipError::Relation(format!(
-                    "relation {relation_id} direction {direction} has reordered or reversed adjacent members {} and {}",
-                    pair[0][0].way_id, pair[1][0].way_id
-                )));
-            }
-        }
-    }
-    if topology_reconstruct {
-        let preferred_reverse = direction_is_reverse(direction);
-        let mut members = Vec::with_capacity(groups.len());
-        for group in groups {
-            let selected = group
+    let topology_direction = matches!(
+        normalized(direction).as_str(),
+        "inner" | "outer" | "inbound" | "outbound"
+    );
+    let preferred_reverse = direction_is_reverse(direction);
+    let mut candidates = Vec::new();
+    for group in groups {
+        if topology_direction {
+            candidates.extend(group);
+        } else {
+            let Some(selected) = group
                 .iter()
                 .find(|member| member.reverse == preferred_reverse)
-                .cloned();
-            let topology_direction = matches!(
-                normalized(direction).as_str(),
-                "inner" | "outer" | "inbound" | "outbound"
-            );
-            if selected.is_none() && !topology_direction {
+                .cloned()
+            else {
                 return Err(RouteMembershipError::Relation(format!(
                     "relation {relation_id} direction {direction} has no requested-direction edges for member {}",
                     group[0].way_id
                 )));
-            }
-            members.push(
-                selected
-                    .or_else(|| group.first().cloned())
-                    .expect("relation member group is non-empty"),
-            );
+            };
+            candidates.push(selected);
         }
-        members.sort_by_key(|member| member.member_index);
-        let mut outgoing: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-        let mut incoming: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-        for (index, member) in members.iter().enumerate() {
-            outgoing
-                .entry(member.from_node_id.clone())
-                .or_default()
-                .push(index);
-            incoming
-                .entry(member.to_node_id.clone())
-                .or_default()
-                .push(index);
-        }
-        for candidates in outgoing.values_mut() {
-            candidates.sort_by_key(|index| members[*index].member_index);
-        }
-        for candidates in incoming.values_mut() {
-            candidates.sort_by_key(|index| members[*index].member_index);
-        }
-        let mut used = vec![false; members.len()];
-        let mut paths = Vec::new();
-        while used.iter().any(|used| !used) {
-            let mut roots = (0..members.len())
-                .filter(|index| {
-                    !used[*index]
-                        && !incoming
-                            .get(&members[*index].from_node_id)
-                            .is_some_and(|preds| preds.iter().any(|pred| !used[*pred]))
-                })
-                .collect::<Vec<_>>();
-            if roots.is_empty() {
-                roots.push(
-                    used.iter()
-                        .position(|used| !used)
-                        .expect("topology reconstruction has an unused member"),
-                );
-            }
-            roots.sort_by_key(|index| members[*index].member_index);
-            for root in roots {
-                if used[root] {
-                    continue;
-                }
-                used[root] = true;
-                let mut path = vec![members[root].clone()];
-                let mut visited_nodes = HashSet::from([members[root].from_node_id.clone()]);
-                let mut current_node = members[root].to_node_id.clone();
-                while visited_nodes.insert(current_node.clone()) {
-                    let Some(next) = outgoing.get(&current_node).and_then(|candidates| {
-                        candidates
-                            .iter()
-                            .copied()
-                            .find(|candidate| !used[*candidate])
-                    }) else {
-                        break;
-                    };
-                    used[next] = true;
-                    current_node = members[next].to_node_id.clone();
-                    path.push(members[next].clone());
-                }
-                paths.push(path);
-            }
-        }
-        return Ok(paths);
     }
-    let mut selected = Vec::<RelationMemberEdges>::with_capacity(groups.len());
-    let mut paths = Vec::<Vec<RelationMemberEdges>>::new();
-    for (index, group) in groups.iter().enumerate() {
-        let previous = selected.last().cloned();
-        let connected_to_previous = group
+    let group_count = candidates
+        .iter()
+        .map(|candidate| candidate.member_index)
+        .collect::<HashSet<_>>()
+        .len();
+    let mut used_groups = HashSet::new();
+    let mut paths = Vec::new();
+    while used_groups.len() < group_count {
+        let unused = candidates
             .iter()
             .enumerate()
-            .filter(|(_, member)| {
-                previous
-                    .as_ref()
-                    .is_some_and(|previous| previous.to_node_id == member.from_node_id)
-            })
-            .map(|(member_index, _)| member_index)
+            .filter(|(_, candidate)| !used_groups.contains(&candidate.member_index))
             .collect::<Vec<_>>();
-        let selected_index = if connected_to_previous.len() == 1 {
-            connected_to_previous[0]
-        } else if connected_to_previous.len() > 1 {
-            return Err(RouteMembershipError::Relation(format!(
-                "relation {relation_id} direction {direction} has ambiguous member {} orientation",
-                group[0].way_id
-            )));
-        } else if group.len() == 1 {
-            0
-        } else {
-            let next = groups
-                .get(index + 1)
-                .filter(|next| next[0].member_index == group[0].member_index + 1);
-            if next.is_none() {
-                group
+        let roots = unused
+            .iter()
+            .filter(|(_, candidate)| {
+                !unused.iter().any(|(_, other)| {
+                    other.member_index != candidate.member_index
+                        && other.to_node_id == candidate.from_node_id
+                })
+            })
+            .map(|(index, _)| *index)
+            .collect::<Vec<_>>();
+        let start = roots
+            .into_iter()
+            .min_by_key(|index| (candidates[*index].member_index, *index))
+            .or_else(|| {
+                unused
                     .iter()
-                    .position(|member| !member.reverse)
-                    .unwrap_or_default()
-            } else {
-                let connected_to_next = group
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, member)| {
-                        next.is_some_and(|next| {
-                            next.iter()
-                                .any(|next_member| member.to_node_id == next_member.from_node_id)
-                        })
-                    })
-                    .map(|(member_index, _)| member_index)
-                    .collect::<Vec<_>>();
-                if connected_to_next.len() != 1 {
-                    return Err(RouteMembershipError::Relation(format!(
-                        "relation {relation_id} direction {direction} cannot prove member {} orientation from member order",
-                        group[0].way_id
-                    )));
-                }
-                connected_to_next[0]
-            }
-        };
-        let member = group[selected_index].clone();
-        selected.push(member.clone());
-        if let Some(previous) = previous.as_ref() {
-            if member.member_index == previous.member_index + 1
-                && previous.to_node_id == member.from_node_id
-            {
-                paths.last_mut().expect("path exists").push(member);
-                continue;
-            }
-            if reject_reversed
-                && member.member_index == previous.member_index + 1
-                && (previous.from_node_id == member.to_node_id
-                    || previous.from_node_id == member.from_node_id
-                    || previous.to_node_id == member.to_node_id)
-            {
+                    .map(|(index, _)| *index)
+                    .min_by_key(|index| (candidates[*index].member_index, *index))
+            })
+            .ok_or_else(|| {
+                RouteMembershipError::Relation(format!(
+                    "relation {relation_id} direction {direction} has no unused member"
+                ))
+            })?;
+        let mut current = start;
+        let mut path = Vec::new();
+        loop {
+            let current_member = &candidates[current];
+            if !used_groups.insert(current_member.member_index) {
                 return Err(RouteMembershipError::Relation(format!(
-                    "relation {relation_id} direction {direction} has reversed adjacent members {} and {}",
-                    previous.way_id, member.way_id
+                    "relation {relation_id} direction {direction} reuses member {}",
+                    current_member.way_id
                 )));
             }
+            path.push(current_member.clone());
+            let successors = candidates
+                .iter()
+                .enumerate()
+                .filter(|(index, candidate)| {
+                    *index != current
+                        && candidate.member_index != current_member.member_index
+                        && !used_groups.contains(&candidate.member_index)
+                        && candidate.from_node_id == current_member.to_node_id
+                })
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
+            if successors.len() > 1 {
+                if !successors.iter().any(|index| candidates[*index].is_link) {
+                    return Err(RouteMembershipError::Relation(format!(
+                        "relation {relation_id} direction {direction} has an ambiguous directed branch after member {}",
+                        current_member.way_id
+                    )));
+                }
+                break;
+            }
+            let Some(next) = successors.first().copied() else {
+                let has_external_successor = graph.edges.iter().any(|edge| {
+                    edge.kind == EdgeKind::Shutoko
+                        && edge.from == current_member.to_node_id
+                        && candidates.iter().any(|candidate| {
+                            candidate.member_index != current_member.member_index
+                                && !used_groups.contains(&candidate.member_index)
+                                && candidate.from_node_id == edge.to
+                        })
+                });
+                if has_external_successor {
+                    return Err(RouteMembershipError::Relation(format!(
+                        "relation {relation_id} direction {direction} would traverse a way outside the relation after member {}",
+                        current_member.way_id
+                    )));
+                }
+                break;
+            };
+            current = next;
         }
-        paths.push(vec![member]);
+        paths.push(path);
+    }
+    if paths.is_empty() {
+        return Err(RouteMembershipError::Relation(format!(
+            "relation {relation_id} direction {direction} has no directed member path"
+        )));
     }
     Ok(paths)
 }
@@ -1505,6 +1436,8 @@ pub fn build_bound_ramp_memberships(
                     binding_evidence_id: Some(item.binding_evidence_id.clone()),
                     ordered_edge_ids: item.edge_ids.clone(),
                     ordered_edge_ids_sha256: evidence_hash,
+                    member_indexes: None,
+                    member_order_matches_relation: None,
                 }],
             },
         );
@@ -1765,11 +1698,19 @@ pub fn validate_route_membership_structure(
                 validate_ordered_edges(graph, &segment.ordered_edge_ids, &segment.segment_id)?;
             match segment.source_kind {
                 RouteMembershipSourceKind::RelationMainline => {
+                    let member_metadata_valid =
+                        segment.member_indexes.as_ref().is_some_and(|indexes| {
+                            !indexes.is_empty()
+                                && indexes.iter().collect::<HashSet<_>>().len() == indexes.len()
+                                && segment.member_order_matches_relation
+                                    == Some(indexes.windows(2).all(|pair| pair[1] == pair[0] + 1))
+                        });
                     if segment
                         .source_relation_id
                         .as_deref()
                         .is_none_or(str::is_empty)
                         || segment.binding_evidence_id.is_some()
+                        || !member_metadata_valid
                         || edges.iter().any(|edge| edge.kind != EdgeKind::Shutoko)
                     {
                         return Err(RouteMembershipError::Validation(format!(
@@ -1784,6 +1725,8 @@ pub fn validate_route_membership_structure(
                             .binding_evidence_id
                             .as_deref()
                             .is_none_or(str::is_empty)
+                        || segment.member_indexes.is_some()
+                        || segment.member_order_matches_relation.is_some()
                         || !binding_evidence_ids
                             .insert(segment.binding_evidence_id.as_deref().unwrap_or_default())
                         || edges
@@ -4459,6 +4402,8 @@ mod tests {
                     binding_evidence_id: None,
                     ordered_edge_ids_sha256: ordered_edge_ids_sha256(&first_edges).unwrap(),
                     ordered_edge_ids: first_edges,
+                    member_indexes: Some(vec![0]),
+                    member_order_matches_relation: Some(true),
                 },
                 RouteMembershipSegment {
                     segment_id: "relation:split:forward:1".into(),
@@ -4468,6 +4413,8 @@ mod tests {
                     binding_evidence_id: None,
                     ordered_edge_ids_sha256: ordered_edge_ids_sha256(&second_edges).unwrap(),
                     ordered_edge_ids: second_edges,
+                    member_indexes: Some(vec![1]),
+                    member_order_matches_relation: Some(true),
                 },
             ],
         };
@@ -4663,27 +4610,125 @@ mod tests {
     }
 
     #[test]
-    fn rejects_reordered_and_reverse_requested_relation_members() {
-        let (mut reordered, graph, snapshot) = synthetic();
-        reordered.elements[5].members.as_mut().unwrap().swap(0, 1);
-        assert!(build_relation_memberships(&reordered, &graph, &snapshot, None).is_err());
+    fn preserves_relation_member_order_when_graph_order_differs() {
+        let relation_segments = |memberships: &[RouteMembershipIndex]| {
+            memberships
+                .iter()
+                .find(|membership| membership.membership_id == "route:R1:forward")
+                .unwrap()
+                .segments
+                .iter()
+                .map(|segment| segment.ordered_edge_ids.clone())
+                .collect::<Vec<_>>()
+        };
+        let (mut topology_reordered, mut graph, snapshot) = synthetic();
+        topology_reordered.elements.push(way(104, vec![4, 1]));
+        topology_reordered.elements[5].members =
+            Some(vec![member(101), member(104), member(102), member(103)]);
+        graph
+            .edges
+            .push(edge("e:w104:0:f", "n:4", "n:1", EdgeKind::Shutoko));
+        let memberships =
+            build_relation_memberships(&topology_reordered, &graph, &snapshot, None).unwrap();
+        assert_eq!(
+            relation_segments(&memberships),
+            vec![vec![
+                "e:w101:0:f".to_owned(),
+                "e:w102:0:f".to_owned(),
+                "e:w103:0:f".to_owned(),
+                "e:w104:0:f".to_owned(),
+            ]]
+        );
+        let segment = &memberships[0].segments[0];
+        assert_eq!(segment.member_indexes, Some(vec![0, 2, 3, 1]));
+        assert_eq!(segment.member_order_matches_relation, Some(false));
+    }
 
-        let (mut reverse_only, mut graph, snapshot) = synthetic();
-        reverse_only.elements[5]
+    #[test]
+    fn rejects_ambiguous_oneway_external_duplicate_and_fallback_relation_paths() {
+        let (mut branch, mut graph, snapshot) = synthetic();
+        branch.elements.push(way(104, vec![2, 5]));
+        branch.elements[5].members = Some(vec![member(101), member(102), member(104)]);
+        graph.nodes.push(node("n:5"));
+        graph
+            .edges
+            .push(edge("e:w104:0:f", "n:2", "n:5", EdgeKind::Shutoko));
+        let error = build_relation_memberships(&branch, &graph, &snapshot, None).unwrap_err();
+        assert!(matches!(
+            error,
+            RouteMembershipError::Relation(message)
+                if message.contains("ambiguous directed branch")
+        ));
+
+        let (mut one_way, mut graph, snapshot) = synthetic();
+        one_way.elements[5]
             .tags
             .as_mut()
             .unwrap()
-            .insert("direction".into(), "forward".into());
+            .insert("direction".into(), "backward".into());
+        graph.edges.retain(|edge| !edge.id.ends_with(":r"));
+        let error = build_relation_memberships(&one_way, &graph, &snapshot, None).unwrap_err();
+        assert!(matches!(
+            error,
+            RouteMembershipError::Relation(message)
+                if message.contains("no graph edges in requested direction")
+        ));
+
+        let (mut external, mut graph, snapshot) = synthetic();
+        external.elements[1].nodes = Some(vec![5, 6]);
+        external.elements[2].nodes = Some(vec![6, 7]);
+        external.elements.push(way(999, vec![2, 5]));
+        graph.nodes.push(node("n:5"));
+        graph.nodes.push(node("n:6"));
+        graph.nodes.push(node("n:7"));
         graph
             .edges
-            .retain(|edge| !(edge.id.starts_with("e:w101:") || edge.id.starts_with("e:w102:")));
+            .retain(|edge| !edge.id.starts_with("e:w102:") && !edge.id.starts_with("e:w103:"));
         graph
             .edges
-            .push(edge("e:w101:0:r", "n:2", "n:1", EdgeKind::Shutoko));
+            .push(edge("e:w102:0:f", "n:5", "n:6", EdgeKind::Shutoko));
         graph
             .edges
-            .push(edge("e:w102:0:r", "n:3", "n:2", EdgeKind::Shutoko));
-        assert!(build_relation_memberships(&reverse_only, &graph, &snapshot, None).is_err());
+            .push(edge("e:w103:0:f", "n:6", "n:7", EdgeKind::Shutoko));
+        graph
+            .edges
+            .push(edge("e:w999:0:f", "n:2", "n:5", EdgeKind::Shutoko));
+        let error = build_relation_memberships(&external, &graph, &snapshot, None).unwrap_err();
+        assert!(matches!(
+            error,
+            RouteMembershipError::Relation(message)
+                if message.contains("way outside the relation")
+        ));
+
+        let (mut duplicate, graph, snapshot) = synthetic();
+        duplicate.elements[5]
+            .members
+            .as_mut()
+            .unwrap()
+            .push(member(101));
+        let error = build_relation_memberships(&duplicate, &graph, &snapshot, None).unwrap_err();
+        assert!(matches!(
+            error,
+            RouteMembershipError::Relation(message) if message.contains("repeats way 101")
+        ));
+
+        let (mut fallback, mut graph, snapshot) = synthetic();
+        fallback.elements[5]
+            .tags
+            .as_mut()
+            .unwrap()
+            .remove("direction");
+        graph.edges.retain(|edge| {
+            !edge.id.starts_with("e:w101:0:f")
+                && !edge.id.starts_with("e:w102:0:f")
+                && !edge.id.starts_with("e:w103:0:f")
+        });
+        let error = build_relation_memberships(&fallback, &graph, &snapshot, None).unwrap_err();
+        assert!(matches!(
+            error,
+            RouteMembershipError::Relation(message)
+                if message.contains("no graph edges in requested direction")
+        ));
     }
 
     #[test]
@@ -4921,6 +4966,8 @@ mod tests {
                 binding_evidence_id: None,
                 ordered_edge_ids_sha256: ordered_edge_ids_sha256(&sequence).unwrap(),
                 ordered_edge_ids: sequence,
+                member_indexes: Some(vec![0]),
+                member_order_matches_relation: Some(true),
             }],
         }];
         let anchor = DirectedJunctionAnchor {
@@ -5003,6 +5050,8 @@ mod tests {
             binding_evidence_id: None,
             ordered_edge_ids_sha256: ordered_edge_ids_sha256(&sequence).unwrap(),
             ordered_edge_ids: sequence,
+            member_indexes: Some(vec![0]),
+            member_order_matches_relation: Some(true),
         };
         let memberships = vec![RouteMembershipIndex {
             membership_id: "route:loop:forward".into(),

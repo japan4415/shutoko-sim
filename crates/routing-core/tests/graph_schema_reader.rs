@@ -138,6 +138,18 @@ fn schema_4_rejects_unknown_kinds_versions_and_partial_data() {
         .remove("anchorKind");
     assert!(prepare_json(&graph.to_string(), "{}").is_err());
 
+    let mut missing_member_order = with_fragment("legacy");
+    missing_member_order["routeMemberships"][0]["segments"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("memberOrderMatchesRelation");
+    assert!(prepare_json(&missing_member_order.to_string(), "{}").is_err());
+
+    let mut invalid_member_order = with_fragment("legacy");
+    invalid_member_order["routeMemberships"][0]["segments"][0]["memberOrderMatchesRelation"] =
+        Value::from(false);
+    assert!(prepare_json(&invalid_member_order.to_string(), "{}").is_err());
+
     let mut graph = with_fragment("legacy");
     graph.as_object_mut().unwrap().remove("routeMemberships");
     assert!(prepare_json(&graph.to_string(), "{}").is_err());
@@ -305,9 +317,20 @@ fn schema_4_legacy_membership_requires_one_ordered_relation_segment() {
     refresh_edge_hashes(&mut extra);
     assert!(prepare_json(&extra.to_string(), "{}").is_err());
 
-    let mut reordered = with_fragment("legacy");
-    reordered["routeMemberships"][0]["segments"][0]["orderedEdgeIds"] =
-        Value::from(Vec::<String>::new());
+    let mut ordered = with_fragment("legacy");
+    ordered["routeMemberships"][0]["segments"][0]["orderedEdgeIds"] =
+        serde_json::json!(["fixture:edge:legacy:mainline", "fixture:edge:legacy:loop"]);
+    refresh_edge_hashes(&mut ordered);
+    let ordered_edges =
+        string_list(&ordered["routeMemberships"][0]["segments"][0]["orderedEdgeIds"]);
+    assert_eq!(ordered_edges.len(), 2);
+    assert!(prepare_json(&ordered.to_string(), "{}").is_ok());
+
+    let mut reordered = ordered;
+    reordered["routeMemberships"][0]["segments"][0]["orderedEdgeIds"]
+        .as_array_mut()
+        .unwrap()
+        .swap(0, 1);
     refresh_edge_hashes(&mut reordered);
     assert!(prepare_json(&reordered.to_string(), "{}").is_err());
 }

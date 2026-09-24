@@ -4673,6 +4673,13 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
                 segment["orderedEdgeIdsSha256"],
                 ordered_edge_ids_sha256(&ordered_edge_ids).unwrap()
             );
+            if segment["sourceKind"] == "relationMainline" {
+                assert!(!segment["memberIndexes"].as_array().unwrap().is_empty());
+                assert!(segment["memberOrderMatchesRelation"].is_boolean());
+            } else {
+                assert!(segment["memberIndexes"].is_null());
+                assert!(segment["memberOrderMatchesRelation"].is_null());
+            }
             for edge_id in &ordered_edge_ids {
                 assert!(edge_ids.iter().any(|candidate| candidate == edge_id));
                 assert!(!edge_id.contains(":w378284491:"));

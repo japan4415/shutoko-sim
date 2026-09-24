@@ -227,6 +227,8 @@
           "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
           "bindingEvidenceId": null,
           "orderedEdgeIds": ["fixture:edge:legacy:mainline"],
+          "memberIndexes": [0],
+          "memberOrderMatchesRelation": true,
           "orderedEdgeIdsSha256": "6880db1db7028bb4dfb1fbeebbbc2312acda99d6ec5791128d3eb53d2899fd48"
         }
       ]
@@ -253,6 +255,8 @@
           "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
           "bindingEvidenceId": null,
           "orderedEdgeIds": ["fixture:edge:entry:mainline", "fixture:edge:merge:mainline"],
+          "memberIndexes": [0, 1],
+          "memberOrderMatchesRelation": true,
           "orderedEdgeIdsSha256": "45c3fbfdecb5078f58f2dc42d81d60b68c517378494900e466b6e1ab9f521061"
         }
       ]
@@ -270,6 +274,8 @@
           "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
           "bindingEvidenceId": null,
           "orderedEdgeIds": ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+          "memberIndexes": [0, 1],
+          "memberOrderMatchesRelation": true,
           "orderedEdgeIdsSha256": "99ddf4b7771edc3fe3c04034d2465719932ca1c2d2104c0d05bab41d6e462a43"
         }
       ]
@@ -287,6 +293,8 @@
           "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
           "bindingEvidenceId": null,
           "orderedEdgeIds": ["fixture:edge:return:mainline"],
+          "memberIndexes": [0],
+          "memberOrderMatchesRelation": true,
           "orderedEdgeIdsSha256": "ba825c8c0f6236ca476824f7553aefe8bf09a94a5343c2470cde33b1bb443e1b"
         },
         {

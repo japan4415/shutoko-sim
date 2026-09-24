@@ -318861,7 +318861,65 @@
             "e:w45021970:27:f",
             "e:w45021970:28:f"
           ],
-          "orderedEdgeIdsSha256": "d20b57ff20c820fdd4eac33147bc6c810dc829c3b1a3a9cc972a753a18d8a714"
+          "orderedEdgeIdsSha256": "d20b57ff20c820fdd4eac33147bc6c810dc829c3b1a3a9cc972a753a18d8a714",
+          "memberIndexes": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            82,
+            83,
+            85,
+            72,
+            73,
+            74,
+            86,
+            76,
+            77,
+            78,
+            79,
+            80
+          ],
+          "memberOrderMatchesRelation": false
         },
         {
           "segmentId": "binding:osm-ramp-binding:ramp:c1-inner:takaracho-entry:segment:0",
@@ -319555,7 +319613,60 @@
             "e:w24372960:20:f",
             "e:w24372960:21:f"
           ],
-          "orderedEdgeIdsSha256": "d3c4bf483a71dd2df126b052031cd851695eb69e783a6ad9ed25fe333f35d592"
+          "orderedEdgeIdsSha256": "d3c4bf483a71dd2df126b052031cd851695eb69e783a6ad9ed25fe333f35d592",
+          "memberIndexes": [
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            81,
+            90,
+            91,
+            84,
+            92,
+            93,
+            94,
+            95,
+            96,
+            97,
+            98,
+            99,
+            100,
+            101,
+            102,
+            103,
+            104,
+            105,
+            106,
+            107,
+            109,
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71
+          ],
+          "memberOrderMatchesRelation": false
         },
         {
           "segmentId": "binding:osm-ramp-binding:ramp:c1-outer:ginza-entry:segment:0",
@@ -319858,7 +319969,24 @@
             "e:w7836679:6:f",
             "e:w7836679:7:f",
             "e:w7836679:8:f",
-            "e:w7836679:9:f",
+            "e:w7836679:9:f"
+          ],
+          "orderedEdgeIdsSha256": "51deb528556ff0f5445cb035ebb61292d7a6233cf7356fada27cf5c98604f293",
+          "memberIndexes": [
+            4,
+            7,
+            9,
+            8
+          ],
+          "memberOrderMatchesRelation": false
+        },
+        {
+          "segmentId": "relation:4256339:inbound:1",
+          "sourceKind": "relationMainline",
+          "sourceRelationId": "4256339",
+          "sourceSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
+          "bindingEvidenceId": null,
+          "orderedEdgeIds": [
             "e:w4853802:0:f",
             "e:w4853802:1:f",
             "e:w4853802:2:f",
@@ -319875,37 +320003,12 @@
             "e:w45248631:2:f",
             "e:w45248631:3:f"
           ],
-          "orderedEdgeIdsSha256": "b1b8684845c76c7ccc04497f1ef7be12dc9aae54b749fe33ca3cb5cf8651d6bd"
-        },
-        {
-          "segmentId": "relation:4256339:inbound:1",
-          "sourceKind": "relationMainline",
-          "sourceRelationId": "4256339",
-          "sourceSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
-          "bindingEvidenceId": null,
-          "orderedEdgeIds": [
-            "e:w24039714:0:f",
-            "e:w24039714:1:f",
-            "e:w207646122:0:f",
-            "e:w207646122:1:f",
-            "e:w207646122:2:f",
-            "e:w207646122:3:f",
-            "e:w207646122:4:f",
-            "e:w207646122:5:f",
-            "e:w207646122:6:f",
-            "e:w207646122:7:f",
-            "e:w207646122:8:f",
-            "e:w207646122:9:f",
-            "e:w207646122:10:f",
-            "e:w207646122:11:f",
-            "e:w207646122:12:f",
-            "e:w207646122:13:f",
-            "e:w207646122:14:f",
-            "e:w422023173:0:f",
-            "e:w422023173:1:f",
-            "e:w422023173:2:f"
+          "orderedEdgeIdsSha256": "9e0d72bd0b68df773b7303daaf95edc68397e1db4c9df5e90e333a9abda9d993",
+          "memberIndexes": [
+            10,
+            11
           ],
-          "orderedEdgeIdsSha256": "faad81a2d754f4130f1c39ba7c789eecdb5395a6c9b35cb3d8498e9134237f22"
+          "memberOrderMatchesRelation": true
         },
         {
           "segmentId": "relation:4256339:inbound:2",
@@ -319932,7 +320035,47 @@
             "e:w4853804:15:f",
             "e:w4853804:16:f"
           ],
-          "orderedEdgeIdsSha256": "07f49b3c4cea8f03406e6d3f91bc47c55e3560ce57ea5a5b6abd5f382f49bf38"
+          "orderedEdgeIdsSha256": "07f49b3c4cea8f03406e6d3f91bc47c55e3560ce57ea5a5b6abd5f382f49bf38",
+          "memberIndexes": [
+            17
+          ],
+          "memberOrderMatchesRelation": true
+        },
+        {
+          "segmentId": "relation:4256339:inbound:3",
+          "sourceKind": "relationMainline",
+          "sourceRelationId": "4256339",
+          "sourceSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
+          "bindingEvidenceId": null,
+          "orderedEdgeIds": [
+            "e:w24039714:0:f",
+            "e:w24039714:1:f",
+            "e:w207646122:0:f",
+            "e:w207646122:1:f",
+            "e:w207646122:2:f",
+            "e:w207646122:3:f",
+            "e:w207646122:4:f",
+            "e:w207646122:5:f",
+            "e:w207646122:6:f",
+            "e:w207646122:7:f",
+            "e:w207646122:8:f",
+            "e:w207646122:9:f",
+            "e:w207646122:10:f",
+            "e:w207646122:11:f",
+            "e:w207646122:12:f",
+            "e:w207646122:13:f",
+            "e:w207646122:14:f",
+            "e:w422023173:0:f",
+            "e:w422023173:1:f",
+            "e:w422023173:2:f"
+          ],
+          "orderedEdgeIdsSha256": "faad81a2d754f4130f1c39ba7c789eecdb5395a6c9b35cb3d8498e9134237f22",
+          "memberIndexes": [
+            19,
+            6,
+            5
+          ],
+          "memberOrderMatchesRelation": false
         },
         {
           "segmentId": "binding:osm-ramp-binding:ramp:2-inbound:meguro-entry:segment:0",
@@ -320167,7 +320310,14 @@
             "e:w106911692:0:f",
             "e:w106911692:1:f"
           ],
-          "orderedEdgeIdsSha256": "2818d9d12012558320cf92a7b48a1b9d218b4692a5430090903a06c4da9b19ef"
+          "orderedEdgeIdsSha256": "2818d9d12012558320cf92a7b48a1b9d218b4692a5430090903a06c4da9b19ef",
+          "memberIndexes": [
+            1,
+            2,
+            3,
+            0
+          ],
+          "memberOrderMatchesRelation": false
         },
         {
           "segmentId": "relation:4256339:outbound:1",
@@ -320198,7 +320348,14 @@
             "e:w207646123:0:f",
             "e:w207646123:1:f"
           ],
-          "orderedEdgeIdsSha256": "4d37813f30e7c262b11f84b4ccb956d0c9635f9193631e2e802bb313fa3d7bad"
+          "orderedEdgeIdsSha256": "4d37813f30e7c262b11f84b4ccb956d0c9635f9193631e2e802bb313fa3d7bad",
+          "memberIndexes": [
+            12,
+            13,
+            14,
+            18
+          ],
+          "memberOrderMatchesRelation": false
         },
         {
           "segmentId": "relation:4256339:outbound:2",
@@ -320227,7 +320384,12 @@
             "e:w23297499:8:f",
             "e:w23297499:9:f"
           ],
-          "orderedEdgeIdsSha256": "5e0fd503bd74a46c51f6bfeda139a2aef39a227ce325c3dd03b4bf78629cc033"
+          "orderedEdgeIdsSha256": "5e0fd503bd74a46c51f6bfeda139a2aef39a227ce325c3dd03b4bf78629cc033",
+          "memberIndexes": [
+            16,
+            15
+          ],
+          "memberOrderMatchesRelation": false
         },
         {
           "segmentId": "binding:osm-ramp-binding:ramp:2-outbound:meguro-exit:segment:0",

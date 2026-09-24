@@ -220,6 +220,7 @@ Issue #62 で parser は `schemaVersion` を明示的に 1 / 2 へ dispatch し�
       {
         "segmentId": "ramp:2-inbound:meguro-entry:segment:0",
         "osmWayIds": [207535708],
+        "osmNodeIds": [2177935837, 2177935839],
         "edgeIds": ["e:w207535708:0:f"],
         "fromNodeId": "n:2177935837",
         "toNodeId": "n:2177935839",
@@ -358,7 +359,7 @@ mandatory lap 自身の境界は `routePlan.mandatoryLap.firstEdgeId` / `lastEdg
 | なし | `routePlanVersion`, `entryCorridor`, `anchor`, `mandatoryLap`, `returnCorridor` | radial variant だけを必須にする。 |
 | なし | `pairEligibility`, `loopValidation`, `tariff` の独立 status | endpoint support、routing capability、loop validation、料金状態を混在させない。 |
 
-generated graph の `billingPairs[]` も同じ判別 union とする。schema 2/3 の `pairKind` なしは legacy として読めるが、schema 4 の builder 出力では `pairKind` を必ず書く。`legacyRing` は `entryToAnchorEdgeIds` と `anchorToExitEdgeIds` を必須にし、`radialReturn` は `anchorNodeId` を省略する。未知の kind、anchor kind、route plan version は reader と builder の両方で拒否する。Issue #65 で schema 4 builder 出力の legacy pair を明示 union へ変換し、core reader、WASM 型、Web Worker の dispatch / fail-closed 契約を追加した。
+generated graph の `billingPairs[]` も同じ判別 union とする。schema 2/3 の `pairKind` なしは legacy として読めるが、schema 4 の builder 出力では `pairKind` を必ず書く。`legacyRing` は `entryToAnchorEdgeIds` と `anchorToExitEdgeIds` を必須にし、`radialReturn` は `anchorNodeId` を省略する。未知の kind、anchor kind、route plan version は reader と builder の両方で拒否する。Issue #65 で schema 4 builder 出力の legacy pair を明示 union へ変換し、core reader、WASM 型、Web Worker の dispatch / fail-closed 契約を追加した。Issue #68の追加修正ではverified entry / exit bindingとFirst Exitを解決し、entry approach / mandatory lap / return corridor / exit approachの4 resolved segmentを検証して`radialReturn`を同じunionへ追加する。
 
 以下はreader fixtureのwire fragmentである。IDとEdgeは実装テスト用の synthetic value であり、天現寺 binding が解けたこと、または公開可能な pair であることを表さない。`legacyRing` と `radialReturn` の判別、必須 field、status の配置を同じ例で確認する。
 
@@ -637,7 +638,7 @@ route planのlegは`sourceSegmentIds[]`でmainlineとrampの由来を明示し�
 4. 候補は return corridor 内の一般 Exitだけで、C1 の Exit、entry approach 中の Exit、boundary JCT を数えない。
 5. 禁止遷移を満たし、探索予算を明示して処理する。
 
-B から全グラフの最短 Exit を選ぶ処理は使わない。実データでは B から C1 芝公園 Exit が1,306m、天現寺候補の開始点が1,972mであり、route constraint なしで Exit を選ぶと誤る。graph-builder の `resolve_diagnostic_radial_route_plan` は seed の declared candidate を検証し、天現寺候補が未解決なら `firstGeneralExit.exactDirectedBinding=unresolved` または `unsupported` を保持したまま次の supported Exit へ skip しない。候補の探索予算が尽きた場合は `ExitNotFound` ではなく `BudgetExceeded` を返す。First Exit の幾何探索が成功しても、端点 support や pair eligibility の証拠にはしない。
+B から全グラフの最短 Exit を選ぶ処理は使わない。実データでは B から C1 芝公園 Exit が1,306m、天現寺候補の開始点が1,972mであり、route constraint なしで Exit を選ぶと誤る。graph-builder の `resolve_diagnostic_radial_route_plan` は seed の declared candidate を検証し、relationMainlineの複数segmentとoffsetを横断して候補の`fromNodeId`まで必ず探索する。天現寺候補が未解決なら `firstGeneralExit.exactDirectedBinding=unresolved` または `unsupported` と、到達したmainline Edge列を保持したまま次の supported Exit へ skip しない。候補へ到達する前に経路が尽きた場合は`ExitNotFound`、探索予算が尽きた場合は`BudgetExceeded`を返す。First Exit の幾何探索が成功しても、端点 support や pair eligibility の証拠にはしない。
 
 実装テストには次を含める。
 
@@ -653,9 +654,9 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 
 ### 3.4 2号計画の診断用データと公開 BillingPair を分ける
 
-本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、Issue #68 で同じ2件を実 `data/billing-pairs-seed.json` にも追加した。parser test、snapshot、実 seed の graph-builder contract test で同じ wire shape を確認する。graph-builder は両 route plan の M→B 長弧と return corridor を検証し、天現寺 exact directed binding が未解決の間は plan を `Graph.billingPairs` へ入れて公開候補にせず、manifest の `diagnostic-only` 記録だけを残す。
+本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、Issue #68 で同じ2件を実 `data/billing-pairs-seed.json` にも追加した。parser test、snapshot、実 seed の graph-builder contract test で同じ wire shape を確認する。`osmNodeIds`はentryで2件、天現寺候補で18件を必須とし、way順・Edge順・node順・hash・監査済みbinding candidateとの一致を検証する。graph-builder は両 route plan の M→B 長弧と return corridor を検証し、天現寺 exact directed binding が未解決の間は plan を `Graph.billingPairs` へ入れて公開候補にせず、manifest の `diagnostic-only` 記録だけを残す。`--graph-schema 2`ではradial pairを診断unionへ出さず、manifestへpair固有の`rejected`記録を残して暗黙に落とさない。
 
-binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。今回は5 wayの連続性を確認したが、2号下りの`n:252175582`から`n:1832672205`へ至る間に、一般道・明治通りへ接続する`n:1832672162`も存在する。公式2号下りの出口番号順は201天現寺、203目黒、205戸越、207荏原で施設名とは矛盾しないが、地上端点の選択までは一意にしない。よって`data/osm-ramp-bindings.json`には`status=unresolved`、`publicProjection=excluded_unresolved`のcandidateとして保持し、現行schema 2の`Graph.ramps`と`ramps.json`へ投影しない。Issue #68 の実 seed も同じ5 way候補と unresolved 状態を保持し、route plan の検証結果だけを diagnostic として記録する。地上端点を他根拠で一意に確定し、#63で`boundRamp`と`bindingEvidenceId`に変換した後、graph schema 4の`radialReturn`として昇格する。昇格後もIssue #41までは`amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`を維持する。
+binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。今回は5 wayの連続性を確認したが、2号下りの`n:252175582`から`n:1832672205`へ至る間に、一般道・明治通りへ接続する`n:1832672162`も存在する。公式2号下りの出口番号順は201天現寺、203目黒、205戸越、207荏原で施設名とは矛盾しないが、地上端点の選択までは一意にしない。よって`data/osm-ramp-bindings.json`には`status=unresolved`、`publicProjection=excluded_unresolved`のcandidateとして保持し、現行schema 2の`Graph.ramps`と`ramps.json`へ投影しない。Issue #68 の実 seed も同じ5 way、18 node、17 Edgeの候補と unresolved 状態を保持し、route plan の検証結果だけを diagnostic として記録する。地上端点を他根拠で一意に確定し、`boundRamp`と`bindingEvidenceId`に変換した後は、4 resolved segmentと未解決でないFirst Exitを再検証してからgraph schema 4の`radialReturn`として昇格する。この昇格経路はverified synthetic fixtureとcore reader contractで検証済みである。昇格後もIssue #41までは`amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`を維持する。
 
 ## 4. 成果物の決定論的再生成手順
 

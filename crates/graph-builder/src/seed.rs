@@ -10,6 +10,7 @@ use crate::model::VerificationStatus;
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
@@ -161,6 +162,7 @@ pub enum EndpointSupportState {
 pub struct DirectedEndpointSegment {
     pub segment_id: String,
     pub osm_way_ids: Vec<i64>,
+    pub osm_node_ids: Vec<i64>,
     pub edge_ids: Vec<String>,
     pub from_node_id: String,
     pub to_node_id: String,
@@ -544,15 +546,69 @@ impl DiagnosticEndpoint {
 }
 
 fn validate_directed_segment(segment: &DirectedEndpointSegment) -> Result<(), String> {
-    if segment.osm_way_ids.is_empty() {
+    if segment.osm_way_ids.is_empty() || segment.osm_way_ids.iter().any(|way_id| *way_id <= 0) {
         return Err(format!(
-            "directed segment {} requires non-empty osmWayIds",
+            "directed segment {} requires positive OSM way IDs",
             segment.segment_id
         ));
     }
     if segment.edge_ids.is_empty() {
         return Err(format!(
             "directed segment {} requires non-empty edgeIds",
+            segment.segment_id
+        ));
+    }
+    if segment.osm_node_ids.len() != segment.edge_ids.len() + 1
+        || segment.osm_node_ids.iter().any(|node_id| *node_id <= 0)
+    {
+        return Err(format!(
+            "directed segment {} requires one positive OSM node per Edge boundary",
+            segment.segment_id
+        ));
+    }
+    if segment.from_node_id != format!("n:{}", segment.osm_node_ids[0])
+        || segment.to_node_id
+            != format!("n:{}", segment.osm_node_ids[segment.osm_node_ids.len() - 1])
+    {
+        return Err(format!(
+            "directed segment {} endpoint IDs do not match osmNodeIds order",
+            segment.segment_id
+        ));
+    }
+    let mut actual_way_ids = Vec::new();
+    for edge_id in &segment.edge_ids {
+        let parts = edge_id.split(':').collect::<Vec<_>>();
+        let way_id = (parts.first() == Some(&"e"))
+            .then_some(())
+            .and(parts.get(1))
+            .and_then(|value| value.strip_prefix('w'))
+            .and_then(|value| value.parse::<i64>().ok())
+            .ok_or_else(|| {
+                format!(
+                    "directed segment {} edge {} has no OSM way identity",
+                    segment.segment_id, edge_id
+                )
+            })?;
+        if actual_way_ids.last() != Some(&way_id) {
+            actual_way_ids.push(way_id);
+        }
+    }
+    if actual_way_ids != segment.osm_way_ids {
+        return Err(format!(
+            "directed segment {} OSM way order does not match edgeIds",
+            segment.segment_id
+        ));
+    }
+    let encoded = serde_json::to_vec(&segment.edge_ids).map_err(|error| {
+        format!(
+            "directed segment {} could not be hashed: {}",
+            segment.segment_id, error
+        )
+    })?;
+    let expected_hash = format!("{:x}", Sha256::digest(encoded));
+    if segment.edge_ids_sha256 != expected_hash {
+        return Err(format!(
+            "directed segment {} edgeIdsSha256 does not match edgeIds",
             segment.segment_id
         ));
     }
@@ -761,6 +817,22 @@ mod tests {
     }
 
     #[test]
+    fn rejects_missing_or_mismatched_osm_node_evidence() {
+        let mut missing: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+        missing["billingPairs"][1]["exitEndpoint"]["bindingCandidates"][0]["directedSegments"][0]
+            ["osmNodeIds"]
+            .as_array_mut()
+            .unwrap()
+            .pop();
+        assert!(parse_billing_pairs_seed(&missing.to_string()).is_err());
+
+        let mut mismatched: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+        mismatched["billingPairs"][1]["exitEndpoint"]["bindingCandidates"][0]["directedSegments"]
+            [0]["fromNodeId"] = json!("n:0");
+        assert!(parse_billing_pairs_seed(&mismatched.to_string()).is_err());
+    }
+
+    #[test]
     fn rejects_directed_junction_boundary_mismatches() {
         let mut value: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
         value["billingPairs"][1]["routePlan"]["anchor"]["mergeNodeId"] =
@@ -941,6 +1013,7 @@ mod tests {
             );
             let exit_segment = &pair.exit_endpoint.binding_candidates[0].directed_segments[0];
             assert_eq!(exit_segment.osm_way_ids.len(), 5);
+            assert_eq!(exit_segment.osm_node_ids.len(), 18);
             assert_eq!(exit_segment.edge_ids.len(), 17);
             assert_eq!(
                 exit_segment.edge_ids_sha256,

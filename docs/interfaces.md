@@ -195,7 +195,7 @@ graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy output�
 - `distanceMeters`はhighway + surface access + surface returnの推定距離、`shutokoDistanceMeters`はhighway Edge距離とする。
 - radialの`handoff`は`{ enabled: false, legUrls: [] }`で返し、device verification gate通過後だけ`enabled=true`と検証済みleg URLを持たせる。
 
-`edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。graph-builder は `routePlanLapV1` の順序付き Edge 列と hash、return corridor の declared Exit candidate を検証し、unresolved / unsupported binding を公開候補に昇格させない。
+`edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。graph-builder は `routePlanLapV1` の順序付き Edge 列と hash、return corridor の declared Exit candidate を検証する。declared candidateの`fromNodeId`へ到達できない場合はunresolved成功を返さず、verified bindingと4 resolved segmentがすべて揃った場合だけgraph schema 4の`radialReturn`として昇格する。unresolved / unsupported binding は公開候補に昇格させない。
 
 以下はreader fixture用のwire-level Candidateである。IDと座標はsynthetic valueで、公開可能な2号bindingや料金を表さない。`toll`に`chargedSectionCount`はなく、4 legのindex、segment hash、距離式が一致する。
 

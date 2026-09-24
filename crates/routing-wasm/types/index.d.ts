@@ -176,6 +176,7 @@ export type RouteAnchor = SameNodeAnchor | DirectedJunctionAnchor;
 export interface DirectedEndpointSegment {
   segmentId: string;
   osmWayIds: number[];
+  osmNodeIds: number[];
   edgeIds: string[];
   fromNodeId: string;
   toNodeId: string;

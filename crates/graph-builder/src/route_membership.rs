@@ -10,7 +10,7 @@ use crate::seed::{
 use crate::validate::contains_forbidden_transition;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,6 +67,7 @@ pub struct BoundRampEvidence {
     pub route_id: String,
     pub direction: String,
     pub osm_way_ids: Vec<i64>,
+    pub osm_node_ids: Vec<i64>,
     pub edge_ids: Vec<String>,
     pub from_node_id: String,
     pub to_node_id: String,
@@ -87,6 +88,7 @@ impl BoundRampEvidence {
             route_id: route_id.into(),
             direction: direction.into(),
             osm_way_ids: segment.osm_way_ids.clone(),
+            osm_node_ids: segment.osm_node_ids.clone(),
             edge_ids: segment.edge_ids.clone(),
             from_node_id: segment.from_node_id.clone(),
             to_node_id: segment.to_node_id.clone(),
@@ -102,6 +104,13 @@ pub struct RouteMembershipBuildOptions {
     pub bound_ramp_evidence: Vec<BoundRampEvidence>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum GraphSchemaV4BillingPair {
+    LegacyRing(Box<shutoko_routing_core::LegacyRingBillingPair>),
+    RadialReturn(Box<shutoko_routing_core::RadialReturnBillingPair>),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GraphSchemaV4 {
@@ -110,7 +119,7 @@ pub struct GraphSchemaV4 {
     pub vehicle_profile: String,
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
-    pub billing_pairs: Vec<shutoko_routing_core::LegacyRingBillingPair>,
+    pub billing_pairs: Vec<GraphSchemaV4BillingPair>,
     #[serde(default)]
     pub forbidden_transitions: Vec<Vec<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -130,7 +139,15 @@ impl GraphSchemaV4 {
         graph: &Graph,
         route_memberships: Vec<RouteMembershipIndex>,
     ) -> Result<Self, RouteMembershipError> {
-        let billing_pairs = graph
+        Self::try_from_graph_with_radial(graph, route_memberships, Vec::new())
+    }
+
+    pub fn try_from_graph_with_radial(
+        graph: &Graph,
+        route_memberships: Vec<RouteMembershipIndex>,
+        radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+    ) -> Result<Self, RouteMembershipError> {
+        let mut billing_pairs = graph
             .billing_pairs
             .iter()
             .map(|pair| {
@@ -139,9 +156,15 @@ impl GraphSchemaV4 {
                     graph,
                     &route_memberships,
                 )
+                .map(|pair| GraphSchemaV4BillingPair::LegacyRing(Box::new(pair)))
                 .map_err(|error| RouteMembershipError::InvalidInput(error.to_string()))
             })
             .collect::<Result<Vec<_>, _>>()?;
+        billing_pairs.extend(
+            radial_billing_pairs
+                .into_iter()
+                .map(|pair| GraphSchemaV4BillingPair::RadialReturn(Box::new(pair))),
+        );
         Ok(Self {
             schema_version: 4,
             release_id: graph.release_id.clone(),
@@ -161,8 +184,20 @@ pub fn graph_schema_v4_to_deterministic_json(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
 ) -> Result<String, serde_json::Error> {
-    let document = GraphSchemaV4::try_from_graph(graph, route_memberships.to_vec())
-        .map_err(|error| serde_json::Error::io(std::io::Error::other(error.to_string())))?;
+    graph_schema_v4_to_deterministic_json_with_radial(graph, route_memberships, Vec::new())
+}
+
+pub fn graph_schema_v4_to_deterministic_json_with_radial(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+) -> Result<String, serde_json::Error> {
+    let document = GraphSchemaV4::try_from_graph_with_radial(
+        graph,
+        route_memberships.to_vec(),
+        radial_billing_pairs,
+    )
+    .map_err(|error| serde_json::Error::io(std::io::Error::other(error.to_string())))?;
     let mut output = serde_json::to_string_pretty(&document)?;
     output.push('\n');
     Ok(output)
@@ -177,6 +212,7 @@ pub struct CorridorExit {
     pub ramp_id: String,
     pub edge_ids: Vec<String>,
     pub mainline_edge_ids: Vec<String>,
+    pub mainline_source_segment_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,6 +256,9 @@ pub struct CorridorFirstExitResolution {
     pub exit: Option<CorridorExit>,
     pub blocked_exit_edge_id: Option<String>,
     pub blocked_ramp_id: Option<String>,
+    pub mainline_edge_ids: Vec<String>,
+    pub mainline_source_segment_ids: Vec<String>,
+    pub distance_meters: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -439,6 +478,10 @@ fn edge_way_id(edge: &Edge) -> Option<i64> {
         return None;
     }
     parts.next()?.strip_prefix('w')?.parse().ok()
+}
+
+fn graph_node_osm_id(node_id: &str) -> Option<i64> {
+    node_id.strip_prefix("n:")?.parse().ok()
 }
 
 fn edge_map(graph: &Graph) -> HashMap<&str, &Edge> {
@@ -1195,6 +1238,15 @@ pub fn build_bound_ramp_memberships(
             )));
         }
         validate_way_order(&item.osm_way_ids, &edges, &segment_id)?;
+        if item.osm_node_ids.len() != edges.len() + 1
+            || item.osm_node_ids.first().copied() != graph_node_osm_id(&item.from_node_id)
+            || item.osm_node_ids.last().copied() != graph_node_osm_id(&item.to_node_id)
+        {
+            return Err(RouteMembershipError::RampBinding(format!(
+                "{} osm node order does not match its ordered graph edges",
+                segment_id
+            )));
+        }
         if edges
             .iter()
             .any(|edge| !matches!(edge.kind, EdgeKind::Entry | EdgeKind::Exit))
@@ -1330,6 +1382,13 @@ pub fn bound_ramp_evidence_from_inventory(
             (motorway, ground)
         };
         let mut edge_ids = Vec::new();
+        let first_osm_node_id = graph_node_osm_id(&from).ok_or_else(|| {
+            RouteMembershipError::RampBinding(format!(
+                "ramp {} evidence start {} is not an OSM node ID",
+                item.ramp_id, from
+            ))
+        })?;
+        let mut osm_node_ids = vec![first_osm_node_id];
         let mut current_node = from.clone();
         let mut visited = HashSet::new();
         while current_node != to {
@@ -1358,6 +1417,13 @@ pub fn bound_ramp_evidence_from_inventory(
                 )));
             }
             edge_ids.push(next.id.clone());
+            let Some(next_osm_node_id) = graph_node_osm_id(&next.to) else {
+                return Err(RouteMembershipError::RampBinding(format!(
+                    "ramp {} evidence node {} is not an OSM node ID",
+                    item.ramp_id, next.to
+                )));
+            };
+            osm_node_ids.push(next_osm_node_id);
             current_node = next.to.clone();
         }
         if edge_ids.is_empty() {
@@ -1374,6 +1440,7 @@ pub fn bound_ramp_evidence_from_inventory(
             route_id: item.route.clone(),
             direction: item.direction.clone(),
             osm_way_ids: vec![binding.osm_way_id],
+            osm_node_ids,
             from_node_id: from,
             to_node_id: to,
             edge_ids,
@@ -2297,6 +2364,25 @@ fn corridor_sequence_for_initial_edge(
     Ok(sequence[start..].to_vec())
 }
 
+fn sequence_source_segment_ids(
+    membership: &RouteMembershipIndex,
+    sequence: &[String],
+) -> Vec<String> {
+    let mut result: Vec<String> = Vec::new();
+    for edge_id in sequence {
+        let source = relation_sequences(membership)
+            .into_iter()
+            .find(|segment| segment.ordered_edge_ids.contains(edge_id))
+            .map(|segment| segment.segment_id.clone());
+        if let Some(source) = source {
+            if result.last() != Some(&source) {
+                result.push(source);
+            }
+        }
+    }
+    result
+}
+
 fn corridor_sequence_from_source_segments(
     membership: &RouteMembershipIndex,
     source_segment_ids: &[String],
@@ -2340,6 +2426,286 @@ fn corridor_sequence_from_source_segments(
     Ok(result)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct RelationPathEdge {
+    edge_id: String,
+    source_segment_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RelationPathSearchState {
+    distance_meters: u64,
+    path: Vec<RelationPathEdge>,
+}
+
+impl Ord for RelationPathSearchState {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other
+            .distance_meters
+            .cmp(&self.distance_meters)
+            .then_with(|| other.path.iter().cmp(&self.path))
+    }
+}
+
+impl PartialOrd for RelationPathSearchState {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn relation_path_adjacency(
+    graph: &Graph,
+    membership: &RouteMembershipIndex,
+) -> Result<BTreeMap<String, Vec<RelationPathEdge>>, RouteMembershipError> {
+    let graph_edges = edge_map(graph);
+    let mut adjacency: BTreeMap<String, Vec<RelationPathEdge>> = BTreeMap::new();
+    for segment in relation_sequences(membership) {
+        for edge_id in &segment.ordered_edge_ids {
+            let edge = graph_edges.get(edge_id.as_str()).ok_or_else(|| {
+                RouteMembershipError::Segment(format!(
+                    "{} references missing graph edge {}",
+                    segment.segment_id, edge_id
+                ))
+            })?;
+            if edge.kind != EdgeKind::Shutoko {
+                return Err(RouteMembershipError::Segment(format!(
+                    "{} contains non-mainline edge {}",
+                    segment.segment_id, edge.id
+                )));
+            }
+            adjacency
+                .entry(edge.from.clone())
+                .or_default()
+                .push(RelationPathEdge {
+                    edge_id: edge.id.clone(),
+                    source_segment_id: segment.segment_id.clone(),
+                });
+        }
+    }
+    for edges in adjacency.values_mut() {
+        edges.sort_by(|left, right| {
+            left.edge_id
+                .cmp(&right.edge_id)
+                .then_with(|| left.source_segment_id.cmp(&right.source_segment_id))
+        });
+    }
+    Ok(adjacency)
+}
+
+fn find_relation_path_to_node(
+    graph: &Graph,
+    membership: &RouteMembershipIndex,
+    start_node_id: &str,
+    initial_edge_id: Option<&str>,
+    target_node_id: &str,
+    state_budget: usize,
+) -> Result<Vec<RelationPathEdge>, RouteMembershipError> {
+    if state_budget == 0 {
+        return Err(RouteMembershipError::InvalidInput(
+            "corridor state budget must be positive".into(),
+        ));
+    }
+    let adjacency = relation_path_adjacency(graph, membership)?;
+    if let Some(initial_edge_id) = initial_edge_id {
+        let initial_edge = graph
+            .edges
+            .iter()
+            .find(|edge| edge.id == initial_edge_id)
+            .ok_or_else(|| {
+                RouteMembershipError::Validation(format!(
+                    "initial edge {} is absent from graph",
+                    initial_edge_id
+                ))
+            })?;
+        if initial_edge.kind != EdgeKind::Shutoko || initial_edge.from != start_node_id {
+            return Err(RouteMembershipError::Validation(format!(
+                "initial edge {} is not a mainline edge leaving {}",
+                initial_edge.id, start_node_id
+            )));
+        }
+        if !adjacency
+            .get(initial_edge.from.as_str())
+            .is_some_and(|edges| edges.iter().any(|edge| edge.edge_id == initial_edge_id))
+        {
+            return Err(RouteMembershipError::Validation(format!(
+                "initial edge {} is absent from relationMainline membership {}",
+                initial_edge_id, membership.membership_id
+            )));
+        }
+    }
+    let mut heap = BinaryHeap::new();
+    heap.push(RelationPathSearchState {
+        distance_meters: 0,
+        path: Vec::new(),
+    });
+    let mut states = 0_usize;
+    while let Some(state) = heap.pop() {
+        states += 1;
+        if states > state_budget {
+            return Err(RouteMembershipError::BudgetExceeded(format!(
+                "corridor search exceeded {} states before reaching declared Exit evidence",
+                state_budget
+            )));
+        }
+        let current_node_id = if let Some(last) = state.path.last() {
+            graph
+                .edges
+                .iter()
+                .find(|edge| edge.id == last.edge_id)
+                .map(|edge| edge.to.as_str())
+                .ok_or_else(|| {
+                    RouteMembershipError::Validation(format!(
+                        "corridor edge {} is absent from graph",
+                        last.edge_id
+                    ))
+                })?
+        } else {
+            start_node_id
+        };
+        if current_node_id == target_node_id {
+            return Ok(state.path);
+        }
+        let outgoing = adjacency
+            .get(current_node_id)
+            .into_iter()
+            .flat_map(|edges| edges.iter())
+            .filter(|candidate| {
+                initial_edge_id.is_none_or(|initial_edge_id| {
+                    !state.path.is_empty() || candidate.edge_id == initial_edge_id
+                })
+            })
+            .filter(|candidate| {
+                !state
+                    .path
+                    .iter()
+                    .any(|edge| edge.edge_id == candidate.edge_id)
+            });
+        for candidate in outgoing {
+            let edge = graph
+                .edges
+                .iter()
+                .find(|edge| edge.id == candidate.edge_id)
+                .ok_or_else(|| {
+                    RouteMembershipError::Validation(format!(
+                        "corridor edge {} is absent from graph",
+                        candidate.edge_id
+                    ))
+                })?;
+            let mut path = state.path.clone();
+            path.push(candidate.clone());
+            let edge_ids = path
+                .iter()
+                .map(|edge| edge.edge_id.clone())
+                .collect::<Vec<_>>();
+            if contains_forbidden_transition(&edge_ids, &graph.forbidden_transitions) {
+                return Err(RouteMembershipError::Validation(
+                    "return corridor contains a forbidden transition".into(),
+                ));
+            }
+            let next_distance = state.distance_meters.saturating_add(edge.distance_meters);
+            heap.push(RelationPathSearchState {
+                distance_meters: next_distance,
+                path,
+            });
+        }
+    }
+    Err(RouteMembershipError::ExitNotFound(format!(
+        "relationMainline does not reach target node {} from {}",
+        target_node_id, start_node_id
+    )))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_first_exit_to_declared_candidates(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership: &RouteMembershipIndex,
+    start_node_id: &str,
+    initial_edge_id: &str,
+    expected_ramp_id: &str,
+    exact_directed_binding: EndpointSupportState,
+    declared_candidates: &[DirectedEndpointSegment],
+    state_budget: usize,
+) -> Result<CorridorFirstExitResolution, RouteMembershipError> {
+    if declared_candidates.is_empty() {
+        return Err(RouteMembershipError::RampBinding(
+            "declared Exit evidence is required to resolve a radial route plan".into(),
+        ));
+    }
+    for candidate in declared_candidates {
+        validate_declared_endpoint_candidate(
+            graph,
+            candidate,
+            exact_directed_binding == EndpointSupportState::VerifiedBound,
+        )?;
+    }
+    let mut paths = Vec::new();
+    for target_node_id in declared_candidates
+        .iter()
+        .map(|candidate| candidate.from_node_id.as_str())
+        .collect::<BTreeSet<_>>()
+    {
+        let path = find_relation_path_to_node(
+            graph,
+            membership,
+            start_node_id,
+            Some(initial_edge_id),
+            target_node_id,
+            state_budget,
+        )?;
+        let distance_meters = path
+            .iter()
+            .map(|edge| {
+                graph
+                    .edges
+                    .iter()
+                    .find(|candidate| candidate.id == edge.edge_id)
+                    .map(|candidate| candidate.distance_meters)
+                    .unwrap_or(0)
+            })
+            .sum::<u64>();
+        paths.push((distance_meters, path));
+    }
+    paths.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| left.1.iter().cmp(&right.1))
+    });
+    let (distance_meters, path) = paths
+        .into_iter()
+        .next()
+        .ok_or_else(|| RouteMembershipError::ExitNotFound("no declared Exit path".into()))?;
+    let sequence = path
+        .iter()
+        .map(|edge| edge.edge_id.clone())
+        .collect::<Vec<_>>();
+    let mut source_segment_ids = Vec::new();
+    for edge in &path {
+        if source_segment_ids.last() != Some(&edge.source_segment_id) {
+            source_segment_ids.push(edge.source_segment_id.clone());
+        }
+    }
+    let mut resolution = resolve_first_exit_on_sequence_with_budget(
+        graph,
+        route_memberships,
+        membership,
+        &sequence,
+        start_node_id,
+        expected_ramp_id,
+        exact_directed_binding,
+        declared_candidates,
+        state_budget,
+    )?;
+    resolution.mainline_source_segment_ids = source_segment_ids;
+    if let Some(exit) = &mut resolution.exit {
+        exit.mainline_source_segment_ids = resolution.mainline_source_segment_ids.clone();
+    }
+    if resolution.distance_meters == 0 {
+        resolution.distance_meters = distance_meters;
+    }
+    Ok(resolution)
+}
+
 fn exit_ramp_candidates<'a>(
     graph: &'a Graph,
     membership: &RouteMembershipIndex,
@@ -2378,7 +2744,7 @@ fn support_state_label(state: EndpointSupportState) -> &'static str {
     }
 }
 
-fn validate_declared_exit_candidate(
+fn validate_declared_endpoint_candidate(
     graph: &Graph,
     candidate: &DirectedEndpointSegment,
     require_exit_edges: bool,
@@ -2387,10 +2753,12 @@ fn validate_declared_exit_candidate(
         || candidate.from_node_id.is_empty()
         || candidate.to_node_id.is_empty()
         || candidate.osm_way_ids.is_empty()
+        || candidate.osm_node_ids.len() != candidate.edge_ids.len() + 1
+        || candidate.osm_node_ids.iter().any(|node_id| *node_id <= 0)
         || candidate.edge_ids.is_empty()
     {
         return Err(RouteMembershipError::RampBinding(
-            "declared Exit candidate has incomplete evidence".into(),
+            "declared endpoint candidate has incomplete evidence".into(),
         ));
     }
     let mut osm_way_ids = HashSet::new();
@@ -2405,11 +2773,23 @@ fn validate_declared_exit_candidate(
         )));
     }
     let edges = validate_ordered_edges(graph, &candidate.edge_ids, &candidate.segment_id)?;
+    let graph_osm_node_ids = edges
+        .first()
+        .map(|edge| edge.from.as_str())
+        .into_iter()
+        .chain(edges.iter().map(|edge| edge.to.as_str()))
+        .map(graph_node_osm_id)
+        .collect::<Option<Vec<_>>>();
     if edges.first().map(|edge| edge.from.as_str()) != Some(candidate.from_node_id.as_str())
         || edges.last().map(|edge| edge.to.as_str()) != Some(candidate.to_node_id.as_str())
+        || candidate.osm_node_ids.first().copied() != graph_node_osm_id(&candidate.from_node_id)
+        || candidate.osm_node_ids.last().copied() != graph_node_osm_id(&candidate.to_node_id)
+        || graph_osm_node_ids
+            .as_ref()
+            .is_some_and(|node_ids| node_ids != &candidate.osm_node_ids)
     {
         return Err(RouteMembershipError::RampBinding(format!(
-            "{} endpoints do not match its declared Exit candidate edges",
+            "{} endpoints do not match its declared endpoint candidate edges",
             candidate.segment_id
         )));
     }
@@ -2424,7 +2804,7 @@ fn validate_declared_exit_candidate(
         .map_err(|error| RouteMembershipError::RampBinding(error.to_string()))?;
     if candidate.edge_ids_sha256 != expected_hash {
         return Err(RouteMembershipError::RampBinding(format!(
-            "{} edgeIdsSha256 does not match its declared Exit candidate",
+            "{} edgeIdsSha256 does not match its declared endpoint candidate",
             candidate.segment_id
         )));
     }
@@ -2460,14 +2840,14 @@ fn resolve_first_exit_on_sequence_with_budget(
     }
     let mut declared_candidate_ids = HashSet::new();
     for candidate in declared_candidates {
-        validate_declared_exit_candidate(
+        validate_declared_endpoint_candidate(
             graph,
             candidate,
             exact_directed_binding == EndpointSupportState::VerifiedBound,
         )?;
         if !declared_candidate_ids.insert(candidate.segment_id.as_str()) {
             return Err(RouteMembershipError::RampBinding(format!(
-                "duplicate declared Exit candidate {}",
+                "duplicate declared endpoint candidate {}",
                 candidate.segment_id
             )));
         }
@@ -2489,6 +2869,7 @@ fn resolve_first_exit_on_sequence_with_budget(
         )));
     }
     validate_ordered_edge_sequence_allowing_repeats(graph, sequence, "return corridor")?;
+    let mainline_source_segment_ids = sequence_source_segment_ids(membership, sequence);
     let mut path = Vec::new();
     let mut mainline = Vec::new();
     let mut distance = 0_u64;
@@ -2531,7 +2912,7 @@ fn resolve_first_exit_on_sequence_with_budget(
             .collect();
         if declared_hits.len() > 1 {
             return Err(RouteMembershipError::RampBinding(format!(
-                "return corridor has {} declared Exit candidates at {}",
+                "return corridor has {} declared endpoint candidates at {}",
                 declared_hits.len(),
                 edge.to
             )));
@@ -2540,7 +2921,7 @@ fn resolve_first_exit_on_sequence_with_budget(
             if let Some(candidate) = declared_hits.first() {
                 if exact_directed_binding == EndpointSupportState::VerifiedBound {
                     return Err(RouteMembershipError::RampBinding(format!(
-                        "declared Exit candidate {} is not a verified binding",
+                        "declared endpoint candidate {} is not a verified binding",
                         candidate.segment_id
                     )));
                 }
@@ -2549,6 +2930,9 @@ fn resolve_first_exit_on_sequence_with_budget(
                     exit: None,
                     blocked_exit_edge_id: candidate.edge_ids.first().cloned(),
                     blocked_ramp_id: Some(expected_ramp_id.to_string()),
+                    mainline_edge_ids: mainline,
+                    mainline_source_segment_ids,
+                    distance_meters: distance,
                 });
             }
             continue;
@@ -2573,6 +2957,9 @@ fn resolve_first_exit_on_sequence_with_budget(
                 exit: None,
                 blocked_exit_edge_id: Some(exit_edge.id.clone()),
                 blocked_ramp_id: Some(ramp.id.clone()),
+                mainline_edge_ids: mainline,
+                mainline_source_segment_ids,
+                distance_meters: distance,
             });
         }
         if exact_directed_binding != EndpointSupportState::VerifiedBound {
@@ -2581,6 +2968,9 @@ fn resolve_first_exit_on_sequence_with_budget(
                 exit: None,
                 blocked_exit_edge_id: Some(exit_edge.id.clone()),
                 blocked_ramp_id: Some(ramp.id.clone()),
+                mainline_edge_ids: mainline,
+                mainline_source_segment_ids,
+                distance_meters: distance,
             });
         }
         let (bound_segment, exact_ramp) = bound_ramp_segment_for_exit(
@@ -2599,7 +2989,7 @@ fn resolve_first_exit_on_sequence_with_budget(
             })?;
             if declared_candidate.edge_ids != bound_segment.ordered_edge_ids {
                 return Err(RouteMembershipError::RampBinding(format!(
-                    "declared Exit candidate {} does not match the exact boundRamp segment {}",
+                    "declared endpoint candidate {} does not match the exact boundRamp segment {}",
                     declared_candidate.segment_id, bound_segment.segment_id
                 )));
             }
@@ -2629,22 +3019,18 @@ fn resolve_first_exit_on_sequence_with_budget(
                 exit_edge_id: exact_ramp.edge_id.clone(),
                 ramp_id: exact_ramp.id.clone(),
                 edge_ids: full_path,
-                mainline_edge_ids: mainline,
+                mainline_edge_ids: mainline.clone(),
+                mainline_source_segment_ids: mainline_source_segment_ids.clone(),
             }),
             blocked_exit_edge_id: None,
             blocked_ramp_id: None,
-        });
-    }
-    if exact_directed_binding != EndpointSupportState::VerifiedBound {
-        return Ok(CorridorFirstExitResolution {
-            exact_directed_binding,
-            exit: None,
-            blocked_exit_edge_id: None,
-            blocked_ramp_id: None,
+            mainline_edge_ids: mainline,
+            mainline_source_segment_ids,
+            distance_meters: distance,
         });
     }
     Err(RouteMembershipError::ExitNotFound(format!(
-        "corridor ended without a general Exit for {} (exactDirectedBinding={})",
+        "corridor ended without reaching declared Exit evidence for {} (exactDirectedBinding={})",
         expected_ramp_id,
         support_state_label(exact_directed_binding)
     )))
@@ -2884,32 +3270,48 @@ fn resolve_directed_route_plan_with_candidates(
             "return corridor initial edge does not leave branch node B".into(),
         ));
     }
-    let return_sequence = corridor_sequence_for_initial_edge(
-        return_membership,
-        &route_plan.return_corridor.initial_edge_id,
-    )?;
-    if return_sequence.first() != Some(&route_plan.return_corridor.initial_edge_id) {
-        return Err(RouteMembershipError::Validation(
-            "return corridor initial edge is not the first resolved edge".into(),
-        ));
-    }
-    let first_exit = resolve_first_exit_on_sequence_with_budget(
-        graph,
-        route_memberships,
-        return_membership,
-        &return_sequence,
-        &route_plan.anchor.branch_node_id,
-        &route_plan
-            .return_corridor
-            .first_general_exit
-            .expected_ramp_id,
-        route_plan
-            .return_corridor
-            .first_general_exit
-            .exact_directed_binding,
-        declared_candidates,
-        CORRIDOR_EXIT_STATE_BUDGET,
-    )?;
+    let expected_ramp_id = &route_plan
+        .return_corridor
+        .first_general_exit
+        .expected_ramp_id;
+    let exact_directed_binding = route_plan
+        .return_corridor
+        .first_general_exit
+        .exact_directed_binding;
+    let first_exit = if declared_candidates.is_empty() {
+        let return_sequence = corridor_sequence_for_initial_edge(
+            return_membership,
+            &route_plan.return_corridor.initial_edge_id,
+        )?;
+        if return_sequence.first() != Some(&route_plan.return_corridor.initial_edge_id) {
+            return Err(RouteMembershipError::Validation(
+                "return corridor initial edge is not the first resolved edge".into(),
+            ));
+        }
+        resolve_first_exit_on_sequence_with_budget(
+            graph,
+            route_memberships,
+            return_membership,
+            &return_sequence,
+            &route_plan.anchor.branch_node_id,
+            expected_ramp_id,
+            exact_directed_binding,
+            declared_candidates,
+            CORRIDOR_EXIT_STATE_BUDGET,
+        )?
+    } else {
+        resolve_first_exit_to_declared_candidates(
+            graph,
+            route_memberships,
+            return_membership,
+            &route_plan.anchor.branch_node_id,
+            &route_plan.return_corridor.initial_edge_id,
+            expected_ramp_id,
+            exact_directed_binding,
+            declared_candidates,
+            CORRIDOR_EXIT_STATE_BUDGET,
+        )?
+    };
     Ok(DirectedRoutePlanResolution { lap, first_exit })
 }
 
@@ -2926,6 +3328,21 @@ pub fn resolve_diagnostic_radial_route_plan(
     route_memberships: &[RouteMembershipIndex],
     seed: &RadialReturnBillingPairSeed,
 ) -> Result<DirectedRoutePlanResolution, RouteMembershipError> {
+    if seed.entry_endpoint.support_state != EndpointSupportState::VerifiedBound {
+        return Err(RouteMembershipError::RampBinding(
+            "entry endpoint is not verified_bound".into(),
+        ));
+    }
+    for segment in &seed.entry_endpoint.directed_segments {
+        validate_declared_endpoint_candidate(graph, segment, false)?;
+        let edges = validate_ordered_edges(graph, &segment.edge_ids, &segment.segment_id)?;
+        if edges.iter().any(|edge| edge.kind != EdgeKind::Entry) {
+            return Err(RouteMembershipError::RampBinding(format!(
+                "{} contains an edge that is not an Entry ramp edge",
+                segment.segment_id
+            )));
+        }
+    }
     let first_exit = &seed.route_plan.return_corridor.first_general_exit;
     if seed.exit_endpoint.ramp_id != first_exit.expected_ramp_id {
         return Err(RouteMembershipError::RampBinding(format!(
@@ -2965,6 +3382,479 @@ fn declared_exit_candidates(endpoint: &DiagnosticEndpoint) -> Vec<DirectedEndpoi
             .flat_map(|candidate| candidate.directed_segments.iter().cloned())
             .collect(),
     }
+}
+
+fn core_endpoint_support_state(
+    state: EndpointSupportState,
+) -> shutoko_routing_core::EndpointSupportState {
+    match state {
+        EndpointSupportState::VerifiedBound => {
+            shutoko_routing_core::EndpointSupportState::VerifiedBound
+        }
+        EndpointSupportState::Unresolved => shutoko_routing_core::EndpointSupportState::Unresolved,
+        EndpointSupportState::Unsupported => {
+            shutoko_routing_core::EndpointSupportState::Unsupported
+        }
+    }
+}
+
+fn core_binding_candidate_status(
+    status: crate::seed::BindingCandidateStatus,
+) -> shutoko_routing_core::EndpointSupportState {
+    match status {
+        crate::seed::BindingCandidateStatus::Unresolved => {
+            shutoko_routing_core::EndpointSupportState::Unresolved
+        }
+        crate::seed::BindingCandidateStatus::Unsupported => {
+            shutoko_routing_core::EndpointSupportState::Unsupported
+        }
+    }
+}
+
+fn core_billing_endpoint(endpoint: &DiagnosticEndpoint) -> shutoko_routing_core::BillingEndpoint {
+    shutoko_routing_core::BillingEndpoint {
+        ramp_id: endpoint.ramp_id.clone(),
+        name: endpoint.name.clone(),
+        support_state: core_endpoint_support_state(endpoint.support_state),
+        directed_segments: endpoint
+            .directed_segments
+            .iter()
+            .map(|segment| shutoko_routing_core::DirectedEndpointSegment {
+                segment_id: segment.segment_id.clone(),
+                osm_way_ids: segment.osm_way_ids.clone(),
+                osm_node_ids: segment.osm_node_ids.clone(),
+                edge_ids: segment.edge_ids.clone(),
+                from_node_id: segment.from_node_id.clone(),
+                to_node_id: segment.to_node_id.clone(),
+                edge_ids_sha256: segment.edge_ids_sha256.clone(),
+            })
+            .collect(),
+        binding_candidates: endpoint
+            .binding_candidates
+            .iter()
+            .map(|candidate| shutoko_routing_core::BindingCandidate {
+                candidate_id: candidate.candidate_id.clone(),
+                status: core_binding_candidate_status(candidate.status),
+                directed_segments: candidate
+                    .directed_segments
+                    .iter()
+                    .map(|segment| shutoko_routing_core::DirectedEndpointSegment {
+                        segment_id: segment.segment_id.clone(),
+                        osm_way_ids: segment.osm_way_ids.clone(),
+                        osm_node_ids: segment.osm_node_ids.clone(),
+                        edge_ids: segment.edge_ids.clone(),
+                        from_node_id: segment.from_node_id.clone(),
+                        to_node_id: segment.to_node_id.clone(),
+                        edge_ids_sha256: segment.edge_ids_sha256.clone(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+    }
+}
+
+fn endpoint_bound_source_segments(
+    graph: &Graph,
+    membership: &RouteMembershipIndex,
+    endpoint: &DiagnosticEndpoint,
+    expected_kind: EdgeKind,
+) -> Result<(Vec<String>, Vec<String>), RouteMembershipError> {
+    let mut source_segment_ids = Vec::new();
+    let mut edge_ids = Vec::new();
+    for endpoint_segment in &endpoint.directed_segments {
+        validate_declared_endpoint_candidate(
+            graph,
+            endpoint_segment,
+            expected_kind == EdgeKind::Exit,
+        )?;
+        let edges = validate_ordered_edges(
+            graph,
+            &endpoint_segment.edge_ids,
+            &endpoint_segment.segment_id,
+        )?;
+        if edges.iter().any(|edge| edge.kind != expected_kind) {
+            return Err(RouteMembershipError::RampBinding(format!(
+                "{} has an edge kind inconsistent with its endpoint role",
+                endpoint_segment.segment_id
+            )));
+        }
+        let matches = membership
+            .segments
+            .iter()
+            .filter(|segment| {
+                segment.source_kind == RouteMembershipSourceKind::BoundRamp
+                    && segment.ordered_edge_ids == endpoint_segment.edge_ids
+            })
+            .collect::<Vec<_>>();
+        if matches.len() != 1 {
+            return Err(RouteMembershipError::RampBinding(format!(
+                "{} must match exactly one boundRamp membership segment (matches={})",
+                endpoint_segment.segment_id,
+                matches.len()
+            )));
+        }
+        if source_segment_ids.contains(&matches[0].segment_id) {
+            return Err(RouteMembershipError::RampBinding(format!(
+                "endpoint segment {} is referenced more than once",
+                endpoint_segment.segment_id
+            )));
+        }
+        source_segment_ids.push(matches[0].segment_id.clone());
+        edge_ids.extend(endpoint_segment.edge_ids.iter().cloned());
+    }
+    if source_segment_ids.is_empty() || edge_ids.is_empty() {
+        return Err(RouteMembershipError::RampBinding(format!(
+            "endpoint {} has no resolved directed segments",
+            endpoint.ramp_id
+        )));
+    }
+    validate_ordered_edges(graph, &edge_ids, &format!("endpoint:{}", endpoint.ramp_id))?;
+    Ok((source_segment_ids, edge_ids))
+}
+
+fn core_resolved_route_segment(
+    resolved_segment_id: String,
+    role: shutoko_routing_core::RoutePlanSegmentRole,
+    membership_id: String,
+    source_segment_ids: Vec<String>,
+    edge_ids: Vec<String>,
+) -> Result<shutoko_routing_core::ResolvedRouteSegment, RouteMembershipError> {
+    let edge_ids_sha256 = ordered_edge_ids_sha256(&edge_ids)
+        .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
+    Ok(shutoko_routing_core::ResolvedRouteSegment {
+        resolved_segment_id,
+        role,
+        membership_id,
+        source_segment_ids,
+        edge_ids,
+        edge_ids_sha256,
+    })
+}
+
+fn entry_approach_resolved_segment(
+    graph: &Graph,
+    membership: &RouteMembershipIndex,
+    seed: &RadialReturnBillingPairSeed,
+) -> Result<shutoko_routing_core::ResolvedRouteSegment, RouteMembershipError> {
+    if seed.entry_endpoint.support_state != EndpointSupportState::VerifiedBound {
+        return Err(RouteMembershipError::RampBinding(
+            "entry endpoint is not verified_bound".into(),
+        ));
+    }
+    let (mut source_segment_ids, mut edge_ids) =
+        endpoint_bound_source_segments(graph, membership, &seed.entry_endpoint, EdgeKind::Entry)?;
+    let entry_terminal_edge_id = edge_ids.last().ok_or_else(|| {
+        RouteMembershipError::RampBinding("entry endpoint has no graph edges".into())
+    })?;
+    let entry_start_node_id = graph
+        .edges
+        .iter()
+        .find(|edge| edge.id == *entry_terminal_edge_id)
+        .map(|edge| edge.to.as_str())
+        .ok_or_else(|| {
+            RouteMembershipError::RampBinding("entry endpoint has no graph edges".into())
+        })?;
+    let terminal_edge_id = &seed.route_plan.entry_corridor.terminal_edge_id;
+    let terminal_edge = graph
+        .edges
+        .iter()
+        .find(|edge| edge.id == *terminal_edge_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "entry terminal edge {} is absent from graph",
+                terminal_edge_id
+            ))
+        })?;
+    if terminal_edge.kind != EdgeKind::Shutoko
+        || terminal_edge.to != seed.route_plan.entry_corridor.merge_node_id
+    {
+        return Err(RouteMembershipError::Validation(
+            "entry terminal edge does not end at merge node M".into(),
+        ));
+    }
+    let terminal_sources = relation_sequences(membership)
+        .into_iter()
+        .filter(|segment| segment.ordered_edge_ids.contains(terminal_edge_id))
+        .collect::<Vec<_>>();
+    if terminal_sources.len() != 1 {
+        return Err(RouteMembershipError::Validation(format!(
+            "entry terminal edge {} must occur in exactly one relationMainline source (matches={})",
+            terminal_edge_id,
+            terminal_sources.len()
+        )));
+    }
+    let mut path = if entry_start_node_id == terminal_edge.from.as_str() {
+        Vec::new()
+    } else {
+        find_relation_path_to_node(
+            graph,
+            membership,
+            entry_start_node_id,
+            None,
+            &terminal_edge.from,
+            CORRIDOR_EXIT_STATE_BUDGET,
+        )?
+    };
+    path.push(RelationPathEdge {
+        edge_id: terminal_edge.id.clone(),
+        source_segment_id: terminal_sources[0].segment_id.clone(),
+    });
+    edge_ids.extend(path.iter().map(|edge| edge.edge_id.clone()));
+    for edge in &path {
+        if source_segment_ids.last() != Some(&edge.source_segment_id) {
+            source_segment_ids.push(edge.source_segment_id.clone());
+        }
+    }
+    validate_ordered_edge_sequence_allowing_repeats(graph, &edge_ids, "promoted entry approach")?;
+    core_resolved_route_segment(
+        format!("{}:resolved:entry", seed.id),
+        shutoko_routing_core::RoutePlanSegmentRole::EntryApproach,
+        membership.membership_id.clone(),
+        source_segment_ids,
+        edge_ids,
+    )
+}
+
+pub fn promote_verified_radial_pair(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    seed: &RadialReturnBillingPairSeed,
+    resolution: &DirectedRoutePlanResolution,
+) -> Result<shutoko_routing_core::RadialReturnBillingPair, RouteMembershipError> {
+    if seed.entry_endpoint.support_state != EndpointSupportState::VerifiedBound
+        || seed.exit_endpoint.support_state != EndpointSupportState::VerifiedBound
+        || resolution.first_exit.exact_directed_binding != EndpointSupportState::VerifiedBound
+    {
+        return Err(RouteMembershipError::RampBinding(
+            "radialReturn promotion requires verified entry and exit endpoints".into(),
+        ));
+    }
+    let exit = resolution.first_exit.exit.as_ref().ok_or_else(|| {
+        RouteMembershipError::RampBinding(
+            "radialReturn promotion has no resolved First Exit".into(),
+        )
+    })?;
+    let entry_membership = corridor_membership(
+        route_memberships,
+        &seed.route_plan.entry_corridor.membership_id,
+    )?;
+    let lap_membership = corridor_membership(
+        route_memberships,
+        &seed.route_plan.mandatory_lap.membership_id,
+    )?;
+    let return_membership = corridor_membership(
+        route_memberships,
+        &seed.route_plan.return_corridor.membership_id,
+    )?;
+    let entry_segment = entry_approach_resolved_segment(graph, entry_membership, seed)?;
+    let lap_segment = core_resolved_route_segment(
+        format!("{}:resolved:lap", seed.id),
+        shutoko_routing_core::RoutePlanSegmentRole::MandatoryLap,
+        lap_membership.membership_id.clone(),
+        vec![resolution.lap.source_segment_id.clone()],
+        resolution.lap.edge_ids.clone(),
+    )?;
+    let return_segment = core_resolved_route_segment(
+        format!("{}:resolved:return", seed.id),
+        shutoko_routing_core::RoutePlanSegmentRole::ReturnCorridor,
+        return_membership.membership_id.clone(),
+        exit.mainline_source_segment_ids.clone(),
+        exit.mainline_edge_ids.clone(),
+    )?;
+    let (exit_source_segment_ids, exit_edge_ids) = endpoint_bound_source_segments(
+        graph,
+        return_membership,
+        &seed.exit_endpoint,
+        EdgeKind::Exit,
+    )?;
+    let exit_segment = core_resolved_route_segment(
+        format!("{}:resolved:exit", seed.id),
+        shutoko_routing_core::RoutePlanSegmentRole::ExitApproach,
+        return_membership.membership_id.clone(),
+        exit_source_segment_ids,
+        exit_edge_ids.clone(),
+    )?;
+    let resolved_route_segments = vec![entry_segment, lap_segment, return_segment, exit_segment];
+    let builder_segments = resolved_route_segments
+        .iter()
+        .map(|segment| ResolvedRouteSegment {
+            resolved_segment_id: segment.resolved_segment_id.clone(),
+            role: match segment.role {
+                shutoko_routing_core::RoutePlanSegmentRole::EntryApproach => {
+                    RoutePlanSegmentRole::EntryApproach
+                }
+                shutoko_routing_core::RoutePlanSegmentRole::MandatoryLap => {
+                    RoutePlanSegmentRole::MandatoryLap
+                }
+                shutoko_routing_core::RoutePlanSegmentRole::ReturnCorridor => {
+                    RoutePlanSegmentRole::ReturnCorridor
+                }
+                shutoko_routing_core::RoutePlanSegmentRole::ExitApproach => {
+                    RoutePlanSegmentRole::ExitApproach
+                }
+            },
+            membership_id: segment.membership_id.clone(),
+            source_segment_ids: segment.source_segment_ids.clone(),
+            edge_ids: segment.edge_ids.clone(),
+            edge_ids_sha256: segment.edge_ids_sha256.clone(),
+        })
+        .collect::<Vec<_>>();
+    validate_resolved_route_plan(graph, route_memberships, &builder_segments)?;
+    let entry_endpoint_edges = seed
+        .entry_endpoint
+        .directed_segments
+        .iter()
+        .flat_map(|segment| segment.edge_ids.iter().cloned())
+        .collect::<Vec<_>>();
+    let entry_id = entry_endpoint_edges
+        .first()
+        .cloned()
+        .ok_or_else(|| RouteMembershipError::RampBinding("entry endpoint has no Edge".into()))?;
+    let exit_id = exit_edge_ids
+        .last()
+        .cloned()
+        .ok_or_else(|| RouteMembershipError::RampBinding("exit endpoint has no Edge".into()))?;
+    if exit.edge_ids.last() != Some(&exit_id) {
+        return Err(RouteMembershipError::RampBinding(
+            "resolved First Exit does not end at the declared exit endpoint".into(),
+        ));
+    }
+    let edge_count = u16::try_from(seed.route_plan.anchor.excluded_short_connector.edge_count)
+        .map_err(|_| {
+            RouteMembershipError::Validation("excluded connector edge count is too large".into())
+        })?;
+    Ok(shutoko_routing_core::RadialReturnBillingPair {
+        id: seed.id.clone(),
+        pair_kind: shutoko_routing_core::PairKind::RadialReturn,
+        route_plan_version: 1,
+        vehicle_profile: seed.vehicle_profile.clone(),
+        entry_id,
+        exit_id,
+        entry_endpoint: core_billing_endpoint(&seed.entry_endpoint),
+        exit_endpoint: core_billing_endpoint(&seed.exit_endpoint),
+        route_plan: shutoko_routing_core::RoutePlanV1 {
+            entry_corridor: shutoko_routing_core::EntryCorridor {
+                membership_id: seed.route_plan.entry_corridor.membership_id.clone(),
+                terminal_edge_id: seed.route_plan.entry_corridor.terminal_edge_id.clone(),
+                merge_node_id: seed.route_plan.entry_corridor.merge_node_id.clone(),
+            },
+            anchor: shutoko_routing_core::RouteAnchor::DirectedJunction(
+                shutoko_routing_core::DirectedJunctionAnchor {
+                    merge_node_id: seed.route_plan.anchor.merge_node_id.clone(),
+                    branch_node_id: seed.route_plan.anchor.branch_node_id.clone(),
+                    merge_terminal_edge_id: seed.route_plan.anchor.merge_terminal_edge_id.clone(),
+                    branch_initial_edge_id: seed.route_plan.anchor.branch_initial_edge_id.clone(),
+                    route_id: seed.route_plan.anchor.route_id.clone(),
+                    direction: seed.route_plan.anchor.direction.clone(),
+                    arc_policy: shutoko_routing_core::ArcPolicy::OrdinaryLongArc,
+                    excluded_short_connector: shutoko_routing_core::ExcludedShortConnector {
+                        from_node_id: seed
+                            .route_plan
+                            .anchor
+                            .excluded_short_connector
+                            .from_node_id
+                            .clone(),
+                        to_node_id: seed
+                            .route_plan
+                            .anchor
+                            .excluded_short_connector
+                            .to_node_id
+                            .clone(),
+                        osm_way_id: seed.route_plan.anchor.excluded_short_connector.osm_way_id,
+                        edge_count,
+                        distance_meters: seed
+                            .route_plan
+                            .anchor
+                            .excluded_short_connector
+                            .distance_meters,
+                    },
+                },
+            ),
+            mandatory_lap: shutoko_routing_core::MandatoryLap {
+                membership_id: seed.route_plan.mandatory_lap.membership_id.clone(),
+                first_edge_id: seed.route_plan.mandatory_lap.first_edge_id.clone(),
+                last_edge_id: seed.route_plan.mandatory_lap.last_edge_id.clone(),
+                lap_count: 1,
+            },
+            return_corridor: shutoko_routing_core::ReturnCorridor {
+                membership_id: seed.route_plan.return_corridor.membership_id.clone(),
+                start_node_id: seed.route_plan.return_corridor.start_node_id.clone(),
+                initial_edge_id: seed.route_plan.return_corridor.initial_edge_id.clone(),
+                first_general_exit: shutoko_routing_core::FirstGeneralExit {
+                    rule: "firstGeneralExit".into(),
+                    expected_ramp_id: seed
+                        .route_plan
+                        .return_corridor
+                        .first_general_exit
+                        .expected_ramp_id
+                        .clone(),
+                    exact_directed_binding:
+                        shutoko_routing_core::EndpointSupportState::VerifiedBound,
+                },
+            },
+        },
+        resolved_route_segments,
+        routing_capability: match seed.routing_capability {
+            crate::seed::RoutingCapability::Routable => {
+                shutoko_routing_core::RoutingCapability::Routable
+            }
+            crate::seed::RoutingCapability::StructuralNoLoop => {
+                shutoko_routing_core::RoutingCapability::StructuralNoLoop
+            }
+            crate::seed::RoutingCapability::Unsupported => {
+                shutoko_routing_core::RoutingCapability::Unsupported
+            }
+        },
+        pair_eligibility: shutoko_routing_core::PairEligibility {
+            status: match seed.pair_eligibility.status {
+                crate::seed::PairEligibilityStatus::VerifiedOneSectionAhead => {
+                    shutoko_routing_core::PairEligibilityStatus::VerifiedOneSectionAhead
+                }
+                crate::seed::PairEligibilityStatus::Unverified => {
+                    shutoko_routing_core::PairEligibilityStatus::Unverified
+                }
+                crate::seed::PairEligibilityStatus::TopologyOnly => {
+                    shutoko_routing_core::PairEligibilityStatus::TopologyOnly
+                }
+            },
+            one_section_ahead_verified: seed.pair_eligibility.one_section_ahead_verified,
+        },
+        loop_validation: shutoko_routing_core::LoopValidation {
+            status: match seed.loop_validation.status {
+                crate::seed::LoopValidationStatus::DeclaredRouteValidated => {
+                    shutoko_routing_core::LoopValidationStatus::DeclaredRouteValidated
+                }
+                crate::seed::LoopValidationStatus::Unresolved => {
+                    shutoko_routing_core::LoopValidationStatus::Unresolved
+                }
+                crate::seed::LoopValidationStatus::TopologyOnly => {
+                    shutoko_routing_core::LoopValidationStatus::TopologyOnly
+                }
+            },
+        },
+        tariff: shutoko_routing_core::Tariff {
+            status: match seed.tariff.status {
+                crate::seed::TariffStatus::Priced => shutoko_routing_core::TariffStatus::Priced,
+                crate::seed::TariffStatus::Unpriced => shutoko_routing_core::TariffStatus::Unpriced,
+                crate::seed::TariffStatus::Expired => shutoko_routing_core::TariffStatus::Expired,
+                crate::seed::TariffStatus::NotApplicable => {
+                    shutoko_routing_core::TariffStatus::NotApplicable
+                }
+            },
+            amount_yen: seed.tariff.amount_yen,
+            billing_distance_meters: seed.tariff.billing_distance_meters,
+            prices: seed
+                .tariff
+                .prices
+                .iter()
+                .map(|price| shutoko_routing_core::Price {
+                    amount_yen: price.amount_yen,
+                    effective_from: price.effective_from.clone(),
+                    effective_to: price.effective_to.clone(),
+                })
+                .collect(),
+        },
+    })
 }
 
 pub fn find_first_exit_on_corridor_from_edge(
@@ -3141,6 +4031,7 @@ mod tests {
                 route_id: "R1".into(),
                 direction: "forward".into(),
                 osm_way_ids: vec![201],
+                osm_node_ids: vec![7, 8, 10],
                 from_node_id: "n:7".into(),
                 to_node_id: "n:10".into(),
                 edge_ids_sha256: ordered_edge_ids_sha256(&entry_edge_ids).unwrap(),
@@ -3152,6 +4043,7 @@ mod tests {
                 route_id: "R1".into(),
                 direction: "forward".into(),
                 osm_way_ids: vec![202, 203],
+                osm_node_ids: vec![4, 9, 10],
                 from_node_id: "n:4".into(),
                 to_node_id: "n:10".into(),
                 edge_ids_sha256: ordered_edge_ids_sha256(&exit_edge_ids).unwrap(),
@@ -3166,22 +4058,32 @@ mod tests {
         ))
         .unwrap();
         let mut seed = parsed.radial_pairs()[0].clone();
-        let exit_edge_ids = vec![
-            "e:w204:0:f".into(),
-            "e:w205:0:f".into(),
-            "e:w205:1:f".into(),
-        ];
+        let exit_edge_ids = vec!["e:w204:0:f".into()];
+        let entry_edge_ids = vec!["e:w201:0:f".into(), "e:w201:1:f".into()];
+        seed.entry_endpoint.ramp_id = "ramp:entry".into();
+        seed.entry_endpoint.directed_segments = vec![DirectedEndpointSegment {
+            segment_id: "binding:entry:candidate:0".into(),
+            osm_way_ids: vec![201],
+            osm_node_ids: vec![7, 8, 10],
+            edge_ids: entry_edge_ids.clone(),
+            from_node_id: "n:7".into(),
+            to_node_id: "n:10".into(),
+            edge_ids_sha256: ordered_edge_ids_sha256(&entry_edge_ids).unwrap(),
+        }];
         seed.exit_endpoint.ramp_id = "ramp:expected".into();
         seed.exit_endpoint.support_state = EndpointSupportState::VerifiedBound;
         seed.exit_endpoint.directed_segments = vec![DirectedEndpointSegment {
             segment_id: "binding:expected:candidate:0".into(),
-            osm_way_ids: vec![204, 205],
+            osm_way_ids: vec![204],
+            osm_node_ids: vec![3, 11],
             edge_ids: exit_edge_ids.clone(),
             from_node_id: "n:3".into(),
-            to_node_id: "n:10".into(),
+            to_node_id: "n:11".into(),
             edge_ids_sha256: ordered_edge_ids_sha256(&exit_edge_ids).unwrap(),
         }];
         seed.exit_endpoint.binding_candidates.clear();
+        seed.pair_eligibility.status = crate::seed::PairEligibilityStatus::VerifiedOneSectionAhead;
+        seed.pair_eligibility.one_section_ahead_verified = true;
         seed.route_plan.entry_corridor.membership_id = "route:R1:forward".into();
         seed.route_plan.entry_corridor.terminal_edge_id = "e:w101:0:f".into();
         seed.route_plan.entry_corridor.merge_node_id = "n:2".into();
@@ -3222,7 +4124,16 @@ mod tests {
         Graph,
         Vec<RouteMembershipIndex>,
     ) {
-        let (response, mut graph, snapshot) = synthetic();
+        let (mut response, mut graph, snapshot) = synthetic();
+        response.elements.push(way(104, vec![10, 1]));
+        response.elements[5]
+            .members
+            .as_mut()
+            .unwrap()
+            .push(member(104));
+        graph
+            .edges
+            .push(edge("e:w104:0:f", "n:10", "n:1", EdgeKind::Shutoko));
         graph.nodes.push(node("n:11"));
         graph.nodes.push(node("n:12"));
         graph
@@ -3252,22 +4163,19 @@ mod tests {
             mainline_node_id: "n:3".into(),
             restrictions: Vec::new(),
         });
-        let expected_edge_ids = vec![
-            "e:w204:0:f".into(),
-            "e:w205:0:f".into(),
-            "e:w205:1:f".into(),
-        ];
+        let expected_edge_ids = vec!["e:w204:0:f".into()];
         let mut bound_ramp_evidence = evidence();
         bound_ramp_evidence.push(BoundRampEvidence {
             binding_evidence_id: "binding:expected".into(),
             ramp_id: "ramp:expected".into(),
             route_id: "R1".into(),
             direction: "forward".into(),
-            osm_way_ids: vec![204, 205],
-            edge_ids: expected_edge_ids.clone(),
+            osm_way_ids: vec![204],
+            osm_node_ids: vec![3, 11],
             from_node_id: "n:3".into(),
-            to_node_id: "n:10".into(),
+            to_node_id: "n:11".into(),
             edge_ids_sha256: ordered_edge_ids_sha256(&expected_edge_ids).unwrap(),
+            edge_ids: expected_edge_ids,
         });
         let mut memberships = build_route_membership_indices(
             &response,
@@ -3337,12 +4245,95 @@ mod tests {
     }
 
     #[test]
+    fn resolves_a_corridor_across_relation_segment_boundaries() {
+        let (_response, graph, snapshot) = synthetic();
+        let first_edges = vec!["e:w102:0:f".to_string()];
+        let second_edges = vec!["e:w103:0:f".to_string()];
+        let membership = RouteMembershipIndex {
+            membership_id: "route:split:forward".into(),
+            route_id: "split".into(),
+            direction: "forward".into(),
+            direction_mapping_version: ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION.into(),
+            segments: vec![
+                RouteMembershipSegment {
+                    segment_id: "relation:split:forward:0".into(),
+                    source_kind: RouteMembershipSourceKind::RelationMainline,
+                    source_relation_id: Some("split".into()),
+                    source_snapshot_sha256: snapshot.clone(),
+                    binding_evidence_id: None,
+                    ordered_edge_ids_sha256: ordered_edge_ids_sha256(&first_edges).unwrap(),
+                    ordered_edge_ids: first_edges,
+                },
+                RouteMembershipSegment {
+                    segment_id: "relation:split:forward:1".into(),
+                    source_kind: RouteMembershipSourceKind::RelationMainline,
+                    source_relation_id: Some("split".into()),
+                    source_snapshot_sha256: snapshot,
+                    binding_evidence_id: None,
+                    ordered_edge_ids_sha256: ordered_edge_ids_sha256(&second_edges).unwrap(),
+                    ordered_edge_ids: second_edges,
+                },
+            ],
+        };
+        let path = find_relation_path_to_node(
+            &graph,
+            &membership,
+            "n:2",
+            Some("e:w102:0:f"),
+            "n:4",
+            CORRIDOR_EXIT_STATE_BUDGET,
+        )
+        .unwrap();
+        assert_eq!(
+            path.iter()
+                .map(|edge| edge.edge_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["e:w102:0:f", "e:w103:0:f"]
+        );
+        assert_eq!(
+            path.iter()
+                .map(|edge| edge.source_segment_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["relation:split:forward:0", "relation:split:forward:1"]
+        );
+    }
+
+    #[test]
+    fn promotes_verified_radial_pair_into_schema4_union() {
+        let (seed, graph, memberships) = verified_diagnostic_radial_fixture();
+        let resolution = resolve_diagnostic_radial_route_plan(&graph, &memberships, &seed).unwrap();
+        let promoted =
+            promote_verified_radial_pair(&graph, &memberships, &seed, &resolution).unwrap();
+        assert_eq!(promoted.resolved_route_segments.len(), 4);
+        assert!(matches!(
+            promoted.tariff.status,
+            shutoko_routing_core::TariffStatus::Unpriced
+        ));
+        assert!(promoted.tariff.amount_yen.is_none());
+        assert!(promoted.tariff.billing_distance_meters.is_none());
+        assert_eq!(promoted.entry_id, "e:w201:0:f");
+        assert_eq!(promoted.exit_id, "e:w204:0:f");
+        assert_eq!(
+            promoted.entry_endpoint.directed_segments[0]
+                .osm_node_ids
+                .len(),
+            3
+        );
+        let json =
+            graph_schema_v4_to_deterministic_json_with_radial(&graph, &memberships, vec![promoted])
+                .unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["billingPairs"].as_array().unwrap().len(), 1);
+        assert_eq!(value["billingPairs"][0]["pairKind"], "radialReturn");
+        let prepared = shutoko_routing_core::prepare_json(&json, "{}").unwrap();
+        assert_eq!(prepared.radial_billing_pairs().len(), 1);
+    }
+
+    #[test]
     fn diagnostic_resolver_requires_exact_verified_exit_candidate_evidence() {
         let (seed, graph, memberships) = verified_diagnostic_radial_fixture();
         let mut reversed_ways = seed.clone();
-        reversed_ways.exit_endpoint.directed_segments[0]
-            .osm_way_ids
-            .swap(0, 1);
+        reversed_ways.exit_endpoint.directed_segments[0].osm_way_ids = vec![205];
         let error =
             resolve_diagnostic_radial_route_plan(&graph, &memberships, &reversed_ways).unwrap_err();
         assert!(matches!(
@@ -3363,6 +4354,7 @@ mod tests {
         alternate_path.exit_endpoint.directed_segments[0] = DirectedEndpointSegment {
             segment_id: "binding:expected:alternate:0".into(),
             osm_way_ids: vec![206],
+            osm_node_ids: vec![3, 13, 10],
             edge_ids: alternate_edge_ids.clone(),
             from_node_id: "n:3".into(),
             to_node_id: "n:10".into(),
@@ -3384,7 +4376,7 @@ mod tests {
             .find(|edge| edge.id == "e:w204:0:f")
             .unwrap()
             .kind = EdgeKind::Entry;
-        assert!(validate_declared_exit_candidate(
+        assert!(validate_declared_endpoint_candidate(
             &non_exit_graph,
             &seed.exit_endpoint.directed_segments[0],
             true
@@ -3978,6 +4970,7 @@ mod tests {
         let segment = DirectedEndpointSegment {
             segment_id: "binding:multi:segment:0".into(),
             osm_way_ids: vec![202, 203],
+            osm_node_ids: vec![4, 9, 10],
             edge_ids: multi_edge_ids.clone(),
             from_node_id: "n:4".into(),
             to_node_id: "n:10".into(),
@@ -4125,6 +5118,7 @@ mod tests {
                 route_id: "R1".into(),
                 direction: "forward".into(),
                 osm_way_ids: vec![201],
+                osm_node_ids: vec![8, 7],
                 from_node_id: "n:8".into(),
                 to_node_id: "n:7".into(),
                 edge_ids_sha256: ordered_edge_ids_sha256(&reversed_entry_edges).unwrap(),

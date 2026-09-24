@@ -151,6 +151,13 @@ fn schema_4_rejects_unknown_kinds_versions_and_partial_data() {
         serde_json::json!(["fixture:relation:r1:inbound:main"]);
     assert!(prepare_json(&graph.to_string(), "{}").is_err());
 
+    let mut graph = with_fragment("radial");
+    graph["billingPairs"][0]["entryEndpoint"]["directedSegments"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("osmNodeIds");
+    assert!(prepare_json(&graph.to_string(), "{}").is_err());
+
     let mut schema_2: Value =
         serde_json::from_str(include_str!("../../../fixtures/synthetic-graph.json")).unwrap();
     schema_2["routeMemberships"] = Value::Null;

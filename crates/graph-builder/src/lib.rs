@@ -25,8 +25,9 @@ pub use inventory::{
 
 pub use billing::{
     generate_and_validate_billing_pairs, generate_and_validate_parsed_billing_pairs,
-    generate_billing_pair, generate_diagnostic_radial_route_plans, BillingError,
-    BillingGenerationReport, RadialRoutePlanGeneration, RejectedSeedRecord,
+    generate_billing_pair, generate_diagnostic_radial_route_plans,
+    validate_radial_seed_binding_candidates, BillingError, BillingGenerationReport,
+    RadialRoutePlanGeneration, RejectedSeedRecord,
 };
 pub use manifest::{
     build_manifest, compute_sha256, manifest_to_deterministic_json, BillingPairProvenance,
@@ -44,15 +45,18 @@ pub use route_membership::{
     find_first_exit_on_corridor_on_segments_with_binding_budget,
     find_first_exit_on_corridor_with_binding, find_first_exit_on_corridor_with_binding_budget,
     find_first_exit_on_corridor_with_budget, generate_directed_mandatory_lap,
-    generate_route_plan_lap_v1, graph_schema_v4_to_deterministic_json, ordered_edge_ids_sha256,
-    resolve_diagnostic_radial_route_plan, resolve_directed_route_plan, route_memberships_sha256,
+    generate_route_plan_lap_v1, graph_schema_v4_to_deterministic_json,
+    graph_schema_v4_to_deterministic_json_with_radial, ordered_edge_ids_sha256,
+    promote_verified_radial_pair, resolve_diagnostic_radial_route_plan,
+    resolve_directed_route_plan, route_memberships_sha256,
     validate_directed_junction_mandatory_lap, validate_mandatory_lap, validate_resolved_route_plan,
     validate_resolved_route_plan_segments, validate_route_membership_structure,
     validate_route_memberships, validate_route_plan_segments, BoundRampEvidence, CorridorExit,
-    CorridorFirstExitResolution, DirectedRoutePlanResolution, GraphSchemaV4, ResolvedRouteSegment,
-    RouteMembershipBuildOptions, RouteMembershipError, RouteMembershipIndex,
-    RouteMembershipSegment, RouteMembershipSourceKind, RoutePlanLapV1, RoutePlanSegmentRole,
-    CORRIDOR_EXIT_STATE_BUDGET, ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION,
+    CorridorFirstExitResolution, DirectedRoutePlanResolution, GraphSchemaV4,
+    GraphSchemaV4BillingPair, ResolvedRouteSegment, RouteMembershipBuildOptions,
+    RouteMembershipError, RouteMembershipIndex, RouteMembershipSegment, RouteMembershipSourceKind,
+    RoutePlanLapV1, RoutePlanSegmentRole, CORRIDOR_EXIT_STATE_BUDGET,
+    ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION,
 };
 pub use seed::{
     parse_billing_pairs_seed, AnchorKind, ArcPolicy, BillingPairSeed, BillingPairSeedEntry,

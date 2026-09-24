@@ -242,6 +242,7 @@ pub struct ResolvedRouteSegment {
 pub struct DirectedEndpointSegment {
     pub segment_id: String,
     pub osm_way_ids: Vec<i64>,
+    pub osm_node_ids: Vec<i64>,
     pub edge_ids: Vec<String>,
     pub from_node_id: String,
     pub to_node_id: String,
@@ -1005,36 +1006,63 @@ fn validate_resolved_segment_sources(
                 .ok_or_else(|| invalid("resolved route source segment is missing"))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    if resolved.role == RoutePlanSegmentRole::MandatoryLap {
-        if sources.len() != 1
-            || sources[0].source_kind != RouteMembershipSourceKind::RelationMainline
-            || !contains_contiguous_subsequence(&sources[0].ordered_edge_ids, &resolved.edge_ids)
-        {
-            return Err(invalid(
-                "mandatory lap must resolve from one contiguous relationMainline subpath",
-            ));
-        }
-        return Ok(());
-    }
-    let edge_ids = sources
-        .iter()
-        .flat_map(|source| source.ordered_edge_ids.iter().cloned())
-        .collect::<Vec<_>>();
-    if edge_ids != resolved.edge_ids {
+    if !source_sequences_match(&sources, 0, &resolved.edge_ids, 0) {
         return Err(invalid(
-            "resolved route source segments do not match edgeIds",
+            "resolved route source segments do not contain ordered edgeIds",
+        ));
+    }
+    let source_kinds = sources
+        .iter()
+        .map(|source| source.source_kind)
+        .collect::<Vec<_>>();
+    let valid_sources = match resolved.role {
+        RoutePlanSegmentRole::EntryApproach => {
+            source_kinds.first() == Some(&RouteMembershipSourceKind::BoundRamp)
+                && source_kinds[1..]
+                    .iter()
+                    .all(|kind| *kind == RouteMembershipSourceKind::RelationMainline)
+        }
+        RoutePlanSegmentRole::MandatoryLap => {
+            source_kinds == [RouteMembershipSourceKind::RelationMainline]
+        }
+        RoutePlanSegmentRole::ReturnCorridor => source_kinds
+            .iter()
+            .all(|kind| *kind == RouteMembershipSourceKind::RelationMainline),
+        RoutePlanSegmentRole::ExitApproach => source_kinds
+            .iter()
+            .all(|kind| *kind == RouteMembershipSourceKind::BoundRamp),
+    };
+    if !valid_sources {
+        return Err(invalid(
+            "resolved route segment source kinds do not match its role",
         ));
     }
     Ok(())
 }
 
-fn contains_contiguous_subsequence(source: &[String], candidate: &[String]) -> bool {
-    !candidate.is_empty()
-        && candidate.len() <= source.len()
-        && (0..source.len()).any(|start| {
-            (0..candidate.len())
-                .all(|offset| source[(start + offset) % source.len()] == candidate[offset])
+fn source_sequences_match(
+    sources: &[&RouteMembershipSegment],
+    source_index: usize,
+    edge_ids: &[String],
+    edge_cursor: usize,
+) -> bool {
+    let Some(source) = sources.get(source_index) else {
+        return edge_cursor == edge_ids.len();
+    };
+    if source.ordered_edge_ids.is_empty() {
+        return false;
+    }
+    (0..source.ordered_edge_ids.len()).any(|start| {
+        (1..=source.ordered_edge_ids.len()).any(|length| {
+            let end = edge_cursor.saturating_add(length);
+            end <= edge_ids.len()
+                && (0..length).all(|offset| {
+                    source.ordered_edge_ids[(start + offset) % source.ordered_edge_ids.len()]
+                        == edge_ids[edge_cursor + offset]
+                })
+                && source_sequences_match(sources, source_index + 1, edge_ids, end)
         })
+    })
 }
 
 fn validate_endpoint_membership_binding(
@@ -1047,22 +1075,19 @@ fn validate_endpoint_membership_binding(
         .find(|membership| membership.membership_id == resolved.membership_id)
         .ok_or_else(|| invalid("resolved endpoint membership is missing"))?;
     for endpoint_segment in &endpoint.directed_segments {
-        if !resolved
-            .source_segment_ids
-            .iter()
-            .any(|source| source == &endpoint_segment.segment_id)
-        {
-            return Err(invalid(
-                "endpoint segment is not referenced by resolved route",
-            ));
-        }
-        let membership_segment = membership
+        let membership_segments = membership
             .segments
             .iter()
-            .find(|segment| segment.segment_id == endpoint_segment.segment_id)
-            .ok_or_else(|| invalid("endpoint segment membership reference is missing"))?;
-        if membership_segment.source_kind != RouteMembershipSourceKind::BoundRamp
-            || membership_segment.ordered_edge_ids != endpoint_segment.edge_ids
+            .filter(|segment| {
+                segment.source_kind == RouteMembershipSourceKind::BoundRamp
+                    && segment.ordered_edge_ids == endpoint_segment.edge_ids
+            })
+            .collect::<Vec<_>>();
+        if membership_segments.len() != 1
+            || !resolved
+                .source_segment_ids
+                .iter()
+                .any(|source| source == &membership_segments[0].segment_id)
         {
             return Err(invalid("endpoint boundRamp segment mismatch"));
         }
@@ -1087,40 +1112,36 @@ fn validate_endpoint(
             "schema 4 endpoint is not an exact verified binding",
         ));
     }
-    let ramp = graph
-        .ramps
-        .iter()
-        .find(|ramp| ramp.id == endpoint.ramp_id)
-        .ok_or_else(|| invalid("endpoint references unknown ramp"))?;
-    if ramp.edge_id != expected_edge_id || ramp.kind != expected_ramp_kind {
-        return Err(invalid("endpoint ramp and graph edge mismatch"));
-    }
-    let edge = graph
-        .edges
-        .iter()
-        .find(|edge| edge.id == expected_edge_id)
-        .ok_or_else(|| invalid("endpoint references unknown graph edge"))?;
-    let bound = match expected_edge_kind {
-        EdgeKind::Entry => {
-            edge.kind == EdgeKind::Entry
-                && ramp.node_id == edge.from
-                && ramp.mainline_node_id == edge.to
-        }
-        EdgeKind::Exit => {
-            edge.kind == EdgeKind::Exit
-                && ramp.mainline_node_id == edge.from
-                && ramp.node_id == edge.to
-        }
-        _ => false,
-    };
-    if !bound {
-        return Err(invalid("endpoint direction binding mismatch"));
-    }
     let edge_map = graph
         .edges
         .iter()
         .map(|item| (item.id.as_str(), item))
         .collect::<HashMap<_, _>>();
+    let ramp = graph
+        .ramps
+        .iter()
+        .find(|ramp| ramp.id == endpoint.ramp_id)
+        .ok_or_else(|| invalid("endpoint references unknown ramp"))?;
+    if ramp.kind != expected_ramp_kind {
+        return Err(invalid("endpoint ramp kind mismatch"));
+    }
+    let pair_edge = edge_map
+        .get(expected_edge_id)
+        .ok_or_else(|| invalid("endpoint references unknown graph edge"))?;
+    let ramp_edge = edge_map
+        .get(ramp.edge_id.as_str())
+        .ok_or_else(|| invalid("endpoint ramp references unknown graph edge"))?;
+    if pair_edge.kind != expected_edge_kind || ramp_edge.kind != expected_edge_kind {
+        return Err(invalid("endpoint ramp and graph edge kind mismatch"));
+    }
+    let bound = match expected_edge_kind {
+        EdgeKind::Entry => ramp.node_id == ramp_edge.from && ramp.mainline_node_id == ramp_edge.to,
+        EdgeKind::Exit => ramp.mainline_node_id == ramp_edge.from && ramp.node_id == ramp_edge.to,
+        _ => false,
+    };
+    if !bound {
+        return Err(invalid("endpoint direction binding mismatch"));
+    }
     let mut segment_ids = HashSet::new();
     for segment in &endpoint.directed_segments {
         valid_id(&segment.segment_id, "endpoint segmentId")?;
@@ -1130,6 +1151,8 @@ fn validate_endpoint(
         if !segment_ids.insert(segment.segment_id.as_str())
             || segment.osm_way_ids.is_empty()
             || segment.osm_way_ids.iter().any(|way| *way <= 0)
+            || segment.osm_node_ids.len() != segment.edge_ids.len() + 1
+            || segment.osm_node_ids.iter().any(|node| *node <= 0)
             || segment
                 .osm_way_ids
                 .windows(2)
@@ -1144,9 +1167,28 @@ fn validate_endpoint(
         }
         let edges =
             validate_ordered_graph_edges(&edge_map, &segment.edge_ids, &segment.segment_id, true)?;
+        let mut actual_way_ids = Vec::new();
+        for edge in &edges {
+            let way_id = edge_way_id(edge.id.as_str())
+                .ok_or_else(|| invalid("endpoint segment edge has no OSM way identity"))?;
+            if actual_way_ids.last() != Some(&way_id) {
+                actual_way_ids.push(way_id);
+            }
+        }
+        let graph_osm_node_ids = edges
+            .first()
+            .map(|edge| edge.from.as_str())
+            .into_iter()
+            .chain(edges.iter().map(|edge| edge.to.as_str()))
+            .map(graph_node_osm_id)
+            .collect::<Option<Vec<_>>>();
         if edges.iter().any(|edge| edge.kind != expected_edge_kind)
             || edges.first().map(|edge| edge.from.as_str()) != Some(segment.from_node_id.as_str())
             || edges.last().map(|edge| edge.to.as_str()) != Some(segment.to_node_id.as_str())
+            || actual_way_ids != segment.osm_way_ids
+            || graph_osm_node_ids
+                .as_ref()
+                .is_some_and(|node_ids| node_ids != &segment.osm_node_ids)
         {
             return Err(invalid("endpoint segment graph binding mismatch"));
         }
@@ -1162,7 +1204,9 @@ fn validate_endpoint(
     } else {
         all_edges_ref.last().map(|edge| edge.id.as_str())
     };
-    if expected_first_or_last != Some(expected_edge_id) {
+    if all_edges_ref.first().map(|edge| edge.id.as_str()) != Some(ramp.edge_id.as_str())
+        || expected_first_or_last != Some(expected_edge_id)
+    {
         return Err(invalid("endpoint does not start or end at its ramp edge"));
     }
     Ok(())
@@ -1233,6 +1277,18 @@ pub fn ordered_edge_ids_sha256(edge_ids: &[String]) -> Result<String, serde_json
         hasher.update(bytes);
         format!("{:x}", hasher.finalize())
     })
+}
+
+fn edge_way_id(edge_id: &str) -> Option<i64> {
+    let mut parts = edge_id.split(':');
+    if parts.next()? != "e" {
+        return None;
+    }
+    parts.next()?.strip_prefix('w')?.parse().ok()
+}
+
+fn graph_node_osm_id(node_id: &str) -> Option<i64> {
+    node_id.strip_prefix("n:")?.parse().ok()
 }
 
 fn valid_id(value: &str, label: &str) -> Result<(), RoutingError> {

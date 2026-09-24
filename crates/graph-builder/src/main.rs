@@ -7,13 +7,14 @@ use shutoko_graph_builder::{
     apply_od_tariffs_to_graph, bind_ramps_to_graph, bound_ramp_evidence_from_inventory,
     build_manifest, build_route_membership_indices, build_topology_with_report,
     generate_and_validate_parsed_billing_pairs, generate_diagnostic_radial_route_plans,
-    graph_schema_v4_to_deterministic_json, manifest_to_deterministic_json,
-    parse_billing_pairs_seed, ramps_artifact_to_deterministic_json, route_memberships_sha256,
-    snap_index_to_deterministic_json, to_deterministic_json, validate_od_tariffs,
-    validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm, validate_ramp_inventory,
-    BillingPairProvenance, EdgeKind, EndpointSupportState, ManifestConfig, OdTariffsFile,
-    OsmRampBindingsFile, OverpassResponse, ParsedBillingPairsSeed, RampInventoryFile, RampKind,
-    RampsArtifact, RouteMembershipBuildOptions, TopologyConfig, VerificationStatus,
+    graph_schema_v4_to_deterministic_json_with_radial, manifest_to_deterministic_json,
+    parse_billing_pairs_seed, promote_verified_radial_pair, ramps_artifact_to_deterministic_json,
+    route_memberships_sha256, snap_index_to_deterministic_json, to_deterministic_json,
+    validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
+    validate_radial_seed_binding_candidates, validate_ramp_inventory, BillingPairProvenance,
+    EdgeKind, EndpointSupportState, ManifestConfig, OdTariffsFile, OsmRampBindingsFile,
+    OverpassResponse, ParsedBillingPairsSeed, RampInventoryFile, RampKind, RampsArtifact,
+    RouteMembershipBuildOptions, TopologyConfig, VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -328,9 +329,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
             for rej in &report.rejected_pairs {
                 eprintln!("  - {}: {}", rej.seed_id, rej.reason);
-                if !rej
-                    .reason
-                    .starts_with("diagnostic radialReturn pair is not publishable")
+                if args.graph_schema == 2
+                    || !rej
+                        .reason
+                        .starts_with("radialReturn pair requires schema 4 route-plan resolution")
                 {
                     unverified_from_seeds.push(format!("rejected:{}:{}", rej.seed_id, rej.reason));
                 }
@@ -402,6 +404,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     e
                 )
             })?;
+            if let Some(seed_file) = &parsed_seed_file {
+                validate_radial_seed_binding_candidates(seed_file, &b).map_err(|error| {
+                    format!(
+                        "radial seed binding evidence validation failed for {}:\n  {}",
+                        bin_path.display(),
+                        error
+                    )
+                })?;
+            }
             validate_osm_ramp_bindings(&b, &inv).map_err(|errs| {
                 format!(
                     "bindings validation failed for {}:\n  {}",
@@ -547,6 +558,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Vec::new()
     };
+    let mut radial_billing_pairs = Vec::new();
     if args.graph_schema == 4 {
         if let Some(seed_file) = &parsed_seed_file {
             for plan in
@@ -569,16 +581,31 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let support_state =
                     endpoint_support_state_wire_value(resolution.first_exit.exact_directed_binding);
                 if resolution.first_exit.exit.is_some() {
-                    return Err(format!(
-                        "diagnostic radial route plan {} resolved to a publishable exit without public promotion",
-                        plan.seed_id
-                    )
-                    .into());
+                    let seed = seed_file
+                        .radial_pairs()
+                        .into_iter()
+                        .find(|seed| seed.id == plan.seed_id)
+                        .ok_or_else(|| {
+                            format!(
+                                "resolved radial route plan {} has no matching seed",
+                                plan.seed_id
+                            )
+                        })?;
+                    radial_billing_pairs.push(
+                        promote_verified_radial_pair(&graph, &route_memberships, seed, resolution)
+                            .map_err(|error| {
+                                format!(
+                                    "radial route plan {} public promotion failed: {}",
+                                    plan.seed_id, error
+                                )
+                            })?,
+                    );
+                } else {
+                    unverified_from_seeds.push(format!(
+                        "diagnostic-only:{}:exact_directed_binding_{}",
+                        plan.seed_id, support_state
+                    ));
                 }
-                unverified_from_seeds.push(format!(
-                    "diagnostic-only:{}:exact_directed_binding_{}",
-                    plan.seed_id, support_state
-                ));
             }
         }
     }
@@ -591,8 +618,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
     let graph_json = if args.graph_schema == 4 {
-        graph_schema_v4_to_deterministic_json(&graph, &route_memberships)
-            .map_err(|e| format!("graph schema 4 serialization failed: {}", e))?
+        graph_schema_v4_to_deterministic_json_with_radial(
+            &graph,
+            &route_memberships,
+            radial_billing_pairs,
+        )
+        .map_err(|e| format!("graph schema 4 serialization failed: {}", e))?
     } else {
         to_deterministic_json(&graph).map_err(|e| format!("graph serialization failed: {}", e))?
     };

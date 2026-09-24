@@ -21,13 +21,13 @@
     { "id": "fixture:edge:legacy:mainline", "from": "fixture:node:legacy:pre-anchor", "to": "fixture:node:legacy:anchor", "kind": "shutoko", "durationSeconds": 60, "distanceMeters": 1000 },
     { "id": "fixture:edge:legacy:loop", "from": "fixture:node:legacy:anchor", "to": "fixture:node:legacy:anchor", "kind": "shutoko", "durationSeconds": 600, "distanceMeters": 10000 },
     { "id": "fixture:edge:legacy:exit", "from": "fixture:node:legacy:anchor", "to": "fixture:node:legacy:exit", "kind": "exit", "durationSeconds": 30, "distanceMeters": 200 },
-    { "id": "fixture:edge:entry:ramp", "from": "fixture:node:entry:ground", "to": "fixture:node:entry:ramp-end", "kind": "entry", "durationSeconds": 30, "distanceMeters": 200 },
+    { "id": "e:w1001:0:f", "from": "fixture:node:entry:ground", "to": "fixture:node:entry:ramp-end", "kind": "entry", "durationSeconds": 30, "distanceMeters": 200 },
     { "id": "fixture:edge:entry:mainline", "from": "fixture:node:entry:ramp-end", "to": "fixture:node:entry:mainline-end", "kind": "shutoko", "durationSeconds": 60, "distanceMeters": 1000 },
     { "id": "fixture:edge:merge:mainline", "from": "fixture:node:entry:mainline-end", "to": "fixture:node:merge", "kind": "shutoko", "durationSeconds": 60, "distanceMeters": 1000 },
     { "id": "fixture:edge:lap:1", "from": "fixture:node:merge", "to": "fixture:node:lap:mid", "kind": "shutoko", "durationSeconds": 600, "distanceMeters": 10000 },
     { "id": "fixture:edge:lap:2", "from": "fixture:node:lap:mid", "to": "fixture:node:branch", "kind": "shutoko", "durationSeconds": 600, "distanceMeters": 10000 },
     { "id": "fixture:edge:return:mainline", "from": "fixture:node:branch", "to": "fixture:node:exit:connector", "kind": "shutoko", "durationSeconds": 60, "distanceMeters": 1000 },
-    { "id": "fixture:edge:exit:ramp", "from": "fixture:node:exit:connector", "to": "fixture:node:exit:ground", "kind": "exit", "durationSeconds": 30, "distanceMeters": 200 }
+    { "id": "e:w2001:0:f", "from": "fixture:node:exit:connector", "to": "fixture:node:exit:ground", "kind": "exit", "durationSeconds": 30, "distanceMeters": 200 }
   ],
   "billingPairs": [
     {
@@ -64,8 +64,8 @@
       "pairKind": "radialReturn",
       "routePlanVersion": 1,
       "vehicleProfile": "passenger-car-etc",
-      "entryId": "fixture:edge:entry:ramp",
-      "exitId": "fixture:edge:exit:ramp",
+      "entryId": "e:w1001:0:f",
+      "exitId": "e:w2001:0:f",
       "entryEndpoint": {
         "rampId": "fixture:ramp:entry",
         "name": "fixture entry",
@@ -74,10 +74,11 @@
           {
             "segmentId": "fixture:binding:entry:0",
             "osmWayIds": [1001],
-            "edgeIds": ["fixture:edge:entry:ramp"],
+            "osmNodeIds": [10001, 10002],
+            "edgeIds": ["e:w1001:0:f"],
             "fromNodeId": "fixture:node:entry:ground",
             "toNodeId": "fixture:node:entry:ramp-end",
-            "edgeIdsSha256": "1846afd5803d03982b1641d3f1c4c9816379eeede1e100a4c3e0a6c130248e97"
+            "edgeIdsSha256": "3bd278b5466bf3fcc1430252a31af1235a51b2429b03631760ccd61b1ee33dd4"
           }
         ]
       },
@@ -89,10 +90,11 @@
           {
             "segmentId": "fixture:binding:exit:0",
             "osmWayIds": [2001],
-            "edgeIds": ["fixture:edge:exit:ramp"],
+            "osmNodeIds": [20001, 20002],
+            "edgeIds": ["e:w2001:0:f"],
             "fromNodeId": "fixture:node:exit:connector",
             "toNodeId": "fixture:node:exit:ground",
-            "edgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+            "edgeIdsSha256": "724a7c8e35a3744a010a1cb14117a33e4416a97a81f59c4c50dbba4c9a7ee9c5"
           }
         ]
       },
@@ -142,8 +144,8 @@
           "role": "entry_approach",
           "membershipId": "route:fixture:R1:inbound",
           "sourceSegmentIds": ["fixture:binding:entry:0", "fixture:relation:r1:inbound:main"],
-          "edgeIds": ["fixture:edge:entry:ramp", "fixture:edge:entry:mainline", "fixture:edge:merge:mainline"],
-          "edgeIdsSha256": "fde104d1bdae3d3673e5285509c3223c53765d876c6a4174e50a3126412f32a2"
+          "edgeIds": ["e:w1001:0:f", "fixture:edge:entry:mainline", "fixture:edge:merge:mainline"],
+          "edgeIdsSha256": "e5af06421dd3aa889f69f1f72a94ab927c6bb8d77ce99ac076ef3c390600a4f5"
         },
         {
           "resolvedSegmentId": "fixture:resolved:lap",
@@ -166,8 +168,8 @@
           "role": "exit_approach",
           "membershipId": "route:fixture:R1:outbound",
           "sourceSegmentIds": ["fixture:binding:exit:0"],
-          "edgeIds": ["fixture:edge:exit:ramp"],
-          "edgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+          "edgeIds": ["e:w2001:0:f"],
+          "edgeIdsSha256": "724a7c8e35a3744a010a1cb14117a33e4416a97a81f59c4c50dbba4c9a7ee9c5"
         }
       ],
       "routingCapability": "routable",
@@ -193,7 +195,7 @@
       "route": "fixture:R1",
       "direction": "inbound",
       "kind": "general_entry",
-      "edgeId": "fixture:edge:entry:ramp",
+      "edgeId": "e:w1001:0:f",
       "nodeId": "fixture:node:entry:ground",
       "mainlineNodeId": "fixture:node:entry:ramp-end"
     },
@@ -204,7 +206,7 @@
       "route": "fixture:R1",
       "direction": "outbound",
       "kind": "general_exit",
-      "edgeId": "fixture:edge:exit:ramp",
+      "edgeId": "e:w2001:0:f",
       "nodeId": "fixture:node:exit:ground",
       "mainlineNodeId": "fixture:node:exit:connector"
     }
@@ -240,8 +242,8 @@
           "sourceRelationId": null,
           "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
           "bindingEvidenceId": "fixture:binding:entry",
-          "orderedEdgeIds": ["fixture:edge:entry:ramp"],
-          "orderedEdgeIdsSha256": "1846afd5803d03982b1641d3f1c4c9816379eeede1e100a4c3e0a6c130248e97"
+          "orderedEdgeIds": ["e:w1001:0:f"],
+          "orderedEdgeIdsSha256": "3bd278b5466bf3fcc1430252a31af1235a51b2429b03631760ccd61b1ee33dd4"
         },
         {
           "segmentId": "fixture:relation:r1:inbound:main",
@@ -292,8 +294,8 @@
           "sourceRelationId": null,
           "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
           "bindingEvidenceId": "fixture:binding:exit",
-          "orderedEdgeIds": ["fixture:edge:exit:ramp"],
-          "orderedEdgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+          "orderedEdgeIds": ["e:w2001:0:f"],
+          "orderedEdgeIdsSha256": "724a7c8e35a3744a010a1cb14117a33e4416a97a81f59c4c50dbba4c9a7ee9c5"
         }
       ]
     }

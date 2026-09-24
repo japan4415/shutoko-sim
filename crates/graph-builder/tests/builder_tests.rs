@@ -4184,7 +4184,7 @@ fn test_schema_v2_diagnostic_radial_pairs_are_not_published() {
     let radial_rejections: Vec<&str> = report
         .rejected_pairs
         .iter()
-        .filter(|rejected| rejected.reason.contains("diagnostic radialReturn"))
+        .filter(|rejected| rejected.reason.contains("schema 4 route-plan resolution"))
         .map(|rejected| rejected.seed_id.as_str())
         .collect();
     assert_eq!(
@@ -4417,12 +4417,9 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
             546
         };
         assert_eq!(lap.edge_ids.len(), expected_length);
-        let resolution = shutoko_graph_builder::resolve_directed_route_plan(
-            &graph,
-            &memberships,
-            &pair.route_plan,
-        )
-        .unwrap();
+        let resolution =
+            shutoko_graph_builder::resolve_diagnostic_radial_route_plan(&graph, &memberships, pair)
+                .unwrap();
         assert_eq!(
             resolution.first_exit.exact_directed_binding,
             pair.route_plan
@@ -4435,8 +4432,96 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
             resolution.first_exit.exact_directed_binding,
             shutoko_graph_builder::EndpointSupportState::Unresolved
         );
-        assert!(resolution.first_exit.blocked_ramp_id.is_none());
+        let expected_return_length = if pair.route_plan.anchor.direction == "inner" {
+            85
+        } else {
+            84
+        };
+        assert_eq!(
+            resolution.first_exit.mainline_edge_ids.len(),
+            expected_return_length
+        );
+        assert!(!resolution.first_exit.mainline_source_segment_ids.is_empty());
+        assert_eq!(
+            resolution.first_exit.blocked_ramp_id.as_deref(),
+            Some("ramp:2-outbound:tengenji-exit")
+        );
+        assert_eq!(
+            resolution.first_exit.blocked_exit_edge_id.as_deref(),
+            Some("e:w172358461:0:f")
+        );
+        let return_end_node_id = graph
+            .edges
+            .iter()
+            .find(|edge| edge.id == *resolution.first_exit.mainline_edge_ids.last().unwrap())
+            .map(|edge| edge.to.as_str());
+        assert_eq!(
+            return_end_node_id,
+            Some(
+                pair.exit_endpoint.binding_candidates[0].directed_segments[0]
+                    .from_node_id
+                    .as_str()
+            )
+        );
     }
+}
+
+#[test]
+fn test_cli_schema2_retains_pair_specific_radial_rejections() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let osm_path = manifest_dir.join("../../fixtures/osm/shutoko-all.json");
+    if !osm_path.exists() {
+        return;
+    }
+    let seed_path = manifest_dir.join("../../data/billing-pairs-seed.json");
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "shutoko-test-schema2-radial-rejections-{}",
+        std::process::id()
+    ));
+    let out_dir = tmp_dir.join("out");
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+    let _ = std::fs::create_dir_all(&out_dir);
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_shutoko-graph-builder"))
+        .args([
+            "--osm",
+            osm_path.to_str().unwrap(),
+            "--seed",
+            seed_path.to_str().unwrap(),
+            "--out-dir",
+            out_dir.to_str().unwrap(),
+            "--release-id",
+            "schema2-radial-rejections",
+            "--graph-schema",
+            "2",
+        ])
+        .status()
+        .expect("failed to execute schema 2 CLI");
+    assert!(status.success());
+    let graph: Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("graph.json")).unwrap())
+            .unwrap();
+    assert_eq!(graph["schemaVersion"], 2);
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 8);
+    let manifest: Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("manifest.json")).unwrap())
+            .unwrap();
+    let sections = manifest["unverifiedSections"].as_array().unwrap();
+    for id in [
+        "bp:2-inbound:meguro:c1-inner:tengenji",
+        "bp:2-inbound:meguro:c1-outer:tengenji",
+    ] {
+        assert!(sections.iter().any(|section| {
+            section
+                .as_str()
+                .is_some_and(|section| section.starts_with(&format!("rejected:{id}:")))
+        }));
+    }
+    assert!(!sections.iter().any(|section| {
+        section
+            .as_str()
+            .is_some_and(|section| section.starts_with("diagnostic-only:"))
+    }));
+    let _ = std::fs::remove_dir_all(&tmp_dir);
 }
 
 #[test]

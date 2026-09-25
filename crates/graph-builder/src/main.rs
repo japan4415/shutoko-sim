@@ -858,6 +858,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 plan.seed_id
                             )
                         })?;
+                    // radialReturn も seed が一次資料の出典と備考を持つので、
+                    // legacy verified pair と同じ粒度で manifest.provenance へ記録する。
+                    billing_provenances.push(BillingPairProvenance {
+                        id: seed.id.clone(),
+                        source: seed.provenance.source.clone(),
+                        source_date: seed.provenance.source_date.clone(),
+                        notes: seed.provenance.notes.clone(),
+                    });
                     radial_billing_pairs.push(
                         promote_verified_radial_pair(&graph, &route_memberships, seed, resolution)
                             .map_err(|error| {

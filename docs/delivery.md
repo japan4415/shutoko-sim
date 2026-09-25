@@ -8,14 +8,28 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
 
 ## `all-real-v4` の atomic release runbook
 
-**重要: 順序は (1) 2026-10 版 PDF の人手レビュー → (2) R2 投入と read-back（payload と engine.json が先、manifest.json は最後） → (3) Web/Worker の allowlist 切替と確認 → (4) main への merge。10 月版 PDF のセルと金額の確認が済むまで merge しない。R2 への投入と read-back が終わるまで merge も production deploy もしない。**
+**重要: 順序は (1) 2026-10 版 PDF の人手レビュー（完了済み・記録済み） → (2) 同一入力で成果物を再生成して決定性を確認し、`all-real-v4` を R2 へ投入して read-back する（payload と `engine.json` が先、`manifest.json` は最後） → (3) PR を merge する（これで本番デプロイと allowlist・既定 release の切り替えが起きる） → (4) 本番を確認する → (5) 異常があれば `all-real-v3` へ切り戻す。R2 への投入と read-back が終わるまで merge も production deploy もしない。マージの前に allowlist を切り替える工程は無い（切り替えは merge 後の deploy で起きる）。**
 
 この節が `all-real-v4` 公開の正本である。旧 `all-real-v3` の runbook は下に残す（切り戻し時に参照する）。今回の実装作業では R2 への upload、Wrangler deploy、Cloudflare への書き込みを行わない。
 
-1. **2026-10 版 PDF の OD セルと金額の人手レビューを先に終える**:
-   2026-10 版の料金表 PDF を `phase1-research-cache/ryoukin-kaitei_toll_rates.pdf` に配置し、`data/od-tariffs.json` が持つ 10 OD（page 3 の C1 9 セル、page 4 の 2 号目黒→天現寺 1 セル）それぞれのセル名・距離・金額と、PDF の行・列・値を突き合わせる。一致が 1 件でも外れれば立ち止まる。このレビューが揃うまで以降の工程に進まない。
-   併せて `fixtures/generated/pair-candidates.json` を開き、候補 11 件の内訳が想定どおりかを確認する。内訳は `eligible_for_review` 9 件、`hold` 2 件（`bp:c1-inner:ginza-shintomicho` と `bp:c1-outer:shibakoen-iikura`）で、`relationCoverage[]` に 26 relation のうち 11 件が展開済み・15 件が reason code 付きで失敗していることが分かる。`hold` 2 件を人手レビューで強制的に昇格させず、理由付きの未検証として残す。導出レポートは seed を変更しないので、`data/billing-pairs-seed.json` と `data/billing-pair-adjacency.json` の更新はレビュー済みの PR で行う。
-2. **同一入力で成果物を再生成し、決定性を確認する**:
+### 1. 2026-10 版 PDF の OD セルと金額の人手レビュー（完了済み）
+
+**このレビューは完了しており、残条件ではない。** 記録は `data/od-tariffs.json` にあり、`documents[shutoko-2026-10-od-fare-table]` が `status=verified` / `reviewedAt=2026-09-25` / `documentSha256=1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5`、`pendingEvidence` は空、`pendingResolution.status` は `completed_2026_10_pdf_review` である。2026-09-26 に 10 OD セル（page 3 の C1 9 セル、page 4 の 2 号目黒→天現寺 1 セル）を再読取し、**10 件すべてが PDF のセルと一致する**ことを確認した。同じ照合で 2025-04 の霞が関→代官町が 12.4km / 570 円ではなく 2.3km / 300 円であることも発見し、evidence・assignment・`verifiedOdPairs`・seed・テストを訂正済みである。写真ではなくページ画像と PDF テキスト層の 2 通りで読んでおり、レビュー方法として `reviewMethods` に記録している。
+
+置き場所は 2 つを区別する。
+
+| 用途 | パス | gitignore |
+| --- | --- | --- |
+| 作業者のキャッシュ（リポジトリの外） | `/Users/discord4415/Documents/hobby/shutoko-sim-worktrees/phase1-research-cache/` | リポジトリ外なので無関係 |
+| worktree 内の作業用コピー | `.cache/official-fare/`（`/.cache/` と `*.pdf` で無視される） | あり |
+
+`data/od-tariffs.json` に記録するのは `documentSha256` と `documents[].cachePath`・ページ・行・列であり、**パスは参考情報**である。PDF とページ画像はどちらも commit しない。
+
+併せて `fixtures/generated/pair-candidates.json` を開き、候補 11 件の内訳が想定どおりかを確認する。内訳は `eligible_for_review` 9 件、`hold` 2 件（`bp:c1-inner:ginza-shintomicho` と `bp:c1-outer:shibakoen-iikura`）で、`relationCoverage[]` に 26 relation のうち 11 件が pass・15 件が reason code 付きで fail していることが分かる。`hold` 2 件を人手レビューで強制的に昇格させず、理由付きの未検証として残す。導出レポートは seed を変更しないので、`data/billing-pairs-seed.json` と `data/billing-pair-adjacency.json` の更新はレビュー済みの PR で行う。
+
+### 2. 同一入力で成果物を再生成し、決定性を確認してから R2 へ投入して read-back する
+
+2-1. 決定性を確認する:
    ```bash
    bash scripts/generate-fixtures.sh
    snapshot_dir="$(mktemp -d)"
@@ -24,7 +38,8 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
    git diff --exit-code -- fixtures/generated
    ```
    `manifest.json` の `releaseId=all-real-v4`、`graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v3`、`tariffModelVersion=1`、`routeMembershipsSha256`、および 5 成果物（graph / od-tariffs / pair-candidates / ramps / snap-index）の SHA-256 と byteLength を確認する。上の 2 回の生成と一時ディレクトリの差分ゼロ（`diff` と `git diff --exit-code`）で決定性を確認する。3 世代分のバイト一致は `cargo test --release -p shutoko-graph-builder --test release_v4_contract --locked -- --ignored` の `all_real_v4_artifacts_are_byte_identical_across_three_generations` が担保する。
-3. **WASM と release metadata を用意する**:
+
+2-2. WASM と release metadata を用意する:
    ```bash
    bash scripts/build-wasm.sh
    npm --prefix workers ci
@@ -35,24 +50,42 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
    npm --prefix web test
    ```
    `engine.json` の hash は実ファイルから生成し、変更されうる固定 hash をソースコードへ追加しない。
-4. **固定版の wrangler と照合してから R2 へ投入する**:
+
+2-3. マージ前に検証できるソースレベルの切替を確認する（deploy はまだ無い）:
+   `web/src/worker/artifact-hashes.ts` の `DEFAULT_RELEASE_ID` と `workers/wrangler.toml` の `ALLOWED_RELEASES` に `all-real-v4` が含まれ、`all-real-v3` も許可されたままであることを確認する（`web/test/release-rollback.test.ts` が 2 つの allowlist の一致、既定と公開 fixture の通過、rollback 先の残存を検査する。`DEFAULT_RELEASE_ID` を 1 行戻す rollback commit でもこのテストは green のままになる）。**この時点では本番の Worker はまだ `all-real-v4` を 404 する**（`workers/src/releases.ts` が新しい allowlist を配るまで）ので、実行時の確認は 4 に置く。
+
+2-4. 固定版の wrangler と照合してから R2 へ投入する:
    ```bash
    SHUTOKO_REQUIRE_PINNED_WRANGLER=1 npm --prefix workers run seed:local -- --remote
    ```
-   seed script は wrangler を `WRANGLER_BIN` → PATH の順で解決し（`npx` フォールバックは無い）、`wrangler --version` の結果を `workers/package-lock.json` の固定版（4.131.0）と照合する。差があれば必ずログへ出す。本番投入では `SHUTOKO_REQUIRE_PINNED_WRANGLER=1` により完全一致を要求し、固定版 4.0.0 未満は機能不足として停止する。`npm --prefix workers run` は `workers/node_modules/.bin` を PATH へ足すため固定版 4.131.0 が選ばれる。`node workers/scripts/seed-local-r2.mjs` を直接呼ぶと `node_modules/.bin` が PATH に入らないので、その形を使う場合は `WRANGLER_BIN=workers/node_modules/.bin/wrangler` を明示する。投入先は未使用の `releases/all-real-v4/` とし、既存の `manifest.json` があれば上書きを拒否する。投入順は manifest の `artifacts[]` 順（graph / od-tariffs / pair-candidates / ramps / snap-index）に WASM 4 点と `engine.json` を先に上げ、各 payload と `engine.json` を read-back して bytes・length・SHA-256 を照合し、**全件成功した後の最後に `manifest.json` を上げて read-back する**。`manifest.json` の投入前は Worker が新 release を公開しない。
-5. **Web/Worker の allowlist を同期して切替を確認する**: `web/src/worker/artifact-hashes.ts` の `DEFAULT_RELEASE_ID` と `workers/wrangler.toml` の `ALLOWED_RELEASES` に `all-real-v4` が含まれ、`all-real-v3` も許可されたままであることを確認する（`web/test/release-rollback.test.ts` が 2 つの allowlist の一致、既定と公開 fixture の通過、rollback 先の残存を検査する。`DEFAULT_RELEASE_ID` を 1 行戻す rollback commit でもこのテストは green のままになる）。その上で manifest → engine.json → graph.json → WASM/glue の取得・hash・schema 4 照合、`billingPairsVersion=v3` と `tariffModelVersion=1` の受理、C1 legacy 回帰、そして 4 地点（東京駅・目黒駅・銀座・六本木）の探索結果を `fixtures/representative-locations.json` と照合する。9 件の `verified_one_section_ahead`（legacy 7 + radial 2）と未確定 1 件（`bp:c1-outer:shibakoen-iikura`）が想定どおりであること、2026-10 改定をまたぐ単価（目黒→天現寺 790 円 → 860 円、C1 は 300 円のまま）を確認する。
+   seed script は wrangler を `WRANGLER_BIN` → PATH の順で解決し（`npx` フォールバックは無い）、`wrangler --version` の結果を `workers/package-lock.json` の固定版（4.131.0）と照合する。差があれば必ずログへ出す。`SHUTOKO_REQUIRE_PINNED_WRANGLER=1` を付けると完全一致を要求し、固定版 4.0.0 未満は機能不足として停止する。`npm --prefix workers run` は `workers/node_modules/.bin` を PATH へ足すため固定版 4.131.0 が選ばれる。`node workers/scripts/seed-local-r2.mjs` を直接呼ぶと `node_modules/.bin` が PATH に入らないので、その形を使う場合は `WRANGLER_BIN=workers/node_modules/.bin/wrangler` を明示する。投入先は未使用の `releases/all-real-v4/` とし、既存の `manifest.json` があれば上書きを拒否する。投入順は manifest の `artifacts[]` 順（graph / od-tariffs / pair-candidates / ramps / snap-index）に WASM 4 点と `engine.json` を先に上げ、各 payload と `engine.json` を read-back して bytes・length・SHA-256 を照合し、**全件成功した後の最後に `manifest.json` を上げて read-back する**。`manifest.json` の投入前は Worker が新 release を公開しない。
 
-   4 地点の期待値は**最近接入口 tier 優先（Issue #57）の実測**であり、料金付き商品候補が出るのは東京駅と目黒駅だけである。E2E で確認する内容:
+### 3. PR を merge する
 
-   | 地点 | 最寄りの入口（距離） | 候補 | 区分 |
-   | --- | --- | --- | --- |
-   | 東京駅 | `ramp:c1-inner:takaracho-entry`（746 m） | `bp:c1-inner:takaracho-kandabashi` 1 件 | 料金付き（300 円・改定前後とも）。`time_per_yen`、推薦 1 件 |
-   | 目黒駅 | `ramp:2-inbound:meguro-entry`（313 m） | `bp:2-inbound:meguro:c1-outer:tengenji`（推薦）と `bp:2-inbound:meguro:c1-inner:tengenji` の 2 件 | 料金付き（790 円 → 860 円）。`time_per_yen`、推薦は最大効率の 1 件だけ |
-   | 銀座 | `ramp:c1-inner:ginza-entry`（511 m） | `od:ramp:c1-inner:ginza-entry:ramp:c1-inner:kasumigaseki-exit` 1 件 | **未価格の topologyOnly**。商品対象外・推薦なし・`shutoko_time` |
-   | 六本木 | `ramp:c1-inner:iikura-entry`（663 m） | `od:ramp:c1-inner:iikura-entry:ramp:c1-outer:iikura-exit` 1 件 | **未価格の topologyOnly**。商品対象外・推薦なし・`shutoko_time` |
+2 の全工程が成功した後に限り PR を merge する。**merge が本番デプロイと、allowlist・既定 release の切り替えを起こす。** `web/src/worker/artifact-hashes.ts` の `DEFAULT_RELEASE_ID` と `workers/wrangler.toml` の `ALLOWED_RELEASES` はこの PR で既に `all-real-v4` を含むため、merge 後の deploy で切り替わる（マージ前に allowlist を切り替える工程は無い）。main への merge/push が Cloudflare Builds の自動 deploy を誘発する構成では、`releases/all-real-v4/manifest.json` の存在と read-back 済みを manual approval / feature gate として確認する。radial の Google Maps handoff は実機検証（Issue #72）が完了するまで `enabled=false` を維持する。
+
+### 4. 本番を確認する
+
+**マージと deploy の後**に、本番の Worker と Web に対して次を確認する。2-3 はマージ前にできるソースレベルの確認、4 はマージと deploy が終わってから実行する実行時確認である。
+
+4-1. 取得と hash / schema 4 の照合: manifest → `engine.json` → `graph.json` → WASM/glue の取得・hash・schema 4 照合、`billingPairsVersion=v3` と `tariffModelVersion=1` の受理を確認する。
+
+4-2. C1 legacy 回帰と 9 件の verified pair: 9 件の `verified_one_section_ahead`（legacy 7 + radial 2）と未確定 1 件（`bp:c1-outer:shibakoen-iikura`、入口ランプは `supportState=unresolved`）が想定どおりであること、2026-10 改定をまたぐ単価（目黒→天現寺 790 円 → 860 円、C1 は 300 円のまま）を確認する。
+
+4-3. 4 地点の探索結果: 期待値は**最近接入口 tier 優先（Issue #57）の実測**であり、料金付き商品候補が出るのは東京駅と目黒駅だけである。時間窓は `fixtures/representative-locations.json` の値をそのまま使う（UI の既定 15〜60 分は目黒駅の窓と一致しない）。
+
+   | 地点 | 最寄りの入口（距離） | 時間窓（fixture） | 候補 | 区分 |
+   | --- | --- | --- | --- | --- |
+   | 東京駅 | `ramp:c1-inner:takaracho-entry`（746 m） | 15〜60 分 | `bp:c1-inner:takaracho-kandabashi` 1 件 | 料金付き（300 円・改定前後とも）。`time_per_yen`、推薦 1 件 |
+   | 目黒駅 | `ramp:2-inbound:meguro-entry`（313 m） | **15〜120 分** | `bp:2-inbound:meguro:c1-outer:tengenji`（推薦）と `bp:2-inbound:meguro:c1-inner:tengenji` の 2 件 | 料金付き（790 円 → 860 円）。`time_per_yen`、推薦は最大効率の 1 件だけ |
+   | 銀座 | `ramp:c1-inner:ginza-entry`（511 m） | 15〜60 分 | `od:ramp:c1-inner:ginza-entry:ramp:c1-inner:kasumigaseki-exit` 1 件 | **未価格の topologyOnly**。商品対象外・推薦なし・`shutoko_time` |
+   | 六本木 | `ramp:c1-inner:iikura-entry`（663 m） | 15〜60 分 | `od:ramp:c1-inner:iikura-entry:ramp:c1-outer:iikura-exit` 1 件 | **未価格の topologyOnly**。商品対象外・推薦なし・`shutoko_time` |
 
    銀座と六本木は最寄りの入口が**内回りランプ**（銀座入口・飯倉入口）で、そこからの 1 区間先に検証済みペアが無いため（内回り銀座入口 → 新富町出口は First Exit 検証が通らず未登録。`data-pipeline.md` の注記を参照）、1 区間先の確定ペアに到達せず動的 OD の未価格候補しか返らない。**この 2 地点では基本料金（割引適用前）の表示を検証できない**ので、未価格（金額なし）・商品対象外・推薦なしのまま表示されることを確認するのが正しい期待である。銀座・六本木にも料金付き候補が出ることを rollout 前の gate として求めるなら、Issue #57 の最近接 tier 制限か検証済みペアの登録を変更する必要がある（本 PR のスコープ外）。
-6. **merge する**: 1 から 5 がすべて成功した後に限り PR を merge し、続けて Cloudflare Workers と Web の production deploy を別 Manager が行う。main への merge/push が Cloudflare Builds の自動 deploy を誘発する構成では、`releases/all-real-v4/manifest.json` の存在と read-back 済みを manual approval / feature gate として確認する。radial の Google Maps handoff は実機検証（Issue #72）が完了するまで `enabled=false` を維持する。
+
+### 5. 異常があれば `all-real-v3` へ切り戻す
+
+4 のいずれかが期待どおりでなかった場合は下の「`all-real-v4` の rollback」手順に従う。**実行時に release pointer を切り替える運用はしない。** 戻すのは Web の `DEFAULT_RELEASE_ID` 1 行だけで、Worker の `ALLOWED_RELEASES` は `all-real-v3` を残したままにする（allowlist を狭めない）。radial の公開 handoff は Issue #72 の実機検証が完了するまで `enabled=false` を保つ。
 
 ### `all-real-v4` の rollback
 
@@ -200,8 +233,8 @@ Issue #72のコード実装、release設定、物理端末の4系列検証、公
 
 - `releases/all-real-v4/` への R2 投入と read-back、`all-real-v4` manifest の本番配置。
 - Cloudflare Workers と Web の production deploy。
-- 2026-10 版 PDF の再取得（gitignore 済み cache への配置を含む。`data/od-tariffs.json` のレビュー済み値はすでに固定済みなので、これは監査トレースの再現用）。
-- 放射線 3 leg split URL の実機 4 環境検証（Android / iOS × Web / app）。完了まで `data/device-verification-manifest.json` の 4 レコードは `missing` のままで、radial の公開 handoff は `enabled=false` を保つ。
+- 2026-10 版 PDF の再取得（hash 検証と監査トレースの再現用。`data/od-tariffs.json` のレビュー済み値はすでに固定済みで、10 OD セルは一致済みなので残条件ではない。再取得した PDF の SHA-256 が `documents[shutoko-2026-10-od-fare-table].documentSha256` と一致することだけを確認する）。
+- 放射線（radial）3 leg split URL の実機 4 環境検証（Android / iOS × Web / app）。完了まで `data/device-verification-manifest.json` の 4 レコードは `missing` のままで、radial の公開 handoff は `enabled=false` を保つ。
 
 ### 保留（根拠 evidence が揃うまで昇格しない）
 

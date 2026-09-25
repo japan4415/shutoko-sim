@@ -829,6 +829,18 @@
   ],
   "provenance": [
     {
+      "id": "bp:2-inbound:meguro:c1-inner:tengenji",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-25",
+      "notes": "目黒入口、C1 inner の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円、2026-10版公式セルの19.4km/860円。 2号目黒線（内回り/外回り）の路線図は https://www.shutoko.jp/use/network/map/route-2/ 。"
+    },
+    {
+      "id": "bp:2-inbound:meguro:c1-outer:tengenji",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-25",
+      "notes": "目黒入口、C1 outer の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円、2026-10版公式セルの19.4km/860円。 2号目黒線（内回り/外回り）の路線図は https://www.shutoko.jp/use/network/map/route-2/ 。"
+    },
+    {
       "id": "bp:c1-inner:daikancho-kasumigaseki",
       "source": "https://www.shutoko.jp/use/network/map/",
       "sourceDate": "2026-09-25",

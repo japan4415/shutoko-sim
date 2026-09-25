@@ -51,7 +51,7 @@
   - `no_*`（via=node）: from エッジから to エッジへの禁止遷移ペア（長さ 2）を生成。
   - `only_*`（via=node）: via ノードにおける to 以外の代替流出エッジを自動特定し、禁止遷移ペアとして生成。
   - `via=way`（Uターン制限等）: from エッジ、via エッジ列、to エッジを連結する長さ 3 以上の禁止エッジ列を生成。
-  - `restriction:conditional`（時間帯・車種条件付き制限）: 静的道路グラフでは一意に評価できないためスキップし、標準エラー出力およびマニフェストへ記録。端点resolverでは `hgv:conditional` のみ passenger-car 製品に無関係な例外として無視し、他の `*:conditional`、`oneway:conditional`、`reversible`、`alternating` は fail-closed とする。
+  - `restriction:conditional`（時間帯・車種条件付き制限）: 静的道路グラフでは一意に評価できないためスキップし、標準エラー出力およびマニフェストへ記録。端点 resolver では `hgv:conditional` のみ passenger-car 製品に無関係な例外として無視し、他の `*:conditional`、`oneway:conditional`、`reversible`、`alternating` は fail-closed とする。
   - `only_*`（via=way）: 静的道路グラフ生成では現時点で未サポートとし、該当関係が存在する場合はスキップしてマニフェストへ記録。
 
 ### 入口/出口ランプの分類方式
@@ -120,7 +120,7 @@
   - 神田橋→宝町は 1.7km / 300円を両版で保持する。
   - 霞が関→代官町は両版とも 2.3km / 300円。570円 / 12.4km は霞が関→霞が関（対角セル）の値であり、この OD には使わない。
   - 2号目黒→天現寺は 2025-04 が 19.4km / 790円、2026-10 が 19.4km / 860円。
-  - 2026-10 PDF は SHA-256 `1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5`、C1 は P.3、2号は P.4 を確認した。PDFと画像は gitignore 済み cache に置く。
+  - 2026-10 PDF は SHA-256 `1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5`、C1 は P.3、2号は P.4 を確認した。PDF と画像は gitignore 済みの `.cache/official-fare/` に置く（正本は `data/od-tariffs.json` の `documents[]` の SHA-256 とページ・行・列。`documents[].cachePath` / `pendingResolution.cachePath` は参考情報）。
   - 出典: `https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf`、`https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
 
 #### 新規登録 7 ペア（2026-09-10 登録、2026-09-25 料金表 v3 で再検証）
@@ -701,16 +701,16 @@ cargo run --bin shutoko-graph-builder --locked -- \
 - **料金カタログ**: `graph.json` は後方互換の `odTariffs` に加え、料金表 v3 の正本 `odTariffsV3`（`tariffRules` / `distanceEvidence` / `assignments` / `deprecatedAssignments`）と `billingPairsVersion`、`tariffModelVersion` を埋め込む。
 - **schema 4 manifest**: `graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v3`、`tariffModelVersion=1` と、決定論的な `routeMembershipsSha256`、および `pairDerivation`（導出ルールと 5 入力の SHA-256、候補集計）を `manifest.json` に記録する。
 
-現行 `all-real-v4` の生成済みファイルは次のとおりである。数値は `fixtures/generated/` の実測値であり、C1限定fixtureの数値ではない。
+現行 `all-real-v4` の生成済みファイルは次のとおりである。数値は `fixtures/generated/` の実測値であり、C1限定fixtureの数値ではない。**ファイルサイズ列は `fixtures/generated/manifest.json` の `artifacts[].byteLength` と実ファイルから機械的に取り直した値**（`manifest.json` 自身は `fixtures/generated/manifest.json` の実サイズ）で、`cargo test -p shutoko-graph-builder --test release_v4_contract` の `documented_artifact_sizes_match_the_generated_files` が本表を実測値と照合するので、数値を手書きで写し直してずれると落ちる。
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
-| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 10件（legacy 8 + radial 2）、route memberships 53件、ramps 236件 | 7,605,829 bytes |
-| `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 20 件、assignment 10 件、deprecated 2 件） | 48,271 bytes |
-| `pair-candidates.json` | 2 | 導出レポート（候補 11 件 = eligible 9 / hold 2、relation coverage 26 件） | 75,671 bytes |
-| `ramps.json` | 1 | 正規台帳399件、うちbound 236件 | 278,142 bytes |
+| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 10件（legacy 8 + radial 2）、route memberships 53件、ramps 236件 | 7,606,019 bytes |
+| `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 20 件、assignment 10 件、deprecated 2 件） | 48,482 bytes |
+| `pair-candidates.json` | 2 | 導出レポート（候補 11 件 = eligible 9 / hold 2、relation coverage 26 件 = pass 11 / fail 15） | 75,737 bytes |
+| `ramps.json` | 1 | 正規台帳399件、うちbound 236件 | 278,337 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
-| `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance | 44,562 bytes |
+| `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 9件 | 45,773 bytes |
 
 `graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は 5 成果物（`graph.json` / `od-tariffs.json` / `pair-candidates.json` / `ramps.json` / `snap-index.json`）の path・SHA-256・byte length を固定し、manifest 自身のサイズと schema は別情報として扱う。`all-real-v4` の `routeMembershipsSha256` は `6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5` であり、同一入力の2回の生成で一致する。3 世代分のバイト一致は `cargo test --release -p shutoko-graph-builder --test release_v4_contract --locked -- --ignored` の `all_real_v4_artifacts_are_byte_identical_across_three_generations` が担保する。
 

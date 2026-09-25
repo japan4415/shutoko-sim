@@ -123,7 +123,7 @@ export type TariffTollSource = "official_distance_rule" | "table";
 /** 候補の toll に付く料金 v3 の証拠（tariff v3 を持つ release でのみ現れる）。 */
 export interface TariffProvenance {
   /** 金額を求めた tariff の出所。距離基準の公定料金かどうかを示す。 */
-  tollSource?: string | null;
+  tollSource?: TariffTollSource | null;
   /** 適用された TariffAssignment の ID。 */
   assignmentId?: string | null;
   /** 適用された TariffRule の ID。 */
@@ -134,9 +134,9 @@ export interface TariffProvenance {
   distanceEvidenceId?: string | null;
   /** 画面表示に使う料金ラベル。 */
   fareLabel?: string | null;
-  vehicleClass?: string | null;
-  paymentMethod?: string | null;
-  fareBasis?: string | null;
+  vehicleClass?: ProductVehicleClass | null;
+  paymentMethod?: ProductPaymentMethod | null;
+  fareBasis?: ProductFareBasis | null;
   /** 割引を一切適用していないことを示すフラグ。 */
   discountsExcluded?: boolean;
 }

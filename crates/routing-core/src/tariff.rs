@@ -994,7 +994,15 @@ impl TariffResolver {
             });
         }
         let mut result = ResolvedTariff::unpriced();
-        if started {
+        // 最初の期間より前でも、この assignment が tariff 期間を持つなら「範囲外」なので
+        // `expired` として返す（engine の legacy 経路と揃える）。
+        let has_any_period = assignment.prices.iter().any(|price| {
+            parse_timestamp(&price.effective_from)
+                .ok()
+                .flatten()
+                .is_some()
+        });
+        if started || has_any_period {
             result.status = TariffResolutionStatus::Expired;
         }
         Ok(result)

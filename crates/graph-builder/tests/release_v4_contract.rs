@@ -110,6 +110,63 @@ fn artifact_bytes(dir: &Path) -> Vec<(String, Vec<u8>)> {
         .collect()
 }
 
+/// `docs/data-pipeline.md` の成果物サイズ表は手書きのコピーを正とせず、
+/// `fixtures/generated` の実測値と manifest の `artifacts[].byteLength` から
+/// 取り直す。表がずれるとこのテストが落ちる。
+#[test]
+fn documented_artifact_sizes_match_the_generated_files() {
+    let root = repo_root();
+    let generated = root.join("fixtures/generated");
+    let manifest = read_json(&generated.join("manifest.json"));
+    let doc = fs::read_to_string(root.join("docs/data-pipeline.md")).unwrap();
+
+    let mut expected = manifest["artifacts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|artifact| {
+            (
+                artifact["path"].as_str().unwrap().to_string(),
+                artifact["byteLength"].as_u64().unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    expected.push((
+        "manifest.json".to_string(),
+        fs::metadata(generated.join("manifest.json")).unwrap().len(),
+    ));
+    expected.sort();
+
+    for (path, byte_length) in expected {
+        let actual = fs::metadata(generated.join(&path)).unwrap().len();
+        assert_eq!(byte_length, actual, "{path} on disk");
+        let documented = format!("{} bytes", thousands(actual));
+        assert!(
+            doc.contains(&format!("| `{path}` |")) && doc.contains(&documented),
+            "docs/data-pipeline.md must record `{path}` as {documented}; the documented size table is stale"
+        );
+    }
+
+    // 10MiB 未満という記述も同じ実測値から導出する。
+    let graph_bytes = fs::metadata(generated.join("graph.json")).unwrap().len();
+    assert!(
+        graph_bytes < 10 * 1024 * 1024,
+        "graph.json must stay inside the 10 MiB transfer budget"
+    );
+}
+
+fn thousands(value: u64) -> String {
+    let digits = value.to_string();
+    let mut grouped = String::new();
+    for (index, ch) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    grouped
+}
+
 #[test]
 fn relation_selection_fails_closed_before_any_expensive_work() {
     let dir = contract_dir("selection");
@@ -310,6 +367,40 @@ fn all_real_v4_manifest_binds_every_artifact_and_input_hash() {
     assert_eq!(candidates["schemaVersion"], 2);
     assert_eq!(candidates["rule"], "billingPairDerivation/v2");
     assert_eq!(candidates["automaticSeedWrite"], false);
+
+    // 9 件の verified pair すべてが一次資料への trace を持つ。legacy 7 + radial 2。
+    let verified_pair_ids = graph["billingPairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|pair| pair["pairEligibility"]["status"] == "verified_one_section_ahead")
+        .map(|pair| pair["id"].as_str().unwrap().to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    let provenance_ids = manifest["provenance"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            let id = entry["id"].as_str().unwrap().to_string();
+            assert!(
+                entry["source"]
+                    .as_str()
+                    .is_some_and(|s| s.starts_with("https://")),
+                "provenance {} must name a primary source",
+                id
+            );
+            assert!(
+                entry["notes"]
+                    .as_str()
+                    .is_some_and(|s| !s.trim().is_empty()),
+                "provenance {} must carry notes",
+                id
+            );
+            id
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(verified_pair_ids.len(), 9);
+    assert_eq!(provenance_ids, verified_pair_ids);
     let _ = fs::remove_dir_all(dir);
 }
 

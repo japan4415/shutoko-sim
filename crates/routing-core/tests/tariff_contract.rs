@@ -1,7 +1,7 @@
 use serde_json::json;
 use shutoko_routing_core::{
     calculate_tariff_micros_yen, calculate_tariff_yen, prepare_json, read_tariff_v3, search_json,
-    TariffResolver, TariffRuleV3, TariffScope,
+    TariffResolutionStatus, TariffResolver, TariffRuleV3, TariffScope,
 };
 use time::OffsetDateTime;
 
@@ -257,6 +257,49 @@ fn v3_candidates_propagate_official_provenance_and_reject_scope_mismatch() {
         "a foreign vehicle profile must be rejected before the scope gate, got {}",
         profile_error.message
     );
+}
+
+/// 最初の期間より前の `pricingAt` は範囲外なので `expired` になる。docs/data-pipeline.md は
+/// 「active 期間外は `expired` とする」と記しており、engine の legacy 経路も同じ扱いにする。
+#[test]
+fn pricing_before_the_first_rule_period_is_expired_not_unpriced() {
+    let resolver = TariffResolver::new(read_tariff_v3(&catalog_json()).unwrap()).unwrap();
+    let scope = TariffScope::product();
+
+    // 最初の規則は 2022-03-31T15:00:00Z 開始なので、その 1 秒前は範囲外。
+    let before_first = resolver
+        .resolve_od(
+            "ramp:c1-outer:kasumigaseki-entry",
+            "ramp:c1-outer:daikancho-exit",
+            "2022-03-31T14:59:59Z",
+            &scope,
+        )
+        .unwrap();
+    assert_eq!(before_first.status, TariffResolutionStatus::Expired);
+    assert_eq!(before_first.amount_yen, None);
+    assert_eq!(before_first.rule_id, None);
+
+    let far_before = resolver
+        .resolve_assignment(
+            "assignment:c1-outer:kasumigaseki-daikancho",
+            "2020-01-01T00:00:00Z",
+            &scope,
+        )
+        .unwrap();
+    assert_eq!(far_before.status, TariffResolutionStatus::Expired);
+    assert_eq!(far_before.amount_yen, None);
+
+    // 期間との境界は半開区間のまま。
+    let at_first = resolver
+        .resolve_od(
+            "ramp:c1-outer:kasumigaseki-entry",
+            "ramp:c1-outer:daikancho-exit",
+            "2022-03-31T15:00:00Z",
+            &scope,
+        )
+        .unwrap();
+    assert_eq!(at_first.status, TariffResolutionStatus::Priced);
+    assert_eq!(at_first.amount_yen, Some(300));
 }
 
 #[test]

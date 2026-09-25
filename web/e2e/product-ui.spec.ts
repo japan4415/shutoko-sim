@@ -1680,6 +1680,12 @@ test("(45) 目黒座標の検証済みradial候補は4区間と商品対象を�
   await expect(card).toBeVisible();
   await expect(card.locator(".charging")).toHaveText("首都高区間: 入口 → 周回 → 戻り");
   await expect(card.locator(".toll")).toHaveText("料金額: 790 円（最安順位 1 位）");
+  // 金額は割引適用前の基本料金。円あたり効率も同じ料金での比較だと分かるようにする。
+  await expect(card.locator(".fare-label")).toHaveText("上記は普通車ETC基本料金（割引適用前）です");
+  // 金額は適用期間で変わるため数値そのものは固定せず、効率行の書き方と注記を固定する。
+  await expect(card.locator(".efficiency")).toHaveText(
+    /^1 円あたり 約 [\d.]+ 分（普通車ETC基本料金（割引適用前）で比較）$/,
+  );
   const routeSteps = card.locator(".route-order-list li");
   await expect(routeSteps).toHaveCount(4);
   await expect(routeSteps.nth(0)).toContainText("入口アプローチ");

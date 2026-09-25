@@ -274,6 +274,7 @@ describe("ramps.ts: 入口・出口の役割分離と非対応理由（getRampEl
     let wrongKindCount = 0;
     let structNoLoopCount = 0;
     let unsupportedCount = 0;
+    let unresolvedCount = 0;
     let closedCount = 0;
     let boundaryCount = 0;
 
@@ -294,6 +295,10 @@ describe("ramps.ts: 入口・出口の役割分離と非対応理由（getRampEl
           structNoLoopCount++;
           expect(el.statusLabel).toBe("周回不可");
           expect(el.reason).toContain("NO_LOOP");
+        } else if (el.category === "unresolved") {
+          unresolvedCount++;
+          expect(el.statusLabel).toBe("未解決");
+          expect(el.reason).toContain("未解決");
         } else if (el.category === "unsupported") {
           unsupportedCount++;
           expect(el.statusLabel).toBe("未対応");
@@ -313,7 +318,8 @@ describe("ramps.ts: 入口・出口の役割分離と非対応理由（getRampEl
     expect(selectableCount).toBe(100);
     expect(wrongKindCount).toBe(191);
     expect(structNoLoopCount).toBe(13);
-    expect(unsupportedCount).toBe(69);
+    expect(unresolvedCount).toBe(1);
+    expect(unsupportedCount).toBe(68);
     expect(closedCount).toBe(2);
     expect(boundaryCount).toBe(24);
   });
@@ -368,6 +374,42 @@ describe("ramps.ts: 入口・出口の役割分離と非対応理由（getRampEl
     expect(unsupportedCount).toBe(66);
     expect(closedCount).toBe(2);
     expect(boundaryCount).toBe(24);
+  });
+
+  it("芝公園入口外回りは未対応ではなく reason code 付きの未解決として表示される", async () => {
+    const { rawRamps, manifest } = await loadFixtureRampsAndManifest();
+    const ramps = validateRampsArtifact(rawRamps, manifest.coverage.endpointCapabilities);
+
+    const unresolved = ramps.filter((r) => r.supportState === "unresolved");
+    expect(unresolved.map((r) => r.id)).toEqual(["ramp:c1-outer:shibakoen-entry"]);
+
+    const shibakoen = unresolved[0];
+    expect(shibakoen.supportReasonCode).toBe("CONDITIONAL_ACCESS_RESTRICTION");
+    expect(shibakoen.routingCapability).toBe("unsupported");
+    expect(shibakoen.bound).toBe(false);
+
+    const asEntry = getRampEligibility(shibakoen, "entry");
+    expect(asEntry.selectable).toBe(false);
+    expect(asEntry.category).toBe("unresolved");
+    expect(asEntry.statusLabel).toBe("未解決");
+    expect(asEntry.reason).toContain("未解決 [CONDITIONAL_ACCESS_RESTRICTION]");
+
+    // 恒久的な利用不可（unsupported）とは別カテゴリなので、混同しない。
+    const permanent = ramps.find(
+      (r) => r.routingCapability === "unsupported" && r.supportState === "unsupported",
+    );
+    expect(permanent).toBeDefined();
+    expect(getRampEligibility(permanent as RampItem, "entry").category).toBe("unsupported");
+
+    // 未解決ランプが routable 分類へ差し替えられた場合は fail closed にする。
+    const badBound = JSON.parse(JSON.stringify(rawRamps));
+    const target = badBound.ramps.find(
+      (item: RampItem) => item.id === "ramp:c1-outer:shibakoen-entry",
+    );
+    target.bound = true;
+    expect(() => validateRampsArtifact(badBound, manifest.coverage.endpointCapabilities)).toThrowError(
+      /unsupported 分類/,
+    );
   });
 });
 

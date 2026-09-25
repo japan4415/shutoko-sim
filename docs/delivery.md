@@ -2,7 +2,7 @@
 
 ## 現在地
 
-Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v4` は graph schema 4 で、22,824 nodes / 22,987 edges、53 route memberships（双方向 46 件に全 route relation cover の forward 7 件）、legacy 8 件と radial 2 件からなる 10 billing pairs（`billingPairsVersion=v3`、`tariffModelVersion=1`）、証拠がある236件（単一 way binding 235件 + 天現寺の multi-way candidate 1件）だけを exact directed segment に bind する。残るactive一般135件は理由・証拠付き `unsupported`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み236件は `routable` 201件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。この10件の `pairEligibility` は `verified_one_section_ahead` 9 件と `unverified` 1 件（`bp:c1-outer:shibakoen-iikura`、public way が access:conditional）である。内回り銀座入口→新富町出口（#34）は exact evidence が未確定なので商品ペアとして登録せず、導出レポートでは `hold` として残す。manifest は graph.json / od-tariffs.json / pair-candidates.json / ramps.json / snap-index.json の 5 成果物と、料金表 v3 の正本（`tariffModelVersion=1`、10 件の OD assignment と期間別 evidence）、導出ルールの `pairDerivation`（5 入力の SHA-256、候補 11 件 = eligible 9 / hold 2、relation 26 件のうち 11 件展開）を結ぶ。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
+Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v4` は graph schema 4 で、22,824 nodes / 22,987 edges、53 route memberships（双方向 46 件に全 route relation cover の forward 7 件）、legacy 8 件と radial 2 件からなる 10 billing pairs（`billingPairsVersion=v3`、`tariffModelVersion=1`）、証拠がある236件（単一 way binding 235件 + 天現寺の multi-way candidate 1件）だけを exact directed segment に bind する。残るactive一般134件は理由・証拠付き `unsupported`、1件（芝公園入口外回り、way `40969792` の `access:conditional`）は reason code `CONDITIONAL_ACCESS_RESTRICTION` 付きの `unresolved`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み236件は `routable` 201件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。この10件の `pairEligibility` は `verified_one_section_ahead` 9 件と `unverified` 1 件（`bp:c1-outer:shibakoen-iikura`、public way が access:conditional）である。内回り銀座入口→新富町出口（#34）は exact evidence が未確定なので商品ペアとして登録せず、導出レポートでは `hold` として残す。manifest は graph.json / od-tariffs.json / pair-candidates.json / ramps.json / snap-index.json の 5 成果物と、料金表 v3 の正本（`tariffModelVersion=1`、10 件の OD assignment と期間別 evidence）、導出ルールの `pairDerivation`（5 入力の SHA-256、候補 11 件 = eligible 9 / hold 2、relation 26 件のうち 11 件展開）を結ぶ。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
 
 このverified pairの縮退と最近接入口優先（Issue #57）は正確性優先の設計である。座標検索は最近接の構造的に利用可能な入口 tier を優先し、東京駅の現行実測は最近接の宝町入口 tier（`ramp:c1-inner:takaracho-entry` → `ramp:c1-outer:takaracho-exit`）が選択され、`minPlanSeconds=1,610`秒（約26.83分）となる。15〜26分窓では最近接 tier の周回が上限を超えるため `no_candidates/TIME_WINDOW` 診断となり、15〜27分窓で成立する。また、30〜60分窓でも同一の宝町 tier から計画時間 2,795 秒・周回 20,205 m の候補が成立する（料金は未算出、`shutoko_time`）。release real-graph test はこの26/27分境界および30〜60分窓の成立、さらに目黒代表座標での最近接目黒ランプ選択を明示的に固定する。
 
@@ -190,7 +190,7 @@ Issue #72のコード実装、release設定、物理端末の4系列検証、公
 ### 実装済み（このリポジトリで検証している）
 
 - 料金表 v3（`data/od-tariffs.json`、`tariffModelVersion=1`）: 規則 2 期間、evidence 20 件、assignment 10 件、deprecated 2 件。2025-04 / 2026-10 の両版を人手レビュー済みで `pendingEvidence` は空。
-- 端点解決 `firstPublicRoadConnection/v1`: 天現寺を 4 way / 16 Edge・hash `bb9114f49d...` で `verified_bound` にし、芝公園入口の `access:conditional` を fail-closed にした。
+- 端点解決 `firstPublicRoadConnection/v1`: 天現寺を 4 way / 16 Edge・hash `bb9114f49d...` で `verified_bound` にし、芝公園入口外回りの `access:conditional` は reason code `CONDITIONAL_ACCESS_RESTRICTION` 付きの `unresolved` として fail-closed にした（`supportState` は `unsupported` ではなく `unresolved`）。
 - 課金ペアの自動導出 `billingPairDerivation/v2`: `pair-candidates.json`（候補 11 / eligible 9 / hold 2、relation 11 展開・15 失敗）、seed の自動変更なし。
 - `all-real-v4` の 5 成果物と manifest: 決定論的再生成、3 世代のバイト一致、route relation coverage、C1 legacy 回帰（神田橋・霞が関）、代表 4 地点の実測（`fixtures/representative-locations.json`）、web 統合テスト 261 件、E2E 55 件。
 - Web / Workers の release 許可リスト: `DEFAULT_RELEASE_ID` と `ALLOWED_RELEASES` は `all-real-v4` を含み、`all-real-v3` を残したまま運用する。rollback は Web の既定 1 行だけで成立する。
@@ -205,7 +205,7 @@ Issue #72のコード実装、release設定、物理端末の4系列検証、公
 
 ### 保留（根拠 evidence が揃うまで昇格しない）
 
-- `bp:c1-outer:shibakoen-iikura`: 接続一般道 way `40969792` の `access:conditional=no @ (08:00-20:00)`。時間帯モデルが導入されるまで `unverified` のまま商品推薦から外す。
+- `bp:c1-outer:shibakoen-iikura`: 接続一般道 way `40969792` の `access:conditional=no @ (08:00-20:00)`。入口ランプは `supportState=unresolved`（reason code `CONDITIONAL_ACCESS_RESTRICTION`）、導出レポートの entry gate は `Unresolved` / `ENTRY_BINDING_UNRESOLVED`。時間帯モデルが導入されるまで `unverified` のまま商品推薦から外す。
 - `bp:c1-inner:ginza-shintomicho`（#34）: 料金セルは `assignment:c1-inner:ginza-shintomicho`（0.4km / 300円）として残るが、relation 制約つきの First Exit 検証が通らないため商品ペアとして登録しない。隣接関係証跡は `blocked`、導出レポートは `hold`。
 - 銀座・六本木での料金付き商品候補: 最寄りの入口が内回りランプで 1 区間先に検証済みペアが無いため、現状は未価格の `topology_only` になる。有料候補を gate として求めるなら Issue #57 の最近接 tier 制限か検証済みペアの登録を変更する必要がある（本フェーズの範囲外）。
 - 未展開の 15 route relation: reason code 付きで記録され、無言でスキップはしない。relation ごとに proof と manifest を要求してから公開を広げる。

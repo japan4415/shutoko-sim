@@ -900,6 +900,8 @@ pub struct PairCandidateEndpointReport {
     pub ramp_id: String,
     pub name: String,
     pub support_state: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_reason_code: Option<String>,
     pub binding_evidence_id: Option<String>,
     pub route_membership_id: Option<String>,
     pub gate: PairDerivationGate,
@@ -1223,6 +1225,32 @@ fn resolve_endpoint(
         .iter()
         .filter(|candidate| candidate.ramp_id == ramp_id && candidate.status == "unresolved")
         .min_by(|left, right| left.candidate_id.cmp(&right.candidate_id));
+    if inventory_item.support_state.as_deref() == Some("unresolved") {
+        // 恒久的な利用不可ではなく exact binding が未解決という状態。時間帯モデルで
+        // 解決しうる証拠（access:conditional など）は reason code で区別する。
+        let role_code = role.to_ascii_uppercase();
+        return Ok(ResolvedEndpoint {
+            report: PairCandidateEndpointReport {
+                ramp_id: ramp_id.to_string(),
+                name: inventory_item.facility_name.clone(),
+                support_state: endpoint_support_state_wire_value(EndpointSupportState::Unresolved)
+                    .to_string(),
+                support_reason_code: inventory_item.support_reason_code.clone(),
+                binding_evidence_id: unresolved_candidate.map(|candidate| {
+                    format!("osm-ramp-binding-candidate:{}", candidate.candidate_id)
+                }),
+                route_membership_id: None,
+                gate: gate(
+                    PairDerivationGateStatus::Unresolved,
+                    [format!("{role_code}_BINDING_UNRESOLVED")],
+                ),
+            },
+            state: EndpointSupportState::Unresolved,
+            edge_id: None,
+            directed_segments: Vec::new(),
+            binding_candidates: Vec::new(),
+        });
+    }
     if inventory_item.support_state.as_deref() == Some("verified_bound") {
         let graph_ramp = graph.ramps.iter().find(|ramp| ramp.id == ramp_id);
         let evidence = bound_evidence
@@ -1266,6 +1294,7 @@ fn resolve_endpoint(
                     EndpointSupportState::VerifiedBound,
                 )
                 .to_string(),
+                support_reason_code: None,
                 binding_evidence_id: evidence.map(|value| value.binding_evidence_id.clone()),
                 route_membership_id: membership_id,
                 gate: gate(gate_status, reason_codes),
@@ -1299,6 +1328,7 @@ fn resolve_endpoint(
                 name: inventory_item.facility_name.clone(),
                 support_state: endpoint_support_state_wire_value(EndpointSupportState::Unresolved)
                     .to_string(),
+                support_reason_code: None,
                 binding_evidence_id: Some(binding_evidence_id),
                 route_membership_id: None,
                 gate: gate(
@@ -1337,6 +1367,7 @@ fn resolve_endpoint(
             name: inventory_item.facility_name.clone(),
             support_state: endpoint_support_state_wire_value(EndpointSupportState::Unsupported)
                 .to_string(),
+            support_reason_code: None,
             binding_evidence_id: None,
             route_membership_id: None,
             gate: gate(PairDerivationGateStatus::Failed, [reason]),

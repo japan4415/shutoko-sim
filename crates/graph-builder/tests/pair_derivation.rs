@@ -227,13 +227,24 @@ fn derives_all_official_candidates_with_independent_gates() {
         blocked_inner.promotion_decision,
         PairDerivationPromotionDecision::Hold
     );
+    // 芝公園入口外回りは access:conditional で exact binding が未解決なので
+    // gate は Unresolved（恒久的な利用不可の Failed ではない）。
     assert_eq!(
         blocked_inner.gates.entry_binding.status,
-        PairDerivationGateStatus::Failed
+        PairDerivationGateStatus::Unresolved
     );
-    assert!(blocked_inner
-        .rejection_reasons
-        .contains(&"ENTRY_BINDING_UNSUPPORTED".to_string()));
+    assert_eq!(blocked_inner.entry.support_state, "unresolved");
+    assert_eq!(
+        blocked_inner.entry.support_reason_code.as_deref(),
+        Some("CONDITIONAL_ACCESS_RESTRICTION")
+    );
+    assert_eq!(
+        blocked_inner.rejection_reasons,
+        vec![
+            "ENTRY_BINDING_UNRESOLVED".to_string(),
+            "ROUTE_PLAN_ROLES_UNRESOLVED".to_string(),
+        ]
+    );
 
     let blocked_shintomicho = pair("bp:c1-inner:ginza-shintomicho");
     assert_eq!(
@@ -247,6 +258,20 @@ fn derives_all_official_candidates_with_independent_gates() {
     assert!(blocked_shintomicho
         .rejection_reasons
         .contains(&"ROUTE_PLAN_EVIDENCE_UNRESOLVED".to_string()));
+    // #34 が持つ全 rejection reason を完全固定する（1 本だけ contains で検査しない）。
+    assert_eq!(
+        blocked_shintomicho.rejection_reasons,
+        vec![
+            "EXIT_BINDING_UNSUPPORTED".to_string(),
+            "EXIT_EXACT_BINDING_UNRESOLVED".to_string(),
+            "FIRST_EXIT_UNRESOLVED".to_string(),
+            "LEGACY_DIRECTION_UNRESOLVED".to_string(),
+            "LEGACY_ROUTE_RESOLUTION_FAILED".to_string(),
+            "MANDATORY_LAP_UNRESOLVED".to_string(),
+            "ROUTE_PLAN_EVIDENCE_UNRESOLVED".to_string(),
+            "ROUTE_PLAN_ROLES_UNRESOLVED".to_string(),
+        ]
+    );
     for pair_id in [
         "bp:2-inbound:meguro:c1-inner:tengenji",
         "bp:2-inbound:meguro:c1-outer:tengenji",

@@ -288,7 +288,7 @@
     "rule": "billingPairDerivation/v2",
     "inputHashes": {
       "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
-      "rampLedgerSha256": "760eac45a2b0796a2cfe1c159acbeca87482b356e01f819f530c9514d213db77",
+      "rampLedgerSha256": "97ad8b378f1dcdd7d1c6af95164727860e040635bb821eaee043cb840b0aa5cc",
       "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
       "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
       "odTariffsSha256": "4183288752326da3549fde6f537d2afec5971a4f156880a088cf0aad42866215"
@@ -884,13 +884,13 @@
     },
     {
       "path": "pair-candidates.json",
-      "sha256": "56c6e228654bfd5e7d3b054a961e4b0a137b13687f3e2f0274bce0386bb609b9",
-      "byteLength": 75670
+      "sha256": "38ba4448eeb74c61375f2b778c932b7424285e3e11a20659b3a4f7c29de9919b",
+      "byteLength": 75737
     },
     {
       "path": "ramps.json",
-      "sha256": "b5523c0a86310b678cd66a2c0e08c73759705d0e08a89ca0a91b80c771f37cc1",
-      "byteLength": 278142
+      "sha256": "3835043405ee6d5e88927ed1623528461537b1b32695bc1b110ffcc2da5ecdd8",
+      "byteLength": 278337
     },
     {
       "path": "snap-index.json",

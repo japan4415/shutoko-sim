@@ -4308,8 +4308,22 @@ fn test_cli_with_full_fixtures() {
             .iter()
             .filter(|r| r["supportState"] == "unsupported" && r["bound"] == false)
             .count(),
-        135
+        134
     );
+    // 芝公園入口外回りだけは exact binding が未解決（access:conditional）で、
+    // 恒久的な利用不可（unsupported）とは区別して reason code 付きで公開する。
+    let unresolved = active_general
+        .iter()
+        .filter(|r| r["supportState"] == "unresolved")
+        .collect::<Vec<_>>();
+    assert_eq!(unresolved.len(), 1);
+    assert_eq!(unresolved[0]["id"], "ramp:c1-outer:shibakoen-entry");
+    assert_eq!(
+        unresolved[0]["supportReasonCode"],
+        "CONDITIONAL_ACCESS_RESTRICTION"
+    );
+    assert_eq!(unresolved[0]["routingCapability"], "unsupported");
+    assert_eq!(unresolved[0]["bound"], false);
     assert_eq!(
         active_general
             .iter()

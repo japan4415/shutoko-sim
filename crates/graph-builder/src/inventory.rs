@@ -35,6 +35,8 @@ pub struct CanonicalRampInventoryItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub support_state: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_reason_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub support_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub support_evidence: Vec<String>,
@@ -343,6 +345,8 @@ pub struct RampArtifactEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub support_state: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_reason_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub support_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub routing_capability: Option<String>,
@@ -456,9 +460,12 @@ pub fn validate_ramp_inventory(inv: &RampInventoryFile) -> Result<(), Vec<String
             let expected_general = r.status == "active"
                 && matches!(r.kind, RampKind::GeneralEntry | RampKind::GeneralExit);
             let valid_state = if expected_general {
+                // `unresolved` は exact binding を立証できないが、恒久的に利用不可とは
+                // 断定していない状態（例: access:conditional の地表接続）。条件付き規制の
+                // ように時間モデルで解決しうる証拠は reason code で区別する。
                 matches!(
                     r.support_state.as_deref(),
-                    Some("verified_bound" | "unsupported")
+                    Some("verified_bound" | "unresolved" | "unsupported")
                 )
             } else {
                 r.support_state.as_deref() == Some("not_routable")
@@ -468,6 +475,12 @@ pub fn validate_ramp_inventory(inv: &RampInventoryFile) -> Result<(), Vec<String
                     "ramp {} has supportState {:?} inconsistent with status/kind",
                     r.ramp_id, r.support_state
                 ));
+            }
+            if r.support_reason_code
+                .as_deref()
+                .is_some_and(|code| code.trim().is_empty())
+            {
+                errors.push(format!("ramp {} has an empty supportReasonCode", r.ramp_id));
             }
             if r.support_reason.as_deref().unwrap_or_default().is_empty() {
                 errors.push(format!("ramp {} has empty supportReason", r.ramp_id));
@@ -2576,6 +2589,7 @@ pub fn bind_ramps_to_graph(
                 lon: item.lon,
                 status: item.status.clone(),
                 support_state: item.support_state.clone(),
+                support_reason_code: item.support_reason_code.clone(),
                 support_reason: item.support_reason.clone(),
                 routing_capability: item.routing_capability.clone(),
                 routing_capability_reason: item.routing_capability_reason.clone(),
@@ -2601,6 +2615,7 @@ pub fn bind_ramps_to_graph(
                 lon: item.lon,
                 status: item.status.clone(),
                 support_state: item.support_state.clone(),
+                support_reason_code: item.support_reason_code.clone(),
                 support_reason: item.support_reason.clone(),
                 routing_capability: item.routing_capability.clone(),
                 routing_capability_reason: item.routing_capability_reason.clone(),
@@ -3322,7 +3337,28 @@ mod tests {
                 .iter()
                 .filter(|r| r.support_state.as_deref() == Some("unsupported"))
                 .count(),
-            135
+            134
+        );
+        // 芝公園入口外回りは access:conditional のため恒久的な利用不可ではなく
+        // exact binding が未解決という状態で、reason code を持つ。
+        let unresolved: Vec<_> = active_general
+            .iter()
+            .filter(|r| r.support_state.as_deref() == Some("unresolved"))
+            .collect();
+        assert_eq!(
+            unresolved
+                .iter()
+                .map(|r| r.ramp_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["ramp:c1-outer:shibakoen-entry"]
+        );
+        assert_eq!(
+            unresolved[0].support_reason_code.as_deref(),
+            Some("CONDITIONAL_ACCESS_RESTRICTION")
+        );
+        assert_eq!(
+            unresolved[0].routing_capability.as_deref(),
+            Some("unsupported")
         );
         for ramp in &active_general {
             let bound = binding_by_id.contains_key(ramp.ramp_id.as_str())
@@ -4074,6 +4110,7 @@ mod tests {
                     coordinate_status: Some("derived".into()),
                     restriction_status: Some("unverified".into()),
                     support_state: None,
+                    support_reason_code: None,
                     support_reason: None,
                     support_evidence: vec![],
                     routing_capability: None,
@@ -4096,6 +4133,7 @@ mod tests {
                     coordinate_status: Some("derived".into()),
                     restriction_status: Some("unverified".into()),
                     support_state: None,
+                    support_reason_code: None,
                     support_reason: None,
                     support_evidence: vec![],
                     routing_capability: None,
@@ -4131,6 +4169,7 @@ mod tests {
                 coordinate_status: Some("derived".into()),
                 restriction_status: Some("unverified".into()),
                 support_state: None,
+                support_reason_code: None,
                 support_reason: None,
                 support_evidence: vec![],
                 routing_capability: None,
@@ -4165,6 +4204,7 @@ mod tests {
                 coordinate_status: Some("bogus_status".into()),
                 restriction_status: Some("unverified".into()),
                 support_state: None,
+                support_reason_code: None,
                 support_reason: None,
                 support_evidence: vec![],
                 routing_capability: None,

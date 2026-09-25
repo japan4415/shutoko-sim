@@ -10,7 +10,7 @@ import {
 
 export type RampKind = "general_entry" | "general_exit" | "boundary_in" | "boundary_out";
 export type RampStatus = "active" | "closed";
-export type SupportState = "verified_bound" | "unsupported" | "not_routable";
+export type SupportState = "verified_bound" | "unresolved" | "unsupported" | "not_routable";
 export type RoutingCapability = "routable" | "structural_no_loop" | "unsupported" | "not_routable";
 
 export interface RampItem {
@@ -24,6 +24,7 @@ export interface RampItem {
   lon: number;
   status: RampStatus;
   supportState: SupportState;
+  supportReasonCode?: string;
   supportReason: string;
   routingCapability: RoutingCapability;
   routingCapabilityReason: string;
@@ -80,6 +81,7 @@ export interface RampsDataset {
 export type EligibilityCategory =
   | "routable"
   | "structural_no_loop"
+  | "unresolved"
   | "unsupported"
   | "boundary"
   | "closed"
@@ -202,6 +204,7 @@ const ALLOWED_KINDS = new Set<RampKind>([
 const ALLOWED_STATUSES = new Set<RampStatus>(["active", "closed"]);
 const ALLOWED_SUPPORT_STATES = new Set<SupportState>([
   "verified_bound",
+  "unresolved",
   "unsupported",
   "not_routable",
 ]);
@@ -403,7 +406,14 @@ export function validateRampsArtifact(
       nodeId = requireBindingId(r, "nodeId");
       mainlineNodeId = requireBindingId(r, "mainlineNodeId");
     } else if (r.routingCapability === "unsupported") {
-      if (!generalKind || r.status !== "active" || r.supportState !== "unsupported" || r.bound !== false) {
+      // supportState=unresolved は exact binding が未解決、unsupported は恒久的な利用不可。
+      // どちらも bound=false で公開選択対象から除外する。
+      if (
+        !generalKind ||
+        r.status !== "active" ||
+        (r.supportState !== "unsupported" && r.supportState !== "unresolved") ||
+        r.bound !== false
+      ) {
         throw new PipelineError("ARTIFACT_MISMATCH", `ramps.json ${r.id} の unsupported 分類が不整合です`);
       }
       rejectUnexpectedBindingIds(r);
@@ -429,6 +439,7 @@ export function validateRampsArtifact(
       lon: r.lon,
       status: r.status as RampStatus,
       supportState: r.supportState as SupportState,
+      supportReasonCode: typeof r.supportReasonCode === "string" ? r.supportReasonCode : undefined,
       supportReason: r.supportReason as string,
       routingCapability: r.routingCapability as RoutingCapability,
       routingCapabilityReason: r.routingCapabilityReason as string,
@@ -511,6 +522,30 @@ export function validateRampsArtifact(
 }
 
 /**
+ * `routingCapability=unsupported` のランプを 2 つに分ける。
+ * `supportState=unresolved` は exact binding が未解決（時間帯モデルで解決しうる証拠がある）、
+ * `supportState=unsupported` は恒久的に利用不可として扱う。どちらも選択はできない。
+ */
+function unsupportedEligibility(ramp: RampItem): RampEligibility {
+  const note = ramp.supportReason || ramp.routingCapabilityReason || "OSM segmentが未監査またはグラフ外のため未対応です。";
+  if (ramp.supportState === "unresolved") {
+    const code = ramp.supportReasonCode ? ` [${ramp.supportReasonCode}]` : "";
+    return {
+      selectable: false,
+      statusLabel: "未解決",
+      reason: `未解決${code}: ${note}`,
+      category: "unresolved",
+    };
+  }
+  return {
+    selectable: false,
+    statusLabel: "未対応",
+    reason: `未対応: ${note}`,
+    category: "unsupported",
+  };
+}
+
+/**
  * 入口／出口としての選択可否・状態ラベル・理由を判定する。
  */
 export function getRampEligibility(ramp: RampItem, role: "entry" | "exit"): RampEligibility {
@@ -549,13 +584,7 @@ export function getRampEligibility(ramp: RampItem, role: "entry" | "exit"): Ramp
       };
     }
     if (ramp.routingCapability === "unsupported") {
-      const note = ramp.supportReason || ramp.routingCapabilityReason || "OSM segmentが未監査またはグラフ外のため未対応です。";
-      return {
-        selectable: false,
-        statusLabel: "未対応",
-        reason: `未対応: ${note}`,
-        category: "unsupported",
-      };
+      return unsupportedEligibility(ramp);
     }
     if (ramp.routingCapability === "routable") {
       return {
@@ -608,13 +637,7 @@ export function getRampEligibility(ramp: RampItem, role: "entry" | "exit"): Ramp
     };
   }
   if (ramp.routingCapability === "unsupported") {
-    const note = ramp.supportReason || ramp.routingCapabilityReason || "OSM segmentが未監査またはグラフ外のため未対応です。";
-    return {
-      selectable: false,
-      statusLabel: "未対応",
-      reason: `未対応: ${note}`,
-      category: "unsupported",
-    };
+    return unsupportedEligibility(ramp);
   }
   if (ramp.routingCapability === "routable") {
     return {

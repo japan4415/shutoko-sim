@@ -4,7 +4,7 @@
   "automaticSeedWrite": false,
   "inputHashes": {
     "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
-    "rampLedgerSha256": "760eac45a2b0796a2cfe1c159acbeca87482b356e01f819f530c9514d213db77",
+    "rampLedgerSha256": "97ad8b378f1dcdd7d1c6af95164727860e040635bb821eaee043cb840b0aa5cc",
     "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
     "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
     "odTariffsSha256": "4183288752326da3549fde6f537d2afec5971a4f156880a088cf0aad42866215"
@@ -2269,13 +2269,14 @@
       "entry": {
         "rampId": "ramp:c1-outer:shibakoen-entry",
         "name": "芝公園",
-        "supportState": "unsupported",
+        "supportState": "unresolved",
+        "supportReasonCode": "CONDITIONAL_ACCESS_RESTRICTION",
         "bindingEvidenceId": null,
         "routeMembershipId": null,
         "gate": {
-          "status": "failed",
+          "status": "unresolved",
           "reasonCodes": [
-            "ENTRY_BINDING_UNSUPPORTED"
+            "ENTRY_BINDING_UNRESOLVED"
           ]
         }
       },
@@ -2353,9 +2354,9 @@
           "reasonCodes": []
         },
         "entryBinding": {
-          "status": "failed",
+          "status": "unresolved",
           "reasonCodes": [
-            "ENTRY_BINDING_UNSUPPORTED"
+            "ENTRY_BINDING_UNRESOLVED"
           ]
         },
         "exitBinding": {
@@ -2402,7 +2403,7 @@
       "promotionDecision": "hold",
       "automaticSeedWrite": false,
       "rejectionReasons": [
-        "ENTRY_BINDING_UNSUPPORTED",
+        "ENTRY_BINDING_UNRESOLVED",
         "ROUTE_PLAN_ROLES_UNRESOLVED"
       ]
     }

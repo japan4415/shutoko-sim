@@ -1299,7 +1299,7 @@ test("(34) ランプ検索（施設名/路線/方向/ID）、絞り込み件数�
   await expect(page.locator("#entry-count-info")).toContainText("全 399 件（選択可能 100 件）");
 });
 
-test("(35) 非対応・無効ランプの理由（周回不可・未対応・境界JCT・閉鎖・役割不一致）が明示される", async ({ page }) => {
+test("(35) 非対応・無効ランプの理由（周回不可・未対応・未解決・境界JCT・閉鎖・役割不一致）が明示される", async ({ page }) => {
   await openApp(page);
   await page.click('input[name="search-mode"][value="explicit"]');
   await expect(page.locator("#ramps-loading-status")).toContainText("399 件を検証完了");
@@ -1315,12 +1315,15 @@ test("(35) 非対応・無効ランプの理由（周回不可・未対応・境
   await expect(ikejiri.locator(".ramp-disabled-reason")).toContainText("循環SCC");
   await expect(ikejiri.locator('input[type="radio"]')).toBeDisabled();
 
-  // 2. 未対応 (unsupported): 条件付きアクセスを持つ芝公園入口外回り
+  // 2. 未解決 (supportState=unresolved): 条件付きアクセスを持つ芝公園入口外回り
   await entrySearch.fill("ramp:c1-outer:shibakoen-entry");
   const shibakoenIn = page.locator("#entry-ramp-list .ramp-item").first();
   await expect(shibakoenIn).toBeVisible();
-  await expect(shibakoenIn.locator(".ramp-status-badge")).toContainText("未対応");
-  await expect(shibakoenIn.locator(".ramp-disabled-reason")).toContainText("未対応");
+  await expect(shibakoenIn.locator(".ramp-status-badge")).toContainText("未解決");
+  await expect(shibakoenIn.locator(".ramp-disabled-reason")).toContainText("未解決");
+  await expect(shibakoenIn.locator(".ramp-disabled-reason")).toContainText(
+    "CONDITIONAL_ACCESS_RESTRICTION",
+  );
   await expect(shibakoenIn.locator('input[type="radio"]')).toBeDisabled();
 
   // 3. 役割不一致 (出口専用): 入口リストで出口ランプを探す
@@ -1473,7 +1476,7 @@ test("(39) 375x667 / 1280x800 でradio・本文・状態・理由が視認でき
     await expect(item.locator(".ramp-name")).toContainText("芝公園");
     await expect(item.locator(".ramp-route-badge")).toContainText("C1");
     await expect(item.locator(".ramp-dir-badge")).toContainText("外回り");
-    await expect(item.locator(".ramp-status-badge")).toContainText("未対応");
+    await expect(item.locator(".ramp-status-badge")).toContainText("未解決");
     await expect(item.locator(".ramp-disabled-reason")).toBeVisible();
 
     const overflow = await page.evaluate(() => {

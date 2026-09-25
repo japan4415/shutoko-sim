@@ -125,15 +125,16 @@
       "sourceDate": "2026-09-16",
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "unsupported",
-      "supportReason": "way 4853801 の地表接続 way 40969792 に access:conditional=no @ (08:00-20:00) があり、終日利用可能な公道接続を証明できない。",
+      "supportState": "unresolved",
+      "supportReasonCode": "CONDITIONAL_ACCESS_RESTRICTION",
+      "supportReason": "way 4853801 の地表接続 way 40969792 に access:conditional=no @ (08:00-20:00) があり、終日利用可能な公道接続を証明できない。時間帯モデルが無い状態では exact binding を未解決として扱い fail-closed にする。",
       "supportEvidence": [
         "https://www.openstreetmap.org/way/4853801",
         "https://www.openstreetmap.org/way/40969792",
         "firstPublicRoadConnection/v1:CONDITIONAL_ACCESS_RESTRICTION"
       ],
       "routingCapability": "unsupported",
-      "routingCapabilityReason": "条件付きアクセスを時間モデルで解決するまで探索端点として拒否する。"
+      "routingCapabilityReason": "条件付きアクセスを時間モデルで解決するまで探索端点として拒否する（supportState=unresolved）。"
     },
     {
       "rampId": "ramp:c1-inner:iikura-entry",

@@ -965,6 +965,23 @@ fn test_shibakoen_entry_negative_fixture_stops_unresolved() {
             .any(|n| n.contains("access:conditional")),
         "diagnostic notes must capture the access:conditional tag"
     );
+
+    // 正規台帳とサポート判定は、この未解決状態を reason code 付きで宣言している。
+    let inventory: shutoko_graph_builder::RampInventoryFile =
+        serde_json::from_str(include_str!("../../../data/ramp-inventory.json")).unwrap();
+    let item = inventory
+        .ramps
+        .iter()
+        .find(|ramp| ramp.ramp_id == "ramp:c1-outer:shibakoen-entry")
+        .expect("ramp:c1-outer:shibakoen-entry must be in the inventory");
+    assert_eq!(item.support_state.as_deref(), Some("unresolved"));
+    assert_eq!(
+        item.support_reason_code.as_deref(),
+        Some(REASON_CONDITIONAL_ACCESS_RESTRICTION)
+    );
+    assert_eq!(item.routing_capability.as_deref(), Some("unsupported"));
+    shutoko_graph_builder::validate_ramp_inventory(&inventory)
+        .expect("the inventory with an unresolved ramp must stay valid");
 }
 
 #[test]

@@ -141,17 +141,12 @@ fn real_graph_deserialization_and_schema_validation() {
     );
 
     for pair in &g.billing_pairs {
-        let expected_amount = if pair.id == "bp:c1-outer:kasumigaseki-daikancho" {
-            570
-        } else {
-            300
-        };
         assert_eq!(
             pair.prices
                 .iter()
                 .map(|price| price.amount_yen)
                 .collect::<Vec<_>>(),
-            vec![expected_amount, 300],
+            vec![300, 300],
             "billing pair {} prices must match the reviewed tariff records",
             pair.id
         );
@@ -665,8 +660,8 @@ const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 7] = [
     ConnectedPairContract {
         pair_id: "bp:c1-outer:kasumigaseki-daikancho",
         max_minutes: 60,
-        amount_yen: 570,
-        rationale: "霞が関〜大官町（外回り）。",
+        amount_yen: 300,
+        rationale: "霞が関〜代官町（外回り）。",
     },
     ConnectedPairContract {
         pair_id: "bp:c1-outer:ginza-shibakoen",
@@ -807,17 +802,12 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         .iter()
         .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
     {
-        let expected_amount = if pair.id == "bp:c1-outer:kasumigaseki-daikancho" {
-            570
-        } else {
-            300
-        };
         assert_eq!(
             pair.prices
                 .iter()
                 .map(|price| price.amount_yen)
                 .collect::<Vec<_>>(),
-            vec![expected_amount, 300],
+            vec![300, 300],
             "pair {} prices must match the reviewed tariff records",
             pair.id
         );

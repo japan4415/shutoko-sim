@@ -118,7 +118,7 @@
   - 参照日: `2026-09-10`
 - **通行料金**: 首都高速道路株式会社の公式料金表と 2026-10 改定資料に基づき、普通車 ETC 料金の 10 OD セルを期間付きで登録する。2025-04 版と 2026-10 版は別の `distanceEvidence` と `prices` を持ち、2026-10-01 JST 以降は PDF のセルと規則検算の両方が一致した `priced` とする。これにより `routing-core` が `pricingAt` と期間から正しい金額と observed distance を選べる。
   - 神田橋→宝町は 1.7km / 300円を両版で保持する。
-  - 霞が関→代官町は 2025-04 が 12.4km / 570円、2026-10 が 2.3km / 300円。
+  - 霞が関→代官町は両版とも 2.3km / 300円。570円 / 12.4km は霞が関→霞が関（対角セル）の値であり、この OD には使わない。
   - 2号目黒→天現寺は 2025-04 が 19.4km / 790円、2026-10 が 19.4km / 860円。
   - 2026-10 PDF は SHA-256 `1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5`、C1 は P.3、2号は P.4 を確認した。PDFと画像は gitignore 済み cache に置く。
   - 出典: `https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf`、`https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
@@ -129,7 +129,7 @@
 
 | # | 方向 | 入口 → 出口 | 料金距離 | 普通車 ETC 基本料金 | ペア ID | 入口 way | 出口 way | 基準点（anchor）node | 状態 |
 |---|------|------------|---------|-----------|---------|---------|---------|---------------------|------|
-| 1 | 外回り | 霞が関入口 → 代官町出口 | 12.4km → 2.3km | 570 円 → 300 円 | `bp:c1-outer:kasumigaseki-daikancho` | `916571610` | `276920911` | `577255571` | `verified_one_section_ahead` |
+| 1 | 外回り | 霞が関入口 → 代官町出口 | 2.3km → 2.3km | 300 円 → 300 円 | `bp:c1-outer:kasumigaseki-daikancho` | `916571610` | `276920911` | `577255571` | `verified_one_section_ahead` |
 | 2 | 外回り | 銀座入口 → 芝公園出口 | 3.4km → 3.4km | 300 円 → 300 円 | `bp:c1-outer:ginza-shibakoen` | `4848922` | `944671542` | `31254160` | `verified_one_section_ahead` |
 | 3 | 外回り | 芝公園入口 → 飯倉出口 | 1.6km → 1.6km | 300 円 → 300 円 | `bp:c1-outer:shibakoen-iikura` | `4853801` | `203832842` | `31296971` | **`unverified`**（端点が `access:conditional`） |
 | 4 | 内回り | 霞が関入口 → 芝公園出口 | 3.7km → 3.7km | 300 円 → 300 円 | `bp:c1-inner:kasumigaseki-shibakoen` | `916571615` | `203873821` | `264877748` | `verified_one_section_ahead` |
@@ -360,7 +360,7 @@ mandatory lap 自身の境界は `routePlan.mandatoryLap.firstEdgeId` / `lastEdg
 | `entryOsmWayId` / `entryName` | `entryId` と `entryEndpoint` | graph Edge ID は build で解決し、way 変更として seed へ書き戻さない。 |
 | `exitOsmWayId` / `exitName` | `exitId` と `exitEndpoint` | 同上。 |
 | `status`, `oneSectionAheadVerified` | `pairEligibility.status`, `pairEligibility.oneSectionAheadVerified` | raw status は変更しない。`verified` は v2 の `verified_one_section_ahead` へ正規化する。 |
-| `prices[]` | `tariff.prices[]`, `tariff.status` | 8 legacy pairと2 radial pairは2025-04 / 2026-10の期間別priceを保持する。霞が関→代官町は12.4km / 570円と2.3km / 300円、2号目黒→天現寺は19.4km / 790円と19.4km / 860円。v3 assignmentが正本。 |
+| `prices[]` | `tariff.prices[]`, `tariff.status` | 8 legacy pairと2 radial pairは2025-04 / 2026-10の期間別priceを保持する。霞が関→代官町は両版とも2.3km / 300円、2号目黒→天現寺は19.4km / 790円と19.4km / 860円。v3 assignmentが正本。 |
 | なし | `routePlanVersion`, `entryCorridor`, `anchor`, `mandatoryLap`, `returnCorridor` | radial variant だけを必須にする。 |
 | なし | `pairEligibility`, `loopValidation`, `tariff` の独立 status | endpoint support、routing capability、loop validation、料金状態を混在させない。 |
 
@@ -814,7 +814,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
   - `shutoko_distance_meters`: 首都高速上の実際の走行距離（エッジ長の積算値）。周回ループを含むため数十〜百キロ超になり得る。
   - `toll.billing_distance_meters`: 入口〜出口間の公称料金距離（OD テーブルまたはベースライン最短経路長）。
   - **OSM 幾何距離を公称料金距離として扱わない規律**: グラフ幾何から計算される実走距離（`shutoko_distance_meters`）を公称料金距離として勝手に流用しない。料金計算は `data/od-tariffs.json` の検証済み OD ペアまたは公式料金距離テーブルに明示された値のみを根拠とし、未定義区間では安易な幾何距離代用を行わず未計算（None）として誠実にモデル化する。
-  - 周回走行を行っても、料金距離は入口と出口の組み合わせで決める。現行 10 assignment は料金表 v3 の期間別 evidence を使い、霞が関→代官町は改定前 12.4km / 570円、改定後 2.3km / 300円を分ける。2号 radial pair 2 件も 1 件の assignment を共有し、19.4km / 790円・19.4km / 860円を使う。「1区間先だから 300 円」という理由だけで金額を決めない。
+  - 周回走行を行っても、料金距離は入口と出口の組み合わせで決める。現行 10 assignment は料金表 v3 の期間別 evidence を使い、霞が関→代官町は両版とも 2.3km / 300円とする。2号 radial pair 2 件も 1 件の assignment を共有し、19.4km / 790円・19.4km / 860円を使う。「1区間先だから 300 円」という理由だけで金額を決めない。
   - 3号用賀と4号高井戸の同一地点折り返しは公式 OD セルが存在しないため `deprecatedAssignments` へ移し、`amountYen=null` / `billingDistanceMeters=null` / `tariffStatus=unpriced` のまま扱う（OSM 距離での補完はしない）。
 - **検証済み OD ペア**:
   - フェーズ 1 で必要な 10 の一意 OD について、公式 OD セルと規則検算の両方が一致することを人手で確認したデータだけを保持する。料金表全体の OD マトリクス自動抽出は行わない。
@@ -836,6 +836,8 @@ cargo run --bin shutoko-graph-builder --locked -- \
 2025-04 の普通車規則は `[2022-03-31T15:00:00Z, 2026-09-30T15:00:00Z)`、2026-10 の規則は `2026-09-30T15:00:00Z` から開始する。2026-10 のパラメータは1kmあたり32.472円、下限300円、上限2,130円、ターミナルチャージ150円、税率1.10、距離量子100m、10円単位の四捨五入、3.9kmの下限境界である。改定後パラメータの根拠資料は SHA-256 `f80126994b3deee36e198f947f3f4f4c3219dd16473bbd9bc9dd296115345702` の `31-toll-shiryo.pdf` P.5-6 であり、ODセルの確認には別の2026-10 PDFを使う。
 
 2号線の inner・outer 計画は目黒入口→天現寺出口の 1 件の一意な assignment（`assignment:2:meguro-tengenji`）を共有する。2025-04 は P.4 の 19.4km / 790円、2026-10 は同じ距離で 860円である。旧設計値の 14.2km・630円は別の列の値であるため採用しない。C1 P.3 の 9 OD セルと 2号 P.4 の 1 セル（合計 10 OD）も含めて、PDF のセルと規則計算値が一致することを確認済みで、`pendingEvidence` は空、各 assignment の 2 期間とも `priced` である。`pendingResolution.status` は `completed_2026_10_pdf_review` で、PDF 自体とページ画像は gitignore 済み cache（`.cache/official-fare/`）に置き commit しない。legacy `verifiedOdPairs` は現行 reader との暫定互換投影であり、料金表 v3 の正本ではない。
+
+2026-09-26 にページ画像から 10 OD セルと 2025-04 P.4 の目黒→天現寺セルを読み直した独立照合を実施し、2026-10 の 10 セルと 2025-04 の 19.4km / 790円がすべて一致することを確認した。同じ照合で 2025-04 P.3 の霞が関→代官町が 12.4km / 570円ではなく 2.3km / 300円であることを発見し、evidence・assignment・`verifiedOdPairs`・seed・テスト・本節の記述を訂正した。12.4km / 570円は霞が関→霞が関の対角セルの値である。
 
 `migration` は既存データの keep / replace / deprecate を明示する。keep は 4 件、added は 6 件、deprecate は 3号用賀と 4号高井戸の 2 件で、`verifiedOdPairs` には deprecate した OD を含まない。
 

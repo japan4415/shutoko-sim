@@ -315601,15 +315601,15 @@
       },
       "tariff": {
         "status": "priced",
-        "amountYen": 570,
-        "observedBaseFareYen": 570,
-        "observedDistanceMeters": 12400,
-        "billingDistanceMeters": 12400,
+        "amountYen": 300,
+        "observedBaseFareYen": 300,
+        "observedDistanceMeters": 2300,
+        "billingDistanceMeters": 2300,
         "effectiveFrom": "2022-03-31T15:00:00Z",
         "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
-            "amountYen": 570,
+            "amountYen": 300,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
           },
@@ -320411,8 +320411,8 @@
     {
       "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
       "exitRampId": "ramp:c1-outer:daikancho-exit",
-      "billingDistanceMeters": 12400,
-      "amountYen": 570,
+      "billingDistanceMeters": 2300,
+      "amountYen": 300,
       "effectiveFrom": "2022-03-31T15:00:00Z",
       "effectiveTo": "2026-09-30T15:00:00Z"
     },
@@ -320515,7 +320515,7 @@
       },
       {
         "assignmentId": "assignment:c1-outer:kasumigaseki-daikancho",
-        "billingDistanceMeters": 12400,
+        "billingDistanceMeters": 2300,
         "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
         "endpointBindingReason": null,
         "endpointBindingStatus": null,
@@ -320531,13 +320531,13 @@
         "paymentMethod": "etc",
         "prices": [
           {
-            "amountYen": 570,
+            "amountYen": 300,
             "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z",
             "evidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
-            "observedBaseFareYen": 570,
-            "observedDistanceMeters": 12400,
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 2300,
             "ruleId": "shutoko-etc-ordinary-2022-04",
             "status": "priced",
             "tariffStatus": "priced"
@@ -320985,11 +320985,11 @@
         "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
       },
       {
-        "calculatedBaseFareYen": 570,
-        "cell": "p03:row-c1-kasumigaseki:column-c1-daikancho:base-etc:570yen:12.4km",
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-kasumigaseki:column-c1-daikancho:base-etc:300yen:2.3km",
         "columnLabel": "代官町",
-        "distanceLabel": "12.4km",
-        "distanceMeters": 12400,
+        "distanceLabel": "2.3km",
+        "distanceMeters": 2300,
         "documentId": "shutoko-2025-04-od-fare-table",
         "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
         "edition": "2025-04",
@@ -320998,7 +320998,7 @@
         "exitRampId": "ramp:c1-outer:daikancho-exit",
         "fareVariant": "base_etc",
         "ink": "black",
-        "observedBaseFareYen": 570,
+        "observedBaseFareYen": 300,
         "page": 3,
         "reviewMethod": [
           "page_image",
@@ -321553,7 +321553,9 @@
         "The 2026-10 PDF was copied to the ignored cache and its SHA-256 was verified.",
         "The C1 cells on page 3 and the Route 2 Meguro cell on page 4 were independently checked twice.",
         "Each 2026-10 price was checked against the ordinary ETC rule, tax, rounding, minimum, and maximum bounds.",
-        "The PDF and rendered page images remain untracked cache files."
+        "The PDF and rendered page images remain untracked cache files.",
+        "2026-09-26 independent re-read of the rendered page images confirmed all ten 2026-10 cells (C1 page 3 rows 神田橋/霞が関/代官町/芝公園/銀座/宝町 and Route 2 page 4 row 目黒) and the 2025-04 page 4 目黒 天現寺 cell at 19.4km / 790 yen.",
+        "The same re-read corrected one 2025-04 cell: 霞が関 to 代官町 on page 3 is 2.3km / 300 yen, not 12.4km / 570 yen. The 12.4km / 570 yen figures belong to the 霞が関 diagonal cell (霞が関 to 霞が関)."
       ]
     },
     "rules": {
@@ -321695,8 +321697,8 @@
         "exitRampId": "ramp:c1-outer:takaracho-exit"
       },
       {
-        "amountYen": 570,
-        "billingDistanceMeters": 12400,
+        "amountYen": 300,
+        "billingDistanceMeters": 2300,
         "effectiveFrom": "2022-03-31T15:00:00Z",
         "effectiveTo": "2026-09-30T15:00:00Z",
         "entryRampId": "ramp:c1-outer:kasumigaseki-entry",

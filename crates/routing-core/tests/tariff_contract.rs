@@ -56,7 +56,7 @@ fn half_open_boundary_selects_the_verified_revision_price_and_distance() {
             &TariffScope::product(),
         )
         .unwrap();
-    assert_eq!(before.amount_yen, Some(570));
+    assert_eq!(before.amount_yen, Some(300));
     assert_eq!(
         before.rule_id.as_deref(),
         Some("shutoko-etc-ordinary-2022-04")
@@ -175,7 +175,7 @@ fn v3_candidates_propagate_official_provenance_and_reject_scope_mismatch() {
             "vehicleProfile": "passenger-car-etc",
             "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
             "exitRampId": "ramp:c1-outer:daikancho-exit",
-            "prices": [{"amountYen": 570, "effectiveFrom": "2022-03-31T15:00:00Z", "effectiveTo": "2026-09-30T15:00:00Z"}]
+            "prices": [{"amountYen": 300, "effectiveFrom": "2022-03-31T15:00:00Z", "effectiveTo": "2026-09-30T15:00:00Z"}]
         }],
         "odTariffs": catalog
     });
@@ -196,7 +196,7 @@ fn v3_candidates_propagate_official_provenance_and_reject_scope_mismatch() {
         serde_json::from_str(&search_json(&graph.to_string(), &request.to_string(), "{}").unwrap())
             .unwrap();
     let toll = &result["candidates"][0]["toll"];
-    assert_eq!(toll["amountYen"], 570);
+    assert_eq!(toll["amountYen"], 300);
     assert_eq!(toll["ruleId"], "shutoko-etc-ordinary-2022-04");
     assert_eq!(
         toll["evidenceId"],

@@ -3539,14 +3539,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
         assert_eq!(seed_pair.status, VerificationStatus::Verified);
         assert!(seed_pair.one_section_ahead_verified);
         assert_eq!(seed_pair.prices.len(), 2);
-        assert_eq!(
-            seed_pair.prices[0].amount_yen,
-            if *expected_id == "bp:c1-outer:kasumigaseki-daikancho" {
-                570
-            } else {
-                300
-            }
-        );
+        assert_eq!(seed_pair.prices[0].amount_yen, 300);
         assert_eq!(seed_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
         assert_eq!(
             seed_pair.prices[0].effective_to.as_deref(),
@@ -3583,14 +3576,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
 
         assert_eq!(graph_pair.status, VerificationStatus::Verified);
         assert_eq!(graph_pair.prices.len(), 2);
-        assert_eq!(
-            graph_pair.prices[0].amount_yen,
-            if *expected_id == "bp:c1-outer:kasumigaseki-daikancho" {
-                570
-            } else {
-                300
-            }
-        );
+        assert_eq!(graph_pair.prices[0].amount_yen, 300);
         assert_eq!(graph_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
         assert_eq!(
             graph_pair.prices[0].effective_to.as_deref(),

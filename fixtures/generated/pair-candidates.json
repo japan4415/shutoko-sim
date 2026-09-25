@@ -7,7 +7,7 @@
     "rampLedgerSha256": "760eac45a2b0796a2cfe1c159acbeca87482b356e01f819f530c9514d213db77",
     "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
     "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
-    "odTariffsSha256": "6154b54f4437837c2ff562503f8e0cde5101a396d522e2f33661cbea4099999f"
+    "odTariffsSha256": "ff7e81c24f7efd95f6804a7dc0176a2b9790a72a959d8e1aa011dbf40e873b1c"
   },
   "relationCoverage": [
     {
@@ -2232,12 +2232,12 @@
       "tariff": {
         "status": "priced",
         "assignmentId": "assignment:c1-outer:kasumigaseki-daikancho",
-        "billingDistanceMeters": 12400,
+        "billingDistanceMeters": 2300,
         "prices": [
           {
             "status": "priced",
             "tariffStatus": "priced",
-            "amountYen": 570,
+            "amountYen": 300,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z",
             "ruleId": "shutoko-etc-ordinary-2022-04",

@@ -3867,9 +3867,9 @@ mod tests {
                 3,
                 "霞が関",
                 "代官町",
-                12_400,
-                570,
-                "p03:row-c1-kasumigaseki:column-c1-daikancho:base-etc:570yen:12.4km",
+                2_300,
+                300,
+                "p03:row-c1-kasumigaseki:column-c1-daikancho:base-etc:300yen:2.3km",
             ),
             (
                 "c1-outer:ginza-shibakoen",

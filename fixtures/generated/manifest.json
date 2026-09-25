@@ -291,7 +291,7 @@
       "rampLedgerSha256": "760eac45a2b0796a2cfe1c159acbeca87482b356e01f819f530c9514d213db77",
       "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
       "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
-      "odTariffsSha256": "6154b54f4437837c2ff562503f8e0cde5101a396d522e2f33661cbea4099999f"
+      "odTariffsSha256": "ff7e81c24f7efd95f6804a7dc0176a2b9790a72a959d8e1aa011dbf40e873b1c"
     },
     "summary": {
       "candidateTotal": 11,
@@ -868,24 +868,24 @@
       "id": "bp:c1-outer:kasumigaseki-daikancho",
       "source": "https://www.shutoko.jp/use/network/map/",
       "sourceDate": "2026-09-10",
-      "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff source (verified 2026-09-10): Kasumigaseki to Daikancho toll distance 12.4km and base ETC fare 570 yen (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf, page 3, row 霞が関, column 代官町). The 2026-10 OD cell is verified from the official revision tariff table (2.3km, 300 yen; page 3, row 霞が関, column 代官町)."
+      "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff source (re-verified 2026-09-26 against the rendered page image): Kasumigaseki to Daikancho toll distance 2.3km and base ETC fare 300 yen in both editions (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf, page 3, row 霞が関, column 代官町; and the official revision tariff table, page 3, same row and column). The 570 yen / 12.4km figure belongs to the 霞が関 diagonal cell (霞が関 to 霞が関), not to the 代官町 exit."
     }
   ],
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "ef1ee18f422136d50f9fe0bfcb8682b49090458734ba45a459bb90ba04372b66",
-      "byteLength": 7605829
+      "sha256": "5f6846145d9a73238d0d9415fcc10b46ff4b492831eed72c24846eb3d23e6372",
+      "byteLength": 7606313
     },
     {
       "path": "od-tariffs.json",
-      "sha256": "6154b54f4437837c2ff562503f8e0cde5101a396d522e2f33661cbea4099999f",
-      "byteLength": 48271
+      "sha256": "ff7e81c24f7efd95f6804a7dc0176a2b9790a72a959d8e1aa011dbf40e873b1c",
+      "byteLength": 48754
     },
     {
       "path": "pair-candidates.json",
-      "sha256": "eeba8630c42209bafa900e2703e3c64d74056c4a173906d84b2edc5c4c290eba",
-      "byteLength": 75671
+      "sha256": "e63ffd6a1638849b2b2508ead9a6eccd593ac2c60aa82c12746ee4ee739eee2d",
+      "byteLength": 75670
     },
     {
       "path": "ramps.json",

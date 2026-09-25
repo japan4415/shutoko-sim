@@ -232,7 +232,7 @@ Issue #69でdynamic ODを`TopologyOnlyCandidate`へ移行した。`eligibilitySt
 `eligibilityStatus`、`amountYen`、`billingDistanceMeters`、`tariffStatus` を正本にし、`chargedSectionCount=1` と `ONE_SECTION_TOLL` は legacy adapter だけで維持する。radial output には「1区間の最低料金」を表示しない。
 
 - 2号 radial は 2025-04 公式セルを 19.4km / 790円、2026-10 公式セルを 19.4km / 860円として `priced` で解決する。runtime は `pricingAt` が 2026-10-01 JST 以降なら後者を選ぶ。
-- C1 の legacy pair は料金表 v3 の assignment を正本とし、期間別の `observedBaseFareYen`・`amountYen`・`evidenceId` を使い、霞が関→代官町は改定前 12.4km / 570円、改定後 2.3km / 300円を分ける。距離は 0.1km 単位の量子に丸めてから規則で検算し、セル値と一致することを evidence ごとに確認する。
+- C1 の legacy pair は料金表 v3 の assignment を正本とし、期間別の `observedBaseFareYen`・`amountYen`・`evidenceId` を使い、霞が関→代官町は両版とも 2.3km / 300円とする。距離は 0.1km 単位の量子に丸めてから規則で検算し、セル値と一致することを evidence ごとに確認する。570円 / 12.4km は霞が関→霞が関（対角セル）の値であり代官町列には適用しない。
 - 旧設計で用いていた 2号の値（14.2km / 630円）は別の OD セルの値であり採用しない。金額と料金距離は必ず期間別 evidence のセル値から取る。
 - OSM driven distance や未確認の tariff を billing distance / 金額へ代入しない。3号用賀と4号高井戸の同一地点折り返しは公式 OD セルが無いため assignment から deprecate し、`tariffStatus=unpriced` のまま扱う。
 - dynamic OD は `topology_only` とし、商品 ranking cohort に入れない。`time_per_yen` は `tariffStatus=priced` の候補だけで比較する。

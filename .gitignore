@@ -14,3 +14,8 @@
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Research and PDF cache
+/.cache/
+*.pdf
+

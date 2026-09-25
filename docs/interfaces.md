@@ -28,6 +28,8 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 
 `anchorNodeId` は入口の合流後から直接区間へ進む本線上の基準状態（ノード）。ここへ一周後に戻り、出口へ進む道路列を定義できるペアを登録する。料金規則の前提は原案に従い、個別ペアの登録ではその適用条件とデータ根拠を確認する。
 
+本節は現行 seed schema 1 / generated graph schema 2 の legacy ring pair について記載する。Issue #42 で追加する seed schema 2 の混在 union、generated graph schema 4 の `legacyRing` / `radialReturn` variant、`RouteMembershipIndex`、diagnostic plan から公開 BillingPair への昇移条件は[実データ生成パイプライン](data-pipeline.md)を正本とする。既存 C1 8要素の raw seed は変更しない。
+
 ## Workers の HTTP 境界
 
 | インターフェース | 入出力・挙動 |
@@ -148,7 +150,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | `nearestAccess` | `SnappedOrigin \| null` | 座標入力（`origin`）における最近接の入口アクセス地点（`{ nodeId, lat, lon, distanceMeters }`）。距離キャップ超過の `NO_CONNECTION` でも返す。`originNodeId` 入力および Entry アクセス地点が0件のときは `null` |
 | `minPlanSeconds` | `number \| null` | ループ時間が製品上限 240 分以内にある合法（禁止遷移を満たす）周回の `planSeconds`（`baseSeconds + bufferSeconds`）の最小値。指定時間枠で棄却した周回も含む。座標検索では最近接入口 tier が診断（`TIME_WINDOW` / `NO_HANDOFF`）を確定する場合、値は評価済み tier 内の最小値となる（合法周回を持つ最近接 tier で診断を確定し遠方入口へフォールスルーしないため）。従来のノード検索（`originNodeId`）や、`origin` 座標を伴わない片側ランプ指定では評価された検証済み課金ペア全体における最小値となる。`origin` 座標と片側ランプ指定を併用した場合は座標検索と同様に評価済み tier 内の最小値となる。列挙は「ループ部分の秒数 ≤ 240 分」で打ち切られるため、その値は列挙範囲内の最小値であり真の全周回最小を上回り得る。**`minPlanSeconds > 240 * 60` を「240 分以内に収まる合法周回が無い」の根拠として使えるのは、列挙が資源上限で打ち切られていない場合に限る**。`SearchLimits.beamWidth`・`maxExpandedStates`・`maxPairs`（または候補側の上限）が列挙を打ち切ったときは真の最小が証明できないため `null` を返す（この場合 UI は「最短でも N 分」「最大 4 時間でも無理」を断定してはならない）。値が non-null でも `240 * 60` を超えるときは列挙範囲内の最小にすぎず列挙外のより長い周回がより小さい `planSeconds` を持ち得るため、UI は絶対的な「最短」と断定せず出所（確認できた範囲）を明示する。`240 * 60` 以下の値は「240 分以内に収まる周回が存在する」ことの根拠として使える。合法な周回が1件も無い場合も `null`。`TIME_WINDOW` の数値根拠（最寄り入口までの距離は `nearestAccess.distanceMeters`）として使う |
 
-### 候補の必須フィールド
+### 現行 pre-v2 Candidate の必須フィールド
 
 | フィールド | 型 | 内容 |
 | --- | --- | --- |
@@ -161,21 +163,212 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | `edgeIds` | `string[]` | 順序付き走行エッジ ID 列（首都高上の entry → loop → exit） |
 | `geometry` | `GeoJsonLineString` | 全経路の GeoJSON LineString（`{ type: "LineString", coordinates: [[lon, lat], ...] }`）。重複端点なし |
 | `duration` | `Duration` | `accessSeconds`, `shutokoSeconds`, `returnSeconds`, `baseSeconds`, `bufferSeconds`, `planSeconds` |
-| `distanceMeters`, `shutokoDistanceMeters` | `number` | 総距離と首都高実走行部分の距離（メートル） |
-| `toll` | `Toll` | `billingPairId`, `chargedSectionCount: 1`, `amountYen`（未確認なら `null`）, `pricingAt`, `effectiveFrom`, `effectiveTo`, `billingDistanceMeters?`, `tollSource?`（`"table" \| "od_tariff" \| "calculated"`） |
-| `loop` | `Loop` | `anchorNodeId`, `edgeIds`, `durationSeconds`, `distanceMeters`, `validated: true` |
-| `reasons` | `string[]` | 機械可読推薦理由コード（先頭候補: 料金確定時は `BEST_TIME_PER_YEN`、時間ソート時は `BEST_SHUTOKO_TIME`。全候補共通: `ONE_SECTION_TOLL`） |
+| `distanceMeters`, `shutokoDistanceMeters` | `number` | 現行pre-v2ではどちらも首都高Edge距離（m）として同じ値を返す。一般道のaccess / return距離はDurationだけを持ち、総距離ではない |
+| `toll` | `Toll` | `billingPairId`, `chargedSectionCount: 1`（現行pre-v2全outputの互換field）, `amountYen`（未確認なら`null`）, `pricingAt`, `effectiveFrom`, `effectiveTo`, `billingDistanceMeters?`, `tollSource?`（`"table" \| "od_tariff" \| "calculated"`） |
+| `loop` | `Loop` | 現行 C1 の `anchorNodeId`, `edgeIds`, `durationSeconds`, `distanceMeters`, `validated: true` |
+| `reasons` | `string[]` | 機械可読推薦理由コード。現行pre-v2ではC1 pairだけでなくdynamic ODにも`ONE_SECTION_TOLL`を付け、`BEST_TIME_PER_YEN`または`BEST_SHUTOKO_TIME`を先頭に置く。これはeligibilityの証拠ではない |
 | `warnings` | `string[]` | 警告コード（常時付与: `HANDOFF_WAYPOINTS_UNVERIFIED`（#8 実機検証未了）、`STATIC_TRAVEL_TIME`） |
-| `handoff` | `Handoff` | Google Maps 引き継ぎ情報（`{ origin, destination, waypoints, mapsUrl, verificationSetVersion }`） |
+| `handoff` | `Handoff` | Google Maps引き継ぎ情報（`{ origin, destination, waypoints, mapsUrl, verificationSetVersion }`） |
+
+現行pre-v2のdynamic ODはseed由来かどうかにかかわらず`status=ok`、`rankingMode=shutoko_time`で返り、`toll.amountYen=null`でも`chargedSectionCount=1`と`ONE_SECTION_TOLL`を持つ。Web UIも全Candidateへ「1区間料金」と表示する。現行の`distanceMeters`と`shutokoDistanceMeters`はどちらもhighway Edge距離で、UIの距離表示と名称が完全には一致しない。これらは移行前の互換contractであり、C1 legacyだけ、または実装済みのradial / total distance契約ではない。
 
 ### 推薦理由コード（`reasons`）一覧
 - `BEST_TIME_PER_YEN`: 時間あたり料金効率が最も高い最優先候補（料金確定時）
 - `BEST_SHUTOKO_TIME`: 首都高滞在時間が最も長い最優先候補（料金未確定時等の時間ソート時）
-- `ONE_SECTION_TOLL`: 1区間料金（最低料金）が適用される周回経路
+- `ONE_SECTION_TOLL`: 現行pre-v2ではC1 pairとdynamic ODの双方に付ける後方互換コード。routing v2では`legacyRing` adapterだけが付け、radialと`topology_only`には生成しない。Web UIも同じvariant境界で「1区間料金」を表示しない
 
 ### 警告コード（`warnings`）一覧
 - `HANDOFF_WAYPOINTS_UNVERIFIED`: Google Maps 引き継ぎ経由地選定ルールが暫定であり実機検証未了であることを示す（#8 完了まで常時付与）。2026-09 に Android Chrome + Google マップアプリ「あり」で代表1系列の周回維持を確認したが、アプリ「なし」・iOS Safari・経由地点0〜3点の系列網羅・URL 長上限は未検証のため引き続き付与する（[検証記録](delivery.md) 参照）
 - `STATIC_TRAVEL_TIME`: 渋滞・規制を含まない静的制限速度に基づく推定時間であることを示す
+
+### Issue #42 後の Candidate v2（設計・未実装）
+
+graph schema 4 / routing v2のCandidateは、次の点で現行C1 legacy outputと区別する。
+
+- `pairKind="radialReturn"`、`routePlanVersion=1`、`anchor.anchorKind="directedJunction"`とM / Bを持つ。`anchorNodeId`と旧`loop`objectは不要。
+- `routePlan.membershipIds[]`と`routePlan.resolvedRouteSegments[]`で、mainline relationとbound rampの由来を保つ。
+- `eligibilityStatus`は`verified_one_section_ahead`、`unverified`、`topology_only`のいずれか。endpoint support、loop validation、routing capabilityと独立させる。
+- `loopValidationStatus`は`declared_route_validated`、`unresolved`、`topology_only`のいずれか。route planの解決状態だけを表し、商品eligibilityへ代用しない。
+- `tariffStatus`は`priced`、`unpriced`、`expired`、`not_applicable`のいずれか。#41前の2号radialは`amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`とする。
+- `toll.chargedSectionCount`と`ONE_SECTION_TOLL`を出さない。`legacyRing` adapterだけが両者を維持する。
+- `time_per_yen`は商品比較対象のtariffが全件`priced`のときだけ使う。unpricedが混在する集合は`shutoko_time`、`topology_only`は商品推薦から外す。
+- `distanceMeters`はhighway + surface access + surface returnの推定距離、`shutokoDistanceMeters`はhighway Edge距離とする。
+- radialの`handoff`は`{ enabled: false, legUrls: [] }`で返し、device verification gate通過後だけ`enabled=true`と検証済みleg URLを持たせる。
+
+`edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。
+
+以下はreader fixture用のwire-level Candidateである。IDと座標はsynthetic valueで、公開可能な2号bindingや料金を表さない。`toll`に`chargedSectionCount`はなく、4 legのindex、segment hash、距離式が一致する。
+
+```json
+{
+  "id": "fixture:candidate:radial",
+  "releaseId": "radial-fixture-v1",
+  "pairKind": "radialReturn",
+  "routePlanVersion": 1,
+  "origin": null,
+  "originNodeId": "fixture:node:entry:ground",
+  "snappedOrigin": {
+    "nodeId": "fixture:node:entry:ground",
+    "lat": 35.0,
+    "lon": 139.0,
+    "distanceMeters": 0
+  },
+  "entry": {
+    "edgeId": "fixture:edge:entry:ramp",
+    "rampId": "fixture:ramp:entry",
+    "name": "fixture entry",
+    "route": "fixture:R1",
+    "direction": "inbound"
+  },
+  "exit": {
+    "edgeId": "fixture:edge:exit:ramp",
+    "rampId": "fixture:ramp:exit",
+    "name": "fixture exit",
+    "route": "fixture:R1",
+    "direction": "outbound"
+  },
+  "entryId": "fixture:edge:entry:ramp",
+  "exitId": "fixture:edge:exit:ramp",
+  "roadNames": [],
+  "edgeIds": [
+    "fixture:edge:entry:ramp",
+    "fixture:edge:entry:mainline",
+    "fixture:edge:lap:1",
+    "fixture:edge:lap:2",
+    "fixture:edge:return:mainline",
+    "fixture:edge:exit:ramp"
+  ],
+  "geometry": {
+    "type": "LineString",
+    "coordinates": [[139.0, 35.0], [139.001, 35.001], [139.002, 35.002]]
+  },
+  "anchor": {
+    "anchorKind": "directedJunction",
+    "mergeNodeId": "fixture:node:merge",
+    "branchNodeId": "fixture:node:branch",
+    "mergeTerminalEdgeId": "fixture:edge:entry:mainline",
+    "branchInitialEdgeId": "fixture:edge:return:mainline",
+    "routeId": "fixture:loop",
+    "direction": "forward",
+    "arcPolicy": "ordinaryLongArc",
+    "excludedShortConnector": {
+      "fromNodeId": "fixture:node:branch",
+      "toNodeId": "fixture:node:merge",
+      "osmWayId": 3001,
+      "edgeCount": 1,
+      "distanceMeters": 100
+    }
+  },
+  "routePlan": {
+    "membershipIds": [
+      "fixture:route:r1:inbound",
+      "fixture:route:loop:forward",
+      "fixture:route:r1:outbound"
+    ],
+    "resolvedRouteSegments": [
+      {
+        "resolvedSegmentId": "fixture:resolved:entry",
+        "role": "entry_approach",
+        "membershipId": "fixture:route:r1:inbound",
+        "sourceSegmentIds": ["fixture:binding:entry:0", "fixture:relation:r1:inbound:main"],
+        "edgeIdsSha256": "26fae7c7d5e125ca9f0c5de847411ff1fdb1883e961b641eb4b05b6030a381be"
+      },
+      {
+        "resolvedSegmentId": "fixture:resolved:lap",
+        "role": "mandatory_lap",
+        "membershipId": "fixture:route:loop:forward",
+        "sourceSegmentIds": ["fixture:relation:loop:forward:main"],
+        "edgeIdsSha256": "99ddf4b7771edc3fe3c04034d2465719932ca1c2d2104c0d05bab41d6e462a43"
+      },
+      {
+        "resolvedSegmentId": "fixture:resolved:return",
+        "role": "return_corridor",
+        "membershipId": "fixture:route:r1:outbound",
+        "sourceSegmentIds": ["fixture:relation:r1:outbound:main"],
+        "edgeIdsSha256": "ba825c8c0f6236ca476824f7553aefe8bf09a94a5343c2470cde33b1bb443e1b"
+      },
+      {
+        "resolvedSegmentId": "fixture:resolved:exit",
+        "role": "exit_approach",
+        "membershipId": "fixture:route:r1:outbound",
+        "sourceSegmentIds": ["fixture:binding:exit:0"],
+        "edgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+      }
+    ]
+  },
+  "edgeRouteLegs": [
+    {
+      "role": "entry_approach",
+      "resolvedSegmentId": "fixture:resolved:entry",
+      "startEdgeIndex": 0,
+      "endEdgeIndexExclusive": 2
+    },
+    {
+      "role": "mandatory_lap",
+      "resolvedSegmentId": "fixture:resolved:lap",
+      "startEdgeIndex": 2,
+      "endEdgeIndexExclusive": 4
+    },
+    {
+      "role": "return_corridor",
+      "resolvedSegmentId": "fixture:resolved:return",
+      "startEdgeIndex": 4,
+      "endEdgeIndexExclusive": 5
+    },
+    {
+      "role": "exit_approach",
+      "resolvedSegmentId": "fixture:resolved:exit",
+      "startEdgeIndex": 5,
+      "endEdgeIndexExclusive": 6
+    }
+  ],
+  "estimatedLegs": [
+    {
+      "role": "surface_access",
+      "estimated": true,
+      "distanceMeters": 1200,
+      "durationSeconds": 240
+    },
+    {
+      "role": "surface_return",
+      "estimated": true,
+      "distanceMeters": 800,
+      "durationSeconds": 160
+    }
+  ],
+  "duration": {
+    "accessSeconds": 240,
+    "shutokoSeconds": 960,
+    "returnSeconds": 160,
+    "baseSeconds": 1360,
+    "bufferSeconds": 300,
+    "planSeconds": 1660
+  },
+  "distanceMeters": 6000,
+  "shutokoDistanceMeters": 4000,
+  "eligibilityStatus": "verified_one_section_ahead",
+  "loopValidationStatus": "declared_route_validated",
+  "tariffStatus": "unpriced",
+  "toll": {
+    "billingPairId": "fixture:radial",
+    "amountYen": null,
+    "pricingAt": "2026-09-16T00:00:00Z",
+    "effectiveFrom": null,
+    "effectiveTo": null,
+    "billingDistanceMeters": null
+  },
+  "reasons": [],
+  "warnings": ["STATIC_TRAVEL_TIME", "HANDOFF_WAYPOINTS_UNVERIFIED"],
+  "handoff": {
+    "enabled": false,
+    "legUrls": []
+  }
+}
+```
+
+`edgeIdsSha256`は順序を保ったEdge IDの空白なしJSON arrayをSHA-256化した値で、generated graphの`resolvedRouteSegments`とCandidateの`routePlan`で同じ値を使う。reader / Workerは全hash、membership / binding参照、role、index範囲、各status、不正または欠落した`chargedSectionCount`を検証してからCandidateを返す。
+
+core、WASM型、Web Workerはgraph schema 2 / 3 / 4を読む。schema 2 / 3の`pairKind`なしは`legacyRing`、schema 4のbuilder出力は`pairKind`を必須とし、未知のkind / versionは部分データを返さず停止する。builderの既定schema 4への切替は、reader、WASM、Web pipeline、Workers allowlist、release ID、manifest hashを同時に更新する独立issueで行う。
 
 ## Google マップへの引き継ぎ
 
@@ -186,6 +379,8 @@ URL は座標のみの固定形式を `format!` で組み立て（区切りは `
 本線上の座標が別道路や停車地点に解釈される可能性を先行検証する。一周を省略せず入口・主要通過点・出口を最大3点で表現でき、代表端末で確認済みの経路系列だけを初期の公開候補とする。入口と1区間先の出口だけでは周回を省略した短い経路になり得るため、周回の再現を必ず確認する。上限超過時に黙って地点を削除したり、走行中の手動区間切替を要求したりしない。
 
 任意出発地点について外部経路の完全一致を事前保証できないため、検証済み系列でも利用者に最終確認を促す。Google の再計算結果を取得して自動比較する機能は含めない。再現不能な系列を除外すると企画価値を満たせない場合は、公開を進めず連携方式を再設計する。
+
+Google Maps URL は waypoint の順序を示しても、近接 JCT の正しい arm、首都高の道路、radial の往路・復路を強制できない。放射線の公開 handoff は、URL 分割だけでは有効にしない。device verification manifest に `routePlanId`、`releaseId`、URL builder version、leg URL hash、期待する道路・向き、OS / browser / app version、検証日時、結果、期限を記録し、Android / iOS × Web / app の必要条件が1件でも `missing`、`failed`、`expired` なら public departure を無効にする。manifest と release gate の詳細は[ルート探索設計](routing.md)を正本とする。
 
 ## 地図・住所検索のデータ利用
 

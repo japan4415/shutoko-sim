@@ -1,6 +1,6 @@
 # 実データ道路グラフ・課金ペア生成パイプライン
 
-本ドキュメントでは、OpenStreetMap（OSM）実データから首都高速道路都心環状線（C1）および接続ランプを抽出し、決定論的な道路ネットワーク成果物（`graph.json`、`snap-index.json`、`manifest.json`）を生成するオフラインパイプラインの仕様と手順を記録する。一般道はルーティンググラフのエッジには含めないが、入口/出口ランプの分類コンテキストとして取得・参照している（詳細は「対象範囲」参照）。
+本ドキュメントでは、OpenStreetMap（OSM）実データから首都高速道路の全24路線と接続ランプを抽出し、決定論的な道路ネットワーク成果物（`graph.json`、`ramps.json`、`snap-index.json`、`manifest.json`）を生成するオフラインパイプラインの仕様と手順を記録する。一般道はルーティンググラフのエッジには含めないが、入口・出口ランプの分類コンテキストとして取得・参照する。
 
 ## 1. ライセンスと帰属表示
 
@@ -13,23 +13,40 @@
 
 ## 2. OSM 実データ取得手順
 
-### 取得仕様
+### 現行 `all-real-v2` の取得仕様
+
 - **Overpass API エンドポイント**:
   - 主系: `https://overpass-api.de/api/interpreter`
   - 副系: `https://overpass.kumi.systems/api/interpreter`
-- **クエリ SHA-256**: `ae8754b341bce5bd0acb79f70fb8c71175b332679b44d6f3425b6e1a00b1510e`
+- **クエリの正本**: `scripts/fetch-osm.sh`。既定は全24路線の relation を取得し、ランプを4 hop、context way を1 hop展開する
+- **出力先**: `fixtures/osm/shutoko-all.json`
+- **source date**: `2026-09-16`
+- **ファイル SHA-256**: `566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9`
+- **ファイルサイズ**: 4,203,540 bytes
+- **要素数**: 合計 26,847 要素（ノード 23,661 / way 3,125 / リレーション 61）
+- **生成 release**: `all-real-v2`（graph schema 2）
+
+### C1限定スナップショット（歴史・回帰用）
+
+旧 C1 限定手順は診断と C1 回帰にだけ使う。現行 release の既定入力、CI 再生成、公開統計ではない。
+
+- **実行条件**: `ROUTES_FILTER=c1 ./scripts/fetch-osm.sh`
 - **出力先**: `fixtures/osm/shutoko-c1.json`
-- **最終取得日時（UTC）**: `2026-09-15T04:38:52Z`（副系エンドポイント使用）
-- **ファイルサイズ**: 369,367 bytes（約 361 KB）
+- **取得日時（UTC）**: `2026-09-15T04:38:52Z`（副系エンドポイント使用）
+- **クエリ SHA-256**: `ae8754b341bce5bd0acb79f70fb8c71175b332679b44d6f3425b6e1a00b1510e`
+- **ファイル SHA-256**: `c39bf4051e4cd6478377e2cc67e9710d885390593e5a5afb18c3b175a464ca52`
+- **ファイルサイズ**: 369,367 bytes
 - **要素数**: 合計 2,051 要素（ノード 1,745 / way 299 / リレーション 7）
+- **旧 release 名**: `c1-real-v2`（graph schema 2）
 
 ### 対象範囲
 
-一般道（`trunk`、`primary`、`secondary`、`residential`、`service` 等）は**ルーティンググラフには含めない**。ルーティングモデルが「直線距離の近い入口から乗る」前提であるため、一般道経路探索は不要である。ただし入口・出口ランプの**分類コンテキスト**として一般道ウェイを取得する（後述「入口/出口ランプの分類方式」参照）。路線追加は Overpass クエリのリレーション ID を足すだけで可能で、地理的 bbox を指定する必要もない。**旧方式で必要だった路線名リスト（「首都高 + ＜数字＞号」パターンマッチ）のメンテナンスも不要になった**（詳細は「入口/出口ランプの分類方式」参照）。
+一般道（`trunk`、`primary`、`secondary`、`residential`、`service` 等）は**ルーティンググラフには含めない**。座標検索は入口までの一般道を解かず、首都高上の探索だけを行う。入口・出口ランプの**分類コンテキスト**として一般道ウェイは取得する。
 
-- **首都高速都心環状線（C1）**: リレーション ID `4256008`（首都高速都心環状線、`ref=C1`）
-- **接続ランプ（motorway_link）**: C1 本線ノードから最大 4 ホップで到達可能な進入・退出ランプウェイ（芝公園・飯倉・霞が関・汐留・宝町等の多ホップランプを包含）
-- **コンテキストウェイ（surface-road context）**: 4 ホップ展開後、取得済みの motorway / motorway_link ウェイのいずれかのノードを共有するすべての `highway` ウェイ（motorway / motorway_link を除く）。`trunk`・`primary`・`secondary`・`tertiary`・`unclassified`・`residential`・`service`・`living_street` など、出口ランプが降りる先になりうるあらゆる型を対象とする。グラフビルダーはこれらを**ルーティンググラフに含めず**、入口・出口ランプの分類（ランプ終端ノードが一般道と接するか否か）にのみ使用する。**コンテキストウェイは way 要素のみ（`nodes` 配列と `tags`）が出力され、そのノードの座標は出力されない。** 座標の代わりにノード ID の包含チェック（motorway_link のノード ID セットとの積集合）で一般道接続を判定するためである。本データセットでは motorway_link のノード ID と重複するコンテキストウェイのノード ID は 57 件。highway 値ごとの way 件数の内訳: motorway 105 / motorway_link 101 / secondary 24 / footway 19 / tertiary 16 / unclassified 11 / secondary_link 6 / primary 5 / primary_link 2 / residential 2 / pedestrian 2 / service 1（highway タグなし 5）。
+- **全24路線**: `network=首都高速道路` のrelationを正本とし、tagの欠落routeを既知relation IDで補完する。C1はrelation `4256008`、C1/JCTを含む2号目黒線はrelation `4256339`を使う。
+- **接続ランプ（`motorway_link`）**: 全路線の本線wayから最大4 hopで到達するwayを展開する。
+- **context way**: 展開済みの`motorway_link`とnodeを共有し、`motorway` / `motorway_link`以外の`highway`を持つway。ルーティンググラフには入れず、ランプ終端が車両通行可能な一般道へ接続するかの証明に使う。way要素の`nodes`と`tags`だけを出力し、context nodeの座標は含めない。
+- **現行スナップショットの実測**: `motorway_link` way 1,619件、context way 712件、両者が共有するnode 557件。context wayの内訳は`secondary` 114、`trunk` 111、`tertiary` 110、`footway` 72、`service` 56、`unclassified` 33、`primary` 107、`primary_link` 14、`tertiary_link` 11、`trunk_link` 38、`secondary_link` 9、`residential` 19、`pedestrian` 3、`proposed` 11、`construction` 2、`rest_area` 1、`steps` 1。
 - **右左折・Uターン禁止制限**: 高速道路本線およびランプ（`ew_all`・`links`）に関連する `type=restriction` リレーション
   - `no_*`（via=node）: from エッジから to エッジへの禁止遷移ペア（長さ 2）を生成。
   - `only_*`（via=node）: via ノードにおける to 以外の代替流出エッジを自動特定し、禁止遷移ペアとして生成。
@@ -46,15 +63,25 @@
 - **距離しきい値**（`JCT_DETECTION_MAX_ENTRY_DIST_METERS = 550`）: 実出口の最遠 466m と JCT 連絡路の最小 665m の間のマージンが薄く、路線拡充で破綻するリスクがあった
 
 **現行の優先順位付き規則**:
-1. **地表接続シグナル（一次）**: ランプ端点ノードが、車両通行可能な一般道 way のノード集合に含まれるか。`is_vehicle_highway(highway) -> Option<bool>` が道路種別の構造的区分を担い、歩道・歩行者専用路（footway / pedestrian / cycleway / steps 等）は共有ノードがあっても地表接続の証拠に数えない（本データセットで 3 ノードが該当）
+1. **地表接続シグナル（一次）**: ランプ端点ノードが、車両通行可能な一般道 way のノード集合に含まれるか。`is_vehicle_highway(highway) -> Option<bool>` が道路種別の構造的区分を担い、歩道・歩行者専用路（footway / pedestrian / cycleway / steps等）は共有nodeがあっても地表接続の証拠に数えない
 2. **OSM ノードタグシグナル（二次）**: `highway=traffic_signals` → 入口/出口の証拠、`highway=motorway_junction` → 本線側の証拠
 3. 一次シグナルが決定的ならそれを採用。二次と矛盾する場合は警告を記録
 4. どちらでも決まらない場合は `undecidable_ramp_edges` を加算し警告を出したうえで保守的に Shutoko に分類
 
-**結果（`c1-real-v1` データセット）**:
+**現行 `all-real-v2` の結果**:
 
 | 種別 | エッジ数 |
-|------|---------|
+|------|---------:|
+| Entry | 168 |
+| Exit | 182 |
+| Shutoko | 22,637 |
+| Local | 0 |
+| undecidable_ramp_edges | 0 |
+
+**C1限定 `c1-real-v1` の結果（歴史）**:
+
+| 種別 | エッジ数 |
+|------|---------:|
 | Entry | 15 |
 | Exit | 17 |
 | Shutoko | 1,687 |
@@ -67,7 +94,7 @@
 ```bash
 ./scripts/fetch-osm.sh [OUTPUT_PATH] [ENDPOINT]
 ```
-引数を省略した場合は既定値（`fixtures/osm/shutoko-c1.json`、`https://overpass-api.de/api/interpreter`）で実行される。
+引数を省略した場合は全24路線を取得し、`fixtures/osm/shutoko-all.json` に出力する。C1限定診断には `ROUTES_FILTER=c1` を明示し、既定入力と混同しない。
 
 ## 3. 宣言的課金シード（`data/billing-pairs-seed.json`）
 
@@ -120,50 +147,565 @@
 > **注記（内回り銀座入口の 1 区間先について）**:
 > 内回り銀座入口 → 新富町出口（0.4km、300 円）は公式資料上の 1 区間先だが、OSM の分流点・合流点の順序（内回り新富町出口の分流点が銀座入口の合流点より上流にある）により First Exit 検証が通らないため未登録。京橋出口は 2 区間先なので登録しない。
 
+### 3.1 `schemaVersion: 2` の混在 seed（設計・未実装）
+
+Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在させる。既存の `schemaVersion: 1` は現行どおりに読み込める。同一ファイルを schema 2 へ更新する時も、既存 C1 8要素の項目、値、意味は変更しない。`pairKind` を持たない要素は legacy ring pair と解釈する。
+
+現在の parser は `schemaVersion` を明示的に dispatch せず、seed の各構造体も `deny_unknown_fields` を持たない。このため、現行実装では未知 version と legacy 互換 field を含む JSON でも v1 要素として読め、未知 field は黙って捨てられる。以下の fail-closed 規則は Issue #1 で実装する契約であり、現行挙動として主张しない。
+
+混在の規則は次のとおりである。
+
+- parser は `schemaVersion` を明示的に `1` / `2` へ dispatch し、それ以外は parsing 前に拒否する。
+- schema 1/2 の top-level、pair、provenance、price、endpoint、route plan、status の全 nested struct で unknown field を拒否する。
+- legacy 要素は現行の `entryOsmWayId`、`exitOsmWayId`、`anchorOsmNodeId`、`status`、`oneSectionAheadVerified` を持つ。`pairKind` は必須ではない。
+- radial 要素は `pairKind: "radialReturn"` と `routePlanVersion: 1` を必須とする。
+- `pairKind` または `routePlanVersion` が未知なら fail-closed で拒否する。
+- radial が `pairKind` / `routePlanVersion` のどちらかを欠く場合、または legacy が variant 必須フィールドを欠く場合も拒否する。
+- seed 内に legacy と radial を何件ずつ含めてよい。ただし ID は重複させない。同じ array 内で endpoint support、pair eligibility、loop validation、tariff status を混ぜない。
+- Issue #1 は、未知 version、各 variant の未知 field、variant 必須 field の欠落をそれぞれ fixture 化・検証してから完了とする。
+
+検証状態は次の軸で独立させ、1つの `status` に押し込まない。
+
+| 軸 | 主な値 |
+| --- | --- |
+| endpoint `supportState` | `verified_bound`, `unsupported`, `unresolved` |
+| `routingCapability` | `routable`, `structural_no_loop`, `unsupported` |
+| `pairEligibility.status` | `verified_one_section_ahead`, `unverified`, `topology_only` |
+| `loopValidation.status` | `declared_route_validated`, `unresolved`, `topology_only` |
+| `tariff.status` / Candidate `tariffStatus` | `priced`, `unpriced`, `expired`, `not_applicable` |
+
+以下は、同じ `billingPairs` array に置ける legacy 1件と radial 1件の wire-level 例である。長い `notes` を含む legacy 要素も、現行データから値を変えない。
+
+```json
+{
+  "id": "bp:c1-outer:kandabashi-takaracho",
+  "entryOsmWayId": 92243921,
+  "entryName": "神田橋入口",
+  "exitOsmWayId": 297864314,
+  "exitName": "宝町出口",
+  "anchorOsmNodeId": 499831338,
+  "vehicleProfile": "passenger-car-etc",
+  "status": "verified",
+  "oneSectionAheadVerified": true,
+  "provenance": {
+    "source": "https://www.shutoko.jp/use/network/map/",
+    "sourceDate": "2026-09-10",
+    "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kandabashi entry to Takaracho exit (Gofukubashi and Edobashi exits decommissioned in 2021). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/tolls/about/price/ (旧 URL https://www.shutoko.jp/fee/fee-info/about/ は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト)); Kandabashi to Takaracho toll distance 1.7km with minimum toll 300 yen applied (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf (旧 URL https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf は 2026-09-10 時点で 404)); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+  },
+  "prices": [
+    {
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
+    },
+    {
+      "amountYen": 300,
+      "effectiveFrom": "2026-09-30T15:00:00Z"
+    }
+  ]
+}
+```
+
+```json
+{
+  "id": "bp:2-inbound:meguro:c1-inner:tengenji",
+  "pairKind": "radialReturn",
+  "routePlanVersion": 1,
+  "vehicleProfile": "passenger-car-etc",
+  "entryEndpoint": {
+    "rampId": "ramp:2-inbound:meguro-entry",
+    "name": "目黒入口",
+    "supportState": "verified_bound",
+    "directedSegments": [
+      {
+        "segmentId": "ramp:2-inbound:meguro-entry:segment:0",
+        "osmWayIds": [207535708],
+        "edgeIds": ["e:w207535708:0:f"],
+        "fromNodeId": "n:2177935837",
+        "toNodeId": "n:2177935839",
+        "edgeIdsSha256": "6af7e1b129f1f8fdb3a48e829c809c8ea9c276d57c5e83481d7bac03c285db79"
+      }
+    ]
+  },
+  "exitEndpoint": {
+    "rampId": "ramp:2-outbound:tengenji-exit",
+    "name": "天現寺出口",
+    "supportState": "unsupported",
+    "directedSegments": [],
+    "bindingCandidates": [
+      {
+        "candidateId": "tengenji:g21:172358461-422023171",
+        "status": "unresolved",
+        "directedSegments": [
+          {
+            "segmentId": "tengenji:g21:chain:0",
+            "osmWayIds": [172358461, 422023171],
+            "edgeIds": [
+              "e:w172358461:0:f",
+              "e:w172358461:1:f",
+              "e:w172358461:2:f",
+              "e:w172358461:3:f",
+              "e:w172358461:4:f",
+              "e:w172358461:5:f",
+              "e:w422023171:0:f",
+              "e:w422023171:1:f",
+              "e:w422023171:2:f"
+            ],
+            "fromNodeId": "n:252175582",
+            "toNodeId": "n:1832672090",
+            "edgeIdsSha256": "ac97e5a464d46bc4dd5cfb641171da94639832516d8bc4876ef510dab2a7872a"
+          }
+        ]
+      }
+    ]
+  },
+  "routePlan": {
+    "entryCorridor": {
+      "membershipId": "route:2:inbound",
+      "terminalEdgeId": "e:w4853804:16:f",
+      "mergeNodeId": "n:574460576"
+    },
+    "anchor": {
+      "anchorKind": "directedJunction",
+      "routeId": "C1",
+      "direction": "inner",
+      "mergeNodeId": "n:574460576",
+      "branchNodeId": "n:574460605",
+      "mergeTerminalEdgeId": "e:w4853804:16:f",
+      "branchInitialEdgeId": "e:w45248411:0:f",
+      "arcPolicy": "ordinaryLongArc",
+      "excludedShortConnector": {
+        "fromNodeId": "n:574460605",
+        "toNodeId": "n:574460576",
+        "osmWayId": "23297444",
+        "edgeCount": 23,
+        "distanceMeters": 493
+      }
+    },
+    "mandatoryLap": {
+      "membershipId": "route:C1:inner",
+      "firstEdgeId": "e:w23297444:43:f",
+      "lastEdgeId": "e:w23297444:19:f",
+      "lapCount": 1
+    },
+    "returnCorridor": {
+      "membershipId": "route:2:outbound",
+      "startNodeId": "n:574460605",
+      "initialEdgeId": "e:w45248411:0:f",
+      "firstGeneralExit": {
+        "rule": "firstGeneralExit",
+        "expectedRampId": "ramp:2-outbound:tengenji-exit",
+        "exactDirectedBinding": "unsupported"
+      }
+    }
+  },
+  "routingCapability": "routable",
+  "pairEligibility": {
+    "status": "unverified",
+    "oneSectionAheadVerified": false
+  },
+  "loopValidation": {
+    "status": "declared_route_validated"
+  },
+  "tariff": {
+    "status": "unpriced",
+    "amountYen": null,
+    "billingDistanceMeters": null,
+    "prices": []
+  },
+  "provenance": {
+    "source": "https://www.shutoko.jp/use/network/map/",
+    "sourceDate": "2026-09-16",
+    "notes": "目黒入口から一ノ橋JCTのC1 inner長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。天現寺exitのexact directed bindingは未解決。"
+  }
+}
+```
+
+endpoint は単一 OSM way を仮定しない。`supportState=verified_bound` では `directedSegments[]` に、解釈が確定した順に連続する `osmWayIds` と `edgeIds` を必ず記録する。way をまたぐ場合も1つの directed segment にまとめ、各要素の接続と順序を検証する。`supportState=unresolved` / `unsupported` では `directedSegments` を空にし、監査した候補だけを `bindingCandidates[]` に置く。候補は `eligibilityStatus=verified_one_section_ahead` へ昇移できず、目黒出口や別施設 ID で補完しない。
+
+`edgeIdsSha256` は、順序を保った `edgeIds` を空白なしの JSON array へ直列化し、その UTF-8 バイト列を SHA-256 にした値とする。outer も同じ形を使い、`anchor.direction=outer`、M=`n:31297008`、B=`n:31297000`、mandatory lap の first / last Edge=`e:w24039737:24:f` / `e:w24039737:3:f`、除外 connector は way `24039737`、20 edges、461m、return initial Edge は `e:w4853805:0:f` とする。
+
+### 3.2 正本 anchor と generated graph union
+
+`anchorKind` の値は `sameNode` と `directedJunction` の2つだけとする。seed、generated graph、Candidate で同じ値を使い、`sameNodeLoopAnchor` / `directedJunctionLoopAnchor` のような別名を登場させない。
+
+| `anchorKind` | 必須 field | 意味 |
+| --- | --- | --- |
+| `sameNode` | `nodeId`, `routeId`, `direction`, `arcPolicy` | 現行 C1。基準点へ戻り、同じノードから次へ進む。 |
+| `directedJunction` | `mergeNodeId`, `branchNodeId`, `mergeTerminalEdgeId`, `branchInitialEdgeId`, `routeId`, `direction`, `arcPolicy`, `excludedShortConnector` | 放射線から環状線へ入り、別ノードから放射線へ戻る。`mergeTerminalEdgeId` は M の直前に来る Edge、`branchInitialEdgeId` は B の直後に出る Edge。 |
+
+mandatory lap 自身の境界は `routePlan.mandatoryLap.firstEdgeId` / `lastEdgeId` に置く。anchor と lap の責務を混ぜない。
+
+| 現行 schema 1 | schema 2 / graph schema 4 | 規則 |
+| --- | --- | --- |
+| `pairKind` なし | `pairKind="legacyRing"` | seed では省略を許す。graph schema 4 では明示する。 |
+| `anchorOsmNodeId` | `anchor.anchorKind="sameNode"`, `anchor.nodeId` | 値と意味を変えない。 |
+| schema 1 にない route / direction | `anchor.routeId`, `anchor.direction` | graph build で entry・anchor・exit の Edge 列として解ける一意な route membership から導出する。0件または複数候補なら graph 4 への昇格を拒否する。 |
+| schema 1 にない arc policy | `anchor.arcPolicy="sameNodeLoop"` | legacy adapter の固定値。raw seed は変更しない。 |
+| `entryOsmWayId` / `entryName` | `entryId` と `entryEndpoint` | graph Edge ID は build で解決し、way 変更として seed へ書き戻さない。 |
+| `exitOsmWayId` / `exitName` | `exitId` と `exitEndpoint` | 同上。 |
+| `status`, `oneSectionAheadVerified` | `pairEligibility.status`, `pairEligibility.oneSectionAheadVerified` | raw status は変更しない。`verified` は v2 の `verified_one_section_ahead` へ正規化する。 |
+| `prices[]` | `tariff.prices[]`, `tariff.status` | 300円→300円と有効期間を保持する。radial は #41 まで空。 |
+| なし | `routePlanVersion`, `entryCorridor`, `anchor`, `mandatoryLap`, `returnCorridor` | radial variant だけを必須にする。 |
+| なし | `pairEligibility`, `loopValidation`, `tariff` の独立 status | endpoint support、routing capability、loop validation、料金状態を混在させない。 |
+
+generated graph の `billingPairs[]` も同じ判別 union にする。schema 2/3 の `pairKind` なしは legacy として読めるが、schema 4 の builder 出力では `pairKind` を必ず書く。`legacyRing` は `entryToAnchorEdgeIds` と `anchorToExitEdgeIds` を必須にし、`radialReturn` は `anchorNodeId` を省略する。未知の kind、anchor kind、route plan version は reader と builder の両方で拒否する。
+
+以下はreader fixtureのwire fragmentである。IDとEdgeは実装テスト用の synthetic value であり、天現寺 binding が解けたこと、または公開可能な pair であることを表さない。`legacyRing` と `radialReturn` の判別、必須 field、status の配置を同じ例で確認する。
+
+```json
+{
+  "billingPairs": [
+    {
+      "id": "fixture:legacy:c1",
+      "pairKind": "legacyRing",
+      "vehicleProfile": "passenger-car-etc",
+      "entryId": "fixture:legacy:entry",
+      "exitId": "fixture:legacy:exit",
+      "anchor": {
+        "anchorKind": "sameNode",
+        "nodeId": "fixture:node:anchor",
+        "routeId": "C1",
+        "direction": "inner",
+        "arcPolicy": "sameNodeLoop"
+      },
+      "entryToAnchorEdgeIds": ["fixture:edge:legacy:entry-anchor"],
+      "anchorToExitEdgeIds": ["fixture:edge:legacy:anchor-exit"],
+      "pairEligibility": {
+        "status": "verified_one_section_ahead",
+        "oneSectionAheadVerified": true
+      },
+      "loopValidation": {
+        "status": "declared_route_validated"
+      },
+      "tariff": {
+        "status": "priced",
+        "amountYen": 300,
+        "billingDistanceMeters": 1700,
+        "prices": [
+          {
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture:radial",
+      "pairKind": "radialReturn",
+      "routePlanVersion": 1,
+      "vehicleProfile": "passenger-car-etc",
+      "entryId": "fixture:edge:entry:ramp",
+      "exitId": "fixture:edge:exit:ramp",
+      "entryEndpoint": {
+        "rampId": "fixture:ramp:entry",
+        "name": "fixture entry",
+        "supportState": "verified_bound",
+        "directedSegments": [
+          {
+            "segmentId": "fixture:binding:entry:0",
+            "osmWayIds": [1001],
+            "edgeIds": ["fixture:edge:entry:ramp"],
+            "fromNodeId": "fixture:node:entry:ground",
+            "toNodeId": "fixture:node:entry:ramp-end",
+            "edgeIdsSha256": "1846afd5803d03982b1641d3f1c4c9816379eeede1e100a4c3e0a6c130248e97"
+          }
+        ]
+      },
+      "exitEndpoint": {
+        "rampId": "fixture:ramp:exit",
+        "name": "fixture exit",
+        "supportState": "verified_bound",
+        "directedSegments": [
+          {
+            "segmentId": "fixture:binding:exit:0",
+            "osmWayIds": [2001],
+            "edgeIds": ["fixture:edge:exit:ramp"],
+            "fromNodeId": "fixture:node:exit:ramp-end",
+            "toNodeId": "fixture:node:exit:ground",
+            "edgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+          }
+        ]
+      },
+      "routePlan": {
+        "entryCorridor": {
+          "membershipId": "fixture:route:r1:inbound",
+          "terminalEdgeId": "fixture:edge:entry:mainline",
+          "mergeNodeId": "fixture:node:merge"
+        },
+        "anchor": {
+          "anchorKind": "directedJunction",
+          "routeId": "fixture:loop",
+          "direction": "forward",
+          "mergeNodeId": "fixture:node:merge",
+          "branchNodeId": "fixture:node:branch",
+          "mergeTerminalEdgeId": "fixture:edge:entry:mainline",
+          "branchInitialEdgeId": "fixture:edge:return:mainline",
+          "arcPolicy": "ordinaryLongArc",
+          "excludedShortConnector": {
+            "fromNodeId": "fixture:node:branch",
+            "toNodeId": "fixture:node:merge",
+            "osmWayId": 3001,
+            "edgeCount": 1,
+            "distanceMeters": 100
+          }
+        },
+        "mandatoryLap": {
+          "membershipId": "fixture:route:loop:forward",
+          "firstEdgeId": "fixture:edge:lap:1",
+          "lastEdgeId": "fixture:edge:lap:2",
+          "lapCount": 1
+        },
+        "returnCorridor": {
+          "membershipId": "fixture:route:r1:outbound",
+          "startNodeId": "fixture:node:branch",
+          "initialEdgeId": "fixture:edge:return:mainline",
+          "firstGeneralExit": {
+            "rule": "firstGeneralExit",
+            "expectedRampId": "fixture:ramp:exit",
+            "exactDirectedBinding": "verified_bound"
+          }
+        }
+      },
+      "resolvedRouteSegments": [
+        {
+          "resolvedSegmentId": "fixture:resolved:entry",
+          "role": "entry_approach",
+          "membershipId": "fixture:route:r1:inbound",
+          "sourceSegmentIds": ["fixture:binding:entry:0", "fixture:relation:r1:inbound:main"],
+          "edgeIds": ["fixture:edge:entry:ramp", "fixture:edge:entry:mainline"],
+          "edgeIdsSha256": "26fae7c7d5e125ca9f0c5de847411ff1fdb1883e961b641eb4b05b6030a381be"
+        },
+        {
+          "resolvedSegmentId": "fixture:resolved:lap",
+          "role": "mandatory_lap",
+          "membershipId": "fixture:route:loop:forward",
+          "sourceSegmentIds": ["fixture:relation:loop:forward:main"],
+          "edgeIds": ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+          "edgeIdsSha256": "99ddf4b7771edc3fe3c04034d2465719932ca1c2d2104c0d05bab41d6e462a43"
+        },
+        {
+          "resolvedSegmentId": "fixture:resolved:return",
+          "role": "return_corridor",
+          "membershipId": "fixture:route:r1:outbound",
+          "sourceSegmentIds": ["fixture:relation:r1:outbound:main"],
+          "edgeIds": ["fixture:edge:return:mainline"],
+          "edgeIdsSha256": "ba825c8c0f6236ca476824f7553aefe8bf09a94a5343c2470cde33b1bb443e1b"
+        },
+        {
+          "resolvedSegmentId": "fixture:resolved:exit",
+          "role": "exit_approach",
+          "membershipId": "fixture:route:r1:outbound",
+          "sourceSegmentIds": ["fixture:binding:exit:0"],
+          "edgeIds": ["fixture:edge:exit:ramp"],
+          "edgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+        }
+      ],
+      "routingCapability": "routable",
+      "pairEligibility": {
+        "status": "verified_one_section_ahead",
+        "oneSectionAheadVerified": true
+      },
+      "loopValidation": {
+        "status": "declared_route_validated"
+      },
+      "tariff": {
+        "status": "unpriced",
+        "amountYen": null,
+        "billingDistanceMeters": null,
+        "prices": []
+      }
+    }
+  ]
+}
+```
+
+`resolvedRouteSegments` の role は `entry_approach`, `mandatory_lap`, `return_corridor`, `exit_approach` の4種類だけにする。Candidate では各 role を `edgeRouteLegs` の `startEdgeIndex`（含む）から `endEdgeIndexExclusive`（含まない）へ写す。一般道の surface access / return は Edge を持たないため、graph segment にも Candidate の Edge index にも入れない。
+
+schema 4 の manifest は `billingPairsVersion=v2`、graph schema 4、route plan version、route membership hash を記録し、`graph.json`、`ramps.json`、tariff 成果物と release ID を結び付ける。旧 manifest の schema 1/2 record は上書きしない。公開 release の切替は、consumer reader と Web/Workers の検証が通った後に行う。
+
+### 3.3 `RouteMembershipIndex` は本線 relation と ramp binding を別々に証明する
+
+現行 Graph の Edge には route membership と direction がない。`find_first_exits_from_anchor` の現行挙動は C1 legacy adapter として保存し、radial には `find_first_exit_on_corridor` を新設する。
+
+OSM route relation は mainline を列挙し、一般入口・出口の ramp way を含まない。目黒 entry way `207535708` や天現寺 exit candidate way `172358461` / `422023171` を mainline relation の member として扱い続けると、正しい ramp binding を relation の連続 Edge 列へ不正に対応させる。したがって、graph schema 4 の top-level `routeMemberships[]` は次の二層構造にする。
+
+| object | 必須 field | 証明する内容 |
+| --- | --- | --- |
+| `RouteMembershipIndex` | `membershipId`, `routeId`, `direction`, `segments[]` | 路線・方向ごとに使う ordered segment を束ねる。 |
+| `RouteMembershipSegment` | `segmentId`, `sourceKind`, `sourceRelationId`, `sourceSnapshotSha256`, `bindingEvidenceId`, `orderedEdgeIds`, `orderedEdgeIdsSha256` | `sourceKind=relationMainline` なら relation と snapshot、`sourceKind=boundRamp` なら exact binding を由来にする。 |
+
+`relationMainline` は `sourceRelationId` と `bindingEvidenceId=null` を要求し、relation の ordered member と way のノード順を graph Edge へ写像する。`boundRamp` は `sourceRelationId=null` と非 null の `bindingEvidenceId` を要求し、正規ランプ台帳と exact directed binding の順序付き Edge 列を使う。どちらも `orderedEdgeIdsSha256` を必須にする。
+
+次の synthetic fragment は、1つの entry approach と return corridor が mainline segment と bound ramp segment を組み合わせた wire shape を示す。
+
+```json
+{
+  "routeMemberships": [
+    {
+      "membershipId": "fixture:route:r1:inbound",
+      "routeId": "fixture:R1",
+      "direction": "inbound",
+      "segments": [
+        {
+          "segmentId": "fixture:binding:entry:0",
+          "sourceKind": "boundRamp",
+          "sourceRelationId": null,
+          "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+          "bindingEvidenceId": "fixture:binding:entry",
+          "orderedEdgeIds": ["fixture:edge:entry:ramp"],
+          "orderedEdgeIdsSha256": "1846afd5803d03982b1641d3f1c4c9816379eeede1e100a4c3e0a6c130248e97"
+        },
+        {
+          "segmentId": "fixture:relation:r1:inbound:main",
+          "sourceKind": "relationMainline",
+          "sourceRelationId": "fixture:relation:r1",
+          "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+          "bindingEvidenceId": null,
+          "orderedEdgeIds": ["fixture:edge:entry:mainline"],
+          "orderedEdgeIdsSha256": "b0ad47503d2604d5160411aba0d6b541ef2171fb1023ebc9bc398d750b5c6bb2"
+        }
+      ]
+    },
+    {
+      "membershipId": "fixture:route:loop:forward",
+      "routeId": "fixture:loop",
+      "direction": "forward",
+      "segments": [
+        {
+          "segmentId": "fixture:relation:loop:forward:main",
+          "sourceKind": "relationMainline",
+          "sourceRelationId": "fixture:relation:loop",
+          "sourceSnapshotSha256": "e19978c5b7cdfc9bb595fb044fcbb6a1a27d1ff2281a9a3eca663d6cc8b7cf30",
+          "bindingEvidenceId": null,
+          "orderedEdgeIds": ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+          "orderedEdgeIdsSha256": "99ddf4b7771edc3fe3c04034d2465719932ca1c2d2104c0d05bab41d6e462a43"
+        }
+      ]
+    },
+    {
+      "membershipId": "fixture:route:r1:outbound",
+      "routeId": "fixture:R1",
+      "direction": "outbound",
+      "segments": [
+        {
+          "segmentId": "fixture:relation:r1:outbound:main",
+          "sourceKind": "relationMainline",
+          "sourceRelationId": "fixture:relation:r1",
+          "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+          "bindingEvidenceId": null,
+          "orderedEdgeIds": ["fixture:edge:return:mainline"],
+          "orderedEdgeIdsSha256": "ba825c8c0f6236ca476824f7553aefe8bf09a94a5343c2470cde33b1bb443e1b"
+        },
+        {
+          "segmentId": "fixture:binding:exit:0",
+          "sourceKind": "boundRamp",
+          "sourceRelationId": null,
+          "sourceSnapshotSha256": "b2a0b24aa896e9d92425ff81539194531e036bda0764aa0792f4cbadf61c044a",
+          "bindingEvidenceId": "fixture:binding:exit",
+          "orderedEdgeIds": ["fixture:edge:exit:ramp"],
+          "orderedEdgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+        }
+      ]
+    }
+  ]
+}
+```
+
+`orderedEdgeIdsSha256`と`edgeIdsSha256`は同じ規則で、順序を保ったEdge IDの空白なしJSON arrayをSHA-256化する。IDの並べ替えや重複除去はhash生成前に行わない。
+
+route planのlegは`sourceSegmentIds[]`でmainlineとrampの由来を明示し、その順番に`edgeIds`を連結する。連続性の検証対象を分ける。`mandatory_lap` は必ず1つの `relationMainline` segment の連続部分列でなければならない。entry、return、exit は複数の `relationMainline` と `boundRamp` segment を連結できるが、各 segment 内部の順序・hash・binding 証拠を個別に満たす。relation を持たない ramp を「例外」として無検証で許さない。
+
+`find_first_exit_on_corridor` は、次の条件をすべて満たす場合だけ一般 Exit を返す。
+
+1. mandatory lap の B を出発点とし、return corridor の `initialEdgeId` から探索を始める。
+2. B から Exit split までの mainline Edge は指定 relation の `relationMainline` segment に順番どおり所属する。
+3. Exit split 以降は seed の `expectedRampId` と `verified_bound` の `boundRamp` segment が連続して一致する。
+4. 候補は return corridor 内の一般 Exitだけで、C1 の Exit、entry approach 中の Exit、boundary JCT を数えない。
+5. 禁止遷移を満たし、探索予算を明示して処理する。
+
+B から全グラフの最短 Exit を選ぶ処理は使わない。実データでは B から C1 芝公園 Exit が1,306m、天現寺候補の開始点が1,972mであり、route constraint なしで Exit を選ぶと誤る。天現寺候補が未解決なら`firstGeneralExit.exactDirectedBinding=unresolved`または`unsupported`を保持し、次のsupported Exitへskipしない。First Exit の幾何探索が成功しても、端点 support や pair eligibility の証拠にはしない。
+
+実装テストには次を含める。
+
+- inner / outer の M→B長弧を選び、B→Mの0.493km / 0.461km connectorを拒否する。
+- relation memberに目黒entryや天現寺exitを含めない現行snapshotで、対応するboundRamp segmentだけをevidence付きで許可する。
+- multi-way rampのway順、node接続、Edge順、hashを検証し、候補をverified bindingへ昇格しない。
+- entry corridorにC1 Exitがあっても、return corridorのExitと混同しない。
+- 逆方向、同名JCT、relation非所属mainline way、別armへの近道を拒否する。
+- segment内のEdge反復を拒否し、route planが宣言したsegment間反復を許す。
+- 探索予算超過を「Exitなし」と読み替えない。
+- 既存C1 8件のanchor、edge resolution、First Exit、300円→300円、verified 2件・unverified 6件を回帰testで固定する。
+
+
+### 3.4 2号計画の診断用データと公開 BillingPair を分ける
+
+本節で定義した inner / outer object は、Issue #42 の設計成果を示す schema-valid な diagnostic fixture にする。実装 issue 1 では、この JSON を parser test と snapshot に使う。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にしない。
+
+binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。binding が解けた後に、route membership、First Exit、全 segment の完全分割を再検証し、graph schema 4 の `radialReturn` として昇格する。昇格後も Issue #41 までは `amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced` を維持する。
+
 ## 4. 成果物の決定論的再生成手順
 
 ### 再生成コマンド
 ```bash
 ./scripts/generate-fixtures.sh
 ```
-または直接 CLI を実行:
+または直接 CLI を実行する。
 ```bash
 cargo run --bin shutoko-graph-builder --locked -- \
-  --osm fixtures/osm/shutoko-c1.json \
+  --osm fixtures/osm/shutoko-all.json \
   --seed data/billing-pairs-seed.json \
+  --inventory data/ramp-inventory.json \
+  --bindings data/osm-ramp-bindings.json \
+  --tariffs data/od-tariffs.json \
   --out-dir fixtures/generated \
-  --release-id "c1-real-v2" \
-  --built-at "2026-09-10T00:00:00Z" \
-  --source-date "2026-09-10" \
+  --release-id "all-real-v2" \
+  --built-at "2026-09-17T00:00:00Z" \
+  --source-date "2026-09-16" \
   --vehicle-profile "passenger-car-etc" \
-  --coverage-area "Tokyo Inner Circular Route (C1) and connecting ramps" \
+  --coverage-area "Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)" \
   --graph-version "1.0.0"
 ```
-※ 検証済み課金ペアが1件以上生成されていることを強制したい場合は `--strict` フラグを付与して実行可能（検証済みペアが0件の場合に非ゼロで終了）。
+検証済み課金ペアが1件以上生成されていることを強制したい場合は `--strict` を付ける。検証済みペアが0件の場合に非ゼロで終了する。
 
-### 成果物スキーマの拡張（Node 座標・Edge 名称・ランプ名）
-issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `graph.json` に追加された:
-- **Node の地理座標 (`lat`, `lon`)**: `graph.json` 内の全ノードに f64 の `lat` および `lon` を必須フィールドとして出力。WASM 内部での空間スナップおよび GeoJSON LineString 幾何データ合成に使用される。
-- **Edge の日本語道路名 (`name`)**: OSM ウェイの `name`（存在しない場合は `name:ja`）を `Edge.name: Option<String>` として伝播。名前のないエッジは `serde(skip_serializing_if = "Option::is_none")` により JSON 出力からキーが省略される。
-- **課金ペアの公式ランプ名 (`entryName`, `exitName`)**: `data/billing-pairs-seed.json` の各ペアに公式ランプ名（例: `"神田橋入口"`, `"宝町出口"`）が定義され、グラフビルダーにより `graph.json` の `billingPairs[]` へそのまま伝播される。
-- **ファイルサイズと転送量予算**: 一般道エッジを除外したことで `fixtures/generated/graph.json` は実測 563 KB（1,717 ノード / 1,719 エッジ: shutoko 1,687 / entry 15 / exit 17）となり、プロジェクトのネットワーク転送量上限である 10MiB に対して十分に安全な範囲に収まっている。`schemaVersion` は 2。
+### 現行 graph schema 2 が保持する情報
+
+issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次を加えた。
+
+- **Node の地理座標 (`lat`, `lon`)**: 全ノードに必須fieldとして出力する。WASMの空間snapとGeoJSON LineStringの合成で使う。
+- **Edge の日本語道路名 (`name`)**: OSMの`name`、なければ`name:ja`を`Edge.name: Option<String>`として伝播する。名前がないEdgeはJSON keyを省略する。
+- **課金ペアの公式ランプ名 (`entryName`, `exitName`)**: `data/billing-pairs-seed.json`の値を`graph.json`の`billingPairs[]`へ伝播する。
+
+現行 `all-real-v2` の生成済みファイルは次のとおりである。数値は `fixtures/generated/` の実測値であり、C1限定fixtureの数値ではない。
+
+| 成果物 | schema | 内容 | ファイルサイズ |
+| --- | ---: | --- | ---: |
+| `graph.json` | 2 | 22,824 nodes / 22,987 edges（Shutoko 22,637、Entry 168、Exit 182）、billing pairs 8件、bound ramps 232件 | 7,089,932 bytes |
+| `ramps.json` | 1 | 正規台帳399件、うちbound 232件 | 277,569 bytes |
+| `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
+| `manifest.json` | 1 | release、hash、byte length、unverified sections、provenance | 41,578 bytes |
+
+`graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は `graph.json`、`ramps.json`、`snap-index.json` のpath・SHA-256・byte lengthを固定し、manifest自身のサイズとschemaは別情報として扱う。
 
 ### `snap-index.json` の意味と `schemaVersion: 2`
 
-`snap-index.json` は一般道ノード一覧から**入口アクセス地点（Entry エッジの from ノード）一覧**に変わった。`schemaVersion` が 1 → 2 に更新されている。現行データには 168 件の入口アクセス地点が登録されており、ファイルサイズは約 15 KB である。WASM はこのインデックスを使って出発座標から近い順に最大 `max_access_entries` 件の入口アクセス地点を選択する。
+`snap-index.json` は一般道ノード一覧から**入口アクセス地点（Entry エッジの from ノード）一覧**へ変わった。WASM はこのインデックスから出発座標に近い順に最大 `max_access_entries` 件のアクセス地点を選ぶ。
 
 ### 再現性・決定論的検証
-同一入力から 2 回実行し、`diff -r` によりバイト完全一致（SHA-256 一致）が確認されている。
-- `graph.json`: 禁止遷移（`only_*` および `via=way` を含む）やソート順を決定論的に出力（`schemaVersion: 2`）
-- `snap-index.json`: 入口アクセス地点（Entry エッジの from ノード）の空間インデックス（`schemaVersion: 2`、168 ノード、約 15 KB）
-- `manifest.json`: 全成果物の SHA-256、未検証区間一覧、検証済みペア出典情報（`provenance`）を記録
+同一入力から2回実行し、`diff -r`で成果物がバイト単位で一致することを確認する。
+
+- `graph.json`: 禁止遷移とソート順を決定論的に出力する（`schemaVersion: 2`）。
+- `snap-index.json`: Entryアクセス地点を安定順序で出力する（`schemaVersion: 2`、168件）。
+- `ramps.json`: 正規台帳とbinding結果を安定順序で出力する（`schemaVersion: 1`）。
+- `manifest.json`: 各公開成果物のSHA-256、byte length、unverified sections、verified pairのprovenanceを記録する。
 
 ## 5. 未検証区間（Unverified Sections）
 
-現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって `manifest.json` の `unverifiedSections` 配列に自動列挙される。
-- **自動列挙対象**: グラフ内に存在するすべての入口・出口エッジのうち、検証済み課金ペアに採用されていないエッジ。OSM ウェイに `name` タグが存在する場合は「エッジID（ウェイ名）」の形式で可読性を担保。
-- **除外路線・通行規制スキップの注記**: C1 外の分岐路線（八重洲線、1号上野線、6号向島線等）や、静的道路グラフで適用外となった通行規制（conditional / no via / outside graph / disconnected / unrecognized 等のスキップカテゴリ）に関する注記も件数付きで同リストに収録。
-- **現状**: 現行リリース `all-real-v2` は監査用課金ペア8件を保持するが、両端点のexact edgeが一意なverified-boundランプへ逆引きでき、公式施設名とも一致する2件だけが `verified` である。残る6件は `unverified` として候補生成から除外する。公式一般ランプ371件のうち232件を exact directed segment に bindし、139件は根拠付き `unsupported` としてグラフ外に隔離している。
+現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって`manifest.json`の`unverifiedSections[]`へ自動列挙する。
+- **自動列挙対象**: graph内のEntry / Exit Edgeのうち、verified billing pairのentry / exitへ採用されていないEdge。wayに`name`があれば「Edge ID（way name）」で記録する。
+- **通行規制のskip注記**: 現行`all-real-v2`はconditional 2件、via欠落2件、graph外要素16件を数える。`all` inputのため「C1以外の路線を除外した」という注記は出さない。
+- **現状**: `all-real-v2`は監査用課金ペア8件を保持し、端点と公式施設名を照合できた2件だけを`verified`とする。残る6件は`unverified`としてpair検索から除外する。active一般ランプ371件のうち232件をexact directed segmentへbindし、139件は根拠付き`unsupported`としてgraph外へ隔離する。
 
 ## 6. 全24路線・正規ランプ台帳（Canonical Ramp Inventory）
 
@@ -206,7 +748,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 - **判断正本**: `data/ramp-support-decisions.json`。距離順位による fallback は使わず、未分類の公式レコードが現れた場合は生成を停止する。
 - **各要素の定義**:
   - `rampId`: 正規ランプ ID（例: `ramp:c1-outer:kandabashi-entry`）
-  - `osmWayId`: ランプを表す OSM `motorway_link` ウェイ ID
+  - `osmWayId`: 現行binding recordの代表`motorway_link` way ID。graph schema 4のendpointは単一wayへ依存せず、`directedSegments[].osmWayIds[]`へwayをまたぐ順序列を保存する
   - `osmNodeId`: 一般道接続端点ノード（入口の乗込ノードまたは出口の流出ノード）
   - `motorwayNodeId`: 首都高本線（`motorway`）との分合流ノード ID
   - `sharedPhysicalOverrides`: 公式番号が異なる共有物理segmentである G15/G27/G53 の完全なメンバー集合、directed segment triplet、理由、証拠。同一facility・別directionも例外にせず、すべてのduplicate triplet集合とoverride集合の完全一致を強制する。方向一意性を立証できない旧22組は `unsupported` としbindingを削除した。
@@ -244,7 +786,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
   - `shutoko_distance_meters`: 首都高速上の実際の走行距離（エッジ長の積算値）。周回ループを含むため数十〜百キロ超になり得る。
   - `toll.billing_distance_meters`: 入口〜出口間の公称料金距離（OD テーブルまたはベースライン最短経路長）。
   - **OSM 幾何距離を公称料金距離として扱わない規律**: グラフ幾何から計算される実走距離（`shutoko_distance_meters`）を公称料金距離として勝手に流用しない。料金計算は `data/od-tariffs.json` の検証済み OD ペアまたは公式料金距離テーブルに明示された値のみを根拠とし、未定義区間では安易な幾何距離代用を行わず未計算（None）として誠実にモデル化する。
-  - 周回走行を行っても、料金距離は入口と出口の組み合わせによって決まるため、1区間先退出時は下限 300 円で周回が可能。
+  - 周回走行を行っても、料金距離は入口と出口の組み合わせで決める。現行 C1 8件の legacy price record は300円→300円だが、2号 radial pair の金額を「1区間先だから300円」という理由だけで決めない。
 - **検証済み OD ペア**:
   - 頻出・代表的な OD ペア（C1 各ランプ、八重洲線接続、主要放射線連絡等）について公式料金距離および料金額を検証済みデータとして保持。
 
@@ -270,6 +812,6 @@ issue #10 の探索コア・WASM 境界拡張に伴い、以下のデータが `
 ## 12. CI における自動再生成検証
 
 パイプラインの決定論的性質と成果物の整合性を担保するため、GitHub Actions ワークフロー（`.github/workflows/ci.yml`）で再生成チェックを自動実行している。
-- コミット済みの `fixtures/osm/shutoko-c1.json` を入力とし、外部 Overpass API にはアクセスしない（外部ネットワーク非依存）。
+- コミット済みの `fixtures/osm/shutoko-all.json` を入力とし、外部 Overpass API にはアクセスしない（外部ネットワーク非依存）。
 - `scripts/generate-fixtures.sh` を実行後、`git diff --exit-code` および `git status --porcelain` でコミット済みの `fixtures/generated/` との差分が一切生じないことを検証する。
 - グラフビルダーのロジックや課金シードの更新時は、再生成された `fixtures/generated/` を同一 PR でコミットする必要があり、意図しない出力の乖離やリグレッションを防ぐ。

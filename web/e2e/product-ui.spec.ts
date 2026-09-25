@@ -1758,7 +1758,7 @@ test("(46) pricedでも商品cohort外のradialは効率と最安順位を表示
   await expect(card.locator(".recommended")).toHaveCount(0);
 });
 
-test("(73) 未価格の候補には料金の注記を出さない（商品対象外の表示と montantsを混同しない）", async ({
+test("(73) 未価格の候補には料金の注記を出さない（商品対象外の表示と金額を混同しない）", async ({
   page,
 }) => {
   await stubWorkerWithRadialCandidate(page, "topologyOnlyUnpriced");

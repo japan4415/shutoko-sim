@@ -11,6 +11,7 @@
 
 use crate::model::{Edge, EdgeKind, Graph, Node, SnapIndex, SnapNode};
 use crate::osm::{OsmElement, OverpassResponse};
+use crate::seed::EndpointSupportState;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// Diagnostic report capturing turn restriction and ramp topology statistics.
@@ -298,6 +299,581 @@ pub fn parse_oneway(element: &OsmElement) -> OnewayDirection {
         Some("-1" | "reverse") => OnewayDirection::ReverseOnly,
         _ => OnewayDirection::Bidirectional,
     }
+}
+
+/// Canonical rule identifier for first public road connection resolution.
+pub const FIRST_PUBLIC_ROAD_CONNECTION_RULE: &str = "firstPublicRoadConnection/v1";
+
+/// Allowed surface road highway values under `firstPublicRoadConnection/v1`.
+pub const ALLOWED_SURFACE_HIGHWAYS: &[&str] = &[
+    "trunk",
+    "trunk_link",
+    "primary",
+    "primary_link",
+    "secondary",
+    "secondary_link",
+    "tertiary",
+    "tertiary_link",
+    "unclassified",
+    "residential",
+    "living_street",
+    "service",
+];
+
+/// Explicitly rejected highway values under `firstPublicRoadConnection/v1`.
+pub const REJECTED_SURFACE_HIGHWAYS: &[&str] = &[
+    "motorway",
+    "motorway_link",
+    "footway",
+    "path",
+    "cycleway",
+    "steps",
+    "pedestrian",
+    "track",
+    "bus_guideway",
+    "escape",
+    "raceway",
+    "road",
+    "construction",
+    "proposed",
+    "abandoned",
+    "disused",
+];
+
+/// Access tag hierarchy values that explicitly deny general motorcar access.
+pub const REJECTED_ACCESS_VALUES: &[&str] = &[
+    "no",
+    "private",
+    "customers",
+    "delivery",
+    "destination",
+    "permit",
+    "agricultural",
+    "forestry",
+    "military",
+    "emergency",
+];
+
+/// Access tag hierarchy values that explicitly permit general motorcar access.
+pub const ALLOWED_ACCESS_VALUES: &[&str] = &["yes", "public", "designated", "permissive"];
+
+/// Allowed sub-tags for `highway=service`. Only `alley` represents a public street connection.
+pub const ALLOWED_SERVICE_SUBTAGS: &[&str] = &["alley"];
+
+/// Rejected sub-tags for `highway=service`.
+pub const REJECTED_SERVICE_SUBTAGS: &[&str] = &[
+    "parking_aisle",
+    "driveway",
+    "drive-through",
+    "emergency_access",
+    "slipway",
+    "unspecified",
+    "unknown",
+];
+
+pub const REASON_CONDITIONAL_ACCESS_RESTRICTION: &str = "CONDITIONAL_ACCESS_RESTRICTION";
+pub const REASON_NO_GROUND_CONNECTION: &str = "NO_GROUND_CONNECTION";
+pub const REASON_MULTIPLE_GROUND_CONNECTION_CANDIDATES: &str =
+    "MULTIPLE_GROUND_CONNECTION_CANDIDATES";
+pub const REASON_EARLY_SURFACE_CONNECTION: &str = "EARLY_SURFACE_CONNECTION";
+pub const REASON_UNRECOGNIZED_TAG_FAIL_CLOSED: &str = "UNRECOGNIZED_TAG_FAIL_CLOSED";
+
+/// Direction of ramp travel relative to highway network and ground street.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RampFlowDirection {
+    /// Ramp travels from highway mainline down to ground surface road.
+    Exit,
+    /// Ramp travels from ground surface road up into highway mainline.
+    Entry,
+}
+
+/// Audit result for a single candidate surface way at a junction node.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SurfaceWayConnectionAudit {
+    /// Way is a legally accessible public road permitting directional continuation.
+    Legal,
+    /// Way is non-public, prohibited, or fails directional continuation.
+    Rejected(String),
+    /// Conditional restriction or unrecognized tag requires immediate fail-closed unresolved.
+    FailClosed(String),
+}
+
+/// Resolution result of applying `firstPublicRoadConnection/v1`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FirstPublicRoadConnectionResolution {
+    pub rule: String,
+    pub support_state: EndpointSupportState,
+    pub ground_node_id: Option<i64>,
+    pub ground_way_id: Option<i64>,
+    pub ground_way_name: Option<String>,
+    pub reason_codes: Vec<String>,
+    pub notes: Vec<String>,
+}
+
+/// Step 1: Detect conditional or variable traffic restrictions.
+///
+/// Any tag key ending with `:conditional` (e.g. `access:conditional`, `oneway:conditional`),
+/// or variable oneway settings (`reversible`, `alternating`) trigger immediate fail-closed.
+pub fn find_conditional_restriction(way: &OsmElement) -> Option<String> {
+    if let Some(tags) = &way.tags {
+        for (key, val) in tags {
+            if key.ends_with(":conditional") || key.contains(":conditional") {
+                return Some(format!("way {} has conditional tag '{key}={val}'", way.id));
+            }
+        }
+    }
+    if let Some(oneway) = way.get_tag("oneway") {
+        if matches!(oneway, "reversible" | "alternating") {
+            return Some(format!("way {} has variable oneway '{oneway}'", way.id));
+        }
+    }
+    if let Some(rev) = way.get_tag("reversible") {
+        if matches!(rev, "yes" | "true" | "1") {
+            return Some(format!("way {} has reversible tag '{rev}'", way.id));
+        }
+    }
+    None
+}
+
+/// Step 2: Evaluate access hierarchy for general motor vehicles:
+/// `motorcar` -> `motor_vehicle` -> `vehicle` -> `access`.
+///
+/// - Rejected values return `Ok(false)`
+/// - Allowed values return `Ok(true)`
+/// - Unspecified defaults to `Ok(true)`
+/// - Unrecognized values return `Err(...)` triggering fail-closed
+pub fn evaluate_access_hierarchy(way: &OsmElement) -> Result<bool, String> {
+    const HIERARCHY: &[&str] = &["motorcar", "motor_vehicle", "vehicle", "access"];
+    for tag_name in HIERARCHY {
+        if let Some(val) = way.get_tag(tag_name) {
+            let val_lower = val.trim().to_lowercase();
+            if REJECTED_ACCESS_VALUES.contains(&val_lower.as_str()) {
+                return Ok(false);
+            }
+            if ALLOWED_ACCESS_VALUES.contains(&val_lower.as_str()) {
+                return Ok(true);
+            }
+            return Err(format!(
+                "way {} has unrecognized access tag '{tag_name}={val}'",
+                way.id
+            ));
+        }
+    }
+    Ok(true)
+}
+
+/// Step 3: Evaluate highway type against whitelist and blacklist.
+///
+/// Only allowed highways are permitted. `area=yes` is rejected.
+/// For `highway=service`, only `service=alley` is permitted.
+pub fn evaluate_highway_type(way: &OsmElement) -> bool {
+    if way.get_tag("area") == Some("yes") {
+        return false;
+    }
+    let Some(highway) = way.get_tag("highway") else {
+        return false;
+    };
+    if highway == "service" {
+        return way.get_tag("service") == Some("alley");
+    }
+    ALLOWED_SURFACE_HIGHWAYS.contains(&highway) && !REJECTED_SURFACE_HIGHWAYS.contains(&highway)
+}
+
+/// Step 4: Evaluate whether continuation into (for Exit) or arrival from (for Entry)
+/// the surface way at `node_id` is legal according to `oneway` tags.
+pub fn is_direction_continuation_legal(
+    way: &OsmElement,
+    node_id: i64,
+    flow: RampFlowDirection,
+) -> Result<bool, String> {
+    let Some(nodes) = &way.nodes else {
+        return Ok(false);
+    };
+    let matching_indices: Vec<usize> = nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, id)| if *id == node_id { Some(idx) } else { None })
+        .collect();
+    if matching_indices.is_empty() {
+        return Ok(false);
+    }
+
+    let oneway = way.get_tag("oneway").unwrap_or("");
+    match oneway {
+        "reversible" | "alternating" => {
+            Err(format!("way {} has variable oneway '{oneway}'", way.id))
+        }
+        "yes" | "1" | "true" => match flow {
+            RampFlowDirection::Exit => {
+                Ok(matching_indices.iter().any(|idx| *idx < nodes.len() - 1))
+            }
+            RampFlowDirection::Entry => Ok(matching_indices.iter().any(|idx| *idx > 0)),
+        },
+        "-1" | "reverse" => match flow {
+            RampFlowDirection::Exit => Ok(matching_indices.iter().any(|idx| *idx > 0)),
+            RampFlowDirection::Entry => {
+                Ok(matching_indices.iter().any(|idx| *idx < nodes.len() - 1))
+            }
+        },
+        "no" | "0" | "false" | "" => Ok(nodes.len() >= 2),
+        other => Err(format!(
+            "way {} has unrecognized oneway tag '{other}'",
+            way.id
+        )),
+    }
+}
+
+/// Evaluates a candidate surface way at a specific junction node using the 4-step precedence.
+pub fn evaluate_surface_way_for_connection(
+    way: &OsmElement,
+    node_id: i64,
+    flow: RampFlowDirection,
+) -> SurfaceWayConnectionAudit {
+    let Some(nodes) = &way.nodes else {
+        return SurfaceWayConnectionAudit::Rejected("way has no nodes".into());
+    };
+    if !nodes.contains(&node_id) {
+        return SurfaceWayConnectionAudit::Rejected("node not in way".into());
+    }
+
+    // Step 1: Conditional restrictions -> immediate fail-closed
+    if let Some(reason) = find_conditional_restriction(way) {
+        return SurfaceWayConnectionAudit::FailClosed(reason);
+    }
+
+    // Step 2: Access hierarchy
+    match evaluate_access_hierarchy(way) {
+        Err(err) => return SurfaceWayConnectionAudit::FailClosed(err),
+        Ok(false) => {
+            return SurfaceWayConnectionAudit::Rejected("access hierarchy rejected".into())
+        }
+        Ok(true) => {}
+    }
+
+    // Step 3: Highway taxonomy
+    if !evaluate_highway_type(way) {
+        return SurfaceWayConnectionAudit::Rejected("highway type not allowed".into());
+    }
+
+    // Step 4: Oneway continuation
+    match is_direction_continuation_legal(way, node_id, flow) {
+        Err(err) => SurfaceWayConnectionAudit::FailClosed(err),
+        Ok(false) => {
+            SurfaceWayConnectionAudit::Rejected("oneway direction continuation illegal".into())
+        }
+        Ok(true) => SurfaceWayConnectionAudit::Legal,
+    }
+}
+
+/// Scans a directed motorway_link chain and resolves the first public road connection.
+///
+/// Precedence order:
+/// 1. Conditional restrictions (`*:conditional`, `oneway:conditional`, `reversible`, `alternating`)
+///    -> immediate fail-closed (`unresolved`).
+/// 2. Access hierarchy (`motorcar` -> `motor_vehicle` -> `vehicle` -> `access`).
+/// 3. Highway whitelist/blacklist and `service=alley` only.
+/// 4. Oneway continuation legality.
+/// 5. Connection uniqueness:
+///    - Exactly 1 legal public way and matches candidate boundary -> `verified_bound`.
+///    - Multiple connections -> `MULTIPLE_GROUND_CONNECTION_CANDIDATES`.
+///    - Early connection before candidate boundary -> `EARLY_SURFACE_CONNECTION`.
+///    - 0 connections -> `NO_GROUND_CONNECTION`.
+pub fn resolve_first_public_road_connection(
+    chain_node_ids: &[i64],
+    flow: RampFlowDirection,
+    way_map: &HashMap<i64, &OsmElement>,
+    node_to_ways: &HashMap<i64, Vec<i64>>,
+    expected_ground_way: Option<i64>,
+) -> FirstPublicRoadConnectionResolution {
+    let mut fail_closed_reasons = Vec::new();
+    let mut legal_ways_by_node: HashMap<i64, Vec<i64>> = HashMap::new();
+
+    for node_id in chain_node_ids {
+        let Some(way_ids) = node_to_ways.get(node_id) else {
+            continue;
+        };
+        for way_id in way_ids {
+            let Some(way) = way_map.get(way_id) else {
+                continue;
+            };
+            if matches!(way.get_tag("highway"), Some("motorway" | "motorway_link")) {
+                continue;
+            }
+            match evaluate_surface_way_for_connection(way, *node_id, flow) {
+                SurfaceWayConnectionAudit::FailClosed(msg) => {
+                    fail_closed_reasons.push(msg);
+                }
+                SurfaceWayConnectionAudit::Legal => {
+                    let entries = legal_ways_by_node.entry(*node_id).or_default();
+                    if !entries.contains(way_id) {
+                        entries.push(*way_id);
+                    }
+                }
+                SurfaceWayConnectionAudit::Rejected(_) => {}
+            }
+        }
+    }
+
+    if !fail_closed_reasons.is_empty() {
+        return FirstPublicRoadConnectionResolution {
+            rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+            support_state: EndpointSupportState::Unresolved,
+            ground_node_id: None,
+            ground_way_id: None,
+            ground_way_name: None,
+            reason_codes: vec![REASON_CONDITIONAL_ACCESS_RESTRICTION.to_string()],
+            notes: fail_closed_reasons,
+        };
+    }
+
+    let connected_nodes: Vec<i64> = chain_node_ids
+        .iter()
+        .copied()
+        .filter(|nid| legal_ways_by_node.contains_key(nid))
+        .collect();
+
+    if connected_nodes.is_empty() {
+        return FirstPublicRoadConnectionResolution {
+            rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+            support_state: EndpointSupportState::Unresolved,
+            ground_node_id: None,
+            ground_way_id: None,
+            ground_way_name: None,
+            reason_codes: vec![REASON_NO_GROUND_CONNECTION.to_string()],
+            notes: vec!["no legal public surface road connection found along chain".to_string()],
+        };
+    }
+
+    // Check for multiple legal ways at any single node
+    for (nid, ways) in &legal_ways_by_node {
+        if ways.len() > 1 {
+            return FirstPublicRoadConnectionResolution {
+                rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+                support_state: EndpointSupportState::Unresolved,
+                ground_node_id: Some(*nid),
+                ground_way_id: None,
+                ground_way_name: None,
+                reason_codes: vec![REASON_MULTIPLE_GROUND_CONNECTION_CANDIDATES.to_string()],
+                notes: vec![format!(
+                    "node {nid} connects to multiple legal public ways: {ways:?}"
+                )],
+            };
+        }
+    }
+
+    // Multiple nodes along the chain connect to public roads
+    if connected_nodes.len() > 1 {
+        let mut reason_codes = vec![
+            REASON_EARLY_SURFACE_CONNECTION.to_string(),
+            REASON_MULTIPLE_GROUND_CONNECTION_CANDIDATES.to_string(),
+        ];
+        reason_codes.sort();
+        return FirstPublicRoadConnectionResolution {
+            rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+            support_state: EndpointSupportState::Unresolved,
+            ground_node_id: None,
+            ground_way_id: None,
+            ground_way_name: None,
+            reason_codes,
+            notes: vec![format!(
+                "multiple nodes in chain connect to public roads: {connected_nodes:?}"
+            )],
+        };
+    }
+
+    let resolved_node = connected_nodes[0];
+    let resolved_way_id = legal_ways_by_node.get(&resolved_node).unwrap()[0];
+
+    // Verify boundary position
+    let expected_boundary_node = match flow {
+        RampFlowDirection::Exit => chain_node_ids.last(),
+        RampFlowDirection::Entry => chain_node_ids.first(),
+    };
+
+    if expected_boundary_node != Some(&resolved_node) {
+        let mut reason_codes = vec![
+            REASON_EARLY_SURFACE_CONNECTION.to_string(),
+            REASON_MULTIPLE_GROUND_CONNECTION_CANDIDATES.to_string(),
+        ];
+        reason_codes.sort();
+        return FirstPublicRoadConnectionResolution {
+            rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+            support_state: EndpointSupportState::Unresolved,
+            ground_node_id: Some(resolved_node),
+            ground_way_id: Some(resolved_way_id),
+            ground_way_name: way_map
+                .get(&resolved_way_id)
+                .and_then(|w| w.get_tag("name"))
+                .map(|s| s.to_string()),
+            reason_codes,
+            notes: vec![format!(
+                "first public road connection is at node {resolved_node}, but chain boundary is at {expected_boundary_node:?}"
+            )],
+        };
+    }
+
+    if let Some(expected_way) = expected_ground_way {
+        if expected_way != resolved_way_id {
+            return FirstPublicRoadConnectionResolution {
+                rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+                support_state: EndpointSupportState::Unresolved,
+                ground_node_id: Some(resolved_node),
+                ground_way_id: Some(resolved_way_id),
+                ground_way_name: way_map
+                    .get(&resolved_way_id)
+                    .and_then(|w| w.get_tag("name"))
+                    .map(|s| s.to_string()),
+                reason_codes: vec!["GROUND_WAY_MISMATCH".to_string()],
+                notes: vec![format!(
+                    "declared ground way {expected_way} does not match resolved way {resolved_way_id}"
+                )],
+            };
+        }
+    }
+
+    let ground_way_name = way_map
+        .get(&resolved_way_id)
+        .and_then(|w| w.get_tag("name"))
+        .map(|s| s.to_string());
+
+    FirstPublicRoadConnectionResolution {
+        rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+        support_state: EndpointSupportState::VerifiedBound,
+        ground_node_id: Some(resolved_node),
+        ground_way_id: Some(resolved_way_id),
+        ground_way_name,
+        reason_codes: Vec::new(),
+        notes: Vec::new(),
+    }
+}
+
+/// Discovers the first public road connection along a directed motorway_link chain without
+/// requiring a pre-bounded candidate.
+///
+/// For Exit: scans forward from mainline (index 0) to surface.
+/// For Entry: scans reverse from mainline (last index) to surface.
+pub fn find_first_public_road_connection(
+    chain_node_ids: &[i64],
+    flow: RampFlowDirection,
+    way_map: &HashMap<i64, &OsmElement>,
+    node_to_ways: &HashMap<i64, Vec<i64>>,
+) -> FirstPublicRoadConnectionResolution {
+    let ordered_nodes: Vec<i64> = match flow {
+        RampFlowDirection::Exit => chain_node_ids.to_vec(),
+        RampFlowDirection::Entry => chain_node_ids.iter().copied().rev().collect(),
+    };
+
+    for node_id in &ordered_nodes {
+        let Some(way_ids) = node_to_ways.get(node_id) else {
+            continue;
+        };
+        let mut fail_closed = None;
+        let mut legal_ways = Vec::new();
+
+        for way_id in way_ids {
+            let Some(way) = way_map.get(way_id) else {
+                continue;
+            };
+            if matches!(way.get_tag("highway"), Some("motorway" | "motorway_link")) {
+                continue;
+            }
+            match evaluate_surface_way_for_connection(way, *node_id, flow) {
+                SurfaceWayConnectionAudit::FailClosed(msg) => {
+                    fail_closed = Some(msg);
+                    break;
+                }
+                SurfaceWayConnectionAudit::Legal => {
+                    if !legal_ways.contains(way_id) {
+                        legal_ways.push(*way_id);
+                    }
+                }
+                SurfaceWayConnectionAudit::Rejected(_) => {}
+            }
+        }
+
+        if let Some(msg) = fail_closed {
+            return FirstPublicRoadConnectionResolution {
+                rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+                support_state: EndpointSupportState::Unresolved,
+                ground_node_id: None,
+                ground_way_id: None,
+                ground_way_name: None,
+                reason_codes: vec![REASON_CONDITIONAL_ACCESS_RESTRICTION.to_string()],
+                notes: vec![msg],
+            };
+        }
+
+        if legal_ways.len() > 1 {
+            return FirstPublicRoadConnectionResolution {
+                rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+                support_state: EndpointSupportState::Unresolved,
+                ground_node_id: Some(*node_id),
+                ground_way_id: None,
+                ground_way_name: None,
+                reason_codes: vec![REASON_MULTIPLE_GROUND_CONNECTION_CANDIDATES.to_string()],
+                notes: vec![format!(
+                    "node {node_id} connects to multiple legal public ways: {legal_ways:?}"
+                )],
+            };
+        }
+
+        if legal_ways.len() == 1 {
+            let way_id = legal_ways[0];
+            let ground_way_name = way_map
+                .get(&way_id)
+                .and_then(|w| w.get_tag("name"))
+                .map(|s| s.to_string());
+            return FirstPublicRoadConnectionResolution {
+                rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+                support_state: EndpointSupportState::VerifiedBound,
+                ground_node_id: Some(*node_id),
+                ground_way_id: Some(way_id),
+                ground_way_name,
+                reason_codes: Vec::new(),
+                notes: Vec::new(),
+            };
+        }
+    }
+
+    FirstPublicRoadConnectionResolution {
+        rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+        support_state: EndpointSupportState::Unresolved,
+        ground_node_id: None,
+        ground_way_id: None,
+        ground_way_name: None,
+        reason_codes: vec![REASON_NO_GROUND_CONNECTION.to_string()],
+        notes: vec!["no legal public surface road connection found along chain".to_string()],
+    }
+}
+
+/// Helper to build maps and resolve first public road connection directly from an Overpass response.
+pub fn resolve_first_public_road_connection_from_osm(
+    chain_node_ids: &[i64],
+    flow: RampFlowDirection,
+    osm_resp: &OverpassResponse,
+    expected_ground_way: Option<i64>,
+) -> FirstPublicRoadConnectionResolution {
+    let mut way_map = HashMap::new();
+    let mut node_to_ways: HashMap<i64, Vec<i64>> = HashMap::new();
+
+    for elem in &osm_resp.elements {
+        if elem.is_way() {
+            way_map.insert(elem.id, elem);
+            if let Some(nodes) = &elem.nodes {
+                for node_id in nodes {
+                    node_to_ways.entry(*node_id).or_default().push(elem.id);
+                }
+            }
+        }
+    }
+
+    resolve_first_public_road_connection(
+        chain_node_ids,
+        flow,
+        &way_map,
+        &node_to_ways,
+        expected_ground_way,
+    )
 }
 
 /// Build `Graph`, `SnapIndex`, and diagnostic `RestrictionReport` from Overpass API elements.

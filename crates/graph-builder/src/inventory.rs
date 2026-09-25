@@ -486,26 +486,47 @@ pub fn validate_osm_ramp_bindings(
                 candidate.candidate_id
             ));
         }
-        if !matches!(candidate.status.as_str(), "unresolved" | "unsupported") {
+        if !matches!(
+            candidate.status.as_str(),
+            "unresolved" | "unsupported" | "verified_bound"
+        ) {
             errors.push(format!(
                 "binding candidate '{}' has invalid status '{}'",
                 candidate.candidate_id, candidate.status
             ));
         }
-        if candidate.public_projection != "excluded_unresolved" {
-            errors.push(format!(
-                "binding candidate '{}' has invalid publicProjection '{}'",
-                candidate.candidate_id, candidate.public_projection
-            ));
-        }
-        if candidate.unresolved_reason.trim().is_empty()
-            || candidate.unresolved_reason_codes.is_empty()
-            || candidate.support_evidence.is_empty()
-        {
-            errors.push(format!(
-                "binding candidate '{}' lacks reason/reasonCodes/evidence",
-                candidate.candidate_id
-            ));
+        if candidate.status == "verified_bound" {
+            if !matches!(
+                candidate.public_projection.as_str(),
+                "included_verified" | "excluded_unresolved"
+            ) {
+                errors.push(format!(
+                    "binding candidate '{}' has invalid publicProjection '{}'",
+                    candidate.candidate_id, candidate.public_projection
+                ));
+            }
+            if candidate.support_evidence.is_empty() {
+                errors.push(format!(
+                    "binding candidate '{}' lacks supportEvidence",
+                    candidate.candidate_id
+                ));
+            }
+        } else {
+            if candidate.public_projection != "excluded_unresolved" {
+                errors.push(format!(
+                    "binding candidate '{}' has invalid publicProjection '{}'",
+                    candidate.candidate_id, candidate.public_projection
+                ));
+            }
+            if candidate.unresolved_reason.trim().is_empty()
+                || candidate.unresolved_reason_codes.is_empty()
+                || candidate.support_evidence.is_empty()
+            {
+                errors.push(format!(
+                    "binding candidate '{}' lacks reason/reasonCodes/evidence",
+                    candidate.candidate_id
+                ));
+            }
         }
         if candidate.directed_segments.len() != 1 {
             errors.push(format!(
@@ -1200,6 +1221,12 @@ pub fn audit_osm_ramp_binding_candidate_against_osm(
             candidate.candidate_id, candidate.unresolved_reason_codes, reason_codes
         ));
     }
+    if candidate.status == "verified_bound" && !reason_codes.is_empty() {
+        errors.push(format!(
+            "binding candidate '{}' is verified_bound but has unresolved reason codes {:?}",
+            candidate.candidate_id, reason_codes
+        ));
+    }
 
     if errors.is_empty() {
         let mut reason_codes = reason_codes.into_iter().collect::<Vec<_>>();
@@ -1208,6 +1235,44 @@ pub fn audit_osm_ramp_binding_candidate_against_osm(
     } else {
         Err(errors)
     }
+}
+
+/// Audits a binding candidate against the `firstPublicRoadConnection/v1` rule.
+pub fn audit_first_public_road_connection(
+    candidate: &OsmRampBindingCandidate,
+    inv: &RampInventoryFile,
+    osm_resp: &crate::osm::OverpassResponse,
+) -> Result<crate::topology::FirstPublicRoadConnectionResolution, Vec<String>> {
+    let Some(ramp) = inv
+        .ramps
+        .iter()
+        .find(|ramp| ramp.ramp_id == candidate.ramp_id)
+    else {
+        return Err(vec![format!(
+            "binding candidate '{}' references unknown ramp '{}'",
+            candidate.candidate_id, candidate.ramp_id
+        )]);
+    };
+    let [segment] = candidate.directed_segments.as_slice() else {
+        return Err(vec![format!(
+            "binding candidate '{}' must have exactly one directed segment",
+            candidate.candidate_id
+        )]);
+    };
+
+    let flow = match ramp.kind {
+        RampKind::GeneralExit | RampKind::BoundaryOut => crate::topology::RampFlowDirection::Exit,
+        RampKind::GeneralEntry | RampKind::BoundaryIn => crate::topology::RampFlowDirection::Entry,
+    };
+
+    Ok(
+        crate::topology::resolve_first_public_road_connection_from_osm(
+            &segment.osm_node_ids,
+            flow,
+            osm_resp,
+            Some(candidate.route_evidence.ground_way_id),
+        ),
+    )
 }
 
 /// Validates OD tariffs against the canonical inventory.

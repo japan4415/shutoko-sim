@@ -1,0 +1,383 @@
+{
+  "schemaVersion": 1,
+  "source": "https://www.shutoko.jp/use/network/map/",
+  "sourceDate": "2026-09-10",
+  "description": "Reviewed official route-order adjacency and directed route-plan evidence for deterministic billing-pair derivation. OSM geometry never repairs or promotes a record in this file.",
+  "pairs": [
+    {
+      "evidenceId": "adjacency:official-route-map:c1-outer:kandabashi-takaracho",
+      "pairId": "bp:c1-outer:kandabashi-takaracho",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C1",
+      "direction": "outer",
+      "entryRampId": "ramp:c1-outer:kandabashi-entry",
+      "exitRampId": "ramp:c1-outer:takaracho-exit",
+      "entryName": "神田橋入口",
+      "exitName": "宝町出口",
+      "entryOsmWayId": 92243921,
+      "exitOsmWayId": 297864314,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C1:outer",
+        "anchorNodeId": "n:499831338",
+        "firstExitInitialEdgeId": "e:w24039781:27:f",
+        "exitApproachEdgeIds": [
+          "e:w297864314:0:f",
+          "e:w297864314:1:f",
+          "e:w297864314:2:f",
+          "e:w297864314:3:f",
+          "e:w297864314:4:f",
+          "e:w297864314:5:f",
+          "e:w297864314:6:f",
+          "e:w297864314:7:f",
+          "e:w297864314:8:f",
+          "e:w297864314:9:f",
+          "e:w297864314:10:f"
+        ]
+      }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c1-outer:kasumigaseki-daikancho",
+      "pairId": "bp:c1-outer:kasumigaseki-daikancho",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C1",
+      "direction": "outer",
+      "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
+      "exitRampId": "ramp:c1-outer:daikancho-exit",
+      "entryName": "霞が関入口",
+      "exitName": "代官町出口",
+      "entryOsmWayId": 916571610,
+      "exitOsmWayId": 276920911,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C1:outer",
+        "anchorNodeId": "n:577255571",
+        "firstExitInitialEdgeId": "e:w35266568:28:f",
+        "exitApproachEdgeIds": [
+          "e:w133037880:0:f",
+          "e:w133037880:1:f",
+          "e:w133037880:2:f",
+          "e:w276920911:0:f",
+          "e:w276920911:1:f",
+          "e:w276920911:2:f",
+          "e:w276920911:3:f",
+          "e:w276920911:4:f",
+          "e:w276920911:5:f"
+        ]
+      }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c1-outer:ginza-shibakoen",
+      "pairId": "bp:c1-outer:ginza-shibakoen",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C1",
+      "direction": "outer",
+      "entryRampId": "ramp:c1-outer:ginza-entry",
+      "exitRampId": "ramp:c1-outer:shibakoen-exit",
+      "entryName": "銀座入口",
+      "exitName": "芝公園出口",
+      "entryOsmWayId": 4848922,
+      "exitOsmWayId": 944671542,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C1:outer",
+        "anchorNodeId": "n:31254160",
+        "firstExitInitialEdgeId": "e:w4848934:7:f",
+        "exitApproachEdgeIds": [
+          "e:w4853798:0:f",
+          "e:w4853798:1:f",
+          "e:w4853798:2:f",
+          "e:w4853798:3:f",
+          "e:w4853798:4:f",
+          "e:w4853798:5:f",
+          "e:w4853798:6:f",
+          "e:w4853798:7:f",
+          "e:w4853798:8:f",
+          "e:w315702266:0:f",
+          "e:w315702266:1:f",
+          "e:w315702266:2:f",
+          "e:w315702266:3:f",
+          "e:w315702266:4:f",
+          "e:w315702266:5:f",
+          "e:w203873824:0:f"
+        ]
+      }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c1-outer:shibakoen-iikura",
+      "pairId": "bp:c1-outer:shibakoen-iikura",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C1",
+      "direction": "outer",
+      "entryRampId": "ramp:c1-outer:shibakoen-entry",
+      "exitRampId": "ramp:c1-outer:iikura-exit",
+      "entryName": "芝公園入口",
+      "exitName": "飯倉出口",
+      "entryOsmWayId": 4853801,
+      "exitOsmWayId": 203832842,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C1:outer",
+        "anchorNodeId": "n:31296971",
+        "firstExitInitialEdgeId": "e:w333682070:60:f",
+        "exitApproachEdgeIds": [
+          "e:w23273634:0:f",
+          "e:w23273634:1:f",
+          "e:w422023165:0:f",
+          "e:w203832842:0:f",
+          "e:w203832842:1:f",
+          "e:w203832842:2:f",
+          "e:w203832842:3:f"
+        ]
+      }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c1-inner:kasumigaseki-shibakoen",
+      "pairId": "bp:c1-inner:kasumigaseki-shibakoen",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C1",
+      "direction": "inner",
+      "entryRampId": "ramp:c1-inner:kasumigaseki-entry",
+      "exitRampId": "ramp:c1-inner:shibakoen-exit",
+      "entryName": "霞が関入口",
+      "exitName": "芝公園出口",
+      "entryOsmWayId": 916571615,
+      "exitOsmWayId": 203873821,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C1:inner",
+        "anchorNodeId": "n:264877748",
+        "firstExitInitialEdgeId": "e:w333682072:0:f",
+        "exitApproachEdgeIds": [
+          "e:w4853799:0:f",
+          "e:w4853799:1:f",
+          "e:w4853799:2:f",
+          "e:w4853799:3:f",
+          "e:w315702034:0:f",
+          "e:w315702034:1:f",
+          "e:w315702034:2:f",
+          "e:w315702034:3:f",
+          "e:w315702034:4:f",
+          "e:w315702034:5:f",
+          "e:w315702034:6:f",
+          "e:w315702034:7:f",
+          "e:w315702034:8:f",
+          "e:w315702034:9:f",
+          "e:w315702034:10:f",
+          "e:w315702034:11:f",
+          "e:w315702034:12:f",
+          "e:w315702034:13:f",
+          "e:w315702034:14:f",
+          "e:w315702034:15:f",
+          "e:w203873821:0:f",
+          "e:w203873821:1:f"
+        ]
+      }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c1-inner:daikancho-kasumigaseki",
+      "pairId": "bp:c1-inner:daikancho-kasumigaseki",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C1",
+      "direction": "inner",
+      "entryRampId": "ramp:c1-inner:daikancho-entry",
+      "exitRampId": "ramp:c1-inner:kasumigaseki-exit",
+      "entryName": "代官町入口",
+      "exitName": "霞が関出口",
+      "entryOsmWayId": 1091280541,
+      "exitOsmWayId": 1232166619,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C1:inner",
+        "anchorNodeId": "n:297945194",
+        "firstExitInitialEdgeId": "e:w27536429:3:f",
+        "exitApproachEdgeIds": [
+          "e:w24402539:0:f",
+          "e:w24402539:1:f",
+          "e:w24402539:2:f",
+          "e:w24402539:3:f",
+          "e:w24402539:4:f",
+          "e:w24402539:5:f",
+          "e:w24402539:6:f",
+          "e:w24402539:7:f",
+          "e:w24402539:8:f",
+          "e:w24402539:9:f",
+          "e:w880644157:0:f",
+          "e:w880644157:1:f",
+          "e:w880644157:2:f"
+        ]
+      }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c1-inner:shibakoen-shiodome",
+      "pairId": "bp:c1-inner:shibakoen-shiodome",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C1",
+      "direction": "inner",
+      "entryRampId": "ramp:c1-inner:shibakoen-entry",
+      "exitRampId": "ramp:c1-inner:shiodome-exit",
+      "entryName": "芝公園入口",
+      "exitName": "汐留出口",
+      "entryOsmWayId": 4853797,
+      "exitOsmWayId": 45068171,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C1:inner",
+        "anchorNodeId": "n:31295430",
+        "firstExitInitialEdgeId": "e:w24039738:52:f",
+        "exitApproachEdgeIds": [
+          "e:w24402125:0:f",
+          "e:w24402125:1:f",
+          "e:w45068168:0:f",
+          "e:w45068168:1:f",
+          "e:w813251269:0:f",
+          "e:w45068171:0:f"
+        ]
+      }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c1-inner:takaracho-kandabashi",
+      "pairId": "bp:c1-inner:takaracho-kandabashi",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C1",
+      "direction": "inner",
+      "entryRampId": "ramp:c1-inner:takaracho-entry",
+      "exitRampId": "ramp:c1-inner:kandabashi-exit",
+      "entryName": "宝町入口",
+      "exitName": "神田橋出口",
+      "entryOsmWayId": 378284514,
+      "exitOsmWayId": 390441534,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C1:inner",
+        "anchorNodeId": "n:1891818143",
+        "firstExitInitialEdgeId": "e:w378284483:0:f",
+        "exitApproachEdgeIds": [
+          "e:w92243922:0:f",
+          "e:w92243922:1:f",
+          "e:w92243922:2:f",
+          "e:w92243922:3:f",
+          "e:w390441534:0:f",
+          "e:w390441534:1:f"
+        ]
+      }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c1-inner:ginza-shintomicho",
+      "pairId": "bp:c1-inner:ginza-shintomicho",
+      "pairKind": "legacyRing",
+      "reviewStatus": "blocked",
+      "routeId": "C1",
+      "direction": "inner",
+      "entryRampId": "ramp:c1-outer:ginza-entry",
+      "exitRampId": "ramp:c1-inner:shintomicho-exit",
+      "entryName": "銀座入口",
+      "exitName": "新富町出口",
+      "entryOsmWayId": 4848922,
+      "unresolvedReasons": [
+        "ROUTE_PLAN_EVIDENCE_UNRESOLVED",
+        "EXIT_EXACT_BINDING_UNRESOLVED"
+      ]
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:2-inbound:meguro:c1-inner:tengenji",
+      "pairId": "bp:2-inbound:meguro:c1-inner:tengenji",
+      "pairKind": "radialReturn",
+      "reviewStatus": "reviewed",
+      "routeId": "C1",
+      "direction": "inner",
+      "entryRampId": "ramp:2-inbound:meguro-entry",
+      "exitRampId": "ramp:2-outbound:tengenji-exit",
+      "entryName": "目黒入口",
+      "exitName": "天現寺出口",
+      "routePlan": {
+        "kind": "directedJunction",
+        "entryCorridor": {
+          "membershipId": "route:2:inbound",
+          "terminalEdgeId": "e:w4853804:16:f",
+          "mergeNodeId": "n:574460576"
+        },
+        "anchor": {
+          "routeId": "C1",
+          "direction": "inner",
+          "mergeNodeId": "n:574460576",
+          "branchNodeId": "n:574460605",
+          "mergeTerminalEdgeId": "e:w4853804:16:f",
+          "branchInitialEdgeId": "e:w45248411:0:f",
+          "excludedShortConnector": {
+            "fromNodeId": "n:574460605",
+            "toNodeId": "n:574460576",
+            "osmWayId": 23297444,
+            "edgeCount": 23,
+            "distanceMeters": 493
+          }
+        },
+        "mandatoryLap": {
+          "membershipId": "route:C1:inner",
+          "firstEdgeId": "e:w23297444:43:f",
+          "lastEdgeId": "e:w23297444:19:f",
+          "lapCount": 1
+        },
+        "returnCorridor": {
+          "membershipId": "route:2:outbound",
+          "startNodeId": "n:574460605",
+          "initialEdgeId": "e:w45248411:0:f"
+        }
+      }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:2-inbound:meguro:c1-outer:tengenji",
+      "pairId": "bp:2-inbound:meguro:c1-outer:tengenji",
+      "pairKind": "radialReturn",
+      "reviewStatus": "reviewed",
+      "routeId": "C1",
+      "direction": "outer",
+      "entryRampId": "ramp:2-inbound:meguro-entry",
+      "exitRampId": "ramp:2-outbound:tengenji-exit",
+      "entryName": "目黒入口",
+      "exitName": "天現寺出口",
+      "routePlan": {
+        "kind": "directedJunction",
+        "entryCorridor": {
+          "membershipId": "route:2:inbound",
+          "terminalEdgeId": "e:w45248631:3:f",
+          "mergeNodeId": "n:31297008"
+        },
+        "anchor": {
+          "routeId": "C1",
+          "direction": "outer",
+          "mergeNodeId": "n:31297008",
+          "branchNodeId": "n:31297000",
+          "mergeTerminalEdgeId": "e:w45248631:3:f",
+          "branchInitialEdgeId": "e:w4853805:0:f",
+          "excludedShortConnector": {
+            "fromNodeId": "n:31297000",
+            "toNodeId": "n:31297008",
+            "osmWayId": 24039737,
+            "edgeCount": 20,
+            "distanceMeters": 461
+          }
+        },
+        "mandatoryLap": {
+          "membershipId": "route:C1:outer",
+          "firstEdgeId": "e:w24039737:24:f",
+          "lastEdgeId": "e:w24039737:3:f",
+          "lapCount": 1
+        },
+        "returnCorridor": {
+          "membershipId": "route:2:outbound",
+          "startNodeId": "n:31297000",
+          "initialEdgeId": "e:w4853805:0:f"
+        }
+      }
+    }
+  ]
+}

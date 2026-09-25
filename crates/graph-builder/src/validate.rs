@@ -14,7 +14,16 @@
 //! - Identifier lengths <= 256 bytes.
 //! - No dynamic distance-based tariff estimation.
 
-use crate::model::{BillingPair, Edge, EdgeKind, Graph, VerificationStatus};
+use crate::billing::{
+    BillingPairAdjacencyFile, BillingPairAdjacencyKind, BillingPairAdjacencyReviewStatus,
+    BillingPairAdjacencyRoutePlan, BILLING_PAIR_ADJACENCY_SCHEMA_VERSION,
+};
+use crate::model::{BillingPair, Edge, EdgeKind, Graph, RampKind, VerificationStatus};
+use crate::route_membership::{
+    find_first_exit_on_corridor_with_binding, CorridorFirstExitResolution,
+};
+use crate::seed::EndpointSupportState;
+use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use time::format_description::well_known::Rfc3339;
 use time::{Date, Month, OffsetDateTime};
@@ -492,6 +501,425 @@ pub fn has_non_empty_shutoko_loop(graph: &Graph, anchor_node_id: &str) -> bool {
     }
 
     false
+}
+
+pub fn validate_billing_pair_adjacency(
+    adjacency: &BillingPairAdjacencyFile,
+) -> Result<(), Vec<String>> {
+    let mut errors = Vec::new();
+    if adjacency.schema_version != BILLING_PAIR_ADJACENCY_SCHEMA_VERSION {
+        errors.push(format!(
+            "billing pair adjacency schemaVersion must be {}",
+            BILLING_PAIR_ADJACENCY_SCHEMA_VERSION
+        ));
+    }
+    if let Err(error) = validate_url(&adjacency.source) {
+        errors.push(format!("billing pair adjacency source is invalid: {error}"));
+    }
+    if let Err(error) = parse_iso_date(&adjacency.source_date) {
+        errors.push(format!(
+            "billing pair adjacency sourceDate is invalid: {error}"
+        ));
+    }
+    if adjacency.description.trim().is_empty() {
+        errors.push("billing pair adjacency description is empty".to_string());
+    }
+    if adjacency.pairs.is_empty() {
+        errors.push("billing pair adjacency pairs cannot be empty".to_string());
+    }
+    let mut evidence_ids = HashSet::new();
+    let mut pair_ids = HashSet::new();
+    for (index, pair) in adjacency.pairs.iter().enumerate() {
+        if pair.evidence_id.is_empty() || !evidence_ids.insert(pair.evidence_id.as_str()) {
+            errors.push(format!(
+                "billing pair adjacency[{index}] has an empty or duplicate evidenceId"
+            ));
+        }
+        if pair.pair_id.is_empty() || !pair_ids.insert(pair.pair_id.as_str()) {
+            errors.push(format!(
+                "billing pair adjacency[{index}] has an empty or duplicate pairId"
+            ));
+        }
+        if pair.route_id.trim().is_empty()
+            || pair.direction.trim().is_empty()
+            || pair.entry_ramp_id.trim().is_empty()
+            || pair.exit_ramp_id.trim().is_empty()
+            || pair.entry_name.trim().is_empty()
+            || pair.exit_name.trim().is_empty()
+        {
+            errors.push(format!(
+                "billing pair adjacency[{index}] has an empty route, endpoint, or name"
+            ));
+        }
+        if pair.entry_ramp_id == pair.exit_ramp_id {
+            errors.push(format!(
+                "billing pair adjacency{} uses the same entry and exit ramp",
+                pair.pair_id
+            ));
+        }
+        if pair.entry_osm_way_id.is_some_and(|value| value <= 0)
+            || pair.exit_osm_way_id.is_some_and(|value| value <= 0)
+        {
+            errors.push(format!(
+                "billing pair adjacency{} has a non-positive OSM way ID",
+                pair.pair_id
+            ));
+        }
+        match pair.review_status {
+            BillingPairAdjacencyReviewStatus::Reviewed => {
+                if pair.route_plan.is_none() {
+                    errors.push(format!(
+                        "reviewed billing pair adjacency{} has no route plan",
+                        pair.pair_id
+                    ));
+                }
+                if !pair.unresolved_reasons.is_empty() {
+                    errors.push(format!(
+                        "reviewed billing pair adjacency{} retains unresolved reasons",
+                        pair.pair_id
+                    ));
+                }
+            }
+            BillingPairAdjacencyReviewStatus::Blocked => {
+                if pair.unresolved_reasons.is_empty()
+                    || pair
+                        .unresolved_reasons
+                        .iter()
+                        .any(|reason| reason.trim().is_empty())
+                {
+                    errors.push(format!(
+                        "blocked billing pair adjacency{} requires explicit unresolved reasons",
+                        pair.pair_id
+                    ));
+                }
+            }
+        }
+        match (pair.pair_kind, pair.route_plan.as_ref()) {
+            (
+                BillingPairAdjacencyKind::LegacyRing,
+                Some(BillingPairAdjacencyRoutePlan::SameNode {
+                    membership_id,
+                    anchor_node_id,
+                    first_exit_initial_edge_id,
+                    exit_approach_edge_ids,
+                }),
+            ) => {
+                if membership_id != &format!("route:{}:{}", pair.route_id, pair.direction)
+                    || anchor_node_id.is_empty()
+                    || first_exit_initial_edge_id.is_empty()
+                    || exit_approach_edge_ids.is_empty()
+                    || exit_approach_edge_ids.iter().any(String::is_empty)
+                    || pair.entry_osm_way_id.is_none()
+                    || pair.exit_osm_way_id.is_none()
+                {
+                    errors.push(format!(
+                        "legacy billing pair adjacency{} has an incomplete sameNode plan",
+                        pair.pair_id
+                    ));
+                }
+            }
+            (
+                BillingPairAdjacencyKind::RadialReturn,
+                Some(BillingPairAdjacencyRoutePlan::DirectedJunction {
+                    entry_corridor,
+                    anchor,
+                    mandatory_lap,
+                    return_corridor,
+                }),
+            ) => {
+                if anchor.route_id != pair.route_id
+                    || anchor.direction != pair.direction
+                    || mandatory_lap.membership_id
+                        != format!("route:{}:{}", pair.route_id, pair.direction)
+                    || mandatory_lap.lap_count != 1
+                    || entry_corridor.membership_id.is_empty()
+                    || entry_corridor.terminal_edge_id.is_empty()
+                    || entry_corridor.merge_node_id != anchor.merge_node_id
+                    || anchor.merge_node_id == anchor.branch_node_id
+                    || anchor.merge_terminal_edge_id.is_empty()
+                    || anchor.branch_initial_edge_id.is_empty()
+                    || mandatory_lap.first_edge_id.is_empty()
+                    || mandatory_lap.last_edge_id.is_empty()
+                    || return_corridor.membership_id.is_empty()
+                    || return_corridor.start_node_id != anchor.branch_node_id
+                    || return_corridor.initial_edge_id != anchor.branch_initial_edge_id
+                    || anchor.excluded_short_connector.from_node_id != anchor.branch_node_id
+                    || anchor.excluded_short_connector.to_node_id != anchor.merge_node_id
+                    || anchor.excluded_short_connector.osm_way_id <= 0
+                    || anchor.excluded_short_connector.edge_count == 0
+                    || anchor.excluded_short_connector.distance_meters == 0
+                {
+                    errors.push(format!(
+                        "radial billing pair adjacency{} has an invalid directedJunction plan",
+                        pair.pair_id
+                    ));
+                }
+            }
+            (
+                BillingPairAdjacencyKind::LegacyRing,
+                Some(BillingPairAdjacencyRoutePlan::DirectedJunction { .. }),
+            )
+            | (
+                BillingPairAdjacencyKind::RadialReturn,
+                Some(BillingPairAdjacencyRoutePlan::SameNode { .. }),
+            ) => {
+                errors.push(format!(
+                    "billing pair adjacency{} route plan kind does not match pairKind",
+                    pair.pair_id
+                ));
+            }
+            (BillingPairAdjacencyKind::LegacyRing, None)
+            | (BillingPairAdjacencyKind::RadialReturn, None) => {
+                if pair.review_status == BillingPairAdjacencyReviewStatus::Reviewed {
+                    errors.push(format!(
+                        "billing pair adjacency{} requires its pair-kind route plan",
+                        pair.pair_id
+                    ));
+                }
+            }
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RelationConstrainedFirstExitStatus {
+    Verified,
+    Unresolved,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelationConstrainedFirstExit {
+    pub status: RelationConstrainedFirstExitStatus,
+    pub expected_ramp_id: String,
+    pub exit_edge_id: Option<String>,
+    pub ramp_id: Option<String>,
+    pub mainline_edge_ids: Vec<String>,
+    pub mainline_source_segment_ids: Vec<String>,
+    pub distance_meters: u64,
+    pub reason_codes: Vec<String>,
+}
+
+pub fn validate_relation_constrained_first_exit(
+    graph: &Graph,
+    route_memberships: &[crate::route_membership::RouteMembershipIndex],
+    membership_id: &str,
+    start_node_id: &str,
+    initial_edge_id: &str,
+    expected_ramp_id: &str,
+    exact_directed_binding: EndpointSupportState,
+) -> Result<RelationConstrainedFirstExit, Vec<String>> {
+    let resolution: CorridorFirstExitResolution = find_first_exit_on_corridor_with_binding(
+        graph,
+        route_memberships,
+        membership_id,
+        start_node_id,
+        initial_edge_id,
+        expected_ramp_id,
+        exact_directed_binding,
+    )
+    .map_err(|error| vec![error.code().to_string()])?;
+    let status = match exact_directed_binding {
+        EndpointSupportState::VerifiedBound => RelationConstrainedFirstExitStatus::Verified,
+        EndpointSupportState::Unresolved => RelationConstrainedFirstExitStatus::Unresolved,
+        EndpointSupportState::Unsupported => RelationConstrainedFirstExitStatus::Unsupported,
+    };
+    let (exit_edge_id, ramp_id) = match (status, resolution.exit.as_ref()) {
+        (RelationConstrainedFirstExitStatus::Verified, Some(exit)) => {
+            if resolution.exact_directed_binding != EndpointSupportState::VerifiedBound
+                || exit.ramp_id != expected_ramp_id
+            {
+                return Err(vec!["RELATION_FIRST_EXIT_MISMATCH".to_string()]);
+            }
+            (Some(exit.exit_edge_id.clone()), Some(exit.ramp_id.clone()))
+        }
+        (RelationConstrainedFirstExitStatus::Verified, None) => {
+            return Err(vec!["RELATION_FIRST_EXIT_NOT_RESOLVED".to_string()]);
+        }
+        (_, Some(_)) => return Err(vec!["RELATION_FIRST_EXIT_STATE_CONFLICT".to_string()]),
+        (_, None) => (None, None),
+    };
+    Ok(RelationConstrainedFirstExit {
+        status,
+        expected_ramp_id: expected_ramp_id.to_string(),
+        exit_edge_id,
+        ramp_id,
+        mainline_edge_ids: resolution.mainline_edge_ids,
+        mainline_source_segment_ids: resolution.mainline_source_segment_ids,
+        distance_meters: resolution.distance_meters,
+        reason_codes: Vec::new(),
+    })
+}
+
+pub fn validate_relation_constrained_legacy_first_exit(
+    graph: &Graph,
+    route_memberships: &[crate::route_membership::RouteMembershipIndex],
+    membership_id: &str,
+    anchor_node_id: &str,
+    initial_edge_id: &str,
+    expected_ramp_id: &str,
+    exit_approach_edge_ids: &[String],
+) -> Result<RelationConstrainedFirstExit, Vec<String>> {
+    let membership = route_memberships
+        .iter()
+        .find(|membership| membership.membership_id == membership_id)
+        .ok_or_else(|| vec!["RELATION_MEMBERSHIP_NOT_FOUND".to_string()])?;
+    let relation_segments = membership
+        .segments
+        .iter()
+        .filter(|segment| {
+            segment.source_kind
+                == crate::route_membership::RouteMembershipSourceKind::RelationMainline
+        })
+        .collect::<Vec<_>>();
+    let [relation_segment] = relation_segments.as_slice() else {
+        return Err(vec!["RELATION_MAINLINE_NOT_UNIQUE".to_string()]);
+    };
+    if exit_approach_edge_ids.is_empty() {
+        return Err(vec!["RELATION_EXIT_APPROACH_MISSING".to_string()]);
+    }
+    let edge_map = graph
+        .edges
+        .iter()
+        .map(|edge| (edge.id.as_str(), edge))
+        .collect::<std::collections::HashMap<_, _>>();
+    let Some(start) = relation_segment
+        .ordered_edge_ids
+        .iter()
+        .position(|edge_id| edge_id == initial_edge_id)
+    else {
+        return Err(vec!["RELATION_INITIAL_EDGE_NOT_FOUND".to_string()]);
+    };
+    let mut relation_order = relation_segment.ordered_edge_ids[start..].to_vec();
+    relation_order.extend_from_slice(&relation_segment.ordered_edge_ids[..start]);
+    let approach = exit_approach_edge_ids
+        .iter()
+        .map(|edge_id| {
+            edge_map
+                .get(edge_id.as_str())
+                .copied()
+                .ok_or_else(|| vec!["RELATION_EXIT_APPROACH_EDGE_NOT_FOUND".to_string()])
+        })
+        .collect::<Result<Vec<_>, Vec<String>>>()?;
+    let split_node_reached = approach.first().is_some_and(|approach_edge| {
+        relation_order.iter().any(|edge_id| {
+            edge_map.get(edge_id.as_str()).map(|edge| edge.to.as_str())
+                == Some(approach_edge.from.as_str())
+        })
+    });
+    if approach.first().map(|edge| edge.from.as_str()) != Some(anchor_node_id)
+        && !split_node_reached
+    {
+        return Err(vec!["RELATION_EXIT_APPROACH_NOT_REACHED".to_string()]);
+    }
+    if approach.iter().any(|edge| edge.kind != EdgeKind::Shutoko)
+        || approach
+            .windows(2)
+            .any(|window| window[0].to != window[1].from)
+    {
+        return Err(vec!["RELATION_EXIT_APPROACH_INVALID".to_string()]);
+    }
+    let split_node_id = approach
+        .first()
+        .map(|edge| edge.from.as_str())
+        .unwrap_or_default();
+    let expected_ramp = graph
+        .ramps
+        .iter()
+        .find(|ramp| {
+            ramp.id == expected_ramp_id
+                && ramp.kind == RampKind::GeneralExit
+                && ramp.route == membership.route_id
+                && ramp.direction == membership.direction
+        })
+        .ok_or_else(|| vec!["RELATION_EXIT_RAMP_NOT_FOUND".to_string()])?;
+    let expected_exit_edge = edge_map
+        .get(expected_ramp.edge_id.as_str())
+        .ok_or_else(|| vec!["RELATION_EXIT_EDGE_NOT_FOUND".to_string()])?;
+    if expected_exit_edge.kind != EdgeKind::Exit
+        || approach.last().map(|edge| edge.to.as_str()) != Some(expected_exit_edge.from.as_str())
+    {
+        return Err(vec!["RELATION_EXIT_APPROACH_BOUNDARY_MISMATCH".to_string()]);
+    }
+    let bound_segments = membership
+        .segments
+        .iter()
+        .filter(|segment| {
+            segment.source_kind == crate::route_membership::RouteMembershipSourceKind::BoundRamp
+                && segment.ordered_edge_ids.first().map(String::as_str)
+                    == Some(expected_ramp.edge_id.as_str())
+        })
+        .collect::<Vec<_>>();
+    let [bound_segment] = bound_segments.as_slice() else {
+        return Err(vec!["RELATION_EXIT_BINDING_EVIDENCE_NOT_FOUND".to_string()]);
+    };
+    let mut mainline_edge_ids = Vec::new();
+    let mut path = Vec::new();
+    let mut distance_meters = 0_u64;
+    for edge_id in relation_order {
+        let edge = edge_map
+            .get(edge_id.as_str())
+            .ok_or_else(|| vec!["RELATION_EDGE_NOT_FOUND".to_string()])?;
+        if edge.kind != EdgeKind::Shutoko {
+            return Err(vec!["RELATION_EDGE_NOT_MAINLINE".to_string()]);
+        }
+        if path.is_empty() && edge.from != anchor_node_id {
+            return Err(vec!["RELATION_INITIAL_BOUNDARY_MISMATCH".to_string()]);
+        }
+        path.push(edge.id.clone());
+        mainline_edge_ids.push(edge.id.clone());
+        distance_meters = distance_meters.saturating_add(edge.distance_meters);
+        if edge.to == split_node_id {
+            path.extend(approach.iter().map(|edge| edge.id.clone()));
+            path.extend(bound_segment.ordered_edge_ids.iter().cloned());
+            if contains_forbidden_transition(&path, &graph.forbidden_transitions) {
+                return Err(vec!["RELATION_FIRST_EXIT_FORBIDDEN_TRANSITION".to_string()]);
+            }
+            distance_meters = distance_meters.saturating_add(
+                approach
+                    .iter()
+                    .map(|edge| edge.distance_meters)
+                    .sum::<u64>()
+                    + bound_segment
+                        .ordered_edge_ids
+                        .iter()
+                        .filter_map(|edge_id| edge_map.get(edge_id.as_str()))
+                        .map(|edge| edge.distance_meters)
+                        .sum::<u64>(),
+            );
+            return Ok(RelationConstrainedFirstExit {
+                status: RelationConstrainedFirstExitStatus::Verified,
+                expected_ramp_id: expected_ramp_id.to_string(),
+                exit_edge_id: Some(expected_ramp.edge_id.clone()),
+                ramp_id: Some(expected_ramp_id.to_string()),
+                mainline_edge_ids,
+                mainline_source_segment_ids: vec![relation_segment.segment_id.clone()],
+                distance_meters,
+                reason_codes: Vec::new(),
+            });
+        }
+        let prior_exit = graph.edges.iter().any(|candidate_edge| {
+            candidate_edge.kind == EdgeKind::Exit
+                && candidate_edge.from == edge.to
+                && graph.ramps.iter().any(|ramp| {
+                    ramp.edge_id == candidate_edge.id
+                        && ramp.kind == RampKind::GeneralExit
+                        && ramp.route == membership.route_id
+                        && ramp.direction == membership.direction
+                })
+        });
+        if prior_exit {
+            return Err(vec!["RELATION_FIRST_EXIT_MISMATCH".to_string()]);
+        }
+    }
+    Err(vec!["RELATION_EXIT_APPROACH_NOT_REACHED".to_string()])
 }
 
 /// Validate a single BillingPair against a Graph according to all system requirements.

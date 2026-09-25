@@ -28,10 +28,23 @@ pub use inventory::{
 };
 
 pub use billing::{
-    generate_and_validate_billing_pairs, generate_and_validate_parsed_billing_pairs,
-    generate_billing_pair, generate_diagnostic_radial_route_plans,
+    compute_pair_derivation_input_hashes, derive_pair_candidates,
+    derive_pair_candidates_from_source_bytes, generate_and_validate_billing_pairs,
+    generate_and_validate_parsed_billing_pairs, generate_billing_pair,
+    generate_diagnostic_radial_route_plans, pair_derivation_report_to_deterministic_json,
     validate_radial_seed_binding_candidates, BillingError, BillingGenerationReport,
-    RadialRoutePlanGeneration, RejectedSeedRecord,
+    BillingPairAdjacency, BillingPairAdjacencyDirectedAnchor, BillingPairAdjacencyEntryCorridor,
+    BillingPairAdjacencyExcludedShortConnector, BillingPairAdjacencyFile, BillingPairAdjacencyKind,
+    BillingPairAdjacencyMandatoryLap, BillingPairAdjacencyReturnCorridor,
+    BillingPairAdjacencyReviewStatus, BillingPairAdjacencyRoutePlan, PairCandidateEndpointReport,
+    PairCandidateProductEligibility, PairCandidateReport, PairCandidateRoutePlanReport,
+    PairCandidateRouteRoleReport, PairCandidateTariffPriceReport, PairCandidateTariffReport,
+    PairDerivationError, PairDerivationGate, PairDerivationGateStatus, PairDerivationGates,
+    PairDerivationInputHashes, PairDerivationProductEligibilityStatus,
+    PairDerivationPromotionDecision, PairDerivationRelationManifest, PairDerivationReport,
+    PairDerivationRouteRole, PairDerivationSummary, RadialRoutePlanGeneration, RejectedSeedRecord,
+    BILLING_PAIR_ADJACENCY_SCHEMA_VERSION, PAIR_DERIVATION_REPORT_SCHEMA_VERSION,
+    PAIR_DERIVATION_RULE,
 };
 pub use manifest::{
     build_manifest, compute_sha256, manifest_to_deterministic_json, BillingPairProvenance,
@@ -81,6 +94,8 @@ pub use topology::{
 pub use validate::{
     contains_forbidden_transition, find_first_exits_from_anchor,
     find_first_exits_from_anchor_with_budget, has_non_empty_shutoko_loop, parse_iso_date,
-    parse_utc_timestamp, validate_billing_pair, validate_url, ValidationError,
-    FIRST_EXIT_STATE_BUDGET,
+    parse_utc_timestamp, validate_billing_pair, validate_billing_pair_adjacency,
+    validate_relation_constrained_first_exit, validate_relation_constrained_legacy_first_exit,
+    validate_url, RelationConstrainedFirstExit, RelationConstrainedFirstExitStatus,
+    ValidationError, FIRST_EXIT_STATE_BUDGET,
 };

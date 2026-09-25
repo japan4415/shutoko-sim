@@ -8,19 +8,34 @@
 //! Ensures both path segments combine into a simple path (no hidden loops or cycle crossovers)
 //! and satisfy all graph routing restrictions.
 
-use crate::inventory::OsmRampBindingsFile;
+use crate::inventory::{
+    validate_od_tariffs, OdTariffsFile, OsmRampBindingsFile, RampInventoryFile,
+};
+use crate::manifest::compute_sha256;
 use crate::model::{BillingPair, Edge, EdgeKind, Graph, Price, VerificationStatus};
 use crate::route_membership::{
-    resolve_diagnostic_radial_route_plan, DirectedRoutePlanResolution, RouteMembershipIndex,
+    bound_ramp_evidence_from_inventory, ordered_edge_ids_sha256, promote_verified_radial_pair,
+    resolve_diagnostic_radial_route_plan, route_memberships_sha256,
+    validate_route_membership_structure, BoundRampEvidence, DirectedRoutePlanResolution,
+    RouteMembershipIndex, RouteMembershipSourceKind,
 };
 use crate::seed::{
-    BillingPairSeed, BillingPairSeedEntry, BillingPairsSeedFile, BindingCandidateStatus,
-    ParsedBillingPairsSeed,
+    AnchorKind, ArcPolicy, BillingPairSeed, BillingPairSeedEntry, BillingPairsSeedFile,
+    BindingCandidate, BindingCandidateStatus, DiagnosticEndpoint, DiagnosticRoutePlan,
+    DirectedEndpointSegment, DirectedJunctionAnchor, EndpointSupportState, EntryCorridor,
+    ExcludedShortConnector, FirstGeneralExit, FirstGeneralExitRule, LoopValidation,
+    LoopValidationStatus, MandatoryLap, PairEligibility, PairEligibilityStatus, PairKind,
+    ParsedBillingPairsSeed, ReturnCorridor, RoutingCapability, SeedPrice, SeedProvenance,
+    TariffStatus,
 };
 use crate::validate::{
-    contains_forbidden_transition, parse_iso_date, validate_billing_pair, validate_url,
-    ValidationError,
+    contains_forbidden_transition, has_non_empty_shutoko_loop, parse_iso_date,
+    validate_billing_pair, validate_billing_pair_adjacency,
+    validate_relation_constrained_legacy_first_exit, validate_url,
+    RelationConstrainedFirstExitStatus, ValidationError,
 };
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
 
@@ -548,6 +563,1819 @@ pub fn generate_and_validate_parsed_billing_pairs(
             }
         }
     }
+}
+
+pub const BILLING_PAIR_ADJACENCY_SCHEMA_VERSION: u32 = 1;
+pub const PAIR_DERIVATION_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const PAIR_DERIVATION_RULE: &str = "billingPairDerivation/v1";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BillingPairAdjacencyKind {
+    LegacyRing,
+    RadialReturn,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BillingPairAdjacencyReviewStatus {
+    Reviewed,
+    Blocked,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BillingPairAdjacencyFile {
+    pub schema_version: u32,
+    pub source: String,
+    pub source_date: String,
+    pub description: String,
+    pub pairs: Vec<BillingPairAdjacency>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BillingPairAdjacency {
+    pub evidence_id: String,
+    pub pair_id: String,
+    pub pair_kind: BillingPairAdjacencyKind,
+    pub review_status: BillingPairAdjacencyReviewStatus,
+    pub route_id: String,
+    pub direction: String,
+    pub entry_ramp_id: String,
+    pub exit_ramp_id: String,
+    pub entry_name: String,
+    pub exit_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_osm_way_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_osm_way_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_plan: Option<BillingPairAdjacencyRoutePlan>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unresolved_reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum BillingPairAdjacencyRoutePlan {
+    SameNode {
+        membership_id: String,
+        anchor_node_id: String,
+        first_exit_initial_edge_id: String,
+        exit_approach_edge_ids: Vec<String>,
+    },
+    DirectedJunction {
+        entry_corridor: BillingPairAdjacencyEntryCorridor,
+        anchor: Box<BillingPairAdjacencyDirectedAnchor>,
+        mandatory_lap: BillingPairAdjacencyMandatoryLap,
+        return_corridor: BillingPairAdjacencyReturnCorridor,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BillingPairAdjacencyEntryCorridor {
+    pub membership_id: String,
+    pub terminal_edge_id: String,
+    pub merge_node_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BillingPairAdjacencyDirectedAnchor {
+    pub route_id: String,
+    pub direction: String,
+    pub merge_node_id: String,
+    pub branch_node_id: String,
+    pub merge_terminal_edge_id: String,
+    pub branch_initial_edge_id: String,
+    pub excluded_short_connector: BillingPairAdjacencyExcludedShortConnector,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BillingPairAdjacencyExcludedShortConnector {
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub osm_way_id: i64,
+    pub edge_count: u32,
+    pub distance_meters: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BillingPairAdjacencyMandatoryLap {
+    pub membership_id: String,
+    pub first_edge_id: String,
+    pub last_edge_id: String,
+    pub lap_count: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BillingPairAdjacencyReturnCorridor {
+    pub membership_id: String,
+    pub start_node_id: String,
+    pub initial_edge_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairDerivationInputHashes {
+    pub osm_snapshot_sha256: String,
+    pub ramp_ledger_sha256: String,
+    pub route_membership_index_sha256: String,
+    pub billing_pair_adjacency_sha256: String,
+    pub od_tariffs_sha256: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PairDerivationGateStatus {
+    Passed,
+    Failed,
+    Unresolved,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairDerivationGate {
+    pub status: PairDerivationGateStatus,
+    pub reason_codes: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairDerivationGates {
+    pub official_adjacency: PairDerivationGate,
+    pub route: PairDerivationGate,
+    pub direction: PairDerivationGate,
+    pub first_exit: PairDerivationGate,
+    pub mandatory_lap: PairDerivationGate,
+    pub entry_binding: PairDerivationGate,
+    pub exit_binding: PairDerivationGate,
+    pub tariff_assignment: PairDerivationGate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PairDerivationProductEligibilityStatus {
+    VerifiedOneSectionAhead,
+    Unverified,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PairDerivationPromotionDecision {
+    EligibleForReview,
+    Hold,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PairDerivationRouteRole {
+    EntryApproach,
+    MandatoryLap,
+    ReturnCorridor,
+    ExitApproach,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairCandidateEndpointReport {
+    pub ramp_id: String,
+    pub name: String,
+    pub support_state: String,
+    pub binding_evidence_id: Option<String>,
+    pub route_membership_id: Option<String>,
+    pub gate: PairDerivationGate,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairCandidateRouteRoleReport {
+    pub role: PairDerivationRouteRole,
+    pub status: PairDerivationGateStatus,
+    pub edge_ids_sha256: Option<String>,
+    pub source_segment_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairCandidateRoutePlanReport {
+    pub route_plan_id: String,
+    pub edge_ids_sha256: Option<String>,
+    pub loop_validation_status: String,
+    pub source_segment_ids: Vec<String>,
+    pub resolved_roles: Vec<PairCandidateRouteRoleReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairCandidateTariffPriceReport {
+    pub status: String,
+    pub tariff_status: String,
+    pub amount_yen: Option<u64>,
+    pub effective_from: String,
+    pub effective_to: Option<String>,
+    pub rule_id: String,
+    pub evidence_id: String,
+    pub distance_evidence_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairCandidateTariffReport {
+    pub status: String,
+    pub assignment_id: Option<String>,
+    pub billing_distance_meters: Option<u64>,
+    pub prices: Vec<PairCandidateTariffPriceReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairCandidateProductEligibility {
+    pub status: PairDerivationProductEligibilityStatus,
+    pub official_adjacency_evidence_id: String,
+    pub one_section_ahead_verified: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairCandidateReport {
+    pub candidate_id: String,
+    pub pair_id: String,
+    pub pair_kind: BillingPairAdjacencyKind,
+    pub route_id: String,
+    pub direction: String,
+    pub entry: PairCandidateEndpointReport,
+    pub exit: PairCandidateEndpointReport,
+    pub route_plan: PairCandidateRoutePlanReport,
+    pub gates: PairDerivationGates,
+    pub product_eligibility: PairCandidateProductEligibility,
+    pub tariff: PairCandidateTariffReport,
+    pub promotion_decision: PairDerivationPromotionDecision,
+    pub automatic_seed_write: bool,
+    pub rejection_reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairDerivationRelationManifest {
+    pub membership_id: String,
+    pub route_id: String,
+    pub direction: String,
+    pub relation_ids: Vec<i64>,
+    pub candidate_pair_ids: Vec<String>,
+    pub route_plan_resolved: usize,
+    pub route_plan_unresolved: usize,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairDerivationSummary {
+    pub candidate_total: usize,
+    pub eligible_for_review: usize,
+    pub hold: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairDerivationReport {
+    pub schema_version: u32,
+    pub rule: String,
+    pub automatic_seed_write: bool,
+    pub input_hashes: PairDerivationInputHashes,
+    pub relation_manifest: Vec<PairDerivationRelationManifest>,
+    pub candidates: Vec<PairCandidateReport>,
+    pub summary: PairDerivationSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PairDerivationError {
+    pub code: &'static str,
+    pub message: String,
+}
+
+impl PairDerivationError {
+    fn new(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for PairDerivationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for PairDerivationError {}
+
+pub fn compute_pair_derivation_input_hashes(
+    osm_snapshot: &[u8],
+    ramp_inventory: &[u8],
+    ramp_support_decisions: &[u8],
+    osm_ramp_bindings: &[u8],
+    route_memberships: &[RouteMembershipIndex],
+    billing_pair_adjacency: &[u8],
+    od_tariffs: &[u8],
+) -> Result<PairDerivationInputHashes, PairDerivationError> {
+    let ledger = serde_json::Value::Array(vec![
+        serde_json::from_slice::<Value>(ramp_inventory).map_err(|error| {
+            PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
+        })?,
+        serde_json::from_slice::<Value>(ramp_support_decisions).map_err(|error| {
+            PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
+        })?,
+        serde_json::from_slice::<Value>(osm_ramp_bindings).map_err(|error| {
+            PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
+        })?,
+    ]);
+    let ledger_bytes = serde_json::to_vec(&ledger).map_err(|error| {
+        PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
+    })?;
+    Ok(PairDerivationInputHashes {
+        osm_snapshot_sha256: compute_sha256(osm_snapshot),
+        ramp_ledger_sha256: compute_sha256(&ledger_bytes),
+        route_membership_index_sha256: route_memberships_sha256(route_memberships).map_err(
+            |error| PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string()),
+        )?,
+        billing_pair_adjacency_sha256: compute_sha256(billing_pair_adjacency),
+        od_tariffs_sha256: compute_sha256(od_tariffs),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn derive_pair_candidates_from_source_bytes(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    osm_snapshot: &[u8],
+    ramp_inventory: &[u8],
+    ramp_support_decisions: &[u8],
+    osm_ramp_bindings: &[u8],
+    billing_pair_adjacency: &[u8],
+    od_tariffs: &[u8],
+) -> Result<PairDerivationReport, PairDerivationError> {
+    let inventory =
+        serde_json::from_slice::<RampInventoryFile>(ramp_inventory).map_err(|error| {
+            PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
+        })?;
+    let bindings =
+        serde_json::from_slice::<OsmRampBindingsFile>(osm_ramp_bindings).map_err(|error| {
+            PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
+        })?;
+    let adjacency = serde_json::from_slice::<BillingPairAdjacencyFile>(billing_pair_adjacency)
+        .map_err(|error| {
+            PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
+        })?;
+    let tariffs = serde_json::from_slice::<OdTariffsFile>(od_tariffs).map_err(|error| {
+        PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
+    })?;
+    let input_hashes = compute_pair_derivation_input_hashes(
+        osm_snapshot,
+        ramp_inventory,
+        ramp_support_decisions,
+        osm_ramp_bindings,
+        route_memberships,
+        billing_pair_adjacency,
+        od_tariffs,
+    )?;
+    derive_pair_candidates(
+        graph,
+        route_memberships,
+        &adjacency,
+        &tariffs,
+        &inventory,
+        &bindings,
+        input_hashes,
+    )
+}
+
+pub fn pair_derivation_report_to_deterministic_json(
+    report: &PairDerivationReport,
+) -> Result<String, serde_json::Error> {
+    let mut output = serde_json::to_string_pretty(report)?;
+    output.push('\n');
+    Ok(output)
+}
+
+fn endpoint_support_state_wire_value(state: EndpointSupportState) -> &'static str {
+    match state {
+        EndpointSupportState::VerifiedBound => "verified_bound",
+        EndpointSupportState::Unresolved => "unresolved",
+        EndpointSupportState::Unsupported => "unsupported",
+    }
+}
+
+fn gate<S: AsRef<str>>(
+    status: PairDerivationGateStatus,
+    reason_codes: impl IntoIterator<Item = S>,
+) -> PairDerivationGate {
+    let mut reason_codes = reason_codes
+        .into_iter()
+        .map(|reason| reason.as_ref().to_string())
+        .collect::<Vec<_>>();
+    reason_codes.sort();
+    reason_codes.dedup();
+    PairDerivationGate {
+        status,
+        reason_codes,
+    }
+}
+
+fn passed_gate() -> PairDerivationGate {
+    gate(PairDerivationGateStatus::Passed, Vec::<String>::new())
+}
+
+struct ResolvedEndpoint {
+    report: PairCandidateEndpointReport,
+    state: EndpointSupportState,
+    edge_id: Option<String>,
+    directed_segments: Vec<DirectedEndpointSegment>,
+    binding_candidates: Vec<BindingCandidate>,
+}
+
+fn directed_segment_from_evidence(evidence: &BoundRampEvidence) -> DirectedEndpointSegment {
+    DirectedEndpointSegment {
+        segment_id: format!("{}:segment:0", evidence.binding_evidence_id),
+        osm_way_ids: evidence.osm_way_ids.clone(),
+        osm_node_ids: evidence.osm_node_ids.clone(),
+        edge_ids: evidence.edge_ids.clone(),
+        from_node_id: evidence.from_node_id.clone(),
+        to_node_id: evidence.to_node_id.clone(),
+        edge_ids_sha256: evidence.edge_ids_sha256.clone(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_endpoint(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    inventory: &RampInventoryFile,
+    bindings: &OsmRampBindingsFile,
+    bound_evidence: &[BoundRampEvidence],
+    ramp_id: &str,
+    expected_kind: crate::model::RampKind,
+    role: &str,
+) -> Result<ResolvedEndpoint, PairDerivationError> {
+    let inventory_item = inventory
+        .ramps
+        .iter()
+        .find(|ramp| ramp.ramp_id == ramp_id)
+        .ok_or_else(|| {
+            PairDerivationError::new(
+                "PAIR_DERIVATION_ENDPOINT_UNKNOWN",
+                format!("{role} ramp {ramp_id} is absent from inventory"),
+            )
+        })?;
+    if inventory_item.kind != expected_kind {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_ENDPOINT_KIND_MISMATCH",
+            format!("{role} ramp {ramp_id} has the wrong ramp kind"),
+        ));
+    }
+    let unresolved_candidate = bindings
+        .binding_candidates
+        .iter()
+        .filter(|candidate| candidate.ramp_id == ramp_id && candidate.status == "unresolved")
+        .min_by(|left, right| left.candidate_id.cmp(&right.candidate_id));
+    if inventory_item.support_state.as_deref() == Some("verified_bound") {
+        let graph_ramp = graph.ramps.iter().find(|ramp| ramp.id == ramp_id);
+        let evidence = bound_evidence
+            .iter()
+            .find(|evidence| evidence.ramp_id == ramp_id);
+        let membership_id = evidence.and_then(|evidence| {
+            route_memberships
+                .iter()
+                .find(|membership| {
+                    membership.segments.iter().any(|segment| {
+                        segment.source_kind == RouteMembershipSourceKind::BoundRamp
+                            && segment.binding_evidence_id.as_deref()
+                                == Some(evidence.binding_evidence_id.as_str())
+                    })
+                })
+                .map(|membership| membership.membership_id.clone())
+        });
+        let mut reason_codes = Vec::new();
+        if graph_ramp.is_none() {
+            reason_codes.push(format!(
+                "{}_BINDING_NOT_PROJECTED",
+                role.to_ascii_uppercase()
+            ));
+        }
+        if evidence.is_none() || membership_id.is_none() {
+            reason_codes.push(format!(
+                "{}_BINDING_EVIDENCE_MISSING",
+                role.to_ascii_uppercase()
+            ));
+        }
+        let gate_status = if reason_codes.is_empty() {
+            PairDerivationGateStatus::Passed
+        } else {
+            PairDerivationGateStatus::Failed
+        };
+        return Ok(ResolvedEndpoint {
+            report: PairCandidateEndpointReport {
+                ramp_id: ramp_id.to_string(),
+                name: inventory_item.facility_name.clone(),
+                support_state: endpoint_support_state_wire_value(
+                    EndpointSupportState::VerifiedBound,
+                )
+                .to_string(),
+                binding_evidence_id: evidence.map(|value| value.binding_evidence_id.clone()),
+                route_membership_id: membership_id,
+                gate: gate(gate_status, reason_codes),
+            },
+            state: EndpointSupportState::VerifiedBound,
+            edge_id: graph_ramp.map(|ramp| ramp.edge_id.clone()),
+            directed_segments: evidence
+                .map(|value| vec![directed_segment_from_evidence(value)])
+                .unwrap_or_default(),
+            binding_candidates: Vec::new(),
+        });
+    }
+    if let Some(candidate) = unresolved_candidate {
+        let binding_evidence_id = format!("osm-ramp-binding-candidate:{}", candidate.candidate_id);
+        let directed_segments = candidate
+            .directed_segments
+            .iter()
+            .map(|segment| DirectedEndpointSegment {
+                segment_id: segment.segment_id.clone(),
+                osm_way_ids: segment.osm_way_ids.clone(),
+                osm_node_ids: segment.osm_node_ids.clone(),
+                edge_ids: segment.edge_ids.clone(),
+                from_node_id: segment.from_node_id.clone(),
+                to_node_id: segment.to_node_id.clone(),
+                edge_ids_sha256: segment.edge_ids_sha256.clone(),
+            })
+            .collect::<Vec<_>>();
+        return Ok(ResolvedEndpoint {
+            report: PairCandidateEndpointReport {
+                ramp_id: ramp_id.to_string(),
+                name: inventory_item.facility_name.clone(),
+                support_state: endpoint_support_state_wire_value(EndpointSupportState::Unresolved)
+                    .to_string(),
+                binding_evidence_id: Some(binding_evidence_id),
+                route_membership_id: None,
+                gate: gate(
+                    PairDerivationGateStatus::Unresolved,
+                    [format!("{}_BINDING_UNRESOLVED", role.to_ascii_uppercase())],
+                ),
+            },
+            state: EndpointSupportState::Unresolved,
+            edge_id: directed_segments
+                .first()
+                .and_then(|segment| segment.edge_ids.first().cloned()),
+            directed_segments,
+            binding_candidates: vec![BindingCandidate {
+                candidate_id: candidate.candidate_id.clone(),
+                status: BindingCandidateStatus::Unresolved,
+                directed_segments: candidate
+                    .directed_segments
+                    .iter()
+                    .map(|segment| DirectedEndpointSegment {
+                        segment_id: segment.segment_id.clone(),
+                        osm_way_ids: segment.osm_way_ids.clone(),
+                        osm_node_ids: segment.osm_node_ids.clone(),
+                        edge_ids: segment.edge_ids.clone(),
+                        from_node_id: segment.from_node_id.clone(),
+                        to_node_id: segment.to_node_id.clone(),
+                        edge_ids_sha256: segment.edge_ids_sha256.clone(),
+                    })
+                    .collect(),
+            }],
+        });
+    }
+    let reason = format!("{}_BINDING_UNSUPPORTED", role.to_ascii_uppercase());
+    Ok(ResolvedEndpoint {
+        report: PairCandidateEndpointReport {
+            ramp_id: ramp_id.to_string(),
+            name: inventory_item.facility_name.clone(),
+            support_state: endpoint_support_state_wire_value(EndpointSupportState::Unsupported)
+                .to_string(),
+            binding_evidence_id: None,
+            route_membership_id: None,
+            gate: gate(PairDerivationGateStatus::Failed, [reason]),
+        },
+        state: EndpointSupportState::Unsupported,
+        edge_id: None,
+        directed_segments: Vec::new(),
+        binding_candidates: Vec::new(),
+    })
+}
+
+fn source_segment_ids_for_edges(
+    route_memberships: &[RouteMembershipIndex],
+    edge_ids: &[String],
+) -> Vec<String> {
+    let edge_ids = edge_ids.iter().map(String::as_str).collect::<HashSet<_>>();
+    let mut result = route_memberships
+        .iter()
+        .flat_map(|membership| membership.segments.iter())
+        .filter(|segment| {
+            segment
+                .ordered_edge_ids
+                .iter()
+                .any(|edge_id| edge_ids.contains(edge_id.as_str()))
+        })
+        .map(|segment| segment.segment_id.clone())
+        .collect::<Vec<_>>();
+    result.sort();
+    result.dedup();
+    result
+}
+
+fn route_role_report(
+    route_memberships: &[RouteMembershipIndex],
+    role: PairDerivationRouteRole,
+    status: PairDerivationGateStatus,
+    edge_ids: Option<&[String]>,
+) -> PairCandidateRouteRoleReport {
+    let edge_ids_sha256 = edge_ids.and_then(|edge_ids| {
+        if edge_ids.is_empty() {
+            None
+        } else {
+            ordered_edge_ids_sha256(edge_ids).ok()
+        }
+    });
+    PairCandidateRouteRoleReport {
+        role,
+        status,
+        edge_ids_sha256,
+        source_segment_ids: edge_ids
+            .map(|edge_ids| source_segment_ids_for_edges(route_memberships, edge_ids))
+            .unwrap_or_default(),
+    }
+}
+
+fn unresolved_route_roles() -> Vec<PairCandidateRouteRoleReport> {
+    vec![
+        route_role_report(
+            &[],
+            PairDerivationRouteRole::EntryApproach,
+            PairDerivationGateStatus::Unresolved,
+            None,
+        ),
+        route_role_report(
+            &[],
+            PairDerivationRouteRole::MandatoryLap,
+            PairDerivationGateStatus::Unresolved,
+            None,
+        ),
+        route_role_report(
+            &[],
+            PairDerivationRouteRole::ReturnCorridor,
+            PairDerivationGateStatus::Unresolved,
+            None,
+        ),
+        route_role_report(
+            &[],
+            PairDerivationRouteRole::ExitApproach,
+            PairDerivationGateStatus::Unresolved,
+            None,
+        ),
+    ]
+}
+
+fn relation_mainline_lap(
+    graph: &Graph,
+    membership: &RouteMembershipIndex,
+    anchor_node_id: &str,
+    initial_edge_id: &str,
+) -> Result<Vec<String>, PairDerivationError> {
+    let segments = membership
+        .segments
+        .iter()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+        .collect::<Vec<_>>();
+    let [segment] = segments.as_slice() else {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS",
+            format!(
+                "membership {} must have one cyclic relationMainline segment",
+                membership.membership_id
+            ),
+        ));
+    };
+    let edge_map = graph
+        .edges
+        .iter()
+        .map(|edge| (edge.id.as_str(), edge))
+        .collect::<HashMap<_, _>>();
+    let ordered = &segment.ordered_edge_ids;
+    if ordered.is_empty()
+        || ordered.windows(2).any(|window| {
+            edge_map
+                .get(window[0].as_str())
+                .map(|edge| edge.to.as_str())
+                != edge_map
+                    .get(window[1].as_str())
+                    .map(|edge| edge.from.as_str())
+        })
+        || edge_map
+            .get(ordered.last().unwrap().as_str())
+            .map(|edge| edge.to.as_str())
+            != edge_map
+                .get(ordered.first().unwrap().as_str())
+                .map(|edge| edge.from.as_str())
+    {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_RELATION_MAINLINE_NOT_CYCLIC",
+            format!(
+                "membership {} is not a cyclic path",
+                membership.membership_id
+            ),
+        ));
+    }
+    let start = ordered
+        .iter()
+        .position(|edge_id| edge_id == initial_edge_id)
+        .ok_or_else(|| {
+            PairDerivationError::new(
+                "PAIR_DERIVATION_INITIAL_EDGE_NOT_IN_RELATION",
+                format!(
+                    "initial edge {initial_edge_id} is absent from {}",
+                    membership.membership_id
+                ),
+            )
+        })?;
+    let mut lap = ordered[start..].to_vec();
+    lap.extend_from_slice(&ordered[..start]);
+    if edge_map
+        .get(lap.first().unwrap().as_str())
+        .map(|edge| edge.from.as_str())
+        != Some(anchor_node_id)
+        || edge_map
+            .get(lap.last().unwrap().as_str())
+            .map(|edge| edge.to.as_str())
+            != Some(anchor_node_id)
+    {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_LAP_BOUNDARY_MISMATCH",
+            format!(
+                "rotated lap for {} does not start and end at {anchor_node_id}",
+                membership.membership_id
+            ),
+        ));
+    }
+    Ok(lap)
+}
+
+fn legacy_seed(
+    adjacency: &BillingPairAdjacency,
+    source: &str,
+    source_date: &str,
+) -> Result<BillingPairSeed, PairDerivationError> {
+    let Some(BillingPairAdjacencyRoutePlan::SameNode { anchor_node_id, .. }) =
+        adjacency.route_plan.as_ref()
+    else {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_ROUTE_PLAN_KIND_MISMATCH",
+            format!("{} does not have a sameNode route plan", adjacency.pair_id),
+        ));
+    };
+    let anchor_osm_node_id = anchor_node_id
+        .strip_prefix("n:")
+        .and_then(|value| value.parse().ok())
+        .ok_or_else(|| {
+            PairDerivationError::new(
+                "PAIR_DERIVATION_ROUTE_PLAN_INVALID",
+                format!(
+                    "{} has invalid anchor node {anchor_node_id}",
+                    adjacency.pair_id
+                ),
+            )
+        })?;
+    let entry_osm_way_id = adjacency.entry_osm_way_id.ok_or_else(|| {
+        PairDerivationError::new(
+            "PAIR_DERIVATION_ROUTE_PLAN_INVALID",
+            format!("{} has no entry OSM way", adjacency.pair_id),
+        )
+    })?;
+    let exit_osm_way_id = adjacency.exit_osm_way_id.ok_or_else(|| {
+        PairDerivationError::new(
+            "PAIR_DERIVATION_ROUTE_PLAN_INVALID",
+            format!("{} has no exit OSM way", adjacency.pair_id),
+        )
+    })?;
+    Ok(BillingPairSeed {
+        id: adjacency.pair_id.clone(),
+        entry_osm_way_id,
+        entry_name: Some(adjacency.entry_name.clone()),
+        exit_osm_way_id,
+        exit_name: Some(adjacency.exit_name.clone()),
+        anchor_osm_node_id,
+        vehicle_profile: String::new(),
+        status: VerificationStatus::Unverified,
+        one_section_ahead_verified: false,
+        provenance: SeedProvenance {
+            source: source.to_string(),
+            source_date: source_date.to_string(),
+            notes: None,
+        },
+        prices: Vec::<SeedPrice>::new(),
+    })
+}
+
+fn radial_seed(
+    adjacency: &BillingPairAdjacency,
+    entry: &ResolvedEndpoint,
+    exit: &ResolvedEndpoint,
+    graph: &Graph,
+    source: &str,
+    source_date: &str,
+) -> Result<crate::seed::RadialReturnBillingPairSeed, PairDerivationError> {
+    let Some(BillingPairAdjacencyRoutePlan::DirectedJunction {
+        entry_corridor,
+        anchor,
+        mandatory_lap,
+        return_corridor,
+    }) = adjacency.route_plan.as_ref()
+    else {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_ROUTE_PLAN_KIND_MISMATCH",
+            format!(
+                "{} does not have a directedJunction route plan",
+                adjacency.pair_id
+            ),
+        ));
+    };
+    let entry_endpoint = DiagnosticEndpoint {
+        ramp_id: adjacency.entry_ramp_id.clone(),
+        name: entry.report.name.clone(),
+        support_state: entry.state,
+        directed_segments: entry.directed_segments.clone(),
+        binding_candidates: entry.binding_candidates.clone(),
+    };
+    let exit_endpoint = DiagnosticEndpoint {
+        ramp_id: adjacency.exit_ramp_id.clone(),
+        name: exit.report.name.clone(),
+        support_state: exit.state,
+        directed_segments: exit.directed_segments.clone(),
+        binding_candidates: exit.binding_candidates.clone(),
+    };
+    let route_plan = DiagnosticRoutePlan {
+        entry_corridor: EntryCorridor {
+            membership_id: entry_corridor.membership_id.clone(),
+            terminal_edge_id: entry_corridor.terminal_edge_id.clone(),
+            merge_node_id: entry_corridor.merge_node_id.clone(),
+        },
+        anchor: DirectedJunctionAnchor {
+            anchor_kind: AnchorKind::DirectedJunction,
+            route_id: anchor.route_id.clone(),
+            direction: anchor.direction.clone(),
+            merge_node_id: anchor.merge_node_id.clone(),
+            branch_node_id: anchor.branch_node_id.clone(),
+            merge_terminal_edge_id: anchor.merge_terminal_edge_id.clone(),
+            branch_initial_edge_id: anchor.branch_initial_edge_id.clone(),
+            arc_policy: ArcPolicy::OrdinaryLongArc,
+            excluded_short_connector: ExcludedShortConnector {
+                from_node_id: anchor.excluded_short_connector.from_node_id.clone(),
+                to_node_id: anchor.excluded_short_connector.to_node_id.clone(),
+                osm_way_id: anchor.excluded_short_connector.osm_way_id,
+                edge_count: anchor.excluded_short_connector.edge_count,
+                distance_meters: anchor.excluded_short_connector.distance_meters,
+            },
+        },
+        mandatory_lap: MandatoryLap {
+            membership_id: mandatory_lap.membership_id.clone(),
+            first_edge_id: mandatory_lap.first_edge_id.clone(),
+            last_edge_id: mandatory_lap.last_edge_id.clone(),
+            lap_count: mandatory_lap.lap_count,
+        },
+        return_corridor: ReturnCorridor {
+            membership_id: return_corridor.membership_id.clone(),
+            start_node_id: return_corridor.start_node_id.clone(),
+            initial_edge_id: return_corridor.initial_edge_id.clone(),
+            first_general_exit: FirstGeneralExit {
+                rule: FirstGeneralExitRule::FirstGeneralExit,
+                expected_ramp_id: adjacency.exit_ramp_id.clone(),
+                exact_directed_binding: exit.state,
+            },
+        },
+    };
+    Ok(crate::seed::RadialReturnBillingPairSeed {
+        id: adjacency.pair_id.clone(),
+        pair_kind: PairKind::RadialReturn,
+        route_plan_version: crate::seed::RoutePlanVersion::V1,
+        vehicle_profile: graph.vehicle_profile.clone(),
+        entry_endpoint,
+        exit_endpoint,
+        route_plan,
+        routing_capability: RoutingCapability::Routable,
+        pair_eligibility: PairEligibility {
+            status: PairEligibilityStatus::Unverified,
+            one_section_ahead_verified: false,
+        },
+        loop_validation: LoopValidation {
+            status: LoopValidationStatus::DeclaredRouteValidated,
+        },
+        tariff: crate::seed::DiagnosticTariff {
+            status: TariffStatus::Unpriced,
+            amount_yen: None,
+            billing_distance_meters: None,
+            prices: Vec::new(),
+        },
+        provenance: SeedProvenance {
+            source: source.to_string(),
+            source_date: source_date.to_string(),
+            notes: None,
+        },
+    })
+}
+
+fn tariff_report(
+    tariffs: &OdTariffsFile,
+    pair_id: &str,
+    entry_ramp_id: &str,
+    exit_ramp_id: &str,
+) -> (PairCandidateTariffReport, PairDerivationGate) {
+    let matches = tariffs
+        .assignments
+        .iter()
+        .filter(|assignment| {
+            assignment
+                .pair_ids
+                .iter()
+                .any(|candidate| candidate == pair_id)
+                && assignment.entry_ramp_id == entry_ramp_id
+                && assignment.exit_ramp_id == exit_ramp_id
+        })
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return (
+            PairCandidateTariffReport {
+                status: "unresolved".to_string(),
+                assignment_id: None,
+                billing_distance_meters: None,
+                prices: Vec::new(),
+            },
+            gate(
+                PairDerivationGateStatus::Failed,
+                ["TARIFF_ASSIGNMENT_MISSING_OR_AMBIGUOUS"],
+            ),
+        );
+    }
+    let assignment = matches[0];
+    let prices = assignment
+        .prices
+        .iter()
+        .map(|price| PairCandidateTariffPriceReport {
+            status: price.status.clone(),
+            tariff_status: price.tariff_status.clone(),
+            amount_yen: price.amount_yen,
+            effective_from: price.effective_from.clone(),
+            effective_to: price.effective_to.clone(),
+            rule_id: price.rule_id.clone(),
+            evidence_id: price.evidence_id.clone(),
+            distance_evidence_id: price.distance_evidence_id.clone(),
+        })
+        .collect::<Vec<_>>();
+    let has_priced_evidence = prices.iter().any(|price| price.status == "priced");
+    let status = if has_priced_evidence {
+        "priced"
+    } else {
+        "unpriced"
+    };
+    let gate = if has_priced_evidence {
+        passed_gate()
+    } else {
+        gate(
+            PairDerivationGateStatus::Unresolved,
+            ["TARIFF_PRICED_EVIDENCE_UNRESOLVED"],
+        )
+    };
+    (
+        PairCandidateTariffReport {
+            status: status.to_string(),
+            assignment_id: Some(assignment.assignment_id.clone()),
+            billing_distance_meters: Some(assignment.billing_distance_meters),
+            prices,
+        },
+        gate,
+    )
+}
+
+struct RouteDerivation {
+    report: PairCandidateRoutePlanReport,
+    route_gate: PairDerivationGate,
+    direction_gate: PairDerivationGate,
+    first_exit_gate: PairDerivationGate,
+    mandatory_lap_gate: PairDerivationGate,
+    membership_ids: Vec<String>,
+}
+
+fn route_plan_id(pair_id: &str) -> String {
+    format!("route-plan:{pair_id}")
+}
+
+fn candidate_id(
+    adjacency: &BillingPairAdjacency,
+    route_plan: &PairCandidateRoutePlanReport,
+) -> String {
+    let identity = serde_json::json!({
+        "pairId": adjacency.pair_id,
+        "routeId": adjacency.route_id,
+        "direction": adjacency.direction,
+        "entryRampId": adjacency.entry_ramp_id,
+        "exitRampId": adjacency.exit_ramp_id,
+        "routePlanId": route_plan.route_plan_id,
+        "edgeIdsSha256": route_plan.edge_ids_sha256,
+    });
+    let hash = compute_sha256(&serde_json::to_vec(&identity).unwrap_or_default());
+    format!("candidate:{hash}")
+}
+
+fn first_exit_gate(
+    result: Result<crate::validate::RelationConstrainedFirstExit, Vec<String>>,
+) -> PairDerivationGate {
+    match result {
+        Err(codes) => gate(PairDerivationGateStatus::Failed, codes),
+        Ok(result) => match result.status {
+            RelationConstrainedFirstExitStatus::Verified => passed_gate(),
+            RelationConstrainedFirstExitStatus::Unresolved => gate(
+                PairDerivationGateStatus::Unresolved,
+                ["FIRST_EXIT_UNRESOLVED"],
+            ),
+            RelationConstrainedFirstExitStatus::Unsupported => {
+                gate(PairDerivationGateStatus::Failed, ["FIRST_EXIT_UNSUPPORTED"])
+            }
+        },
+    }
+}
+
+fn source_segment_ids(roles: &[PairCandidateRouteRoleReport]) -> Vec<String> {
+    let mut result = roles
+        .iter()
+        .flat_map(|role| role.source_segment_ids.iter().cloned())
+        .collect::<Vec<_>>();
+    result.sort();
+    result.dedup();
+    result
+}
+
+fn route_plan_report(
+    pair_id: &str,
+    edge_ids: &[String],
+    roles: Vec<PairCandidateRouteRoleReport>,
+    loop_validation_status: &str,
+) -> PairCandidateRoutePlanReport {
+    PairCandidateRoutePlanReport {
+        route_plan_id: route_plan_id(pair_id),
+        edge_ids_sha256: if edge_ids.is_empty() {
+            None
+        } else {
+            ordered_edge_ids_sha256(edge_ids).ok()
+        },
+        loop_validation_status: loop_validation_status.to_string(),
+        source_segment_ids: source_segment_ids(&roles),
+        resolved_roles: roles,
+    }
+}
+
+fn derive_legacy_route(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    adjacency: &BillingPairAdjacency,
+    source: &str,
+    source_date: &str,
+    entry: &ResolvedEndpoint,
+    exit: &ResolvedEndpoint,
+) -> RouteDerivation {
+    let unresolved_report = || RouteDerivation {
+        report: route_plan_report(
+            &adjacency.pair_id,
+            &[],
+            unresolved_route_roles(),
+            "unresolved",
+        ),
+        route_gate: gate(
+            PairDerivationGateStatus::Failed,
+            ["LEGACY_ROUTE_RESOLUTION_FAILED"],
+        ),
+        direction_gate: gate(
+            PairDerivationGateStatus::Unresolved,
+            ["LEGACY_DIRECTION_UNRESOLVED"],
+        ),
+        first_exit_gate: gate(
+            PairDerivationGateStatus::Unresolved,
+            ["FIRST_EXIT_UNRESOLVED"],
+        ),
+        mandatory_lap_gate: gate(
+            PairDerivationGateStatus::Unresolved,
+            ["MANDATORY_LAP_UNRESOLVED"],
+        ),
+        membership_ids: vec![format!(
+            "route:{}:{}",
+            adjacency.route_id, adjacency.direction
+        )],
+    };
+    let Some(BillingPairAdjacencyRoutePlan::SameNode {
+        membership_id,
+        anchor_node_id,
+        first_exit_initial_edge_id,
+        exit_approach_edge_ids,
+    }) = adjacency.route_plan.as_ref()
+    else {
+        return unresolved_report();
+    };
+    let mut seed = match legacy_seed(adjacency, source, source_date) {
+        Ok(seed) => seed,
+        Err(_) => return unresolved_report(),
+    };
+    seed.vehicle_profile = graph.vehicle_profile.clone();
+    let pair = match generate_billing_pair(graph, &seed) {
+        Ok(pair) => pair,
+        Err(_) => return unresolved_report(),
+    };
+    let _wire = match shutoko_routing_core::LegacyRingBillingPair::from_legacy(
+        &pair,
+        graph,
+        route_memberships,
+    ) {
+        Ok(wire) => wire,
+        Err(_) => return unresolved_report(),
+    };
+    let membership = route_memberships
+        .iter()
+        .find(|membership| membership.membership_id == *membership_id);
+    let direction_matches = membership.is_some_and(|membership| {
+        membership.route_id == adjacency.route_id && membership.direction == adjacency.direction
+    });
+    let endpoint_edges_match = entry
+        .edge_id
+        .as_deref()
+        .is_none_or(|edge_id| edge_id == pair.entry_id)
+        && exit
+            .edge_id
+            .as_deref()
+            .is_none_or(|edge_id| edge_id == pair.exit_id);
+    let initial_edge_matches = pair.anchor_to_exit_edge_ids.first().map(String::as_str)
+        == Some(first_exit_initial_edge_id.as_str());
+    let mut route_reason_codes = Vec::new();
+    if membership.is_none() {
+        route_reason_codes.push("LEGACY_ROUTE_MEMBERSHIP_MISSING");
+    }
+    if !endpoint_edges_match {
+        route_reason_codes.push("LEGACY_ENDPOINT_EDGE_MISMATCH");
+    }
+    if !initial_edge_matches {
+        route_reason_codes.push("LEGACY_FIRST_EXIT_INITIAL_EDGE_MISMATCH");
+    }
+    let route_gate = if route_reason_codes.is_empty() {
+        passed_gate()
+    } else {
+        gate(PairDerivationGateStatus::Failed, route_reason_codes)
+    };
+    let direction_gate = if direction_matches {
+        passed_gate()
+    } else {
+        gate(
+            PairDerivationGateStatus::Failed,
+            ["LEGACY_ROUTE_DIRECTION_MISMATCH"],
+        )
+    };
+    let Some(membership) = membership else {
+        return RouteDerivation {
+            report: route_plan_report(
+                &adjacency.pair_id,
+                &[],
+                unresolved_route_roles(),
+                "unresolved",
+            ),
+            route_gate,
+            direction_gate,
+            first_exit_gate: gate(
+                PairDerivationGateStatus::Unresolved,
+                ["FIRST_EXIT_UNRESOLVED"],
+            ),
+            mandatory_lap_gate: gate(
+                PairDerivationGateStatus::Unresolved,
+                ["MANDATORY_LAP_UNRESOLVED"],
+            ),
+            membership_ids: vec![membership_id.clone()],
+        };
+    };
+    let lap = relation_mainline_lap(
+        graph,
+        membership,
+        anchor_node_id,
+        first_exit_initial_edge_id,
+    );
+    let (lap_gate, lap_edge_ids) = match &lap {
+        Ok(edge_ids)
+            if has_non_empty_shutoko_loop(graph, anchor_node_id)
+                && edge_ids
+                    .first()
+                    .and_then(|edge_id| graph.edges.iter().find(|edge| edge.id == *edge_id))
+                    .map(|edge| edge.from.as_str())
+                    == Some(anchor_node_id.as_str()) =>
+        {
+            (passed_gate(), edge_ids.clone())
+        }
+        Ok(_) => (
+            gate(
+                PairDerivationGateStatus::Failed,
+                ["MANDATORY_LAP_NOT_VALIDATED"],
+            ),
+            Vec::new(),
+        ),
+        Err(error) => (
+            gate(PairDerivationGateStatus::Failed, [error.code]),
+            Vec::new(),
+        ),
+    };
+    let first_exit = validate_relation_constrained_legacy_first_exit(
+        graph,
+        route_memberships,
+        membership_id,
+        anchor_node_id,
+        first_exit_initial_edge_id,
+        &adjacency.exit_ramp_id,
+        exit_approach_edge_ids,
+    );
+    let first_exit_gate = first_exit_gate(first_exit.clone());
+    let return_edge_ids = first_exit
+        .as_ref()
+        .map(|resolution| resolution.mainline_edge_ids.clone())
+        .unwrap_or_default();
+    let mut exit_edge_ids = if first_exit_gate.status == PairDerivationGateStatus::Passed {
+        exit_approach_edge_ids.clone()
+    } else {
+        Vec::new()
+    };
+    exit_edge_ids.extend(pair.anchor_to_exit_edge_ids.last().cloned());
+    let entry_status = if entry.report.gate.status == PairDerivationGateStatus::Passed {
+        PairDerivationGateStatus::Passed
+    } else {
+        PairDerivationGateStatus::Unresolved
+    };
+    let exit_status = if exit.report.gate.status == PairDerivationGateStatus::Passed {
+        PairDerivationGateStatus::Passed
+    } else {
+        PairDerivationGateStatus::Unresolved
+    };
+    let return_status = if first_exit_gate.status == PairDerivationGateStatus::Passed {
+        PairDerivationGateStatus::Passed
+    } else {
+        PairDerivationGateStatus::Unresolved
+    };
+    let lap_status = if lap_gate.status == PairDerivationGateStatus::Passed {
+        PairDerivationGateStatus::Passed
+    } else {
+        PairDerivationGateStatus::Unresolved
+    };
+    let roles = vec![
+        route_role_report(
+            route_memberships,
+            PairDerivationRouteRole::EntryApproach,
+            entry_status,
+            Some(&pair.entry_to_anchor_edge_ids),
+        ),
+        route_role_report(
+            route_memberships,
+            PairDerivationRouteRole::MandatoryLap,
+            lap_status,
+            (!lap_edge_ids.is_empty()).then_some(lap_edge_ids.as_slice()),
+        ),
+        route_role_report(
+            route_memberships,
+            PairDerivationRouteRole::ReturnCorridor,
+            return_status,
+            Some(&return_edge_ids),
+        ),
+        route_role_report(
+            route_memberships,
+            PairDerivationRouteRole::ExitApproach,
+            exit_status,
+            Some(&exit_edge_ids),
+        ),
+    ];
+    let mut full_edge_ids = pair.entry_to_anchor_edge_ids.clone();
+    full_edge_ids.extend(lap_edge_ids);
+    full_edge_ids.extend(return_edge_ids);
+    full_edge_ids.extend(exit_edge_ids);
+    let loop_status = if lap_gate.status == PairDerivationGateStatus::Passed {
+        "declared_route_validated"
+    } else {
+        "unresolved"
+    };
+    RouteDerivation {
+        report: route_plan_report(&adjacency.pair_id, &full_edge_ids, roles, loop_status),
+        route_gate,
+        direction_gate,
+        first_exit_gate,
+        mandatory_lap_gate: lap_gate,
+        membership_ids: vec![membership_id.clone()],
+    }
+}
+
+fn derive_radial_route(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    adjacency: &BillingPairAdjacency,
+    source: &str,
+    source_date: &str,
+    entry: &ResolvedEndpoint,
+    exit: &ResolvedEndpoint,
+) -> Result<RouteDerivation, PairDerivationError> {
+    let Some(BillingPairAdjacencyRoutePlan::DirectedJunction {
+        entry_corridor,
+        anchor,
+        mandatory_lap,
+        return_corridor,
+    }) = adjacency.route_plan.as_ref()
+    else {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_ROUTE_PLAN_KIND_MISMATCH",
+            format!("{} has no directedJunction route plan", adjacency.pair_id),
+        ));
+    };
+    let membership_ids = vec![
+        entry_corridor.membership_id.clone(),
+        mandatory_lap.membership_id.clone(),
+        return_corridor.membership_id.clone(),
+    ];
+    let seed = radial_seed(adjacency, entry, exit, graph, source, source_date)?;
+    let resolution = match resolve_diagnostic_radial_route_plan(graph, route_memberships, &seed) {
+        Ok(resolution) => resolution,
+        Err(_) => {
+            return Ok(RouteDerivation {
+                report: route_plan_report(
+                    &adjacency.pair_id,
+                    &[],
+                    unresolved_route_roles(),
+                    "unresolved",
+                ),
+                route_gate: gate(
+                    PairDerivationGateStatus::Failed,
+                    ["RADIAL_ROUTE_RESOLUTION_FAILED"],
+                ),
+                direction_gate: gate(
+                    PairDerivationGateStatus::Unresolved,
+                    ["RADIAL_DIRECTION_UNRESOLVED"],
+                ),
+                first_exit_gate: gate(
+                    PairDerivationGateStatus::Unresolved,
+                    ["FIRST_EXIT_UNRESOLVED"],
+                ),
+                mandatory_lap_gate: gate(
+                    PairDerivationGateStatus::Unresolved,
+                    ["MANDATORY_LAP_UNRESOLVED"],
+                ),
+                membership_ids,
+            });
+        }
+    };
+    let route_matches = anchor.route_id == adjacency.route_id
+        && anchor.direction == adjacency.direction
+        && mandatory_lap.membership_id
+            == format!("route:{}:{}", adjacency.route_id, adjacency.direction);
+    let route_gate = if route_matches {
+        passed_gate()
+    } else {
+        gate(
+            PairDerivationGateStatus::Failed,
+            ["RADIAL_ROUTE_MEMBERSHIP_MISMATCH"],
+        )
+    };
+    let direction_gate = if route_matches
+        && resolution.lap.route_id == adjacency.route_id
+        && resolution.lap.direction == adjacency.direction
+    {
+        passed_gate()
+    } else {
+        gate(
+            PairDerivationGateStatus::Failed,
+            ["RADIAL_ROUTE_DIRECTION_MISMATCH"],
+        )
+    };
+    let first_exit_gate = if resolution.first_exit.exact_directed_binding == exit.state {
+        match (exit.state, resolution.first_exit.exit.as_ref()) {
+            (EndpointSupportState::VerifiedBound, Some(first_exit))
+                if first_exit.ramp_id == adjacency.exit_ramp_id =>
+            {
+                passed_gate()
+            }
+            (EndpointSupportState::VerifiedBound, _) => {
+                gate(PairDerivationGateStatus::Failed, ["FIRST_EXIT_UNRESOLVED"])
+            }
+            (EndpointSupportState::Unresolved, None) => gate(
+                PairDerivationGateStatus::Unresolved,
+                ["FIRST_EXIT_UNRESOLVED"],
+            ),
+            (EndpointSupportState::Unsupported, None) => {
+                gate(PairDerivationGateStatus::Failed, ["FIRST_EXIT_UNSUPPORTED"])
+            }
+            _ => gate(
+                PairDerivationGateStatus::Failed,
+                ["FIRST_EXIT_STATE_CONFLICT"],
+            ),
+        }
+    } else {
+        gate(
+            PairDerivationGateStatus::Failed,
+            ["FIRST_EXIT_STATE_CONFLICT"],
+        )
+    };
+    let mandatory_lap_gate = if resolution.lap.edge_ids.is_empty() {
+        gate(
+            PairDerivationGateStatus::Failed,
+            ["MANDATORY_LAP_NOT_VALIDATED"],
+        )
+    } else {
+        passed_gate()
+    };
+    let promoted = if first_exit_gate.status == PairDerivationGateStatus::Passed {
+        promote_verified_radial_pair(graph, route_memberships, &seed, &resolution).ok()
+    } else {
+        None
+    };
+    let (roles, full_edge_ids) = if let Some(promoted) = promoted {
+        let roles = promoted
+            .resolved_route_segments
+            .iter()
+            .map(|segment| PairCandidateRouteRoleReport {
+                role: match segment.role {
+                    shutoko_routing_core::RoutePlanSegmentRole::EntryApproach => {
+                        PairDerivationRouteRole::EntryApproach
+                    }
+                    shutoko_routing_core::RoutePlanSegmentRole::MandatoryLap => {
+                        PairDerivationRouteRole::MandatoryLap
+                    }
+                    shutoko_routing_core::RoutePlanSegmentRole::ReturnCorridor => {
+                        PairDerivationRouteRole::ReturnCorridor
+                    }
+                    shutoko_routing_core::RoutePlanSegmentRole::ExitApproach => {
+                        PairDerivationRouteRole::ExitApproach
+                    }
+                },
+                status: PairDerivationGateStatus::Passed,
+                edge_ids_sha256: Some(segment.edge_ids_sha256.clone()),
+                source_segment_ids: segment.source_segment_ids.clone(),
+            })
+            .collect::<Vec<_>>();
+        let full_edge_ids = promoted
+            .resolved_route_segments
+            .iter()
+            .flat_map(|segment| segment.edge_ids.iter().cloned())
+            .collect::<Vec<_>>();
+        (roles, full_edge_ids)
+    } else {
+        let entry_edge_ids = entry
+            .directed_segments
+            .iter()
+            .flat_map(|segment| segment.edge_ids.iter().cloned())
+            .collect::<Vec<_>>();
+        let exit_edge_ids = exit
+            .directed_segments
+            .iter()
+            .flat_map(|segment| segment.edge_ids.iter().cloned())
+            .collect::<Vec<_>>();
+        let roles = vec![
+            route_role_report(
+                route_memberships,
+                PairDerivationRouteRole::EntryApproach,
+                PairDerivationGateStatus::Unresolved,
+                (!entry_edge_ids.is_empty()).then_some(entry_edge_ids.as_slice()),
+            ),
+            route_role_report(
+                route_memberships,
+                PairDerivationRouteRole::MandatoryLap,
+                PairDerivationGateStatus::Passed,
+                Some(&resolution.lap.edge_ids),
+            ),
+            route_role_report(
+                route_memberships,
+                PairDerivationRouteRole::ReturnCorridor,
+                if first_exit_gate.status == PairDerivationGateStatus::Passed {
+                    PairDerivationGateStatus::Passed
+                } else {
+                    PairDerivationGateStatus::Unresolved
+                },
+                Some(&resolution.first_exit.mainline_edge_ids),
+            ),
+            route_role_report(
+                route_memberships,
+                PairDerivationRouteRole::ExitApproach,
+                PairDerivationGateStatus::Unresolved,
+                (!exit_edge_ids.is_empty()).then_some(exit_edge_ids.as_slice()),
+            ),
+        ];
+        let mut full_edge_ids = entry_edge_ids;
+        full_edge_ids.extend(resolution.lap.edge_ids.clone());
+        full_edge_ids.extend(resolution.first_exit.mainline_edge_ids.clone());
+        full_edge_ids.extend(exit_edge_ids);
+        (roles, full_edge_ids)
+    };
+    let loop_status = if mandatory_lap_gate.status == PairDerivationGateStatus::Passed {
+        "declared_route_validated"
+    } else {
+        "unresolved"
+    };
+    Ok(RouteDerivation {
+        report: route_plan_report(&adjacency.pair_id, &full_edge_ids, roles, loop_status),
+        route_gate,
+        direction_gate,
+        first_exit_gate,
+        mandatory_lap_gate,
+        membership_ids,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn derive_candidate(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    adjacency: &BillingPairAdjacency,
+    tariffs: &OdTariffsFile,
+    inventory: &RampInventoryFile,
+    bindings: &OsmRampBindingsFile,
+    bound_evidence: &[BoundRampEvidence],
+    source: &str,
+    source_date: &str,
+) -> Result<(PairCandidateReport, Vec<String>), PairDerivationError> {
+    let entry = resolve_endpoint(
+        graph,
+        route_memberships,
+        inventory,
+        bindings,
+        bound_evidence,
+        &adjacency.entry_ramp_id,
+        crate::model::RampKind::GeneralEntry,
+        "entry",
+    )?;
+    let exit = resolve_endpoint(
+        graph,
+        route_memberships,
+        inventory,
+        bindings,
+        bound_evidence,
+        &adjacency.exit_ramp_id,
+        crate::model::RampKind::GeneralExit,
+        "exit",
+    )?;
+    let route = match adjacency.pair_kind {
+        BillingPairAdjacencyKind::LegacyRing => derive_legacy_route(
+            graph,
+            route_memberships,
+            adjacency,
+            source,
+            source_date,
+            &entry,
+            &exit,
+        ),
+        BillingPairAdjacencyKind::RadialReturn => derive_radial_route(
+            graph,
+            route_memberships,
+            adjacency,
+            source,
+            source_date,
+            &entry,
+            &exit,
+        )?,
+    };
+    let official_gate = match adjacency.review_status {
+        BillingPairAdjacencyReviewStatus::Reviewed => passed_gate(),
+        BillingPairAdjacencyReviewStatus::Blocked => gate(
+            PairDerivationGateStatus::Unresolved,
+            adjacency.unresolved_reasons.clone(),
+        ),
+    };
+    let (tariff, tariff_gate) = tariff_report(
+        tariffs,
+        &adjacency.pair_id,
+        &adjacency.entry_ramp_id,
+        &adjacency.exit_ramp_id,
+    );
+    let gates = PairDerivationGates {
+        official_adjacency: official_gate,
+        route: route.route_gate,
+        direction: route.direction_gate,
+        first_exit: route.first_exit_gate,
+        mandatory_lap: route.mandatory_lap_gate,
+        entry_binding: entry.report.gate.clone(),
+        exit_binding: exit.report.gate.clone(),
+        tariff_assignment: tariff_gate,
+    };
+    let all_gates_pass = [
+        &gates.official_adjacency,
+        &gates.route,
+        &gates.direction,
+        &gates.first_exit,
+        &gates.mandatory_lap,
+        &gates.entry_binding,
+        &gates.exit_binding,
+        &gates.tariff_assignment,
+    ]
+    .iter()
+    .all(|gate| gate.status == PairDerivationGateStatus::Passed);
+    let mut rejection_reasons = gates
+        .official_adjacency
+        .reason_codes
+        .iter()
+        .chain(gates.route.reason_codes.iter())
+        .chain(gates.direction.reason_codes.iter())
+        .chain(gates.first_exit.reason_codes.iter())
+        .chain(gates.mandatory_lap.reason_codes.iter())
+        .chain(gates.entry_binding.reason_codes.iter())
+        .chain(gates.exit_binding.reason_codes.iter())
+        .chain(gates.tariff_assignment.reason_codes.iter())
+        .cloned()
+        .collect::<Vec<_>>();
+    if gates.first_exit.status != PairDerivationGateStatus::Passed
+        && !rejection_reasons
+            .iter()
+            .any(|reason| reason.starts_with("FIRST_EXIT_"))
+    {
+        rejection_reasons.push("FIRST_EXIT_UNRESOLVED".to_string());
+    }
+    if gates.entry_binding.status != PairDerivationGateStatus::Passed
+        && !rejection_reasons
+            .iter()
+            .any(|reason| reason.starts_with("ENTRY_"))
+    {
+        rejection_reasons.push("ENTRY_BINDING_UNRESOLVED".to_string());
+    }
+    if gates.exit_binding.status != PairDerivationGateStatus::Passed
+        && !rejection_reasons
+            .iter()
+            .any(|reason| reason.starts_with("EXIT_"))
+    {
+        rejection_reasons.push("EXIT_BINDING_UNRESOLVED".to_string());
+    }
+    rejection_reasons.sort();
+    rejection_reasons.dedup();
+    let candidate = PairCandidateReport {
+        candidate_id: candidate_id(adjacency, &route.report),
+        pair_id: adjacency.pair_id.clone(),
+        pair_kind: adjacency.pair_kind,
+        route_id: adjacency.route_id.clone(),
+        direction: adjacency.direction.clone(),
+        entry: entry.report,
+        exit: exit.report,
+        product_eligibility: PairCandidateProductEligibility {
+            status: if all_gates_pass {
+                PairDerivationProductEligibilityStatus::VerifiedOneSectionAhead
+            } else {
+                PairDerivationProductEligibilityStatus::Unverified
+            },
+            official_adjacency_evidence_id: adjacency.evidence_id.clone(),
+            one_section_ahead_verified: all_gates_pass,
+        },
+        route_plan: route.report,
+        gates,
+        tariff,
+        promotion_decision: if all_gates_pass {
+            PairDerivationPromotionDecision::EligibleForReview
+        } else {
+            PairDerivationPromotionDecision::Hold
+        },
+        automatic_seed_write: false,
+        rejection_reasons,
+    };
+    Ok((candidate, route.membership_ids))
+}
+
+pub fn derive_pair_candidates(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    adjacency: &BillingPairAdjacencyFile,
+    tariffs: &OdTariffsFile,
+    inventory: &RampInventoryFile,
+    bindings: &OsmRampBindingsFile,
+    input_hashes: PairDerivationInputHashes,
+) -> Result<PairDerivationReport, PairDerivationError> {
+    let computed_route_membership_hash =
+        route_memberships_sha256(route_memberships).map_err(|error| {
+            PairDerivationError::new("PAIR_DERIVATION_MEMBERSHIP_INVALID", error.to_string())
+        })?;
+    if computed_route_membership_hash != input_hashes.route_membership_index_sha256 {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_INPUT_HASH_MISMATCH",
+            "route membership index hash does not match the report input",
+        ));
+    }
+    validate_billing_pair_adjacency(adjacency).map_err(|errors| {
+        PairDerivationError::new("PAIR_DERIVATION_ADJACENCY_INVALID", errors.join("; "))
+    })?;
+    validate_od_tariffs(tariffs, inventory).map_err(|errors| {
+        PairDerivationError::new("PAIR_DERIVATION_TARIFF_INVALID", errors.join("; "))
+    })?;
+    validate_route_membership_structure(
+        graph,
+        route_memberships,
+        &input_hashes.osm_snapshot_sha256,
+    )
+    .map_err(|error| {
+        PairDerivationError::new("PAIR_DERIVATION_MEMBERSHIP_INVALID", error.to_string())
+    })?;
+    let bound_evidence =
+        bound_ramp_evidence_from_inventory(graph, inventory, bindings).map_err(|error| {
+            PairDerivationError::new("PAIR_DERIVATION_BINDING_INVALID", error.to_string())
+        })?;
+    let mut ordered = adjacency.pairs.iter().collect::<Vec<_>>();
+    ordered.sort_by(|left, right| left.pair_id.cmp(&right.pair_id));
+    let mut candidates = Vec::with_capacity(ordered.len());
+    let mut membership_candidates = BTreeMap::<String, Vec<(String, bool)>>::new();
+    for pair in ordered {
+        let (candidate, membership_ids) = derive_candidate(
+            graph,
+            route_memberships,
+            pair,
+            tariffs,
+            inventory,
+            bindings,
+            &bound_evidence,
+            &adjacency.source,
+            &adjacency.source_date,
+        )?;
+        let route_resolved = candidate.gates.route.status == PairDerivationGateStatus::Passed;
+        for membership_id in membership_ids {
+            membership_candidates
+                .entry(membership_id)
+                .or_default()
+                .push((candidate.pair_id.clone(), route_resolved));
+        }
+        candidates.push(candidate);
+    }
+    let mut relation_manifest = membership_candidates
+        .into_iter()
+        .map(|(membership_id, mut candidate_pairs)| {
+            candidate_pairs.sort();
+            candidate_pairs.dedup();
+            let membership = route_memberships
+                .iter()
+                .find(|membership| membership.membership_id == membership_id)
+                .ok_or_else(|| {
+                    PairDerivationError::new(
+                        "PAIR_DERIVATION_MEMBERSHIP_INVALID",
+                        format!("candidate references unknown membership {membership_id}"),
+                    )
+                })?;
+            let mut relation_ids = membership
+                .segments
+                .iter()
+                .filter_map(|segment| segment.source_relation_id.as_deref())
+                .filter_map(|value| value.parse::<i64>().ok())
+                .collect::<Vec<_>>();
+            relation_ids.sort();
+            relation_ids.dedup();
+            let route_plan_unresolved = candidate_pairs
+                .iter()
+                .filter(|(_, resolved)| !*resolved)
+                .count();
+            let candidate_total = candidate_pairs.len();
+            Ok(PairDerivationRelationManifest {
+                membership_id: membership.membership_id.clone(),
+                route_id: membership.route_id.clone(),
+                direction: membership.direction.clone(),
+                relation_ids,
+                candidate_pair_ids: candidate_pairs
+                    .into_iter()
+                    .map(|(pair_id, _)| pair_id)
+                    .collect(),
+                route_plan_resolved: candidate_total - route_plan_unresolved,
+                route_plan_unresolved,
+                status: if route_plan_unresolved == 0 {
+                    "pass".to_string()
+                } else {
+                    "fail".to_string()
+                },
+            })
+        })
+        .collect::<Result<Vec<_>, PairDerivationError>>()?;
+    relation_manifest.sort_by(|left, right| left.membership_id.cmp(&right.membership_id));
+    let eligible_for_review = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.promotion_decision == PairDerivationPromotionDecision::EligibleForReview
+        })
+        .count();
+    let summary = PairDerivationSummary {
+        candidate_total: candidates.len(),
+        eligible_for_review,
+        hold: candidates.len() - eligible_for_review,
+    };
+    Ok(PairDerivationReport {
+        schema_version: PAIR_DERIVATION_REPORT_SCHEMA_VERSION,
+        rule: PAIR_DERIVATION_RULE.to_string(),
+        automatic_seed_write: false,
+        input_hashes,
+        relation_manifest,
+        candidates,
+        summary,
+    })
 }
 
 #[cfg(test)]

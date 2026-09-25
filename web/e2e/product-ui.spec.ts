@@ -117,7 +117,8 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
 
 async function stubWorkerWithRadialCandidate(
   page: Page,
-  variant: "radial" | "radialEnabled" | "topologyOnly" | "pricedIneligible" = "radial",
+  variant: "radial" | "radialEnabled" | "topologyOnly" | "topologyOnlyUnpriced" | "pricedIneligible" =
+    "radial",
 ): Promise<void> {
   await page.addInitScript((variant) => {
     const candidate = {
@@ -302,6 +303,35 @@ async function stubWorkerWithRadialCandidate(
       Reflect.deleteProperty(candidate, "anchor");
       Reflect.deleteProperty(candidate, "routePlan");
       Reflect.deleteProperty(candidate, "edgeRouteLegs");
+    } else if (variant === "topologyOnlyUnpriced") {
+      // 銀座・六本木と同じ状態（未価格の topologyOnly）。商品対象外・推薦なしのままで
+      // 表示され、料金の注記は出ないことを runbook の期待値として固定する。
+      candidate.id = "fixture-candidate-topology-unpriced";
+      candidate.pairKind = "topologyOnly";
+      candidate.eligibilityStatus = "topology_only";
+      candidate.loopValidationStatus = "topology_only";
+      candidate.tariffStatus = "unpriced";
+      candidate.toll.amountYen = null;
+      candidate.toll.effectiveFrom = null;
+      candidate.toll.effectiveTo = null;
+      candidate.reasons = ["TOPOLOGY_ONLY"];
+      candidate.loop = {
+        anchorNodeId: "fixture-merge",
+        edgeIds: ["fixture-lap"],
+        durationSeconds: 1200,
+        distanceMeters: 20000,
+        validated: false,
+      };
+      candidate.handoff = {
+        origin: { lat: 35.6896727, lon: 139.7644248 },
+        destination: { lat: 35.6896727, lon: 139.7644248 },
+        waypoints: [],
+        mapsUrl: "https://www.google.com/maps/dir/?api=1&candidate=topology-unpriced",
+        verificationSetVersion: "fixture",
+      };
+      Reflect.deleteProperty(candidate, "anchor");
+      Reflect.deleteProperty(candidate, "routePlan");
+      Reflect.deleteProperty(candidate, "edgeRouteLegs");
     } else if (variant === "pricedIneligible") {
       candidate.eligibilityStatus = "unverified";
       candidate.loopValidationStatus = "unresolved";
@@ -314,7 +344,10 @@ async function stubWorkerWithRadialCandidate(
       releaseId: "all-real-v4",
       status: "ok",
       reason: null,
-      rankingMode: variant === "pricedIneligible" ? "shutoko_time" : "time_per_yen",
+      rankingMode:
+        variant === "pricedIneligible" || variant === "topologyOnlyUnpriced"
+          ? "shutoko_time"
+          : "time_per_yen",
       expandedStates: 1,
       candidates: [candidate],
       nearestAccess: null,
@@ -1716,8 +1749,28 @@ test("(46) pricedでも商品cohort外のradialは効率と最安順位を表示
   await expect(card.locator(".charging")).toHaveText(
     "首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）",
   );
-  await expect(card.locator(".toll")).toHaveText("料金額: 500 円");
+  // 金額は決まっていても商品対象外なので、金額のラベルは「参考料金」に揃える。
+  // 「料金額」のままだと、その下の注記が購入可能な金額のように読める。
+  await expect(card.locator(".toll")).toHaveText("参考料金: 500 円");
+  await expect(card.locator(".fare-label")).toHaveText("上記は普通車ETC基本料金（割引適用前）です");
   await expect(card.locator(".efficiency")).toHaveCount(0);
   await expect(card.locator(".rank")).toHaveCount(0);
+  await expect(card.locator(".recommended")).toHaveCount(0);
+});
+
+test("(73) 未価格の候補には料金の注記を出さない（商品対象外の表示と montantsを混同しない）", async ({
+  page,
+}) => {
+  await stubWorkerWithRadialCandidate(page, "topologyOnlyUnpriced");
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const card = page.locator("#results .card").first();
+  await expect(card).toBeVisible();
+  await expect(card.locator(".charging")).toHaveText("道路形状のみ（商品対象外）");
+  // 金額が未算出なら、どの料金の額か示せないので注記も付けない。
+  await expect(card.locator(".toll")).toHaveText("参考料金: 未算出");
+  await expect(card.locator(".fare-label")).toHaveCount(0);
   await expect(card.locator(".recommended")).toHaveCount(0);
 });

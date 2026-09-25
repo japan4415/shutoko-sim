@@ -607,7 +607,10 @@ describe("toCardModel", () => {
 
     const model = toCardModel(radial);
 
-    expect(model.toll).toBe("料金額: 500 円");
+    // 金額は決まっていても商品対象外なので、金額のラベルと注記は「参考料金」に揃える。
+    // 「料金額: 500 円」の下に「上記は普通車ETC基本料金…」が来ると購入可能な金額に見える。
+    expect(model.toll).toBe("参考料金: 500 円");
+    expect(model.fareLabelNote).toBe("上記は普通車ETC基本料金（割引適用前）です");
     expect(model.timePerYen).toBeNull();
     expect(model.chargedSection).toBe("首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）");
     expect(canRankByPrice("time_per_yen", [radial])).toBe(false);

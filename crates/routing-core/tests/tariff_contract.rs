@@ -261,6 +261,34 @@ fn v3_candidates_propagate_official_provenance_and_reject_scope_mismatch() {
 
 /// 最初の期間より前の `pricingAt` は範囲外なので `expired` になる。docs/data-pipeline.md は
 /// 「active 期間外は `expired` とする」と記しており、engine の legacy 経路も同じ扱いにする。
+/// 端点 binding が未解決の OD は、料金セルが検証済みでも
+/// `endpointBindingStatus` / `endpointBindingReason` を必ず持つ。`priced` で出荷される
+/// 割に端点が split な状態を再現できないように、catalog 側でも fail-closed にする。
+#[test]
+fn an_assignment_with_an_unresolved_endpoint_declares_the_binding_state() {
+    let raw: serde_json::Value = serde_json::from_str(&catalog_json()).unwrap();
+    let shibakoen = raw["assignments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|assignment| assignment["assignmentId"] == "assignment:c1-outer:shibakoen-iikura")
+        .expect("the Shibakoen to Iikura assignment must exist");
+    assert_eq!(shibakoen["entryRampId"], "ramp:c1-outer:shibakoen-entry");
+    assert_eq!(shibakoen["endpointBindingStatus"], "unresolved");
+    assert!(shibakoen["endpointBindingReason"]
+        .as_str()
+        .is_some_and(|reason| reason.contains("CONDITIONAL_ACCESS_RESTRICTION")));
+
+    // 同じファイル内で entry が確定済みの assignment は同じ形式で記録している。
+    let radial = raw["assignments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|assignment| assignment["assignmentId"] == "assignment:2:meguro-tengenji")
+        .unwrap();
+    assert_eq!(radial["endpointBindingStatus"], "verified_bound");
+}
+
 #[test]
 fn pricing_before_the_first_rule_period_is_expired_not_unpriced() {
     let resolver = TariffResolver::new(read_tariff_v3(&catalog_json()).unwrap()).unwrap();

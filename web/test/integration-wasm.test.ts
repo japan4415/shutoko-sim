@@ -703,6 +703,9 @@ interface LocationFixture {
     entryRampId: string;
     entryName: string;
     distanceMeters: number;
+    route: string;
+    direction: string;
+    kind: string;
   };
   expectedRecommendedPairId: string | null;
   expectedCandidates: LocationCandidateFixture[];
@@ -782,6 +785,12 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
     expect(catalog.fareLabel).toBe(locationsFixture.fareLabel);
     expect(catalog.vehicleProfile).toBe(locationsFixture.vehicleProfile);
     expect(locationsFixture.pricingWindows).toHaveLength(2);
+    // fixture は 4 地点の集合そのものを固定する。id を固定しないと、地点を 1 つ
+    // 消しても期待値が空になるだけで green のまま残り「4 地点を照合した」証明にならない。
+    expect(
+      locationsFixture.locations.map((location) => location.id).sort(),
+    ).toEqual(["ginza", "meguro-station", "roppongi", "tokyo-station"]);
+    expect(locationsFixture.locations).toHaveLength(4);
 
     const glue = await import(gluePath.href);
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
@@ -793,6 +802,19 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
     expect(locationsFixture.maxDisplayedCandidates).toBe(MAX_DISPLAY_CANDIDATES);
 
     const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+    // 各地点の最寄りの入口ランプは graph 側の entry ランプと突き合わせる（engine 出力の
+    // nearestAccess はアクセス node しか返さないので、graph の nodeId から逆引きする）。
+    for (const location of locationsFixture.locations) {
+      const expectedRampId = location.expectedNearestAccess.entryRampId;
+      const ramps = (JSON.parse(graphJson) as {
+        ramps: Array<{ id: string; name: string; route: string; direction: string; kind: string }>;
+      }).ramps.filter((ramp) => ramp.id === expectedRampId);
+      expect(ramps, `${location.label} ${expectedRampId}`).toHaveLength(1);
+      expect(ramps[0].name).toBe(location.expectedNearestAccess.entryName);
+      expect(ramps[0].route).toBe(location.expectedNearestAccess.route);
+      expect(ramps[0].direction).toBe(location.expectedNearestAccess.direction);
+      expect(ramps[0].kind).toBe(location.expectedNearestAccess.kind);
+    }
     try {
       for (const location of locationsFixture.locations) {
         const where = `${location.label}（${location.id}）`;

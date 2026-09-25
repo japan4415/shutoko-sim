@@ -354,14 +354,18 @@ function isExecutableFile(candidate) {
   }
 }
 
-/** wrangler の実行ファイルを WRANGLER_BIN → PATH の順で解決する。 */
+/**
+ * wrangler の実行ファイルを WRANGLER_BIN → PATH の順で解決する。
+ * `WRANGLER_BIN` に相対パスを渡した場合は `cwd` を基準に解決する。
+ */
 export function resolveWranglerBinary({ env = process.env, cwd = defaultRepoRoot } = {}) {
   const override = env.WRANGLER_BIN;
   if (override !== undefined && override !== "") {
-    const resolved = resolveOnPath(override, env);
+    const absolute = path.isAbsolute(override) ? override : path.resolve(cwd, override);
+    const resolved = isExecutableFile(absolute) ? absolute : null;
     if (resolved === null) {
       throw new Error(
-        `WRANGLER_BIN=${override} is not an executable file; fix the override or unset it`,
+        `WRANGLER_BIN=${override} is not a file (resolved to ${absolute}); fix the override or unset it`,
       );
     }
     return { binary: resolved, source: "WRANGLER_BIN" };
@@ -430,7 +434,7 @@ function readWranglerVersion({ runCommand, commandCwd, binary }) {
  * - 固定版未満（機能不足）と、SHUTOKO_REQUIRE_PINNED_WRANGLER=1 時の不一致は停止
  */
 export function preflightWrangler({ runCommand, commandCwd, repoRoot, env = process.env, log }) {
-  const { binary, source } = resolveWranglerBinary({ env });
+  const { binary, source } = resolveWranglerBinary({ env, cwd: repoRoot });
   const pinned = pinnedWranglerVersion(path.join(repoRoot, "workers", "package-lock.json"));
   const version = readWranglerVersion({ runCommand, commandCwd, binary });
   const matchesPin = version === pinned;

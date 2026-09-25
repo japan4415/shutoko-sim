@@ -585,6 +585,36 @@ impl TariffCatalog {
                 PRODUCT_FARE_LABEL,
                 &self.discounts_excluded,
             )?;
+            // 端点 binding が確定していない OD は、料金セルが検証済みでも
+            // endpointBindingStatus / endpointBindingReason を必ず明示する。
+            // 未記録のままだと、端点が未解決なのに `priced` で出荷してしまう。
+            let binding_declared = matches!(
+                assignment.endpoint_binding_status.as_deref(),
+                Some("verified_bound" | "unresolved" | "unsupported")
+            ) && assignment
+                .endpoint_binding_reason
+                .as_deref()
+                .is_some_and(|reason| !reason.trim().is_empty());
+            if let Some(status) = assignment.endpoint_binding_status.as_deref() {
+                if !matches!(status, "verified_bound" | "unresolved" | "unsupported") {
+                    return Err(error(
+                        "TARIFF_ASSIGNMENT_ENDPOINT_BINDING_INVALID",
+                        format!(
+                            "assignment {} has an unknown endpointBindingStatus {}",
+                            assignment.assignment_id, status
+                        ),
+                    ));
+                }
+                if !binding_declared {
+                    return Err(error(
+                        "TARIFF_ASSIGNMENT_ENDPOINT_BINDING_INVALID",
+                        format!(
+                            "assignment {} records endpointBindingStatus without a reason",
+                            assignment.assignment_id
+                        ),
+                    ));
+                }
+            }
             if assignment.billing_distance_meters == 0
                 || assignment.billing_distance_meters % DISTANCE_QUANTUM_METERS != 0
             {

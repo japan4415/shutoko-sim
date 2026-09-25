@@ -7,7 +7,7 @@
     "rampLedgerSha256": "97ad8b378f1dcdd7d1c6af95164727860e040635bb821eaee043cb840b0aa5cc",
     "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
     "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
-    "odTariffsSha256": "4183288752326da3549fde6f537d2afec5971a4f156880a088cf0aad42866215"
+    "odTariffsSha256": "37056d2b46b8c42168fdf54073ef856939c5152cec566de5dfea27ce6b26d763"
   },
   "relationCoverage": [
     {

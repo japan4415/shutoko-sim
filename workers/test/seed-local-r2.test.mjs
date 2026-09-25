@@ -582,9 +582,21 @@ test("wrangler は WRANGLER_BIN を優先し、PATH 探しで解決し、npx に
     () => resolveWranglerBinary({ env: { PATH: "/nonexistent" } }),
     /npx is not used as a fallback/,
   );
+  // メッセージは実際の判定（ファイルであること）に合わせる。
   assert.throws(
     () => resolveWranglerBinary({ env: { WRANGLER_BIN: path.join(onPathDir, "absent"), PATH: onPathDir } }),
-    /WRANGLER_BIN=.* is not an executable file/,
+    /WRANGLER_BIN=.* is not a file \(resolved to /,
+  );
+  assert.throws(
+    () => resolveWranglerBinary({ env: { WRANGLER_BIN: onPathDir, PATH: "" } }),
+    /WRANGLER_BIN=.* is not a file/,
+  );
+
+  // 相対パスは渡した cwd を基準に解決する（runbook の例は repo root 相対）。
+  const relative = path.relative(process.cwd(), override);
+  assert.deepEqual(
+    resolveWranglerBinary({ env: { WRANGLER_BIN: relative, PATH: "" }, cwd: process.cwd() }),
+    { binary: override, source: "WRANGLER_BIN" },
   );
 });
 

@@ -284,6 +284,10 @@ pub struct TariffAssignmentV3 {
     pub billing_distance_meters: u64,
     pub distance_evidence_id: String,
     pub verification_status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint_binding_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint_binding_reason: Option<String>,
     pub prices: Vec<TariffPriceV3>,
 }
 
@@ -1892,6 +1896,38 @@ fn validate_versioned_od_tariffs(
                 "tariff v3 assignment '{}' has invalid exitRampId '{}'",
                 assignment.assignment_id, assignment.exit_ramp_id
             )),
+        }
+        // 端点が exact binding 未解決の OD は、料金セルが検証済みでも
+        // endpointBindingStatus / endpointBindingReason を必ず明示する。
+        // 未記録のまま `priced` で出荷すると、端点が split なことを読み落とす。
+        let unverified_endpoint = [
+            assignment.entry_ramp_id.as_str(),
+            assignment.exit_ramp_id.as_str(),
+        ]
+        .iter()
+        .any(|ramp_id| {
+            inventory_by_id
+                .get(*ramp_id)
+                .and_then(|ramp| ramp.support_state.as_deref())
+                .is_some_and(|state| state != "verified_bound")
+        });
+        if unverified_endpoint {
+            let declared = assignment
+                .endpoint_binding_status
+                .as_deref()
+                .filter(|status| matches!(*status, "unresolved" | "unsupported"))
+                .is_some_and(|_| {
+                    assignment
+                        .endpoint_binding_reason
+                        .as_deref()
+                        .is_some_and(|reason| !reason.trim().is_empty())
+                });
+            if !declared {
+                errors.push(format!(
+                    "tariff v3 assignment '{}' has an endpoint that is not verified_bound and must record endpointBindingStatus ('unresolved' or 'unsupported') with endpointBindingReason",
+                    assignment.assignment_id
+                ));
+            }
         }
         assignments_by_ramps
             .entry((
@@ -4082,6 +4118,70 @@ mod tests {
         assert!(errors
             .iter()
             .any(|error| error.contains("overlapping effective intervals")));
+    }
+
+    /// 端点が exact binding 未解決の OD は `endpointBindingStatus` を必ず明示する。
+    /// 記録を落とすと build が fail-closed になる。
+    #[test]
+    fn test_tariff_v3_requires_endpoint_binding_state_for_unverified_endpoints() {
+        let inv: RampInventoryFile = serde_json::from_str(
+            &fs::read_to_string(find_data_file("data/ramp-inventory.json")).unwrap(),
+        )
+        .unwrap();
+        let tariffs: OdTariffsFile = serde_json::from_str(
+            &fs::read_to_string(find_data_file("data/od-tariffs.json")).unwrap(),
+        )
+        .unwrap();
+        validate_od_tariffs(&tariffs, &inv).expect("the shipped catalog must satisfy the rule");
+
+        let shibakoen = tariffs
+            .assignments
+            .iter()
+            .position(|assignment| {
+                assignment.assignment_id == "assignment:c1-outer:shibakoen-iikura"
+            })
+            .expect("the Shibakoen to Iikura assignment must exist");
+        assert_eq!(
+            tariffs.assignments[shibakoen]
+                .endpoint_binding_status
+                .as_deref(),
+            Some("unresolved")
+        );
+
+        let mut missing = tariffs.clone();
+        missing.assignments[shibakoen].endpoint_binding_status = None;
+        missing.assignments[shibakoen].endpoint_binding_reason = None;
+        let errors = validate_od_tariffs(&missing, &inv).unwrap_err();
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("must record endpointBindingStatus")),
+            "{:?}",
+            errors
+        );
+
+        let mut reasonless = tariffs.clone();
+        reasonless.assignments[shibakoen].endpoint_binding_reason = None;
+        let errors = validate_od_tariffs(&reasonless, &inv).unwrap_err();
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("must record endpointBindingStatus")),
+            "{:?}",
+            errors
+        );
+
+        let mut wrong_state = tariffs.clone();
+        wrong_state.assignments[shibakoen].endpoint_binding_status =
+            Some("verified_bound".to_string());
+        let errors = validate_od_tariffs(&wrong_state, &inv).unwrap_err();
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("must record endpointBindingStatus")),
+            "{:?}",
+            errors
+        );
     }
 
     #[test]

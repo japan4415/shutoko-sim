@@ -35,7 +35,10 @@
         "nodeId": "n:1105125663",
         "entryRampId": "ramp:c1-inner:takaracho-entry",
         "entryName": "宝町",
-        "distanceMeters": 746.277
+        "distanceMeters": 746.277,
+        "kind": "general_entry",
+        "route": "C1",
+        "direction": "inner"
       },
       "expectedRecommendedPairId": "bp:c1-inner:takaracho-kandabashi",
       "expectedCandidates": [
@@ -96,7 +99,10 @@
         "nodeId": "n:2177935837",
         "entryRampId": "ramp:2-inbound:meguro-entry",
         "entryName": "目黒",
-        "distanceMeters": 313.474
+        "distanceMeters": 313.474,
+        "kind": "general_entry",
+        "route": "2",
+        "direction": "inbound"
       },
       "expectedRecommendedPairId": "bp:2-inbound:meguro:c1-outer:tengenji",
       "expectedCandidates": [
@@ -195,7 +201,10 @@
         "nodeId": "n:31254351",
         "entryRampId": "ramp:c1-inner:ginza-entry",
         "entryName": "銀座",
-        "distanceMeters": 510.761
+        "distanceMeters": 510.761,
+        "kind": "general_entry",
+        "route": "C1",
+        "direction": "inner"
       },
       "expectedRecommendedPairId": null,
       "expectedCandidates": [
@@ -256,7 +265,10 @@
         "nodeId": "n:266237326",
         "entryRampId": "ramp:c1-inner:iikura-entry",
         "entryName": "飯倉",
-        "distanceMeters": 662.501
+        "distanceMeters": 662.501,
+        "kind": "general_entry",
+        "route": "C1",
+        "direction": "inner"
       },
       "expectedRecommendedPairId": null,
       "expectedCandidates": [

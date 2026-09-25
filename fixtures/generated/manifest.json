@@ -291,7 +291,7 @@
       "rampLedgerSha256": "97ad8b378f1dcdd7d1c6af95164727860e040635bb821eaee043cb840b0aa5cc",
       "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
       "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
-      "odTariffsSha256": "4183288752326da3549fde6f537d2afec5971a4f156880a088cf0aad42866215"
+      "odTariffsSha256": "37056d2b46b8c42168fdf54073ef856939c5152cec566de5dfea27ce6b26d763"
     },
     "summary": {
       "candidateTotal": 11,
@@ -886,17 +886,17 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "3eb631ce98c633817aa7fbcc98de079e7b8739dbfce80c2f989ce872610ebac9",
-      "byteLength": 7606019
+      "sha256": "3c6c421f33bcbc7cd634b586979f0fef455792362c3e7b1559e93408057f03b4",
+      "byteLength": 7606198
     },
     {
       "path": "od-tariffs.json",
-      "sha256": "4183288752326da3549fde6f537d2afec5971a4f156880a088cf0aad42866215",
-      "byteLength": 48482
+      "sha256": "37056d2b46b8c42168fdf54073ef856939c5152cec566de5dfea27ce6b26d763",
+      "byteLength": 48735
     },
     {
       "path": "pair-candidates.json",
-      "sha256": "38ba4448eeb74c61375f2b778c932b7424285e3e11a20659b3a4f7c29de9919b",
+      "sha256": "007e19804655060e48a565ca0289f469a680b91384080dbc166484b77accd5e9",
       "byteLength": 75737
     },
     {

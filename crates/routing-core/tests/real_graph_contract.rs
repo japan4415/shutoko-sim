@@ -2117,6 +2117,24 @@ fn representative_locations_release_v4_contract() {
         "the 2026-10 revision must be pinned on both sides"
     );
 
+    // fixture は 4 地点の集合を固定する。ここを id で固定しないと、地点を 1 つ削除しても
+    // 期待値が空になるだけで green のまま残り、「4 地点を照合した」証明にならない。
+    let location_ids = fixture["locations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|location| location["id"].as_str().unwrap().to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut expected_ids = vec![
+        "tokyo-station".to_string(),
+        "meguro-station".to_string(),
+        "ginza".to_string(),
+        "roppongi".to_string(),
+    ];
+    expected_ids.sort();
+    assert_eq!(location_ids, expected_ids.into_iter().collect());
+    assert_eq!(fixture["locations"].as_array().unwrap().len(), 4);
+
     for location in fixture["locations"].as_array().unwrap() {
         let id = location["id"].as_str().unwrap();
         let label = location["label"].as_str().unwrap();
@@ -2174,6 +2192,42 @@ fn representative_locations_release_v4_contract() {
             assert!(
                 (distance - expected_distance).abs() <= 1.0,
                 "{where_}: nearest access distance {distance} vs {expected_distance}"
+            );
+            // engine が返した最寄りのアクセス node から graph 側の入口ランプを解決し、
+            // fixture の期待値と直接照合する（候補経由の間接被覆だけに頼らない）。
+            let expected_ramp = &location["expectedNearestAccess"];
+            let node_id = nearest["nodeId"].as_str().unwrap();
+            let resolved = wire["ramps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|ramp| ramp["nodeId"] == node_id && ramp["kind"] == "general_entry")
+                .collect::<Vec<_>>();
+            assert_eq!(
+                resolved.len(),
+                1,
+                "{where_}: the nearest access node must resolve to exactly one general entry ramp"
+            );
+            let ramp = resolved[0];
+            assert_eq!(
+                ramp["id"], expected_ramp["entryRampId"],
+                "{where_}: nearest entry ramp id"
+            );
+            assert_eq!(
+                ramp["name"], expected_ramp["entryName"],
+                "{where_}: nearest entry ramp name"
+            );
+            assert_eq!(
+                ramp["route"], expected_ramp["route"],
+                "{where_}: nearest entry ramp route"
+            );
+            assert_eq!(
+                ramp["direction"], expected_ramp["direction"],
+                "{where_}: nearest entry ramp direction"
+            );
+            assert_eq!(
+                ramp["kind"], expected_ramp["kind"],
+                "{where_}: nearest entry ramp kind"
             );
 
             let expected_candidates = location["expectedCandidates"].as_array().unwrap();

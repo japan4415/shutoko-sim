@@ -820,6 +820,8 @@
       "billingDistanceMeters": 1600,
       "distanceEvidenceId": "evidence:2025-04:p03:c1-shibakoen-iikura",
       "verificationStatus": "verified",
+      "endpointBindingStatus": "unresolved",
+      "endpointBindingReason": "The tariff cell is verified, but way 40969792 (access:conditional) leaves the C1 outer Shibakoen entry binding unresolved (supportReasonCode CONDITIONAL_ACCESS_RESTRICTION).",
       "prices": [
         {
           "status": "priced",

@@ -877,7 +877,10 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     estimatedLegs,
     routeOverview,
     pathSummary: routePathSummary,
-    toll: isTopologyOnly ? referenceTollText(candidate.toll) : tollText(candidate.toll),
+    // 商品対象外の候補（topologyOnly と、形式は radialReturn でも商品対象外のペア）は
+    // 「参考料金」として出す。金額のラベルと注記の整合を 1 か所にまとめ、注記が
+    // 購入可能な金額のように読める状態を作らない。
+    toll: productEligible ? tollText(candidate.toll) : referenceTollText(candidate.toll),
     tollShort: tollShortText(candidate.toll),
     fareLabelNote: fareLabelNote(candidate.toll),
     timePerYen,

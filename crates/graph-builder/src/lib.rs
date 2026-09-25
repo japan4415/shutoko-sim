@@ -28,12 +28,12 @@ pub use inventory::{
 };
 
 pub use billing::{
-    compute_pair_derivation_input_hashes, derive_pair_candidates,
-    derive_pair_candidates_from_source_bytes, generate_and_validate_billing_pairs,
-    generate_and_validate_parsed_billing_pairs, generate_billing_pair,
-    generate_diagnostic_radial_route_plans, pair_derivation_report_to_deterministic_json,
-    validate_radial_seed_binding_candidates, BillingError, BillingGenerationReport,
-    BillingPairAdjacency, BillingPairAdjacencyDirectedAnchor, BillingPairAdjacencyEntryCorridor,
+    compute_pair_derivation_input_hashes, derive_pair_candidates_from_source_bytes,
+    generate_and_validate_billing_pairs, generate_and_validate_parsed_billing_pairs,
+    generate_billing_pair, generate_diagnostic_radial_route_plans,
+    pair_derivation_report_to_deterministic_json, validate_radial_seed_binding_candidates,
+    BillingError, BillingGenerationReport, BillingPairAdjacency,
+    BillingPairAdjacencyDirectedAnchor, BillingPairAdjacencyEntryCorridor,
     BillingPairAdjacencyExcludedShortConnector, BillingPairAdjacencyFile, BillingPairAdjacencyKind,
     BillingPairAdjacencyMandatoryLap, BillingPairAdjacencyReturnCorridor,
     BillingPairAdjacencyReviewStatus, BillingPairAdjacencyRoutePlan, PairCandidateEndpointReport,
@@ -95,7 +95,6 @@ pub use validate::{
     contains_forbidden_transition, find_first_exits_from_anchor,
     find_first_exits_from_anchor_with_budget, has_non_empty_shutoko_loop, parse_iso_date,
     parse_utc_timestamp, validate_billing_pair, validate_billing_pair_adjacency,
-    validate_relation_constrained_first_exit, validate_relation_constrained_legacy_first_exit,
-    validate_url, RelationConstrainedFirstExit, RelationConstrainedFirstExitStatus,
-    ValidationError, FIRST_EXIT_STATE_BUDGET,
+    validate_relation_constrained_first_exit, validate_url, RelationConstrainedFirstExit,
+    RelationConstrainedFirstExitStatus, ValidationError, FIRST_EXIT_STATE_BUDGET,
 };

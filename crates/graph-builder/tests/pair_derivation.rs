@@ -1,12 +1,13 @@
 use shutoko_graph_builder::{
     bind_ramps_to_graph, bound_ramp_evidence_from_inventory, build_route_membership_indices,
-    build_topology, compute_pair_derivation_input_hashes, compute_sha256, derive_pair_candidates,
-    derive_pair_candidates_from_source_bytes, pair_derivation_report_to_deterministic_json,
-    validate_billing_pair_adjacency, BillingPairAdjacencyFile, OdTariffsFile, OsmRampBindingsFile,
-    OverpassResponse, PairDerivationGateStatus, PairDerivationInputHashes,
-    PairDerivationPromotionDecision, RampInventoryFile, RouteMembershipBuildOptions,
-    RouteMembershipIndex, TopologyConfig, BILLING_PAIR_ADJACENCY_SCHEMA_VERSION,
-    PAIR_DERIVATION_REPORT_SCHEMA_VERSION, PAIR_DERIVATION_RULE,
+    build_topology, compute_pair_derivation_input_hashes, compute_sha256,
+    derive_pair_candidates_from_source_bytes, ordered_edge_ids_sha256,
+    pair_derivation_report_to_deterministic_json, validate_billing_pair_adjacency,
+    BillingPairAdjacencyFile, OsmRampBindingsFile, OverpassResponse, PairDerivationGateStatus,
+    PairDerivationInputHashes, PairDerivationPromotionDecision, RampInventoryFile,
+    RouteMembershipBuildOptions, RouteMembershipIndex, TopologyConfig,
+    BILLING_PAIR_ADJACENCY_SCHEMA_VERSION, PAIR_DERIVATION_REPORT_SCHEMA_VERSION,
+    PAIR_DERIVATION_RULE,
 };
 
 const OSM_BYTES: &[u8] = include_bytes!("../../../fixtures/osm/shutoko-all.json");
@@ -21,7 +22,6 @@ struct RealDerivationFixture {
     graph: shutoko_graph_builder::Graph,
     route_memberships: Vec<RouteMembershipIndex>,
     adjacency: BillingPairAdjacencyFile,
-    tariffs: OdTariffsFile,
     inventory: RampInventoryFile,
     bindings: OsmRampBindingsFile,
     input_hashes: PairDerivationInputHashes,
@@ -54,7 +54,6 @@ fn real_fixture() -> RealDerivationFixture {
     )
     .unwrap();
     let adjacency = serde_json::from_slice(ADJACENCY_BYTES).unwrap();
-    let tariffs = serde_json::from_slice(TARIFFS_BYTES).unwrap();
     let input_hashes = compute_pair_derivation_input_hashes(
         OSM_BYTES,
         INVENTORY_BYTES,
@@ -69,24 +68,59 @@ fn real_fixture() -> RealDerivationFixture {
         graph,
         route_memberships,
         adjacency,
-        tariffs,
         inventory,
         bindings,
         input_hashes,
     }
 }
 
-fn derive(fixture: &RealDerivationFixture) -> shutoko_graph_builder::PairDerivationReport {
-    derive_pair_candidates(
+fn derive_from_source_with_support(
+    fixture: &RealDerivationFixture,
+    ramp_support_decisions: &[u8],
+    ramp_inventory: &[u8],
+    osm_ramp_bindings: &[u8],
+    billing_pair_adjacency: &[u8],
+    od_tariffs: &[u8],
+) -> shutoko_graph_builder::PairDerivationReport {
+    derive_pair_candidates_from_source_bytes(
         &fixture.graph,
         &fixture.route_memberships,
-        &fixture.adjacency,
-        &fixture.tariffs,
-        &fixture.inventory,
-        &fixture.bindings,
-        fixture.input_hashes.clone(),
+        OSM_BYTES,
+        ramp_inventory,
+        ramp_support_decisions,
+        osm_ramp_bindings,
+        billing_pair_adjacency,
+        od_tariffs,
+        SEED_BYTES,
     )
     .unwrap()
+}
+
+fn derive_from_source(
+    fixture: &RealDerivationFixture,
+    ramp_inventory: &[u8],
+    osm_ramp_bindings: &[u8],
+    billing_pair_adjacency: &[u8],
+    od_tariffs: &[u8],
+) -> shutoko_graph_builder::PairDerivationReport {
+    derive_from_source_with_support(
+        fixture,
+        SUPPORT_DECISIONS_BYTES,
+        ramp_inventory,
+        osm_ramp_bindings,
+        billing_pair_adjacency,
+        od_tariffs,
+    )
+}
+
+fn derive(fixture: &RealDerivationFixture) -> shutoko_graph_builder::PairDerivationReport {
+    derive_from_source(
+        fixture,
+        INVENTORY_BYTES,
+        BINDINGS_BYTES,
+        ADJACENCY_BYTES,
+        TARIFFS_BYTES,
+    )
 }
 
 #[test]
@@ -98,7 +132,7 @@ fn derives_all_official_candidates_with_independent_gates() {
     assert!(!report.automatic_seed_write);
     assert_eq!(report.candidates.len(), 11);
     assert_eq!(report.summary.candidate_total, 11);
-    assert_eq!(report.summary.eligible_for_review, 2);
+    assert_eq!(report.summary.eligible_for_review, 2, "{report:#?}");
     assert_eq!(report.summary.hold, 9);
     assert_eq!(
         report
@@ -143,6 +177,22 @@ fn derives_all_official_candidates_with_independent_gates() {
             .find(|candidate| candidate.pair_id == pair_id)
             .unwrap()
     };
+    for pair_id in [
+        "bp:c1-outer:kandabashi-takaracho",
+        "bp:c1-outer:kasumigaseki-daikancho",
+        "bp:c1-outer:ginza-shibakoen",
+        "bp:c1-outer:shibakoen-iikura",
+        "bp:c1-inner:kasumigaseki-shibakoen",
+        "bp:c1-inner:daikancho-kasumigaseki",
+        "bp:c1-inner:shibakoen-shiodome",
+        "bp:c1-inner:takaracho-kandabashi",
+    ] {
+        assert_eq!(
+            pair(pair_id).gates.official_adjacency.status,
+            PairDerivationGateStatus::Passed,
+            "{pair_id}"
+        );
+    }
     for pair_id in [
         "bp:c1-outer:kandabashi-takaracho",
         "bp:c1-outer:kasumigaseki-daikancho",
@@ -279,35 +329,327 @@ fn report_is_byte_identical_across_three_generations_and_never_writes_seed() {
     assert_eq!(first, second);
     assert_eq!(second, third);
     assert!(first.ends_with('\n'));
-    let source_report = derive_pair_candidates_from_source_bytes(
-        &fixture.graph,
-        &fixture.route_memberships,
-        OSM_BYTES,
+    assert_eq!(SEED_BYTES, seed_before.as_slice());
+}
+
+#[test]
+fn all_five_input_hashes_bind_source_bytes_and_memberships() {
+    let fixture = real_fixture();
+    let mut osm = OSM_BYTES.to_vec();
+    osm.push(b' ');
+    let osm_hash = compute_pair_derivation_input_hashes(
+        &osm,
         INVENTORY_BYTES,
         SUPPORT_DECISIONS_BYTES,
         BINDINGS_BYTES,
+        &fixture.route_memberships,
         ADJACENCY_BYTES,
         TARIFFS_BYTES,
     )
     .unwrap();
-    assert_eq!(
-        first,
-        pair_derivation_report_to_deterministic_json(&source_report).unwrap()
+    assert_ne!(
+        osm_hash.osm_snapshot_sha256,
+        fixture.input_hashes.osm_snapshot_sha256
     );
-    let mut mismatched_hashes = fixture.input_hashes.clone();
-    mismatched_hashes.route_membership_index_sha256 = "0".repeat(64);
-    let error = derive_pair_candidates(
-        &fixture.graph,
+
+    let mut inventory_value: serde_json::Value = serde_json::from_slice(INVENTORY_BYTES).unwrap();
+    inventory_value["description"] = serde_json::Value::String("hash mutation".to_string());
+    let inventory = serde_json::to_vec(&inventory_value).unwrap();
+    let inventory_hash = compute_pair_derivation_input_hashes(
+        OSM_BYTES,
+        &inventory,
+        SUPPORT_DECISIONS_BYTES,
+        BINDINGS_BYTES,
         &fixture.route_memberships,
-        &fixture.adjacency,
-        &fixture.tariffs,
-        &fixture.inventory,
-        &fixture.bindings,
-        mismatched_hashes,
+        ADJACENCY_BYTES,
+        TARIFFS_BYTES,
     )
-    .unwrap_err();
-    assert_eq!(error.code, "PAIR_DERIVATION_INPUT_HASH_MISMATCH");
-    assert_eq!(SEED_BYTES, seed_before.as_slice());
+    .unwrap();
+    assert_ne!(
+        inventory_hash.ramp_ledger_sha256,
+        fixture.input_hashes.ramp_ledger_sha256
+    );
+
+    let mut support_value: serde_json::Value =
+        serde_json::from_slice(SUPPORT_DECISIONS_BYTES).unwrap();
+    support_value["description"] = serde_json::Value::String("hash mutation".to_string());
+    let support_decisions = serde_json::to_vec(&support_value).unwrap();
+    let support_hash = compute_pair_derivation_input_hashes(
+        OSM_BYTES,
+        INVENTORY_BYTES,
+        &support_decisions,
+        BINDINGS_BYTES,
+        &fixture.route_memberships,
+        ADJACENCY_BYTES,
+        TARIFFS_BYTES,
+    )
+    .unwrap();
+    assert_ne!(
+        support_hash.ramp_ledger_sha256,
+        fixture.input_hashes.ramp_ledger_sha256
+    );
+
+    let mut bindings_value: serde_json::Value = serde_json::from_slice(BINDINGS_BYTES).unwrap();
+    bindings_value["sourceDate"] = serde_json::Value::String("2000-01-01".to_string());
+    let bindings = serde_json::to_vec(&bindings_value).unwrap();
+    let bindings_hash = compute_pair_derivation_input_hashes(
+        OSM_BYTES,
+        INVENTORY_BYTES,
+        SUPPORT_DECISIONS_BYTES,
+        &bindings,
+        &fixture.route_memberships,
+        ADJACENCY_BYTES,
+        TARIFFS_BYTES,
+    )
+    .unwrap();
+    assert_ne!(
+        bindings_hash.ramp_ledger_sha256,
+        fixture.input_hashes.ramp_ledger_sha256
+    );
+
+    let mut memberships = fixture.route_memberships.clone();
+    memberships[0].segments[0].source_relation_id = Some("999999999".to_string());
+    let membership_hash = compute_pair_derivation_input_hashes(
+        OSM_BYTES,
+        INVENTORY_BYTES,
+        SUPPORT_DECISIONS_BYTES,
+        BINDINGS_BYTES,
+        &memberships,
+        ADJACENCY_BYTES,
+        TARIFFS_BYTES,
+    )
+    .unwrap();
+    assert_ne!(
+        membership_hash.route_membership_index_sha256,
+        fixture.input_hashes.route_membership_index_sha256
+    );
+
+    let mut adjacency = ADJACENCY_BYTES.to_vec();
+    adjacency.push(b' ');
+    let adjacency_hash = compute_pair_derivation_input_hashes(
+        OSM_BYTES,
+        INVENTORY_BYTES,
+        SUPPORT_DECISIONS_BYTES,
+        BINDINGS_BYTES,
+        &fixture.route_memberships,
+        &adjacency,
+        TARIFFS_BYTES,
+    )
+    .unwrap();
+    assert_ne!(
+        adjacency_hash.billing_pair_adjacency_sha256,
+        fixture.input_hashes.billing_pair_adjacency_sha256
+    );
+
+    let mut tariffs = TARIFFS_BYTES.to_vec();
+    tariffs.push(b' ');
+    let tariff_hash = compute_pair_derivation_input_hashes(
+        OSM_BYTES,
+        INVENTORY_BYTES,
+        SUPPORT_DECISIONS_BYTES,
+        BINDINGS_BYTES,
+        &fixture.route_memberships,
+        ADJACENCY_BYTES,
+        &tariffs,
+    )
+    .unwrap();
+    assert_ne!(
+        tariff_hash.od_tariffs_sha256,
+        fixture.input_hashes.od_tariffs_sha256
+    );
+}
+
+#[test]
+fn legacy_seed_identity_rejects_changed_meaning() {
+    let fixture = real_fixture();
+    let mut adjacency = fixture.adjacency.clone();
+    adjacency
+        .pairs
+        .iter_mut()
+        .find(|pair| pair.pair_id == "bp:c1-outer:kandabashi-takaracho")
+        .unwrap()
+        .entry_name = "変更入口".to_string();
+    let adjacency = serde_json::to_vec(&adjacency).unwrap();
+    let report = derive_from_source(
+        &fixture,
+        INVENTORY_BYTES,
+        BINDINGS_BYTES,
+        &adjacency,
+        TARIFFS_BYTES,
+    );
+    assert_eq!(
+        report.input_hashes.billing_pair_adjacency_sha256,
+        compute_sha256(&adjacency)
+    );
+    assert_ne!(
+        report.input_hashes.billing_pair_adjacency_sha256,
+        fixture.input_hashes.billing_pair_adjacency_sha256
+    );
+    let candidate = report
+        .candidates
+        .iter()
+        .find(|candidate| candidate.pair_id == "bp:c1-outer:kandabashi-takaracho")
+        .unwrap();
+    assert_eq!(
+        candidate.gates.official_adjacency.status,
+        PairDerivationGateStatus::Failed
+    );
+    assert!(candidate
+        .gates
+        .official_adjacency
+        .reason_codes
+        .contains(&"LEGACY_SEED_NAME_MISMATCH".to_string()));
+    assert!(candidate
+        .gates
+        .official_adjacency
+        .reason_codes
+        .contains(&"LEGACY_SEED_RAMP_IDENTITY_MISMATCH".to_string()));
+    assert_eq!(
+        candidate.promotion_decision,
+        PairDerivationPromotionDecision::Hold
+    );
+}
+
+#[test]
+fn legacy_first_exit_rejects_unprojected_unresolved_candidate() {
+    let fixture = real_fixture();
+    let target_pair_id = "bp:c1-outer:kandabashi-takaracho";
+    let target = fixture
+        .adjacency
+        .pairs
+        .iter()
+        .find(|pair| pair.pair_id == target_pair_id)
+        .unwrap();
+    let membership_id = match target.route_plan.as_ref().unwrap() {
+        shutoko_graph_builder::BillingPairAdjacencyRoutePlan::SameNode {
+            membership_id,
+            first_exit_initial_edge_id,
+            ..
+        } => {
+            let membership = fixture
+                .route_memberships
+                .iter()
+                .find(|membership| membership.membership_id == *membership_id)
+                .unwrap();
+            let initial_edge_id = first_exit_initial_edge_id.clone();
+            let segment = membership
+                .segments
+                .iter()
+                .find(|segment| segment.ordered_edge_ids.contains(&initial_edge_id))
+                .unwrap();
+            let initial_index = segment
+                .ordered_edge_ids
+                .iter()
+                .position(|edge_id| edge_id == &initial_edge_id)
+                .unwrap();
+            segment.ordered_edge_ids[initial_index].clone()
+        }
+        _ => panic!("legacy candidate must have a sameNode plan"),
+    };
+    let mainline_edge = fixture
+        .graph
+        .edges
+        .iter()
+        .find(|edge| edge.id == membership_id)
+        .unwrap();
+    let edge_ids = vec![mainline_edge.id.clone()];
+    let edge_ids_sha256 = ordered_edge_ids_sha256(&edge_ids).unwrap();
+    let target_node_id = fixture
+        .graph
+        .edges
+        .iter()
+        .find(|edge| edge.from == mainline_edge.to)
+        .unwrap()
+        .to
+        .clone();
+    let from_osm_node_id = mainline_edge
+        .to
+        .strip_prefix("n:")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let to_osm_node_id = target_node_id.strip_prefix("n:").unwrap().parse().unwrap();
+    let template_inventory = fixture
+        .inventory
+        .ramps
+        .iter()
+        .find(|ramp| {
+            ramp.route == "C1"
+                && ramp.direction == "outer"
+                && ramp.kind == shutoko_graph_builder::RampKind::GeneralExit
+        })
+        .unwrap();
+    let mut unprojected_inventory = template_inventory.clone();
+    unprojected_inventory.ramp_id = "ramp:test:unprojected-exit".to_string();
+    unprojected_inventory.facility_id = "fac:test:unprojected-exit".to_string();
+    unprojected_inventory.facility_name = "未投影出口".to_string();
+    unprojected_inventory.support_state = Some("unresolved".to_string());
+    unprojected_inventory.routing_capability = Some("unsupported".to_string());
+    let mut inventory = fixture.inventory.clone();
+    inventory.ramps.push(unprojected_inventory);
+
+    let mut candidate = fixture.bindings.binding_candidates.first().unwrap().clone();
+    candidate.candidate_id = "test:unprojected-exit".to_string();
+    candidate.ramp_id = "ramp:test:unprojected-exit".to_string();
+    candidate.status = "unresolved".to_string();
+    candidate.direction = "outer".to_string();
+    candidate.route_evidence.route_id = "C1".to_string();
+    candidate.route_evidence.direction = "outer".to_string();
+    candidate.unresolved_reason_codes = vec!["TEST_UNPROJECTED_EXIT".to_string()];
+    let mut segment = candidate.directed_segments.first().unwrap().clone();
+    segment.segment_id = "ramp:test:unprojected-exit:segment:0".to_string();
+    segment.osm_way_ids = vec![9_999_999_991];
+    segment.osm_node_ids = vec![from_osm_node_id, to_osm_node_id];
+    segment.edge_ids = edge_ids;
+    segment.from_node_id = mainline_edge.to.clone();
+    segment.to_node_id = target_node_id;
+    segment.edge_ids_sha256 = edge_ids_sha256;
+    candidate.directed_segments = vec![segment];
+    let mut bindings = fixture.bindings.clone();
+    bindings.binding_candidates.push(candidate);
+    let mut support_decisions: serde_json::Value =
+        serde_json::from_slice(SUPPORT_DECISIONS_BYTES).unwrap();
+    support_decisions["decisions"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "rampId": "ramp:test:unprojected-exit",
+            "supportState": "unresolved",
+            "bindingCandidateEvidence": {
+                "rampIdInverseMap": {
+                    "rampId": "ramp:test:unprojected-exit",
+                    "candidateId": "test:unprojected-exit"
+                },
+                "status": "unresolved",
+                "mainlineNodeId": mainline_edge.to
+            }
+        }));
+    let report = derive_from_source_with_support(
+        &fixture,
+        &serde_json::to_vec(&support_decisions).unwrap(),
+        &serde_json::to_vec(&inventory).unwrap(),
+        &serde_json::to_vec(&bindings).unwrap(),
+        ADJACENCY_BYTES,
+        TARIFFS_BYTES,
+    );
+    let target = report
+        .candidates
+        .iter()
+        .find(|candidate| candidate.pair_id == target_pair_id)
+        .unwrap();
+    assert_eq!(
+        target.gates.first_exit.status,
+        PairDerivationGateStatus::Failed
+    );
+    assert!(target
+        .gates
+        .first_exit
+        .reason_codes
+        .contains(&"RELATION_FIRST_EXIT_UNRESOLVED".to_string()));
+    assert_eq!(
+        target.promotion_decision,
+        PairDerivationPromotionDecision::Hold
+    );
 }
 
 #[test]

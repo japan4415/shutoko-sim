@@ -18,12 +18,13 @@ use crate::billing::{
     BillingPairAdjacencyFile, BillingPairAdjacencyKind, BillingPairAdjacencyReviewStatus,
     BillingPairAdjacencyRoutePlan, BILLING_PAIR_ADJACENCY_SCHEMA_VERSION,
 };
+use crate::inventory::{OsmRampBindingsFile, RampInventoryFile};
 use crate::model::{BillingPair, Edge, EdgeKind, Graph, RampKind, VerificationStatus};
 use crate::route_membership::{
     find_first_exit_on_corridor_with_binding, CorridorFirstExitResolution,
 };
 use crate::seed::EndpointSupportState;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use time::format_description::well_known::Rfc3339;
 use time::{Date, Month, OffsetDateTime};
@@ -758,9 +759,280 @@ pub fn validate_relation_constrained_first_exit(
     })
 }
 
-pub fn validate_relation_constrained_legacy_first_exit(
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RampSupportDecisionsFile {
+    pub(crate) decisions: Vec<RampSupportDecision>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RampSupportDecision {
+    pub(crate) ramp_id: String,
+    pub(crate) support_state: String,
+    #[serde(default)]
+    pub(crate) binding: Option<RampSupportBinding>,
+    #[serde(default)]
+    pub(crate) binding_candidate_evidence: Option<RampSupportBindingCandidateEvidence>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RampSupportBinding {
+    pub(crate) ramp_id: String,
+    pub(crate) motorway_node_id: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RampSupportBindingCandidateEvidence {
+    pub(crate) ramp_id_inverse_map: RampSupportBindingCandidateRamp,
+    pub(crate) status: String,
+    pub(crate) mainline_node_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RampSupportBindingCandidateRamp {
+    pub(crate) ramp_id: String,
+    pub(crate) candidate_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LegacyFirstExitEvidence {
+    ramp_id: String,
+    from_node_id: String,
+    support_state: EndpointSupportState,
+}
+
+fn parse_endpoint_support_state(value: &str) -> Option<EndpointSupportState> {
+    match value {
+        "verified_bound" => Some(EndpointSupportState::VerifiedBound),
+        "unresolved" => Some(EndpointSupportState::Unresolved),
+        "unsupported" => Some(EndpointSupportState::Unsupported),
+        _ => None,
+    }
+}
+
+fn add_legacy_first_exit_evidence(
+    evidence: &mut Vec<LegacyFirstExitEvidence>,
+    ramp_id: &str,
+    from_node_id: &str,
+    support_state: EndpointSupportState,
+) -> Result<(), Vec<String>> {
+    if let Some(existing) = evidence
+        .iter()
+        .find(|item| item.ramp_id == ramp_id && item.from_node_id == from_node_id)
+    {
+        if existing.support_state != support_state {
+            return Err(vec!["RELATION_EXIT_EVIDENCE_STATE_CONFLICT".to_string()]);
+        }
+        return Ok(());
+    }
+    if let Some(existing) = evidence.iter().find(|item| item.ramp_id == ramp_id) {
+        if existing.support_state != support_state {
+            return Err(vec!["RELATION_EXIT_EVIDENCE_STATE_CONFLICT".to_string()]);
+        }
+    }
+    evidence.push(LegacyFirstExitEvidence {
+        ramp_id: ramp_id.to_string(),
+        from_node_id: from_node_id.to_string(),
+        support_state,
+    });
+    Ok(())
+}
+
+fn legacy_first_exit_evidence(
+    graph: &Graph,
+    inventory: &RampInventoryFile,
+    bindings: &OsmRampBindingsFile,
+    support_decisions: &RampSupportDecisionsFile,
+    adjacency: &BillingPairAdjacencyFile,
+    membership: &crate::route_membership::RouteMembershipIndex,
+) -> Result<Vec<LegacyFirstExitEvidence>, Vec<String>> {
+    let mut evidence = Vec::new();
+    let inventory_exit = |ramp_id: &str| {
+        inventory.ramps.iter().find(|ramp| {
+            ramp.ramp_id == ramp_id
+                && ramp.kind == RampKind::GeneralExit
+                && ramp.route == membership.route_id
+                && ramp.direction == membership.direction
+        })
+    };
+    for ramp in graph.ramps.iter().filter(|ramp| {
+        ramp.kind == RampKind::GeneralExit
+            && ramp.route == membership.route_id
+            && ramp.direction == membership.direction
+    }) {
+        let item = inventory_exit(&ramp.id)
+            .ok_or_else(|| vec!["RELATION_EXIT_EVIDENCE_INVENTORY_MISSING".to_string()])?;
+        let support_state = item
+            .support_state
+            .as_deref()
+            .and_then(parse_endpoint_support_state)
+            .ok_or_else(|| vec!["RELATION_EXIT_EVIDENCE_STATE_INVALID".to_string()])?;
+        add_legacy_first_exit_evidence(
+            &mut evidence,
+            &ramp.id,
+            &ramp.mainline_node_id,
+            support_state,
+        )?;
+    }
+    for binding in bindings.bindings.iter() {
+        let Some(item) = inventory_exit(&binding.ramp_id) else {
+            continue;
+        };
+        let support_state = item
+            .support_state
+            .as_deref()
+            .and_then(parse_endpoint_support_state)
+            .ok_or_else(|| vec!["RELATION_EXIT_EVIDENCE_STATE_INVALID".to_string()])?;
+        add_legacy_first_exit_evidence(
+            &mut evidence,
+            &binding.ramp_id,
+            &format!("n:{}", binding.motorway_node_id),
+            support_state,
+        )?;
+    }
+    for decision in support_decisions.decisions.iter() {
+        let Some(item) = inventory_exit(&decision.ramp_id) else {
+            continue;
+        };
+        let support_state = parse_endpoint_support_state(&decision.support_state)
+            .ok_or_else(|| vec!["RELATION_EXIT_EVIDENCE_STATE_INVALID".to_string()])?;
+        if item.support_state.as_deref() != Some(decision.support_state.as_str()) {
+            return Err(vec!["RELATION_EXIT_EVIDENCE_STATE_CONFLICT".to_string()]);
+        }
+        if let Some(binding) = &decision.binding {
+            if binding.ramp_id != decision.ramp_id {
+                return Err(vec!["RELATION_EXIT_EVIDENCE_RAMP_MISMATCH".to_string()]);
+            }
+            add_legacy_first_exit_evidence(
+                &mut evidence,
+                &decision.ramp_id,
+                &format!("n:{}", binding.motorway_node_id),
+                support_state,
+            )?;
+        }
+        if let Some(candidate_evidence) = &decision.binding_candidate_evidence {
+            let inverse = &candidate_evidence.ramp_id_inverse_map;
+            if inverse.ramp_id != decision.ramp_id {
+                return Err(vec!["RELATION_EXIT_EVIDENCE_RAMP_MISMATCH".to_string()]);
+            }
+            let candidate = bindings
+                .binding_candidates
+                .iter()
+                .find(|candidate| {
+                    candidate.ramp_id == inverse.ramp_id
+                        && candidate.candidate_id == inverse.candidate_id
+                })
+                .ok_or_else(|| {
+                    vec!["RELATION_EXIT_EVIDENCE_BINDING_CANDIDATE_MISSING".to_string()]
+                })?;
+            if candidate.status != candidate_evidence.status {
+                return Err(vec!["RELATION_EXIT_EVIDENCE_STATE_CONFLICT".to_string()]);
+            }
+            add_legacy_first_exit_evidence(
+                &mut evidence,
+                &decision.ramp_id,
+                &candidate_evidence.mainline_node_id,
+                support_state,
+            )?;
+        }
+    }
+    for candidate in bindings.binding_candidates.iter().filter(|candidate| {
+        candidate.route_evidence.route_id == membership.route_id
+            && candidate.route_evidence.direction == membership.direction
+    }) {
+        let item = inventory_exit(&candidate.ramp_id)
+            .ok_or_else(|| vec!["RELATION_EXIT_EVIDENCE_INVENTORY_MISSING".to_string()])?;
+        let support_state = parse_endpoint_support_state(&candidate.status)
+            .ok_or_else(|| vec!["RELATION_EXIT_EVIDENCE_STATE_INVALID".to_string()])?;
+        if item.support_state.as_deref() != Some(candidate.status.as_str()) {
+            return Err(vec!["RELATION_EXIT_EVIDENCE_STATE_CONFLICT".to_string()]);
+        }
+        if candidate.directed_segments.is_empty() {
+            return Err(vec!["RELATION_EXIT_EVIDENCE_PLACEMENT_MISSING".to_string()]);
+        }
+        for segment in &candidate.directed_segments {
+            add_legacy_first_exit_evidence(
+                &mut evidence,
+                &candidate.ramp_id,
+                &segment.from_node_id,
+                support_state,
+            )?;
+        }
+    }
+    let edge_map = graph
+        .edges
+        .iter()
+        .map(|edge| (edge.id.as_str(), edge))
+        .collect::<BTreeMap<_, _>>();
+    for pair in adjacency.pairs.iter().filter(|pair| {
+        pair.pair_kind == BillingPairAdjacencyKind::LegacyRing
+            && pair.review_status == BillingPairAdjacencyReviewStatus::Reviewed
+            && pair.route_id == membership.route_id
+            && pair.direction == membership.direction
+    }) {
+        let Some(BillingPairAdjacencyRoutePlan::SameNode {
+            exit_approach_edge_ids,
+            ..
+        }) = pair.route_plan.as_ref()
+        else {
+            return Err(vec!["RELATION_EXIT_EVIDENCE_ROUTE_PLAN_MISSING".to_string()]);
+        };
+        let first_edge_id = exit_approach_edge_ids
+            .first()
+            .ok_or_else(|| vec!["RELATION_EXIT_EVIDENCE_PLACEMENT_MISSING".to_string()])?;
+        let edge = edge_map
+            .get(first_edge_id.as_str())
+            .ok_or_else(|| vec!["RELATION_EXIT_EVIDENCE_EDGE_NOT_FOUND".to_string()])?;
+        let item = inventory_exit(&pair.exit_ramp_id)
+            .ok_or_else(|| vec!["RELATION_EXIT_EVIDENCE_INVENTORY_MISSING".to_string()])?;
+        let support_state = item
+            .support_state
+            .as_deref()
+            .and_then(parse_endpoint_support_state)
+            .ok_or_else(|| vec!["RELATION_EXIT_EVIDENCE_STATE_INVALID".to_string()])?;
+        add_legacy_first_exit_evidence(
+            &mut evidence,
+            &pair.exit_ramp_id,
+            &edge.from,
+            support_state,
+        )?;
+    }
+    evidence.sort_by(|left, right| {
+        left.from_node_id
+            .cmp(&right.from_node_id)
+            .then_with(|| left.ramp_id.cmp(&right.ramp_id))
+    });
+    Ok(evidence)
+}
+
+fn first_exit_evidence_error(evidence: &[&LegacyFirstExitEvidence]) -> Vec<String> {
+    if evidence
+        .iter()
+        .any(|item| item.support_state == EndpointSupportState::Unsupported)
+    {
+        vec!["RELATION_FIRST_EXIT_UNSUPPORTED".to_string()]
+    } else if evidence
+        .iter()
+        .any(|item| item.support_state == EndpointSupportState::Unresolved)
+    {
+        vec!["RELATION_FIRST_EXIT_UNRESOLVED".to_string()]
+    } else {
+        vec!["RELATION_FIRST_EXIT_MISMATCH".to_string()]
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn validate_relation_constrained_legacy_first_exit(
     graph: &Graph,
     route_memberships: &[crate::route_membership::RouteMembershipIndex],
+    inventory: &RampInventoryFile,
+    bindings: &OsmRampBindingsFile,
+    support_decisions: &RampSupportDecisionsFile,
+    adjacency: &BillingPairAdjacencyFile,
     membership_id: &str,
     anchor_node_id: &str,
     initial_edge_id: &str,
@@ -771,6 +1043,14 @@ pub fn validate_relation_constrained_legacy_first_exit(
         .iter()
         .find(|membership| membership.membership_id == membership_id)
         .ok_or_else(|| vec!["RELATION_MEMBERSHIP_NOT_FOUND".to_string()])?;
+    let exit_evidence = legacy_first_exit_evidence(
+        graph,
+        inventory,
+        bindings,
+        support_decisions,
+        adjacency,
+        membership,
+    )?;
     let relation_segments = membership
         .segments
         .iter()
@@ -879,18 +1159,19 @@ pub fn validate_relation_constrained_legacy_first_exit(
         path.push(edge.id.clone());
         mainline_edge_ids.push(edge.id.clone());
         distance_meters = distance_meters.saturating_add(edge.distance_meters);
-        let prior_exit = graph.edges.iter().any(|candidate_edge| {
-            candidate_edge.kind == EdgeKind::Exit
-                && candidate_edge.from == edge.to
-                && graph.ramps.iter().any(|ramp| {
-                    ramp.edge_id == candidate_edge.id
-                        && ramp.kind == RampKind::GeneralExit
-                        && ramp.route == membership.route_id
-                        && ramp.direction == membership.direction
-                })
-        });
-        if prior_exit {
-            return Err(vec!["RELATION_FIRST_EXIT_MISMATCH".to_string()]);
+        let exits_here = exit_evidence
+            .iter()
+            .filter(|candidate| candidate.from_node_id == edge.to)
+            .collect::<Vec<_>>();
+        if edge.to == split_node_id {
+            if exits_here.len() != 1
+                || exits_here[0].ramp_id != expected_ramp_id
+                || exits_here[0].support_state != EndpointSupportState::VerifiedBound
+            {
+                return Err(first_exit_evidence_error(&exits_here));
+            }
+        } else if !exits_here.is_empty() {
+            return Err(first_exit_evidence_error(&exits_here));
         }
         if edge.to == split_node_id {
             path.extend(approach.iter().map(|edge| edge.id.clone()));

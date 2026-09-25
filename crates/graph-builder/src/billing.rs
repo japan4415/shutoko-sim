@@ -31,7 +31,7 @@ use crate::seed::{
 use crate::validate::{
     contains_forbidden_transition, has_non_empty_shutoko_loop, parse_iso_date,
     validate_billing_pair, validate_billing_pair_adjacency,
-    validate_relation_constrained_legacy_first_exit, validate_url,
+    validate_relation_constrained_legacy_first_exit, validate_url, RampSupportDecisionsFile,
     RelationConstrainedFirstExitStatus, ValidationError,
 };
 use serde::{Deserialize, Serialize};
@@ -925,6 +925,7 @@ pub fn derive_pair_candidates_from_source_bytes(
     osm_ramp_bindings: &[u8],
     billing_pair_adjacency: &[u8],
     od_tariffs: &[u8],
+    billing_pair_seed: &[u8],
 ) -> Result<PairDerivationReport, PairDerivationError> {
     let inventory =
         serde_json::from_slice::<RampInventoryFile>(ramp_inventory).map_err(|error| {
@@ -934,6 +935,10 @@ pub fn derive_pair_candidates_from_source_bytes(
         serde_json::from_slice::<OsmRampBindingsFile>(osm_ramp_bindings).map_err(|error| {
             PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
         })?;
+    let support_decisions =
+        serde_json::from_slice::<RampSupportDecisionsFile>(ramp_support_decisions).map_err(
+            |error| PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string()),
+        )?;
     let adjacency = serde_json::from_slice::<BillingPairAdjacencyFile>(billing_pair_adjacency)
         .map_err(|error| {
             PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
@@ -941,6 +946,13 @@ pub fn derive_pair_candidates_from_source_bytes(
     let tariffs = serde_json::from_slice::<OdTariffsFile>(od_tariffs).map_err(|error| {
         PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
     })?;
+    let billing_pair_seed = std::str::from_utf8(billing_pair_seed).map_err(|error| {
+        PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
+    })?;
+    let billing_pair_seed =
+        crate::seed::parse_billing_pairs_seed(billing_pair_seed).map_err(|error| {
+            PairDerivationError::new("PAIR_DERIVATION_INPUT_INVALID", error.to_string())
+        })?;
     let input_hashes = compute_pair_derivation_input_hashes(
         osm_snapshot,
         ramp_inventory,
@@ -957,6 +969,8 @@ pub fn derive_pair_candidates_from_source_bytes(
         &tariffs,
         &inventory,
         &bindings,
+        &support_decisions,
+        &billing_pair_seed,
         input_hashes,
     )
 }
@@ -1642,9 +1656,14 @@ fn route_plan_report(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn derive_legacy_route(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
+    adjacency_file: &BillingPairAdjacencyFile,
+    inventory: &RampInventoryFile,
+    bindings: &OsmRampBindingsFile,
+    support_decisions: &RampSupportDecisionsFile,
     adjacency: &BillingPairAdjacency,
     source: &str,
     source_date: &str,
@@ -1797,6 +1816,10 @@ fn derive_legacy_route(
     let first_exit = validate_relation_constrained_legacy_first_exit(
         graph,
         route_memberships,
+        inventory,
+        bindings,
+        support_decisions,
+        adjacency_file,
         membership_id,
         anchor_node_id,
         first_exit_initial_edge_id,
@@ -1940,7 +1963,7 @@ fn derive_radial_route(
         && anchor.direction == adjacency.direction
         && mandatory_lap.membership_id
             == format!("route:{}:{}", adjacency.route_id, adjacency.direction);
-    let route_gate = if route_matches {
+    let mut route_gate = if route_matches {
         passed_gate()
     } else {
         gate(
@@ -1995,11 +2018,18 @@ fn derive_radial_route(
     } else {
         passed_gate()
     };
-    let promoted = if first_exit_gate.status == PairDerivationGateStatus::Passed {
-        promote_verified_radial_pair(graph, route_memberships, &seed, &resolution).ok()
-    } else {
-        None
+    let (promoted, promotion_error) = match radial_promotion(&first_exit_gate, || {
+        promote_verified_radial_pair(graph, route_memberships, &seed, &resolution)
+    }) {
+        Ok(promoted) => (promoted, None),
+        Err(error) => (None, Some(error.code())),
     };
+    if let Some(error_code) = promotion_error {
+        let mut reason_codes = route_gate.reason_codes.clone();
+        reason_codes.push("ROUTE_PLAN_RESOLUTION_FAILED".to_string());
+        reason_codes.push(error_code.to_string());
+        route_gate = gate(PairDerivationGateStatus::Failed, reason_codes);
+    }
     let (roles, full_edge_ids) = if let Some(promoted) = promoted {
         let roles = promoted
             .resolved_route_segments
@@ -2092,14 +2122,135 @@ fn derive_radial_route(
     })
 }
 
+fn legacy_seed_identity_gate(
+    graph: &Graph,
+    adjacency: &BillingPairAdjacency,
+    inventory: &RampInventoryFile,
+    billing_pair_seed: &ParsedBillingPairsSeed,
+) -> PairDerivationGate {
+    if adjacency.pair_kind == BillingPairAdjacencyKind::RadialReturn
+        || (adjacency.review_status == BillingPairAdjacencyReviewStatus::Blocked
+            && adjacency.route_plan.is_none())
+    {
+        return passed_gate();
+    }
+    let Some(seed) = billing_pair_seed
+        .legacy_pairs()
+        .into_iter()
+        .find(|seed| seed.id == adjacency.pair_id)
+    else {
+        return gate(
+            PairDerivationGateStatus::Failed,
+            ["LEGACY_SEED_IDENTITY_MISSING"],
+        );
+    };
+    let mut reason_codes = Vec::new();
+    let route_prefix = format!(
+        "bp:{}-{}:",
+        adjacency.route_id.to_ascii_lowercase(),
+        adjacency.direction
+    );
+    let ramp_prefix = format!(
+        "ramp:{}-{}:",
+        adjacency.route_id.to_ascii_lowercase(),
+        adjacency.direction
+    );
+    if !adjacency.pair_id.starts_with(&route_prefix)
+        || !adjacency.entry_ramp_id.starts_with(&ramp_prefix)
+        || !adjacency.exit_ramp_id.starts_with(&ramp_prefix)
+    {
+        reason_codes.push("LEGACY_SEED_PAIR_ID_MISMATCH");
+    }
+    if seed.vehicle_profile != graph.vehicle_profile {
+        reason_codes.push("LEGACY_SEED_VEHICLE_PROFILE_MISMATCH");
+    }
+    if Some(seed.entry_osm_way_id) != adjacency.entry_osm_way_id {
+        reason_codes.push("LEGACY_SEED_ENTRY_OSM_WAY_MISMATCH");
+    }
+    if Some(seed.exit_osm_way_id) != adjacency.exit_osm_way_id {
+        reason_codes.push("LEGACY_SEED_EXIT_OSM_WAY_MISMATCH");
+    }
+    if seed.entry_name.as_deref() != Some(adjacency.entry_name.as_str())
+        || seed.exit_name.as_deref() != Some(adjacency.exit_name.as_str())
+    {
+        reason_codes.push("LEGACY_SEED_NAME_MISMATCH");
+    }
+    let entry_inventory = inventory
+        .ramps
+        .iter()
+        .find(|ramp| ramp.ramp_id == adjacency.entry_ramp_id);
+    let exit_inventory = inventory
+        .ramps
+        .iter()
+        .find(|ramp| ramp.ramp_id == adjacency.exit_ramp_id);
+    let entry_identity_matches = entry_inventory.is_some_and(|ramp| {
+        ramp.kind == crate::model::RampKind::GeneralEntry
+            && ramp.route == adjacency.route_id
+            && ramp.direction == adjacency.direction
+            && adjacency
+                .entry_name
+                .strip_suffix("入口")
+                .is_some_and(|name| name == ramp.facility_name)
+    });
+    let exit_identity_matches = exit_inventory.is_some_and(|ramp| {
+        ramp.kind == crate::model::RampKind::GeneralExit
+            && ramp.route == adjacency.route_id
+            && ramp.direction == adjacency.direction
+            && adjacency
+                .exit_name
+                .strip_suffix("出口")
+                .is_some_and(|name| name == ramp.facility_name)
+    });
+    if !entry_identity_matches || !exit_identity_matches {
+        reason_codes.push("LEGACY_SEED_RAMP_IDENTITY_MISMATCH");
+    }
+    let anchor_matches = match adjacency.route_plan.as_ref() {
+        Some(BillingPairAdjacencyRoutePlan::SameNode { anchor_node_id, .. }) => {
+            seed.anchor_osm_node_id.to_string() == anchor_node_id.strip_prefix("n:").unwrap_or("")
+        }
+        _ => false,
+    };
+    if !anchor_matches {
+        reason_codes.push("LEGACY_SEED_ROUTE_PLAN_MISMATCH");
+    }
+    if reason_codes.is_empty() {
+        passed_gate()
+    } else {
+        gate(PairDerivationGateStatus::Failed, reason_codes)
+    }
+}
+
+fn merge_failed_gate(target: &mut PairDerivationGate, source: PairDerivationGate) {
+    if source.status == PairDerivationGateStatus::Failed {
+        target.status = PairDerivationGateStatus::Failed;
+        target.reason_codes.extend(source.reason_codes);
+        target.reason_codes.sort();
+        target.reason_codes.dedup();
+    }
+}
+
+fn radial_promotion<T, E>(
+    first_exit_gate: &PairDerivationGate,
+    promote: impl FnOnce() -> Result<T, E>,
+) -> Result<Option<T>, E> {
+    if first_exit_gate.status == PairDerivationGateStatus::Passed {
+        promote().map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn derive_candidate(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
+    adjacency_file: &BillingPairAdjacencyFile,
     adjacency: &BillingPairAdjacency,
     tariffs: &OdTariffsFile,
     inventory: &RampInventoryFile,
     bindings: &OsmRampBindingsFile,
+    support_decisions: &RampSupportDecisionsFile,
+    billing_pair_seed: &ParsedBillingPairsSeed,
     bound_evidence: &[BoundRampEvidence],
     source: &str,
     source_date: &str,
@@ -2128,6 +2279,10 @@ fn derive_candidate(
         BillingPairAdjacencyKind::LegacyRing => derive_legacy_route(
             graph,
             route_memberships,
+            adjacency_file,
+            inventory,
+            bindings,
+            support_decisions,
             adjacency,
             source,
             source_date,
@@ -2144,13 +2299,33 @@ fn derive_candidate(
             &exit,
         )?,
     };
-    let official_gate = match adjacency.review_status {
+    let route_roles_resolved = route.report.resolved_roles.len() == 4
+        && route
+            .report
+            .resolved_roles
+            .iter()
+            .zip([
+                PairDerivationRouteRole::EntryApproach,
+                PairDerivationRouteRole::MandatoryLap,
+                PairDerivationRouteRole::ReturnCorridor,
+                PairDerivationRouteRole::ExitApproach,
+            ])
+            .all(|(role, expected)| {
+                role.role == expected
+                    && role.status == PairDerivationGateStatus::Passed
+                    && role.edge_ids_sha256.is_some()
+            });
+    let mut official_gate = match adjacency.review_status {
         BillingPairAdjacencyReviewStatus::Reviewed => passed_gate(),
         BillingPairAdjacencyReviewStatus::Blocked => gate(
             PairDerivationGateStatus::Unresolved,
             adjacency.unresolved_reasons.clone(),
         ),
     };
+    merge_failed_gate(
+        &mut official_gate,
+        legacy_seed_identity_gate(graph, adjacency, inventory, billing_pair_seed),
+    );
     let (tariff, tariff_gate) = tariff_report(
         tariffs,
         &adjacency.pair_id,
@@ -2178,7 +2353,8 @@ fn derive_candidate(
         &gates.tariff_assignment,
     ]
     .iter()
-    .all(|gate| gate.status == PairDerivationGateStatus::Passed);
+    .all(|gate| gate.status == PairDerivationGateStatus::Passed)
+        && route_roles_resolved;
     let mut rejection_reasons = gates
         .official_adjacency
         .reason_codes
@@ -2192,6 +2368,9 @@ fn derive_candidate(
         .chain(gates.tariff_assignment.reason_codes.iter())
         .cloned()
         .collect::<Vec<_>>();
+    if !route_roles_resolved {
+        rejection_reasons.push("ROUTE_PLAN_ROLES_UNRESOLVED".to_string());
+    }
     if gates.first_exit.status != PairDerivationGateStatus::Passed
         && !rejection_reasons
             .iter()
@@ -2246,13 +2425,16 @@ fn derive_candidate(
     Ok((candidate, route.membership_ids))
 }
 
-pub fn derive_pair_candidates(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn derive_pair_candidates(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
     adjacency: &BillingPairAdjacencyFile,
     tariffs: &OdTariffsFile,
     inventory: &RampInventoryFile,
     bindings: &OsmRampBindingsFile,
+    support_decisions: &RampSupportDecisionsFile,
+    billing_pair_seed: &ParsedBillingPairsSeed,
     input_hashes: PairDerivationInputHashes,
 ) -> Result<PairDerivationReport, PairDerivationError> {
     let computed_route_membership_hash =
@@ -2283,6 +2465,17 @@ pub fn derive_pair_candidates(
         bound_ramp_evidence_from_inventory(graph, inventory, bindings).map_err(|error| {
             PairDerivationError::new("PAIR_DERIVATION_BINDING_INVALID", error.to_string())
         })?;
+    let legacy_c1_seed_count = billing_pair_seed
+        .legacy_pairs()
+        .into_iter()
+        .filter(|seed| seed.id.starts_with("bp:c1-"))
+        .count();
+    if legacy_c1_seed_count != 8 {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_LEGACY_C1_SEED_COUNT_MISMATCH",
+            format!("expected 8 legacy C1 seed pairs, got {legacy_c1_seed_count}"),
+        ));
+    }
     let mut ordered = adjacency.pairs.iter().collect::<Vec<_>>();
     ordered.sort_by(|left, right| left.pair_id.cmp(&right.pair_id));
     let mut candidates = Vec::with_capacity(ordered.len());
@@ -2291,10 +2484,13 @@ pub fn derive_pair_candidates(
         let (candidate, membership_ids) = derive_candidate(
             graph,
             route_memberships,
+            adjacency,
             pair,
             tariffs,
             inventory,
             bindings,
+            support_decisions,
+            billing_pair_seed,
             &bound_evidence,
             &adjacency.source,
             &adjacency.source_date,
@@ -2307,6 +2503,18 @@ pub fn derive_pair_candidates(
                 .push((candidate.pair_id.clone(), route_resolved));
         }
         candidates.push(candidate);
+    }
+    let candidate_pair_ids = candidates
+        .iter()
+        .map(|candidate| candidate.pair_id.as_str())
+        .collect::<HashSet<_>>();
+    for seed in billing_pair_seed.legacy_pairs() {
+        if seed.id.starts_with("bp:c1-") && !candidate_pair_ids.contains(seed.id.as_str()) {
+            return Err(PairDerivationError::new(
+                "PAIR_DERIVATION_LEGACY_SEED_IDENTITY_MISSING",
+                format!("legacy C1 seed {} has no derived candidate", seed.id),
+            ));
+        }
     }
     let mut relation_manifest = membership_candidates
         .into_iter()
@@ -2380,6 +2588,13 @@ pub fn derive_pair_candidates(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verified_first_exit_propagates_radial_promotion_failure() {
+        let error = radial_promotion(&passed_gate(), || Err::<(), _>("promotion failed"))
+            .expect_err("promotion failure must not be discarded");
+        assert_eq!(error, "promotion failed");
+    }
 
     #[test]
     fn real_radial_seed_candidates_match_audited_binding_evidence() {

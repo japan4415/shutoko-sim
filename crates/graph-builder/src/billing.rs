@@ -1273,21 +1273,24 @@ fn relation_mainline_lap(
         .map(|edge| (edge.id.as_str(), edge))
         .collect::<HashMap<_, _>>();
     let ordered = &segment.ordered_edge_ids;
-    if ordered.is_empty()
-        || ordered.windows(2).any(|window| {
-            edge_map
-                .get(window[0].as_str())
-                .map(|edge| edge.to.as_str())
-                != edge_map
-                    .get(window[1].as_str())
-                    .map(|edge| edge.from.as_str())
-        })
-        || edge_map
-            .get(ordered.last().unwrap().as_str())
+    let (Some(first), Some(last)) = (ordered.first(), ordered.last()) else {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_RELATION_MAINLINE_NOT_CYCLIC",
+            format!(
+                "membership {} has an empty mainline",
+                membership.membership_id
+            ),
+        ));
+    };
+    if ordered.windows(2).any(|window| {
+        edge_map
+            .get(window[0].as_str())
             .map(|edge| edge.to.as_str())
             != edge_map
-                .get(ordered.first().unwrap().as_str())
+                .get(window[1].as_str())
                 .map(|edge| edge.from.as_str())
+    }) || edge_map.get(last.as_str()).map(|edge| edge.to.as_str())
+        != edge_map.get(first.as_str()).map(|edge| edge.from.as_str())
     {
         return Err(PairDerivationError::new(
             "PAIR_DERIVATION_RELATION_MAINLINE_NOT_CYCLIC",
@@ -1311,15 +1314,11 @@ fn relation_mainline_lap(
         })?;
     let mut lap = ordered[start..].to_vec();
     lap.extend_from_slice(&ordered[..start]);
-    if edge_map
-        .get(lap.first().unwrap().as_str())
-        .map(|edge| edge.from.as_str())
-        != Some(anchor_node_id)
-        || edge_map
-            .get(lap.last().unwrap().as_str())
-            .map(|edge| edge.to.as_str())
-            != Some(anchor_node_id)
-    {
+    let lap_boundary_matches = lap.first().zip(lap.last()).is_some_and(|(first, last)| {
+        edge_map.get(first.as_str()).map(|edge| edge.from.as_str()) == Some(anchor_node_id)
+            && edge_map.get(last.as_str()).map(|edge| edge.to.as_str()) == Some(anchor_node_id)
+    });
+    if !lap_boundary_matches {
         return Err(PairDerivationError::new(
             "PAIR_DERIVATION_LAP_BOUNDARY_MISMATCH",
             format!(

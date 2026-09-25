@@ -785,6 +785,9 @@ pub fn validate_relation_constrained_legacy_first_exit(
     if exit_approach_edge_ids.is_empty() {
         return Err(vec!["RELATION_EXIT_APPROACH_MISSING".to_string()]);
     }
+    if exit_approach_edge_ids.iter().collect::<HashSet<_>>().len() != exit_approach_edge_ids.len() {
+        return Err(vec!["RELATION_EXIT_APPROACH_REPEATS_EDGE".to_string()]);
+    }
     let edge_map = graph
         .edges
         .iter()
@@ -876,6 +879,19 @@ pub fn validate_relation_constrained_legacy_first_exit(
         path.push(edge.id.clone());
         mainline_edge_ids.push(edge.id.clone());
         distance_meters = distance_meters.saturating_add(edge.distance_meters);
+        let prior_exit = graph.edges.iter().any(|candidate_edge| {
+            candidate_edge.kind == EdgeKind::Exit
+                && candidate_edge.from == edge.to
+                && graph.ramps.iter().any(|ramp| {
+                    ramp.edge_id == candidate_edge.id
+                        && ramp.kind == RampKind::GeneralExit
+                        && ramp.route == membership.route_id
+                        && ramp.direction == membership.direction
+                })
+        });
+        if prior_exit {
+            return Err(vec!["RELATION_FIRST_EXIT_MISMATCH".to_string()]);
+        }
         if edge.to == split_node_id {
             path.extend(approach.iter().map(|edge| edge.id.clone()));
             path.extend(bound_segment.ordered_edge_ids.iter().cloned());
@@ -904,19 +920,6 @@ pub fn validate_relation_constrained_legacy_first_exit(
                 distance_meters,
                 reason_codes: Vec::new(),
             });
-        }
-        let prior_exit = graph.edges.iter().any(|candidate_edge| {
-            candidate_edge.kind == EdgeKind::Exit
-                && candidate_edge.from == edge.to
-                && graph.ramps.iter().any(|ramp| {
-                    ramp.edge_id == candidate_edge.id
-                        && ramp.kind == RampKind::GeneralExit
-                        && ramp.route == membership.route_id
-                        && ramp.direction == membership.direction
-                })
-        });
-        if prior_exit {
-            return Err(vec!["RELATION_FIRST_EXIT_MISMATCH".to_string()]);
         }
     }
     Err(vec!["RELATION_EXIT_APPROACH_NOT_REACHED".to_string()])

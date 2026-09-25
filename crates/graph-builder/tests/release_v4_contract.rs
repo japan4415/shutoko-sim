@@ -411,7 +411,7 @@ fn routing_core_reads_the_generated_graph_and_the_legacy_release() {
     assert_eq!(checked_in_manifest["tariffModelVersion"], 1);
     assert_eq!(
         shutoko_graph_builder::compute_sha256(checked_in.as_bytes()),
-        sha256(&graph),
+        sha256(graph.as_bytes()),
         "the checked-in all-real-v4 graph must be byte identical to a fresh build"
     );
     shutoko_routing_core::prepare_json(&checked_in, "{}")

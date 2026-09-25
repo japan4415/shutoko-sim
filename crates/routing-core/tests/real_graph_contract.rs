@@ -97,7 +97,19 @@ fn real_graph_deserialization_and_schema_validation() {
     assert!(wire["routeMemberships"].as_array().is_some());
     let prepared = prepare_json(real_graph_str(), "{}").expect("schema 4 graph must prepare");
     assert_eq!(prepared.graph().schema_version, 4);
-    assert_eq!(prepared.route_memberships().len(), 46);
+    // all-real-v4 は全 route relation を cover するため、双方向 46 件に 7 件の
+    // forward membership が加わる（pair-candidates.json の relationManifest と一致）。
+    assert_eq!(prepared.route_memberships().len(), 53);
+    assert_eq!(
+        wire["billingPairs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|pair| pair["pairEligibility"]["status"] == json!("verified_one_section_ahead"))
+            .count(),
+        9,
+        "9 verified pairs (7 legacyRing + 2 radialReturn); only bp:c1-outer:shibakoen-iikura stays unverified (conditional public way)"
+    );
     let g = real_graph();
     assert_eq!(g.schema_version, 2);
     assert_eq!(g.release_id, "all-real-v4");
@@ -1767,7 +1779,7 @@ fn tokyo_wide_narrow_window_reports_nearest_tier_time_window() {
 
 #[test]
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
-fn meguro_station_all_real_v3_end_to_end_contract() {
+fn meguro_station_all_real_v4_end_to_end_contract() {
     let graph = real_graph();
     assert_eq!(graph.billing_pairs.len(), 8);
     assert!(graph
@@ -2077,5 +2089,256 @@ fn meguro_explicit_ramp_pair_matches_coordinate_route() {
             serde_json::to_string(&repeat).unwrap(),
             "explicit meguro {min}-{max}: repeated calls must be deterministic"
         );
+    }
+}
+
+/// 4 地点（東京駅・目黒駅・銀座・六本木）の探索結果を実 engine で固定する。
+///
+/// 期待値は fixtures/representative-locations.json に置き、Web の実 WASM 統合テスト
+/// （web/test/integration-wasm.test.ts）と同じ項目を engine 側でも照合する。
+/// - 最寄りの入口（access node と距離、候補の入口ランプ）
+/// - 候補の件数・並び・pairId / pairKind
+/// - 。”（`tariffStatus` と 2026-10 改定をまたぐ 2 時点の金額・規則 ID・証拠 ID・適用期間）
+/// - 推薦バッジが先頭 1 件だけであること
+/// - 同じ入力の再実行がバイト完全一致（並びも決定的）であること
+#[test]
+#[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
+fn representative_locations_release_v4_contract() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../../fixtures/representative-locations.json"
+    ))
+    .expect("representative-locations.json must be valid JSON");
+    let graph_json = real_graph_str();
+    let wire: Value = serde_json::from_str(graph_json).unwrap();
+    assert_eq!(
+        wire["releaseId"], fixture["releaseId"],
+        "release id must match the fixture"
+    );
+    let limits_json = format!("{{\"maxAccessDistanceMeters\":{WIDE_ACCESS_CAP_METERS}}}");
+    let windows = fixture["pricingWindows"].as_array().unwrap();
+    assert_eq!(
+        windows.len(),
+        2,
+        "the 2026-10 revision must be pinned on both sides"
+    );
+
+    for location in fixture["locations"].as_array().unwrap() {
+        let id = location["id"].as_str().unwrap();
+        let label = location["label"].as_str().unwrap();
+        for window in windows {
+            let window_id = window["id"].as_str().unwrap();
+            let pricing_at = window["pricingAt"].as_str().unwrap();
+            let where_ = format!("{label} ({id}) {window_id}");
+            let request_json = serde_json::json!({
+                "requestId": format!("representative-{id}-{window_id}"),
+                "releaseId": fixture["releaseId"],
+                "origin": location["origin"],
+                "minMinutes": location["minMinutes"],
+                "maxMinutes": location["maxMinutes"],
+                "vehicleProfile": fixture["vehicleProfile"],
+                "pricingAt": pricing_at,
+            })
+            .to_string();
+            let result_json = search_json(graph_json, &request_json, &limits_json)
+                .unwrap_or_else(|e| panic!("{where_}: search must succeed: {e}"));
+            let repeat_json = search_json(graph_json, &request_json, &limits_json)
+                .unwrap_or_else(|e| panic!("{where_}: repeat search must succeed: {e}"));
+            assert_eq!(
+                result_json, repeat_json,
+                "{where_}: search must be deterministic"
+            );
+            let result: Value = serde_json::from_str(&result_json).unwrap();
+
+            assert_eq!(result["status"], location["expectedStatus"], "{where_}");
+            assert_eq!(result["reason"], location["expectedReason"], "{where_}");
+            assert_eq!(
+                result["rankingMode"], location["expectedRankingMode"],
+                "{where_}"
+            );
+            let candidates = result["candidates"].as_array().unwrap();
+            assert_eq!(
+                candidates.len() as u64,
+                location["expectedCandidateCount"].as_u64().unwrap(),
+                "{where_}: candidate count"
+            );
+            assert!(
+                candidates.len() <= 3,
+                "{where_}: displayed candidates are capped at 3"
+            );
+
+            // 最寄りの入口: access node と距離（1 m 許容）。
+            let nearest = &result["nearestAccess"];
+            assert_eq!(
+                nearest["nodeId"], location["expectedNearestAccess"]["nodeId"],
+                "{where_}: nearest access node"
+            );
+            let distance = nearest["distanceMeters"].as_f64().unwrap();
+            let expected_distance = location["expectedNearestAccess"]["distanceMeters"]
+                .as_f64()
+                .unwrap();
+            assert!(
+                (distance - expected_distance).abs() <= 1.0,
+                "{where_}: nearest access distance {distance} vs {expected_distance}"
+            );
+
+            let expected_candidates = location["expectedCandidates"].as_array().unwrap();
+            let mut badges = 0usize;
+            for (index, expected) in expected_candidates.iter().enumerate() {
+                let candidate = &candidates[index];
+                let pair_id = expected["pairId"].as_str().unwrap();
+                let where_pair = format!("{where_} {pair_id}");
+                assert_eq!(candidate["toll"]["billingPairId"], pair_id, "{where_pair}");
+                assert_eq!(
+                    candidate["pairKind"], expected["pairKind"],
+                    "{where_pair}: pair kind"
+                );
+                assert_eq!(
+                    candidate["entry"]["rampId"], expected["entryRampId"],
+                    "{where_pair}: 候補は最寄りの入口 tier からしか返らない"
+                );
+                assert_eq!(
+                    candidate["exit"]["rampId"], expected["exitRampId"],
+                    "{where_pair}"
+                );
+                assert_eq!(
+                    candidate["entry"]["name"], expected["entryName"],
+                    "{where_pair}"
+                );
+                assert_eq!(
+                    candidate["exit"]["name"], expected["exitName"],
+                    "{where_pair}"
+                );
+                assert_eq!(
+                    candidate["duration"]["shutokoSeconds"], expected["shutokoSeconds"],
+                    "{where_pair}: shutoko seconds"
+                );
+                assert_eq!(
+                    candidate["duration"]["planSeconds"], expected["planSeconds"],
+                    "{where_pair}: plan seconds"
+                );
+
+                // 推薦バッジは fixture が指定した 1 件だけ。
+                let recommended = expected["recommended"].as_bool().unwrap();
+                let has_badge = candidate["reasons"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|reason| reason == "BEST_TIME_PER_YEN" || reason == "BEST_SHUTOKO_TIME");
+                assert_eq!(has_badge, recommended, "{where_pair}: recommended badge");
+                if has_badge {
+                    badges += 1;
+                }
+                // 商品対象外の候補は推薦しない。
+                assert!(
+                    !has_badge || is_product_eligible(candidate),
+                    "{where_pair}: an ineligible candidate must not be recommended"
+                );
+
+                // 2026-10 改定をまたぐ料金。規則 ID と証拠 ID は期間ごとに別レコード。
+                let pricing = expected["pricing"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|item| item["window"] == window["id"])
+                    .unwrap_or_else(|| panic!("{where_pair}: pricing window is missing"));
+                assert_eq!(
+                    candidate["tariffStatus"], pricing["tariffStatus"],
+                    "{where_pair}: tariff status"
+                );
+                assert_eq!(
+                    candidate["toll"]["amountYen"], pricing["amountYen"],
+                    "{where_pair}"
+                );
+                assert_eq!(
+                    candidate["toll"]["billingDistanceMeters"], pricing["billingDistanceMeters"],
+                    "{where_pair}: billing distance"
+                );
+                assert_eq!(
+                    candidate["toll"]["effectiveFrom"], pricing["effectiveFrom"],
+                    "{where_pair}: effective from"
+                );
+                assert_eq!(
+                    candidate["toll"]["effectiveTo"], pricing["effectiveTo"],
+                    "{where_pair}: effective to"
+                );
+                if pricing["tariffStatus"] == "priced" {
+                    assert_eq!(
+                        candidate["toll"]["fareLabel"], fixture["fareLabel"],
+                        "{where_pair}"
+                    );
+                    assert_eq!(
+                        candidate["toll"]["assignmentId"], expected["assignmentId"],
+                        "{where_pair}"
+                    );
+                    assert_eq!(
+                        candidate["toll"]["ruleId"], pricing["ruleId"],
+                        "{where_pair}"
+                    );
+                    assert_eq!(
+                        candidate["toll"]["evidenceId"], pricing["evidenceId"],
+                        "{where_pair}"
+                    );
+                    assert_eq!(
+                        candidate["toll"]["distanceEvidenceId"], pricing["distanceEvidenceId"],
+                        "{where_pair}"
+                    );
+                    assert_eq!(
+                        candidate["toll"]["tollSource"], fixture["tollSource"],
+                        "{where_pair}"
+                    );
+                } else {
+                    // 確定しない候補は金額も証拠も持たない。
+                    for field in [
+                        "amountYen",
+                        "assignmentId",
+                        "ruleId",
+                        "evidenceId",
+                        "tollSource",
+                    ] {
+                        assert!(
+                            candidate["toll"][field].is_null(),
+                            "{where_pair}: {field} must stay null for an unpriced candidate"
+                        );
+                    }
+                }
+            }
+
+            // 推薦バッジは表示範囲に高々 1 件。
+            assert!(
+                badges <= 1,
+                "{where_}: at most one candidate is recommended"
+            );
+
+            // time_per_yen の主規則（円あたり首都高走行時間）は降順。並びは決定的。
+            if result["rankingMode"] == "time_per_yen" {
+                let efficiency = candidates
+                    .iter()
+                    .map(|candidate| {
+                        let amount = candidate["toll"]["amountYen"].as_f64().unwrap();
+                        assert!(amount > 0.0, "{where_}: priced candidates need an amount");
+                        candidate["duration"]["shutokoSeconds"].as_f64().unwrap() / amount
+                    })
+                    .collect::<Vec<_>>();
+                for pair in efficiency.windows(2) {
+                    assert!(
+                        pair[0] >= pair[1],
+                        "{where_}: shutoko seconds per yen must not increase: {efficiency:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// 商品対象の判定（UI と同じ規則）。topologyOnly と未検証の radial は対象外で、
+/// legacyRing は常に対象。
+fn is_product_eligible(candidate: &Value) -> bool {
+    match candidate["pairKind"].as_str().unwrap_or("legacyRing") {
+        "topologyOnly" => false,
+        "radialReturn" => {
+            candidate["eligibilityStatus"] == "verified_one_section_ahead"
+                && candidate["loopValidationStatus"] == "declared_route_validated"
+        }
+        _ => true,
     }
 }

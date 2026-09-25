@@ -2,9 +2,49 @@
 
 ## 現在地
 
-Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v3` は graph schema 4 で、22,824 nodes / 22,987 edges、46 route memberships、8 legacy billing pairs、証拠がある232件だけを exact directed segment に bind する。残るactive一般139件は理由・証拠付き `unsupported`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み232件は `routable` 197件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。課金ペア8件中、両端点を一意なverified-boundランプへ逆引きできる2件だけを `verified` とし、残る6件は `unverified` とする。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
+Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v4` は graph schema 4 で、22,824 nodes / 22,987 edges、53 route memberships（双方向 46 件に全 route relation cover の forward 7 件）、legacy 8 件と radial 2 件からなる 10 billing pairs（`billingPairsVersion=v3`、`tariffModelVersion=1`）、証拠がある232件だけを exact directed segment に bind する。残るactive一般139件は理由・証拠付き `unsupported`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み232件は `routable` 197件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。この10件の `pairEligibility` は `verified_one_section_ahead` 9 件と `unverified` 1 件（`bp:c1-outer:shibakoen-iikura`、public way が access:conditional）である。manifest は graph.json / ramps.json / snap-index.json に加え od-tariffs.json（料金表 v3 のカタログと同一）と pair-candidates.json（導出レポート）を結ぶ。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
 
 このverified pairの縮退と最近接入口優先（Issue #57）は正確性優先の設計である。座標検索は最近接の構造的に利用可能な入口 tier を優先し、東京駅の現行実測は最近接の宝町入口 tier（`ramp:c1-inner:takaracho-entry` → `ramp:c1-outer:takaracho-exit`）が選択され、`minPlanSeconds=1,610`秒（約26.83分）となる。15〜26分窓では最近接 tier の周回が上限を超えるため `no_candidates/TIME_WINDOW` 診断となり、15〜27分窓で成立する。また、30〜60分窓でも同一の宝町 tier から計画時間 2,795 秒・周回 20,205 m の候補が成立する（料金は未算出、`shutoko_time`）。release real-graph test はこの26/27分境界および30〜60分窓の成立、さらに目黒代表座標での最近接目黒ランプ選択を明示的に固定する。
+
+## `all-real-v4` の atomic release runbook
+
+**重要: 順序は (1) 2026-10 版 PDF の人手レビュー → (2) R2 投入と read-back（payload と engine.json が先、manifest.json は最後） → (3) Web/Worker の allowlist 切替と確認 → (4) main への merge。10 月版 PDF のセルと金額の確認が済むまで merge しない。R2 への投入と read-back が終わるまで merge も production deploy もしない。**
+
+この節が `all-real-v4` 公開の正本である。旧 `all-real-v3` の runbook は下に残す（切り戻し時に参照する）。今回の実装作業では R2 への upload、Wrangler deploy、Cloudflare への書き込みを行わない。
+
+1. **2026-10 版 PDF の OD セルと金額の人手レビューを先に終える**:
+   2026-10 版の料金表 PDF を `phase1-research-cache/ryoukin-kaitei_toll_rates.pdf` に配置し、`data/od-tariffs.json` が持つ 10 OD（page 3 の C1 8 セル、page 4 の 2 号目黒→天現寺 1 セル）それぞれのセル名・距離・金額と、PDF の行・列・値を突き合わせる。一致が 1 件でも外れれば立ち止まる。このレビューが揃うまで以降の工程に進まない。
+2. **同一入力で成果物を 3 回生成して決定性を確認する**:
+   ```bash
+   bash scripts/generate-fixtures.sh
+   snapshot_dir="$(mktemp -d)"
+   SHUTOKO_RELEASE_ID=all-real-v4 bash scripts/generate-fixtures.sh "${snapshot_dir}"
+   diff --no-dereference -r "${snapshot_dir}" fixtures/generated
+   git diff --exit-code -- fixtures/generated
+   ```
+   `manifest.json` の `releaseId=all-real-v4`、`graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v3`、`tariffModelVersion=1`、`routeMembershipsSha256`、および 5 成果物（graph / od-tariffs / pair-candidates / ramps / snap-index）の SHA-256 と byteLength を確認する。3 回の生成バイトが一致すること。
+3. **WASM と release metadata を用意する**:
+   ```bash
+   bash scripts/build-wasm.sh
+   npm --prefix workers ci
+   npm --prefix web ci
+   npm --prefix workers run typecheck
+   npm --prefix workers test
+   npm --prefix web run typecheck
+   npm --prefix web test
+   ```
+   `engine.json` の hash は実ファイルから生成し、変更されうる固定 hash をソースコードへ追加しない。
+4. **PATH 上の wrangler を固定版と照合してから R2 へ投入する**:
+   ```bash
+   SHUTOKO_REQUIRE_PINNED_WRANGLER=1 node workers/scripts/seed-local-r2.mjs --remote
+   ```
+   seed script は wrangler を `WRANGLER_BIN` → PATH の順で解決し（`npx` フォールバックは無い）、`wrangler --version` の結果を `workers/package-lock.json` の固定版（4.131.0）と照合する。差があれば必ずログへ出す。本番投入では `SHUTOKO_REQUIRE_PINNED_WRANGLER=1` により完全一致を要求し、固定版 4.0.0 未満は機能不足として停止する。投入先は未使用の `releases/all-real-v4/` とし、既存の `manifest.json` があれば上書きを拒否する。投入順は manifest の `artifacts[]` 順（graph / od-tariffs / pair-candidates / ramps / snap-index）に WASM 4 点と `engine.json` を先に上げ、各 payload と `engine.json` を read-back して bytes・length・SHA-256 を照合し、**全件成功した後の最後に `manifest.json` を上げて read-back する**。`manifest.json` の投入前は Worker が新 release を公開しない。
+5. **Web/Worker の allowlist を同期して切替を確認する**: `web/src/worker/artifact-hashes.ts` の `DEFAULT_RELEASE_ID` と `workers/wrangler.toml` の `ALLOWED_RELEASES` に `all-real-v4` が含まれ、`all-real-v3` も許可されたままであることを確認する（`web/test/release-rollback.test.ts` が 2 つの allowlist の一致と既定の通過を検査する）。その上で manifest → engine.json → graph.json → WASM/glue の取得・hash・schema 4 照合、`billingPairsVersion=v3` と `tariffModelVersion=1` の受理、C1 legacy 回帰、そして 4 地点（東京駅・目黒駅・銀座・六本木）の探索結果（`fixtures/representative-locations.json`）と基本料金（割引適用前）の表示を E2E で再実行する。9 件の `verified_one_section_ahead`（legacy 7 + radial 2）と未確定 1 件（`bp:c1-outer:shibakoen-iikura`）が想定どおりであること、2026-10 改定をまたぐ単価（目黒→天現寺 790 円 → 860 円、C1 は 300 円のまま）を確認する。
+6. **merge する**: 1 から 5 がすべて成功した後に限り PR を merge し、続けて Cloudflare Workers と Web の production deploy を別 Manager が行う。main への merge/push が Cloudflare Builds の自動 deploy を誘発する構成では、`releases/all-real-v4/manifest.json` の存在と read-back 済みを manual approval / feature gate として確認する。radial の Google Maps handoff は実機検証（Issue #72）が完了するまで `enabled=false` を維持する。
+
+### `all-real-v4` の rollback
+
+`all-real-v4` の公開後に異常を確認した場合は、R2 上の旧 release manifest を上書き・削除せず、Web の `DEFAULT_RELEASE_ID` と Worker の `ALLOWED_RELEASES` を**同時に** `all-real-v3` へ戻す rollback commit を作成して再 deploy する。Worker の allowlist には `all-real-v3` を残したままにする（allowlist を狭めない）ため、戻すのは Web の既定 1 行である。実行時に release pointer を切り替える運用は行わない。rollback 後も `all-real-v3` の manifest → engine → graph → WASM/glue の hash/schema、C1 legacy 回帰、4 地点の探索結果を再確認し、古い Web/Worker cache が新しい release 参照を保持していないことを確認する。Web の reader は `billingPairsVersion` の v2（`all-real-v3`）と v3（`all-real-v4`）のどちらでも読むため、既定を戻すだけで確実に前の版へ戻る。
 
 ## `all-real-v3` の atomic release runbook
 

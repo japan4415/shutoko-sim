@@ -403,10 +403,18 @@ fn routing_core_reads_the_generated_graph_and_the_legacy_release() {
     let graph = fs::read_to_string(dir.join("graph.json")).unwrap();
     shutoko_routing_core::prepare_json(&graph, "{}")
         .expect("the generated all-real-v4 graph must be readable by routing-core");
-    let legacy = fs::read_to_string(repo_root().join("fixtures/generated/graph.json")).unwrap();
-    let legacy_manifest = read_json(&repo_root().join("fixtures/generated/manifest.json"));
-    assert_eq!(legacy_manifest["billingPairsVersion"], "v2");
-    shutoko_routing_core::prepare_json(&legacy, "{}")
-        .expect("the checked-in all-real-v3 graph must stay readable");
+    // 公開 fixture 自体も同じ build の all-real-v4 であり、reader が一致すること。
+    let checked_in = fs::read_to_string(repo_root().join("fixtures/generated/graph.json")).unwrap();
+    let checked_in_manifest = read_json(&repo_root().join("fixtures/generated/manifest.json"));
+    assert_eq!(checked_in_manifest["releaseId"], "all-real-v4");
+    assert_eq!(checked_in_manifest["billingPairsVersion"], "v3");
+    assert_eq!(checked_in_manifest["tariffModelVersion"], 1);
+    assert_eq!(
+        shutoko_graph_builder::compute_sha256(checked_in.as_bytes()),
+        sha256(&graph),
+        "the checked-in all-real-v4 graph must be byte identical to a fresh build"
+    );
+    shutoko_routing_core::prepare_json(&checked_in, "{}")
+        .expect("the checked-in all-real-v4 graph must be readable by routing-core");
     let _ = fs::remove_dir_all(dir);
 }

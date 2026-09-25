@@ -10,6 +10,7 @@
       "exitName": "宝町出口",
       "anchorOsmNodeId": 499831338,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c1-outer:kandabashi-takaracho",
       "status": "verified",
       "oneSectionAheadVerified": true,
       "provenance": {
@@ -22,6 +23,10 @@
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -33,18 +38,23 @@
       "exitName": "代官町出口",
       "anchorOsmNodeId": 577255571,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c1-outer:kasumigaseki-daikancho",
       "status": "verified",
       "oneSectionAheadVerified": true,
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-10",
-        "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff source (verified 2026-09-10): Kasumigaseki to Daikancho toll distance 12.4km and base ETC fare 570 yen (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf, page 3, row 霞が関, column 代官町). The post-2026-10 OD cell remains unpriced until manual review of the revision tariff table (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+        "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff source (verified 2026-09-10): Kasumigaseki to Daikancho toll distance 12.4km and base ETC fare 570 yen (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf, page 3, row 霞が関, column 代官町). The 2026-10 OD cell is verified from the official revision tariff table (2.3km, 300 yen; page 3, row 霞が関, column 代官町)."
       },
       "prices": [
         {
           "amountYen": 570,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -56,6 +66,7 @@
       "exitName": "芝公園出口",
       "anchorOsmNodeId": 31254160,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c1-outer:ginza-shibakoen",
       "status": "verified",
       "oneSectionAheadVerified": true,
       "provenance": {
@@ -68,6 +79,10 @@
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -79,6 +94,7 @@
       "exitName": "飯倉出口",
       "anchorOsmNodeId": 31296971,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c1-outer:shibakoen-iikura",
       "status": "unverified",
       "oneSectionAheadVerified": false,
       "provenance": {
@@ -91,6 +107,10 @@
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -102,6 +122,7 @@
       "exitName": "芝公園出口",
       "anchorOsmNodeId": 264877748,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c1-inner:kasumigaseki-shibakoen",
       "status": "verified",
       "oneSectionAheadVerified": true,
       "provenance": {
@@ -114,6 +135,10 @@
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -125,6 +150,7 @@
       "exitName": "霞が関出口",
       "anchorOsmNodeId": 297945194,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c1-inner:daikancho-kasumigaseki",
       "status": "verified",
       "oneSectionAheadVerified": true,
       "provenance": {
@@ -137,6 +163,10 @@
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -148,6 +178,7 @@
       "exitName": "汐留出口",
       "anchorOsmNodeId": 31295430,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c1-inner:shibakoen-shiodome",
       "status": "verified",
       "oneSectionAheadVerified": true,
       "provenance": {
@@ -160,6 +191,10 @@
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -171,6 +206,7 @@
       "exitName": "神田橋出口",
       "anchorOsmNodeId": 1891818143,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c1-inner:takaracho-kandabashi",
       "status": "verified",
       "oneSectionAheadVerified": true,
       "provenance": {
@@ -183,6 +219,10 @@
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -191,6 +231,7 @@
       "pairKind": "radialReturn",
       "routePlanVersion": 1,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:2:meguro-tengenji",
       "entryEndpoint": {
         "rampId": "ramp:2-inbound:meguro-entry",
         "name": "目黒入口",
@@ -327,13 +368,17 @@
             "amountYen": 790,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 860,
+            "effectiveFrom": "2026-09-30T15:00:00Z"
           }
         ]
       },
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-25",
-        "notes": "目黒入口、C1 inner の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円。2026-10以降は未確認PDFのためunpricedとする。"
+        "notes": "目黒入口、C1 inner の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円、2026-10版公式セルの19.4km/860円。"
       }
     },
     {
@@ -341,6 +386,7 @@
       "pairKind": "radialReturn",
       "routePlanVersion": 1,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:2:meguro-tengenji",
       "entryEndpoint": {
         "rampId": "ramp:2-inbound:meguro-entry",
         "name": "目黒入口",
@@ -477,13 +523,17 @@
             "amountYen": 790,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 860,
+            "effectiveFrom": "2026-09-30T15:00:00Z"
           }
         ]
       },
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-25",
-        "notes": "目黒入口、C1 outer の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円。2026-10以降は未確認PDFのためunpricedとする。"
+        "notes": "目黒入口、C1 outer の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円、2026-10版公式セルの19.4km/860円。"
       }
     }
   ]

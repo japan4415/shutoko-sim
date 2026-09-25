@@ -846,14 +846,14 @@
       "id": "bp:c1-outer:kasumigaseki-daikancho",
       "source": "https://www.shutoko.jp/use/network/map/",
       "sourceDate": "2026-09-10",
-      "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff source (verified 2026-09-10): Kasumigaseki to Daikancho toll distance 12.4km and base ETC fare 570 yen (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf, page 3, row 霞が関, column 代官町). The post-2026-10 OD cell remains unpriced until manual review of the revision tariff table (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+      "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff source (verified 2026-09-10): Kasumigaseki to Daikancho toll distance 12.4km and base ETC fare 570 yen (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf, page 3, row 霞が関, column 代官町). The 2026-10 OD cell is verified from the official revision tariff table (2.3km, 300 yen; page 3, row 霞が関, column 代官町)."
     }
   ],
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "9fc034cabf811da0f07eebc5067ec803b07531eba8398fc18d70a7edf06332d7",
-      "byteLength": 7352409
+      "sha256": "a97f8876fa0a8060a548b685e5c92ab1f2eda8ad680a134105d9b67b321098b4",
+      "byteLength": 7413419
     },
     {
       "path": "ramps.json",

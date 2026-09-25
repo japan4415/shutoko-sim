@@ -5,7 +5,7 @@
 //! - `data/osm-ramp-bindings.json` (explicit OSM way/node bindings)
 //! - `data/od-tariffs.json` (official ETC OD tariffs and distance rules)
 
-use crate::model::{EdgeKind, Graph, OdTariff, Ramp, RampKind};
+use crate::model::{EdgeKind, Graph, OdTariff, Price, Ramp, RampKind};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -149,6 +149,7 @@ pub struct FirstPublicRoadConnectionDiagnosticMismatch {
     pub declared_ground_node_id: Option<i64>,
     pub resolved_ground_node_id: Option<i64>,
     pub resolved_ground_way_id: Option<i64>,
+    pub resolved_ground_way_ids: Vec<i64>,
     pub reason_codes: Vec<String>,
 }
 
@@ -1031,6 +1032,7 @@ pub fn validate_osm_ramp_bindings_against_osm(
                     support_state: crate::seed::EndpointSupportState::Unresolved,
                     ground_node_id: None,
                     ground_way_id: None,
+                    ground_way_ids: Vec::new(),
                     ground_way_name: None,
                     reason_codes: vec!["CANDIDATE_EVIDENCE_ERROR".to_string()],
                     notes: errors,
@@ -1428,7 +1430,7 @@ pub fn audit_osm_ramp_binding_candidate_against_osm(
     }
     if !early_surface_nodes.is_empty() {
         reason_codes.insert("EARLY_SURFACE_CONNECTION".to_string());
-        reason_codes.insert("MULTIPLE_GROUND_CONNECTION_CANDIDATES".to_string());
+        reason_codes.insert(crate::topology::REASON_AMBIGUOUS_GROUND_ENDPOINT.to_string());
     }
 
     let declared_codes = candidate
@@ -2199,6 +2201,7 @@ fn diagnostic_mismatch(
         declared_ground_node_id,
         resolved_ground_node_id: resolution.ground_node_id,
         resolved_ground_way_id: resolution.ground_way_id,
+        resolved_ground_way_ids: resolution.ground_way_ids.clone(),
         reason_codes,
     }
 }
@@ -2253,6 +2256,7 @@ pub fn audit_first_public_road_connections(
                 support_state: crate::seed::EndpointSupportState::Unresolved,
                 ground_node_id: None,
                 ground_way_id: None,
+                ground_way_ids: Vec::new(),
                 ground_way_name: None,
                 reason_codes: vec!["BINDING_CHAIN_UNAVAILABLE".to_string()],
                 notes: Vec::new(),
@@ -2307,6 +2311,7 @@ pub fn audit_first_public_road_connections(
                 support_state: crate::seed::EndpointSupportState::Unresolved,
                 ground_node_id: None,
                 ground_way_id: None,
+                ground_way_ids: Vec::new(),
                 ground_way_name: None,
                 reason_codes: vec!["CANDIDATE_EVIDENCE_ERROR".to_string()],
                 notes: errors,
@@ -2625,22 +2630,9 @@ pub fn bind_ramps_to_graph(
 }
 
 /// Applies OD tariffs and annotates existing billing pairs in graph.
-pub fn apply_od_tariffs_to_graph(graph: &mut Graph, tariffs: &OdTariffsFile) {
+pub fn apply_od_tariffs_to_graph(graph: &mut Graph, tariffs: &OdTariffsFile) -> Result<(), String> {
     graph.od_tariffs = tariffs.verified_od_pairs.clone();
 
-    // Map (entry_ramp_id, exit_ramp_id) -> billing_distance_meters
-    let tariff_dist: HashMap<(&str, &str), u64> = tariffs
-        .verified_od_pairs
-        .iter()
-        .map(|t| {
-            (
-                (t.entry_ramp_id.as_str(), t.exit_ramp_id.as_str()),
-                t.billing_distance_meters,
-            )
-        })
-        .collect();
-
-    // Map edge_id -> ramp_id from graph.ramps
     let mut edge_to_ramps: HashMap<&str, Vec<&str>> = HashMap::new();
     for ramp in &graph.ramps {
         edge_to_ramps
@@ -2649,29 +2641,140 @@ pub fn apply_od_tariffs_to_graph(graph: &mut Graph, tariffs: &OdTariffsFile) {
             .push(ramp.id.as_str());
     }
 
-    for p in &mut graph.billing_pairs {
-        if p.entry_ramp_id.is_none() {
-            if let Some(rids) = edge_to_ramps.get(p.entry_id.as_str()) {
+    for pair in &mut graph.billing_pairs {
+        if pair.entry_ramp_id.is_none() {
+            if let Some(rids) = edge_to_ramps.get(pair.entry_id.as_str()) {
                 if let [rid] = rids.as_slice() {
-                    p.entry_ramp_id = Some((*rid).to_string());
+                    pair.entry_ramp_id = Some((*rid).to_string());
                 }
             }
         }
-        if p.exit_ramp_id.is_none() {
-            if let Some(rids) = edge_to_ramps.get(p.exit_id.as_str()) {
+        if pair.exit_ramp_id.is_none() {
+            if let Some(rids) = edge_to_ramps.get(pair.exit_id.as_str()) {
                 if let [rid] = rids.as_slice() {
-                    p.exit_ramp_id = Some((*rid).to_string());
+                    pair.exit_ramp_id = Some((*rid).to_string());
                 }
             }
         }
-        if p.billing_distance_meters.is_none() {
-            if let (Some(e_rid), Some(x_rid)) = (&p.entry_ramp_id, &p.exit_ramp_id) {
-                if let Some(&dist) = tariff_dist.get(&(e_rid.as_str(), x_rid.as_str())) {
-                    p.billing_distance_meters = Some(dist);
+        if tariffs.version < 3 {
+            if let (Some(entry), Some(exit)) = (&pair.entry_ramp_id, &pair.exit_ramp_id) {
+                if let Some(tariff) = tariffs
+                    .verified_od_pairs
+                    .iter()
+                    .find(|tariff| tariff.entry_ramp_id == *entry && tariff.exit_ramp_id == *exit)
+                {
+                    pair.billing_distance_meters = Some(tariff.billing_distance_meters);
                 }
             }
+            continue;
+        }
+        let assignment = if let Some(assignment_id) = pair.assignment_id.as_deref() {
+            tariffs
+                .assignments
+                .iter()
+                .find(|assignment| assignment.assignment_id == assignment_id)
+        } else {
+            None
+        }
+        .or_else(|| {
+            tariffs.assignments.iter().find(|assignment| {
+                assignment
+                    .pair_ids
+                    .iter()
+                    .any(|pair_id| pair_id == &pair.id)
+            })
+        })
+        .ok_or_else(|| {
+            format!(
+                "billing pair {} has no unique v3 tariff assignment",
+                pair.id
+            )
+        })?;
+        if !assignment
+            .pair_ids
+            .iter()
+            .any(|pair_id| pair_id == &pair.id)
+            || pair
+                .entry_ramp_id
+                .as_deref()
+                .is_some_and(|entry| entry != assignment.entry_ramp_id)
+            || pair
+                .exit_ramp_id
+                .as_deref()
+                .is_some_and(|exit| exit != assignment.exit_ramp_id)
+        {
+            return Err(format!(
+                "billing pair {} does not match tariff assignment {}",
+                pair.id, assignment.assignment_id
+            ));
+        }
+        pair.assignment_id = Some(assignment.assignment_id.clone());
+        pair.billing_distance_meters = Some(assignment.billing_distance_meters);
+        pair.prices = assignment
+            .prices
+            .iter()
+            .filter(|price| price.status == "priced" && price.amount_yen.is_some())
+            .map(|price| Price {
+                amount_yen: price.amount_yen.unwrap_or_default(),
+                effective_from: price.effective_from.clone(),
+                effective_to: price.effective_to.clone(),
+            })
+            .collect();
+    }
+    Ok(())
+}
+
+pub fn tariff_overrides_from_catalog(
+    tariffs: &OdTariffsFile,
+) -> HashMap<String, shutoko_routing_core::Tariff> {
+    let mut overrides = HashMap::new();
+    for assignment in &tariffs.assignments {
+        let prices: Vec<Price> = assignment
+            .prices
+            .iter()
+            .filter(|price| price.status == "priced" && price.amount_yen.is_some())
+            .map(|price| Price {
+                amount_yen: price.amount_yen.unwrap_or_default(),
+                effective_from: price.effective_from.clone(),
+                effective_to: price.effective_to.clone(),
+            })
+            .collect();
+        let first = assignment
+            .prices
+            .iter()
+            .find(|price| price.status == "priced" && price.amount_yen.is_some());
+        let tariff = shutoko_routing_core::Tariff {
+            status: if first.is_some() {
+                shutoko_routing_core::TariffStatus::Priced
+            } else {
+                shutoko_routing_core::TariffStatus::Unpriced
+            },
+            amount_yen: first.and_then(|price| price.amount_yen),
+            observed_base_fare_yen: first.and_then(|price| price.observed_base_fare_yen),
+            observed_distance_meters: first.and_then(|price| price.observed_distance_meters),
+            billing_distance_meters: first
+                .and_then(|price| price.observed_distance_meters)
+                .or(Some(assignment.billing_distance_meters)),
+            effective_from: first.map(|price| price.effective_from.clone()),
+            effective_to: first.and_then(|price| price.effective_to.clone()),
+            prices,
+            assignment_id: Some(assignment.assignment_id.clone()),
+            rule_id: first.map(|price| price.rule_id.clone()),
+            evidence_id: first.map(|price| price.evidence_id.clone()),
+            distance_evidence_id: first.map(|price| price.distance_evidence_id.clone()),
+            fare_label: Some(shutoko_routing_core::PRODUCT_FARE_LABEL.to_string()),
+            vehicle_class: Some(shutoko_routing_core::PRODUCT_VEHICLE_CLASS.to_string()),
+            payment_method: Some(shutoko_routing_core::PRODUCT_PAYMENT_METHOD.to_string()),
+            fare_basis: Some(shutoko_routing_core::PRODUCT_FARE_BASIS.to_string()),
+            discounts_excluded: true,
+            toll_source: first
+                .map(|_| shutoko_routing_core::OFFICIAL_DISTANCE_RULE_SOURCE.to_string()),
+        };
+        for pair_id in &assignment.pair_ids {
+            overrides.insert(pair_id.clone(), tariff.clone());
         }
     }
+    overrides
 }
 
 /// Classifies every bound endpoint against the directed Shutoko topology.
@@ -3887,6 +3990,47 @@ mod tests {
         assert!(revised_rule.source_refs.iter().any(|source| {
             source.document_id.as_deref() == Some("shutoko-2026-10-revision-material")
         }));
+        let revision_expected = [
+            ("c1-outer:kandabashi-takaracho", 1_700, 300),
+            ("c1-outer:kasumigaseki-daikancho", 2_300, 300),
+            ("c1-outer:ginza-shibakoen", 3_400, 300),
+            ("c1-outer:shibakoen-iikura", 1_600, 300),
+            ("c1-inner:kasumigaseki-shibakoen", 3_700, 300),
+            ("c1-inner:daikancho-kasumigaseki", 2_300, 300),
+            ("c1-inner:shibakoen-shiodome", 2_400, 300),
+            ("c1-inner:takaracho-kandabashi", 1_700, 300),
+            ("c1-inner:ginza-shintomicho", 400, 300),
+            ("2:meguro-tengenji", 19_400, 860),
+        ];
+        assert_eq!(revision_expected.len(), tariffs.assignments.len());
+        for (od_key, distance_meters, amount_yen) in revision_expected {
+            let assignment = tariffs
+                .assignments
+                .iter()
+                .find(|assignment| assignment.od_key == od_key)
+                .unwrap();
+            let price = assignment
+                .prices
+                .iter()
+                .find(|price| price.rule_id == "shutoko-etc-ordinary-2026-10")
+                .unwrap();
+            let evidence = tariffs
+                .distance_evidence
+                .iter()
+                .find(|evidence| evidence.evidence_id == price.evidence_id)
+                .unwrap();
+            assert_eq!(
+                evidence.page,
+                if od_key == "2:meguro-tengenji" { 4 } else { 3 }
+            );
+            assert_eq!(evidence.distance_meters, distance_meters);
+            assert_eq!(price.amount_yen, Some(amount_yen));
+            assert_eq!(price.observed_distance_meters, Some(distance_meters));
+            assert_eq!(
+                calculate_versioned_tariff_yen(distance_meters, revised_rule),
+                amount_yen
+            );
+        }
         assert_eq!(calculate_versioned_tariff_yen(3_900, revised_rule), 300);
         assert_eq!(calculate_versioned_tariff_yen(4_000, revised_rule), 310);
     }

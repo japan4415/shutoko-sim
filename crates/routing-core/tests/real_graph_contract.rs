@@ -26,6 +26,7 @@ fn real_graph() -> Graph {
         serde_json::from_str(real_graph_str()).expect("schema 4 graph JSON must deserialize");
     wire["schemaVersion"] = json!(2);
     wire.as_object_mut().unwrap().remove("routeMemberships");
+    wire.as_object_mut().unwrap().remove("odTariffsV3");
     wire["billingPairs"]
         .as_array_mut()
         .unwrap()
@@ -135,7 +136,7 @@ fn real_graph_deserialization_and_schema_validation() {
                 .iter()
                 .map(|price| price.amount_yen)
                 .collect::<Vec<_>>(),
-            vec![expected_amount],
+            vec![expected_amount, 300],
             "billing pair {} prices must match the reviewed tariff records",
             pair.id
         );
@@ -144,6 +145,8 @@ fn real_graph_deserialization_and_schema_validation() {
             pair.prices[0].effective_to.as_deref(),
             Some("2026-09-30T15:00:00Z")
         );
+        assert_eq!(pair.prices[1].amount_yen, 300);
+        assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
         if pair.status == shutoko_routing_core::VerificationStatus::Verified {
             assert!(
                 pair.entry_ramp_id.is_some() && pair.exit_ramp_id.is_some(),
@@ -425,20 +428,26 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
     let res_at_boundary = search(&g, &make_request("2026-09-30T15:00:00Z"), &limits)
         .expect("search must succeed at boundary");
     assert_eq!(res_at_boundary.status, "ok");
-    assert_eq!(res_at_boundary.ranking_mode, "shutoko_time");
+    assert_eq!(res_at_boundary.ranking_mode, "time_per_yen");
     let c = legacy(&res_at_boundary.candidates[0]);
-    assert_eq!(c.toll.amount_yen, None);
-    assert_eq!(c.toll.effective_from, None);
+    assert_eq!(c.toll.amount_yen, Some(300));
+    assert_eq!(
+        c.toll.effective_from.as_deref(),
+        Some("2026-09-30T15:00:00Z")
+    );
     assert_eq!(c.toll.effective_to, None);
 
     // 3. Post-revision (e.g. 2026-10-01T00:00:00Z) -> post-revision record
     let res_post = search(&g, &make_request("2026-10-01T00:00:00Z"), &limits)
         .expect("search must succeed post-revision");
     assert_eq!(res_post.status, "ok");
-    assert_eq!(res_post.ranking_mode, "shutoko_time");
+    assert_eq!(res_post.ranking_mode, "time_per_yen");
     let c = legacy(&res_post.candidates[0]);
-    assert_eq!(c.toll.amount_yen, None);
-    assert_eq!(c.toll.effective_from, None);
+    assert_eq!(c.toll.amount_yen, Some(300));
+    assert_eq!(
+        c.toll.effective_from.as_deref(),
+        Some("2026-09-30T15:00:00Z")
+    );
     assert_eq!(c.toll.effective_to, None);
 
     // 4. Prior to 2022-03-31T15:00:00Z (e.g. 2022-01-01T00:00:00Z) -> unknown toll, fall back to shutoko_time
@@ -793,7 +802,7 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
                 .iter()
                 .map(|price| price.amount_yen)
                 .collect::<Vec<_>>(),
-            vec![expected_amount],
+            vec![expected_amount, 300],
             "pair {} prices must match the reviewed tariff records",
             pair.id
         );
@@ -1435,8 +1444,8 @@ fn coordinate_request(request_id: &str, lat: f64, lon: f64, max_minutes: u64) ->
 /// 八王子駅 (35.6556, 139.3388) / 神田橋入口 (35.6896727, 139.7644248) の
 /// 全線実データ境界。Issue #57 の最近接入口優先により、いずれの地点も
 /// 最寄りの routable 入口 tier (日野・八王子: K7横浜青葉、立川: 4号高井戸)
-/// から動的 OD 候補が成立する。立川は OD 料金表 (300 円) を持つため
-/// `time_per_yen`、日野・八王子は料金未算出の `shutoko_time` になる。
+/// から動的 OD 候補が成立する。立川は deprecated assignment のため未計算、
+/// 日野・八王子も料金未算出なのでいずれも `shutoko_time` になる。
 #[test]
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn tokyo_wide_coordinate_diagnostics_contract() {
@@ -1546,7 +1555,7 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         tachikawa_min_plan <= FOUR_HOURS_SECONDS,
         "tachikawa minPlanSeconds ({tachikawa_min_plan}) must fit the 240 min window"
     );
-    // 最寄り4号高井戸入口はOD料金表を持つが、dynamic ODのため商品cohortには入らない。
+    // 最寄り4号高井戸入口は deprecated assignment のため、dynamic OD として未計算とする。
     let tachikawa_candidate = topology_only(&tachikawa_wide.candidates[0]);
     assert_eq!(
         tachikawa_candidate.entry.ramp_id.as_deref(),
@@ -1556,10 +1565,10 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         tachikawa_candidate.exit.ramp_id.as_deref(),
         Some("ramp:4-outbound:takaido-exit")
     );
-    assert_eq!(tachikawa_candidate.toll.amount_yen, Some(300));
+    assert_eq!(tachikawa_candidate.toll.amount_yen, None);
     assert_eq!(
         tachikawa_candidate.tariff_status,
-        shutoko_routing_core::TariffStatus::Priced
+        shutoko_routing_core::TariffStatus::Unpriced
     );
     assert_eq!(
         tachikawa_candidate.eligibility_status,

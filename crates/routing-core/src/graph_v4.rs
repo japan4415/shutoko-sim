@@ -654,7 +654,7 @@ impl LegacyRingBillingPair {
                 effective_from: None,
                 effective_to: None,
                 prices: pair.prices.clone(),
-                assignment_id: None,
+                assignment_id: pair.assignment_id.clone(),
                 rule_id: None,
                 evidence_id: None,
                 distance_evidence_id: None,
@@ -723,6 +723,7 @@ impl LegacyRingBillingPair {
             anchor_node_id: anchor.node_id.clone(),
             entry_to_anchor_edge_ids: self.entry_to_anchor_edge_ids.clone(),
             anchor_to_exit_edge_ids: self.anchor_to_exit_edge_ids.clone(),
+            assignment_id: self.tariff.assignment_id.clone(),
             status: match self.pair_eligibility.status {
                 PairEligibilityStatus::VerifiedOneSectionAhead => VerificationStatus::Verified,
                 PairEligibilityStatus::Unverified | PairEligibilityStatus::TopologyOnly => {

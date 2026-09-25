@@ -717,8 +717,12 @@ impl TariffCatalog {
                             || price.amount_yen != Some(evidence.observed_base_fare_yen)
                             || price.observed_base_fare_yen != Some(evidence.observed_base_fare_yen)
                             || price.observed_distance_meters != Some(evidence.distance_meters)
-                            || calculate_tariff_yen(assignment.billing_distance_meters, rule)?
-                                != evidence.observed_base_fare_yen
+                            || calculate_tariff_yen(
+                                price
+                                    .observed_distance_meters
+                                    .unwrap_or(assignment.billing_distance_meters),
+                                rule,
+                            )? != evidence.observed_base_fare_yen
                         {
                             return Err(error(
                                 "TARIFF_PRICE_EVIDENCE_MISMATCH",
@@ -977,7 +981,10 @@ impl TariffResolver {
                 .iter()
                 .find(|rule| rule.rule_id == price.rule_id)
                 .ok_or_else(|| error("TARIFF_RULE_UNKNOWN", "price references an unknown rule"))?;
-            let amount = calculate_tariff_yen(assignment.billing_distance_meters, rule)?;
+            let billing_distance_meters = price
+                .observed_distance_meters
+                .unwrap_or(assignment.billing_distance_meters);
+            let amount = calculate_tariff_yen(billing_distance_meters, rule)?;
             if amount != price.amount_yen.unwrap_or_default() {
                 return Err(error(
                     "TARIFF_PRICE_CALCULATION_MISMATCH",
@@ -987,7 +994,7 @@ impl TariffResolver {
             return Ok(ResolvedTariff {
                 status: TariffResolutionStatus::Priced,
                 amount_yen: price.amount_yen,
-                billing_distance_meters: Some(assignment.billing_distance_meters),
+                billing_distance_meters: Some(billing_distance_meters),
                 effective_from: Some(price.effective_from.clone()),
                 effective_to: price.effective_to.clone(),
                 rule_id: Some(price.rule_id.clone()),

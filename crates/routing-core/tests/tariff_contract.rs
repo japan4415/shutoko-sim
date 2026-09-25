@@ -46,7 +46,7 @@ fn reads_the_reviewed_tariff_v3_catalog() {
 }
 
 #[test]
-fn half_open_boundary_and_pending_evidence_are_not_replaced_by_a_fallback() {
+fn half_open_boundary_selects_the_verified_revision_price_and_distance() {
     let resolver = TariffResolver::new(read_tariff_v3(&catalog_json()).unwrap()).unwrap();
     let before = resolver
         .resolve_od(
@@ -74,9 +74,45 @@ fn half_open_boundary_and_pending_evidence_are_not_replaced_by_a_fallback() {
             &TariffScope::product(),
         )
         .unwrap();
-    assert_eq!(at_boundary.amount_yen, None);
-    assert_eq!(at_boundary.billing_distance_meters, None);
-    assert_eq!(at_boundary.evidence_id, None);
+    assert_eq!(at_boundary.amount_yen, Some(300));
+    assert_eq!(at_boundary.billing_distance_meters, Some(2300));
+    assert_eq!(
+        at_boundary.rule_id.as_deref(),
+        Some("shutoko-etc-ordinary-2026-10")
+    );
+    assert_eq!(
+        at_boundary.evidence_id.as_deref(),
+        Some("evidence:2026-10:p03:c1-kasumigaseki-daikancho")
+    );
+}
+
+#[test]
+fn revision_resolves_the_meguro_tengenji_distance_and_formula_result() {
+    let resolver = TariffResolver::new(read_tariff_v3(&catalog_json()).unwrap()).unwrap();
+    let resolved = resolver
+        .resolve_od(
+            "ramp:2-inbound:meguro-entry",
+            "ramp:2-outbound:tengenji-exit",
+            "2026-10-01T00:00:00Z",
+            &TariffScope::product(),
+        )
+        .unwrap();
+    assert_eq!(resolved.amount_yen, Some(860));
+    assert_eq!(resolved.billing_distance_meters, Some(19_400));
+    assert_eq!(
+        resolved.evidence_id.as_deref(),
+        Some("evidence:2026-10:p04:2-meguro-tengenji")
+    );
+}
+
+#[test]
+fn deprecated_yoga_and_takaido_pairs_are_not_legacy_prices() {
+    let catalog: serde_json::Value = serde_json::from_str(&catalog_json()).unwrap();
+    let pairs = catalog["verifiedOdPairs"].as_array().unwrap();
+    assert!(!pairs.iter().any(|pair| {
+        pair["entryRampId"] == "ramp:3-inbound:yoga-entry"
+            || pair["entryRampId"] == "ramp:4-inbound:takaido-entry"
+    }));
 }
 
 #[test]
@@ -247,7 +283,7 @@ fn catalog_rejects_same_fare_evidence_from_another_od() {
 }
 
 #[test]
-fn catalog_rejects_pending_evidence_from_another_od() {
+fn catalog_rejects_evidence_from_another_od() {
     let mut catalog: serde_json::Value = serde_json::from_str(&catalog_json()).unwrap();
     let target = catalog["assignments"]
         .as_array_mut()
@@ -255,9 +291,8 @@ fn catalog_rejects_pending_evidence_from_another_od() {
         .iter_mut()
         .find(|assignment| assignment["assignmentId"] == "assignment:c1-outer:ginza-shibakoen")
         .unwrap();
-    target["prices"][1]["evidenceId"] = json!("pending:2026-10:od:c1-outer:kandabashi-takaracho");
-    target["prices"][1]["distanceEvidenceId"] =
-        json!("pending:2026-10:od:c1-outer:kandabashi-takaracho");
+    target["prices"][1]["evidenceId"] = json!("evidence:2026-10:p03:c1-ginza-shintomicho");
+    target["prices"][1]["distanceEvidenceId"] = json!("evidence:2026-10:p03:c1-ginza-shintomicho");
 
     let error = read_tariff_v3(&catalog.to_string()).unwrap_err();
     assert_eq!(error.code, "TARIFF_PRICE_EVIDENCE_MISMATCH");

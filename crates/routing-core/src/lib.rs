@@ -213,6 +213,8 @@ pub struct BillingPair {
     pub anchor_to_exit_edge_ids: Vec<String>,
     pub status: VerificationStatus,
     pub vehicle_profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignment_id: Option<String>,
     #[serde(default)]
     pub prices: Vec<Price>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

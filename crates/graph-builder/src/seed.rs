@@ -36,6 +36,8 @@ pub struct BillingPairSeed {
     pub exit_name: Option<String>,
     pub anchor_osm_node_id: i64,
     pub vehicle_profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignment_id: Option<String>,
     pub status: VerificationStatus,
     pub one_section_ahead_verified: bool,
     pub provenance: SeedProvenance,
@@ -91,6 +93,7 @@ pub struct RadialReturnBillingPairSeed {
     pub pair_kind: PairKind,
     pub route_plan_version: RoutePlanVersion,
     pub vehicle_profile: String,
+    pub assignment_id: String,
     pub entry_endpoint: DiagnosticEndpoint,
     pub exit_endpoint: DiagnosticEndpoint,
     pub route_plan: DiagnosticRoutePlan,
@@ -963,17 +966,22 @@ mod tests {
         assert!(legacy_pairs
             .iter()
             .filter(|pair| pair.id != "bp:c1-outer:kasumigaseki-daikancho")
-            .all(|pair| pair.prices.len() == 1
+            .all(|pair| pair.prices.len() == 2
                 && pair.prices.iter().all(|price| price.amount_yen == 300)));
         let corrected_pair = legacy_pairs
             .iter()
             .find(|pair| pair.id == "bp:c1-outer:kasumigaseki-daikancho")
             .unwrap();
-        assert_eq!(corrected_pair.prices.len(), 1);
+        assert_eq!(corrected_pair.prices.len(), 2);
         assert_eq!(corrected_pair.prices[0].amount_yen, 570);
         assert_eq!(
             corrected_pair.prices[0].effective_to.as_deref(),
             Some("2026-09-30T15:00:00Z")
+        );
+        assert_eq!(corrected_pair.prices[1].amount_yen, 300);
+        assert_eq!(
+            corrected_pair.prices[1].effective_from,
+            "2026-09-30T15:00:00Z"
         );
 
         let radial_pairs: Vec<_> = seed
@@ -1011,7 +1019,8 @@ mod tests {
             assert_eq!(pair.tariff.status, TariffStatus::Priced);
             assert_eq!(pair.tariff.amount_yen, Some(790));
             assert_eq!(pair.tariff.billing_distance_meters, Some(19400));
-            assert_eq!(pair.tariff.prices.len(), 1);
+            assert_eq!(pair.tariff.prices.len(), 2);
+            assert_eq!(pair.tariff.prices[1].amount_yen, 860);
             assert_eq!(pair.exit_endpoint.binding_candidates.len(), 0);
             let exit_segment = &pair.exit_endpoint.directed_segments[0];
             assert_eq!(exit_segment.osm_way_ids.len(), 4);

@@ -126,7 +126,43 @@ pub struct GraphSchemaV4 {
     pub ramps: Vec<Ramp>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub od_tariffs: Vec<OdTariff>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub od_tariffs_v3: Option<serde_json::Value>,
     pub route_memberships: Vec<RouteMembershipIndex>,
+}
+
+fn clear_incomplete_v3_tariff_metadata(tariff: &mut shutoko_routing_core::Tariff) {
+    let has_v3_metadata = tariff.assignment_id.is_some()
+        || tariff.rule_id.is_some()
+        || tariff.evidence_id.is_some()
+        || tariff.distance_evidence_id.is_some()
+        || tariff.fare_label.is_some()
+        || tariff.vehicle_class.is_some()
+        || tariff.payment_method.is_some()
+        || tariff.fare_basis.is_some()
+        || tariff.toll_source.is_some();
+    let has_complete_priced_metadata = tariff.assignment_id.is_some()
+        && tariff.rule_id.is_some()
+        && tariff.evidence_id.is_some()
+        && tariff.distance_evidence_id.is_some()
+        && tariff.fare_label.is_some()
+        && tariff.vehicle_class.is_some()
+        && tariff.payment_method.is_some()
+        && tariff.fare_basis.is_some()
+        && tariff.discounts_excluded
+        && tariff.toll_source.is_some();
+    if has_v3_metadata && !has_complete_priced_metadata {
+        tariff.assignment_id = None;
+        tariff.rule_id = None;
+        tariff.evidence_id = None;
+        tariff.distance_evidence_id = None;
+        tariff.fare_label = None;
+        tariff.vehicle_class = None;
+        tariff.payment_method = None;
+        tariff.fare_basis = None;
+        tariff.discounts_excluded = false;
+        tariff.toll_source = None;
+    }
 }
 
 impl GraphSchemaV4 {
@@ -147,24 +183,46 @@ impl GraphSchemaV4 {
         route_memberships: Vec<RouteMembershipIndex>,
         radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
     ) -> Result<Self, RouteMembershipError> {
+        Self::try_from_graph_with_radial_and_catalog(
+            graph,
+            route_memberships,
+            radial_billing_pairs,
+            None,
+            HashMap::new(),
+        )
+    }
+
+    pub fn try_from_graph_with_radial_and_catalog(
+        graph: &Graph,
+        route_memberships: Vec<RouteMembershipIndex>,
+        radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+        od_tariffs_v3: Option<serde_json::Value>,
+        tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+    ) -> Result<Self, RouteMembershipError> {
         let mut billing_pairs = graph
             .billing_pairs
             .iter()
             .map(|pair| {
-                shutoko_routing_core::LegacyRingBillingPair::from_legacy(
+                let mut pair = shutoko_routing_core::LegacyRingBillingPair::from_legacy(
                     pair,
                     graph,
                     &route_memberships,
                 )
-                .map(|pair| GraphSchemaV4BillingPair::LegacyRing(Box::new(pair)))
-                .map_err(|error| RouteMembershipError::InvalidInput(error.to_string()))
+                .map_err(|error| RouteMembershipError::InvalidInput(error.to_string()))?;
+                if let Some(tariff) = tariff_overrides.get(&pair.id) {
+                    pair.tariff = tariff.clone();
+                }
+                clear_incomplete_v3_tariff_metadata(&mut pair.tariff);
+                Ok(GraphSchemaV4BillingPair::LegacyRing(Box::new(pair)))
             })
-            .collect::<Result<Vec<_>, _>>()?;
-        billing_pairs.extend(
-            radial_billing_pairs
-                .into_iter()
-                .map(|pair| GraphSchemaV4BillingPair::RadialReturn(Box::new(pair))),
-        );
+            .collect::<Result<Vec<_>, RouteMembershipError>>()?;
+        billing_pairs.extend(radial_billing_pairs.into_iter().map(|mut pair| {
+            if let Some(tariff) = tariff_overrides.get(&pair.id) {
+                pair.tariff = tariff.clone();
+            }
+            clear_incomplete_v3_tariff_metadata(&mut pair.tariff);
+            GraphSchemaV4BillingPair::RadialReturn(Box::new(pair))
+        }));
         Ok(Self {
             schema_version: 4,
             release_id: graph.release_id.clone(),
@@ -175,6 +233,7 @@ impl GraphSchemaV4 {
             forbidden_transitions: graph.forbidden_transitions.clone(),
             ramps: graph.ramps.clone(),
             od_tariffs: graph.od_tariffs.clone(),
+            od_tariffs_v3,
             route_memberships,
         })
     }
@@ -192,10 +251,28 @@ pub fn graph_schema_v4_to_deterministic_json_with_radial(
     route_memberships: &[RouteMembershipIndex],
     radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
 ) -> Result<String, serde_json::Error> {
-    let document = GraphSchemaV4::try_from_graph_with_radial(
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
+        graph,
+        route_memberships,
+        radial_billing_pairs,
+        None,
+        HashMap::new(),
+    )
+}
+
+pub fn graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+    od_tariffs_v3: Option<serde_json::Value>,
+    tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+) -> Result<String, serde_json::Error> {
+    let document = GraphSchemaV4::try_from_graph_with_radial_and_catalog(
         graph,
         route_memberships.to_vec(),
         radial_billing_pairs,
+        od_tariffs_v3,
+        tariff_overrides,
     )
     .map_err(|error| serde_json::Error::io(std::io::Error::other(error.to_string())))?;
     let mut output = serde_json::to_string_pretty(&document)?;
@@ -4171,7 +4248,7 @@ pub fn promote_verified_radial_pair(
                     effective_to: price.effective_to.clone(),
                 })
                 .collect(),
-            assignment_id: None,
+            assignment_id: Some(seed.assignment_id.clone()),
             rule_id: None,
             evidence_id: None,
             distance_evidence_id: None,

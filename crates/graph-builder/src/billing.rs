@@ -480,6 +480,7 @@ pub fn generate_billing_pair(
         anchor_to_exit_edge_ids,
         status: seed.status,
         vehicle_profile: seed.vehicle_profile.clone(),
+        assignment_id: seed.assignment_id.clone(),
         prices,
         entry_name: seed.entry_name.clone(),
         exit_name: seed.exit_name.clone(),
@@ -748,6 +749,8 @@ pub struct BillingPairAdjacency {
     pub direction: String,
     pub entry_ramp_id: String,
     pub exit_ramp_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignment_id: Option<String>,
     pub entry_name: String,
     pub exit_name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1533,6 +1536,7 @@ fn legacy_seed(
         exit_name: Some(adjacency.exit_name.clone()),
         anchor_osm_node_id,
         vehicle_profile: String::new(),
+        assignment_id: adjacency.assignment_id.clone(),
         status: VerificationStatus::Unverified,
         one_section_ahead_verified: false,
         provenance: SeedProvenance {
@@ -1626,6 +1630,10 @@ fn radial_seed(
         pair_kind: PairKind::RadialReturn,
         route_plan_version: crate::seed::RoutePlanVersion::V1,
         vehicle_profile: graph.vehicle_profile.clone(),
+        assignment_id: adjacency
+            .assignment_id
+            .clone()
+            .unwrap_or_else(|| format!("assignment:{}", adjacency.pair_id)),
         entry_endpoint,
         exit_endpoint,
         route_plan,

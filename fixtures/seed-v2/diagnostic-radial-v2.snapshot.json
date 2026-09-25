@@ -28,6 +28,7 @@
       "pairKind": "radialReturn",
       "routePlanVersion": 1,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "fixture:assignment:meguro-tengenji",
       "entryEndpoint": {
         "rampId": "ramp:2-inbound:meguro-entry",
         "name": "目黒入口",
@@ -178,6 +179,7 @@
       "pairKind": "radialReturn",
       "routePlanVersion": 1,
       "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "fixture:assignment:meguro-tengenji",
       "entryEndpoint": {
         "rampId": "ramp:2-inbound:meguro-entry",
         "name": "目黒入口",

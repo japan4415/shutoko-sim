@@ -1901,6 +1901,7 @@ fn micro_loop_exclusion_contract() {
             anchor_to_exit_edge_ids: vec!["e:loop1".into(), "e:exit".into()],
             status: VerificationStatus::Verified,
             vehicle_profile: "passenger-car-etc".into(),
+            assignment_id: None,
             prices: vec![Price {
                 amount_yen: 300,
                 effective_from: "2026-01-01T00:00:00Z".into(),
@@ -2037,6 +2038,7 @@ fn search_request_explicit_ramp_filters() {
         billing_pairs: vec![
             shutoko_routing_core::BillingPair {
                 id: "bp-1".into(),
+                assignment_id: None,
                 entry_id: "e:entry1".into(),
                 exit_id: "e:exit1".into(),
                 anchor_node_id: "n:a".into(),
@@ -2057,6 +2059,7 @@ fn search_request_explicit_ramp_filters() {
             },
             shutoko_routing_core::BillingPair {
                 id: "bp-2".into(),
+                assignment_id: None,
                 entry_id: "e:entry2".into(),
                 exit_id: "e:exit1".into(),
                 anchor_node_id: "n:a".into(),
@@ -2431,6 +2434,7 @@ mod coordinate_entry_tiers {
                 anchor_to_exit_edge_ids: vec![exit_edge.into()],
                 status: VerificationStatus::Verified,
                 vehicle_profile: PROFILE.into(),
+                assignment_id: None,
                 prices: vec![Price {
                     amount_yen: 300,
                     effective_from: "2022-03-31T15:00:00Z".into(),

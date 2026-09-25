@@ -14,6 +14,7 @@ fn generated_legacy_graph() -> Graph {
     assert_eq!(wire["schemaVersion"], 4);
     wire["schemaVersion"] = json!(2);
     wire.as_object_mut().unwrap().remove("routeMemberships");
+    wire.as_object_mut().unwrap().remove("odTariffsV3");
     wire["billingPairs"]
         .as_array_mut()
         .unwrap()
@@ -536,6 +537,7 @@ fn test_routing_core_search_integration() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -664,6 +666,7 @@ fn test_billing_pair_seed_and_pathfinding_success() {
         exit_osm_way_id: 6,
         anchor_osm_node_id: 3,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         one_section_ahead_verified: true,
         provenance: SeedProvenance {
@@ -752,6 +755,7 @@ fn test_reject_hidden_loop_in_billing_pair() {
         ],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -823,6 +827,7 @@ fn test_reject_graph_with_no_loop_from_anchor() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -857,6 +862,7 @@ fn test_forbidden_transitions_not_adopted_and_rejected() {
         exit_osm_way_id: 6,
         anchor_osm_node_id: 3,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         one_section_ahead_verified: true,
         provenance: SeedProvenance {
@@ -895,6 +901,7 @@ fn test_forbidden_transitions_not_adopted_and_rejected() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -925,6 +932,7 @@ fn test_reject_disconnected_path() {
         anchor_to_exit_edge_ids: vec!["e:w4:0:f".into(), "e:w6:0:f".into()], // e:w4 starts at n:4, but anchor is n:3!
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -964,6 +972,7 @@ fn test_reject_invalid_edge_kinds() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -993,6 +1002,7 @@ fn test_reject_invalid_prices_and_overlapping_intervals() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 0, // Invalid 0 amount!
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -1047,6 +1057,7 @@ fn test_reject_mismatched_vehicle_profile() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "heavy-truck".into(), // graph is passenger-car-etc
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -1073,6 +1084,7 @@ fn test_reject_unverified_section_marked_verified() {
         exit_osm_way_id: 6,
         anchor_osm_node_id: 3,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         one_section_ahead_verified: false, // Inconsistent with status=verified!
         provenance: SeedProvenance {
@@ -1163,6 +1175,7 @@ fn test_deterministic_byte_identical_output_two_runs() {
             exit_osm_way_id: 6,
             anchor_osm_node_id: 3,
             vehicle_profile: "passenger-car-etc".into(),
+            assignment_id: None,
             status: VerificationStatus::Verified,
             one_section_ahead_verified: true,
             provenance: SeedProvenance {
@@ -1892,6 +1905,7 @@ fn test_refutation_first_exit_mismatch_shintomicho() {
         exit_osm_way_id: 760760233,    // Shintomicho exit
         anchor_osm_node_id: 499831338, // Anchor node
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         one_section_ahead_verified: true,
         provenance: SeedProvenance {
@@ -1938,6 +1952,7 @@ fn test_provenance_url_and_date_validation() {
         exit_osm_way_id: 6,
         anchor_osm_node_id: 3,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         one_section_ahead_verified: true,
         provenance: SeedProvenance {
@@ -2316,6 +2331,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
         entry_to_anchor_edge_ids: vec!["entry".into()],
         anchor_to_exit_edge_ids: vec!["e1".into(), "e4".into(), "exit2".into()],
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         prices: vec![Price {
             amount_yen: 300,
@@ -2726,6 +2742,7 @@ fn test_refutation_counterexample_b_opus5() {
         entry_to_anchor_edge_ids: vec!["entry_e".into()],
         anchor_to_exit_edge_ids: vec!["e9".into(), "e10".into()],
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         prices: vec![Price {
             amount_yen: 300,
@@ -2762,6 +2779,7 @@ fn test_refutation_counterexample_b_opus5() {
             "e8".into(),
         ],
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         prices: vec![Price {
             amount_yen: 300,
@@ -3005,6 +3023,7 @@ fn test_refutation_counterexample_c_codex() {
             "exit2".into(),
         ],
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         prices: vec![Price {
             amount_yen: 300,
@@ -3296,6 +3315,7 @@ fn test_issue6_item2_simple_path_first_exit() {
         entry_to_anchor_edge_ids: vec!["entry_e".into()],
         anchor_to_exit_edge_ids: vec!["e4".into(), "exit_simple".into()],
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         prices: Vec::new(),
         entry_name: None,
@@ -3515,7 +3535,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
 
         assert_eq!(seed_pair.status, VerificationStatus::Verified);
         assert!(seed_pair.one_section_ahead_verified);
-        assert_eq!(seed_pair.prices.len(), 1);
+        assert_eq!(seed_pair.prices.len(), 2);
         assert_eq!(
             seed_pair.prices[0].amount_yen,
             if *expected_id == "bp:c1-outer:kasumigaseki-daikancho" {
@@ -3529,6 +3549,8 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
             seed_pair.prices[0].effective_to.as_deref(),
             Some("2026-09-30T15:00:00Z")
         );
+        assert_eq!(seed_pair.prices[1].amount_yen, 300);
+        assert_eq!(seed_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
     }
     for unverified_id in &unverified_pair_ids {
         let seed_pair = legacy_pairs
@@ -3539,9 +3561,9 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
         assert!(!seed_pair.one_section_ahead_verified);
     }
 
-    // 2. The full-network graph retains all audited pairs, but the two
-    // FIRST_EXIT_MISMATCH pairs must remain explicitly unverified so
-    // routing-core will not make them searchable.
+    // 2. The full-network graph retains all audited pairs, while the
+    // conditional Shibakoen pair remains explicitly unverified so routing-core
+    // will not make it searchable.
     let graph = generated_legacy_graph();
     assert_eq!(
         graph.billing_pairs.len(),
@@ -3557,7 +3579,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
             .unwrap_or_else(|| panic!("graph pair {} not found in graph.json", expected_id));
 
         assert_eq!(graph_pair.status, VerificationStatus::Verified);
-        assert_eq!(graph_pair.prices.len(), 1);
+        assert_eq!(graph_pair.prices.len(), 2);
         assert_eq!(
             graph_pair.prices[0].amount_yen,
             if *expected_id == "bp:c1-outer:kasumigaseki-daikancho" {
@@ -3571,6 +3593,8 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
             graph_pair.prices[0].effective_to.as_deref(),
             Some("2026-09-30T15:00:00Z")
         );
+        assert_eq!(graph_pair.prices[1].amount_yen, 300);
+        assert_eq!(graph_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
     }
     for unverified_id in &unverified_pair_ids {
         let graph_pair = graph
@@ -4584,6 +4608,8 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
         assert!(pair["pairEligibility"]["status"].is_string());
         assert_eq!(pair["loopValidation"]["status"], "declared_route_validated");
         assert!(pair["tariff"]["status"].is_string());
+        assert!(pair["tariff"]["assignmentId"].is_string());
+        assert!(pair["tariff"]["billingDistanceMeters"].is_u64());
     }
     for pair in radial_pairs {
         assert_eq!(
@@ -4591,8 +4617,18 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
             "directedJunction"
         );
         assert_eq!(pair["routePlan"]["anchor"]["arcPolicy"], "ordinaryLongArc");
+        assert_eq!(
+            pair["tariff"]["assignmentId"],
+            "assignment:2:meguro-tengenji"
+        );
         assert_eq!(pair["tariff"]["amountYen"], 790);
         assert_eq!(pair["tariff"]["billingDistanceMeters"], 19400);
+        assert_eq!(pair["tariff"]["prices"].as_array().unwrap().len(), 2);
+        assert_eq!(pair["tariff"]["prices"][1]["amountYen"], 860);
+        assert_eq!(
+            pair["tariff"]["prices"][1]["effectiveFrom"],
+            "2026-09-30T15:00:00Z"
+        );
     }
     let prepared = shutoko_routing_core::prepare_json(&graph_raw, "{}").unwrap();
     assert_eq!(prepared.graph().schema_version, 4);

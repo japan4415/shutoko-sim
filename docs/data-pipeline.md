@@ -51,7 +51,7 @@
   - `no_*`（via=node）: from エッジから to エッジへの禁止遷移ペア（長さ 2）を生成。
   - `only_*`（via=node）: via ノードにおける to 以外の代替流出エッジを自動特定し、禁止遷移ペアとして生成。
   - `via=way`（Uターン制限等）: from エッジ、via エッジ列、to エッジを連結する長さ 3 以上の禁止エッジ列を生成。
-  - `restriction:conditional`（時間帯・車種条件付き制限）: 静的道路グラフでは一意に評価できないためスキップし、標準エラー出力およびマニフェストへ記録。
+  - `restriction:conditional`（時間帯・車種条件付き制限）: 静的道路グラフでは一意に評価できないためスキップし、標準エラー出力およびマニフェストへ記録。端点resolverでは `hgv:conditional` のみ passenger-car 製品に無関係な例外として無視し、他の `*:conditional`、`oneway:conditional`、`reversible`、`alternating` は fail-closed とする。
   - `only_*`（via=way）: 静的道路グラフ生成では現時点で未サポートとし、該当関係が存在する場合はスキップしてマニフェストへ記録。
 
 ### 入口/出口ランプの分類方式
@@ -114,18 +114,16 @@
 - **根拠と出典**:
   - 出典 URL: `https://www.shutoko.jp/use/network/map/`
   - 参照日: `2026-09-10`
-- **通行料金**: 首都高速道路株式会社の公式料金表およびプレスリリースに基づき、普通車 ETC 料金（300 円、料金距離 1.7km・普通車下限料金適用）を有効期間付きで 2 レコード登録済み。2026-10-01 の料金改定（キロ単価引き上げ）後も下限料金 300 円は維持されるため、改定前後で期間を分割して登録している。これにより `routing-core` において有効期間に応じた `amountYen: 300` が解決され、`time_per_yen`（首都高時間 / 料金円）ソートが有効化されている。
-  - 現行レコード: 金額 300 円、有効期間 `2022-03-31T15:00:00Z` 〜 `2026-09-30T15:00:00Z`（JST 2022-04-01 00:00 〜 2026-10-01 00:00）
-  - 2026-10-01 改定後レコード: 金額 300 円、有効期間 `2026-09-30T15:00:00Z` 〜 期限なし（null）
-  - 出典:
-    - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト）
-    - 神田橋〜宝町 料金距離 1.7km・300 円: `https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf`（旧 URL `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf` は 2026-09-10 時点で 404。首都高料金表 2025年4月改訂版 P.3「料金・距離表（ETC 普通車）」）
-    - 2026-10-01 改定発表: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
-    - 参照日: `2026-09-10`
+- **通行料金**: 首都高速道路株式会社の公式料金表と 2026-10 改定資料に基づき、普通車 ETC 料金の 10 OD セルを期間付きで登録する。2025-04 版と 2026-10 版は別の `distanceEvidence` と `prices` を持ち、2026-10-01 JST 以降は PDF のセルと規則検算の両方が一致した `priced` とする。これにより `routing-core` が `pricingAt` と期間から正しい金額と observed distance を選べる。
+  - 神田橋→宝町は 1.7km / 300円を両版で保持する。
+  - 霞が関→代官町は 2025-04 が 12.4km / 570円、2026-10 が 2.3km / 300円。
+  - 2号目黒→天現寺は 2025-04 が 19.4km / 790円、2026-10 が 19.4km / 860円。
+  - 2026-10 PDF は SHA-256 `1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5`、C1 は P.3、2号は P.4 を確認した。PDFと画像は gitignore 済み cache に置く。
+  - 出典: `https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf`、`https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
 
 #### 新規登録 7 ペア（2026-09-10）
 
-7 ペアの 2025 年 4 月公式表の該当セルに記載された料金距離と普通車 ETC 基本料金を登録する。6 ペアは下限料金 300 円で、改定前後を各 1 レコード保持する。霞が関入口→代官町出口は P.3 の行「霞が関」、列「代官町」が 12.4km・570 円であり、逆方向の 2.3km・300 円を転用しない。2026-10-01 以降は OD 表 PDF の未確認状態を維持し、この 1 ペアには改定前レコードだけを登録する。1 区間先の隣接関係は公式路線図に基づく（参照日 `2026-09-10`）。
+7 ペアの 2025-04 公式セルと、2026-10 公式 PDF の対応セルをそれぞれ登録する。2026-10 版では霞が関入口→代官町出口を 2.3km / 300円として確定し、2025-04 の 12.4km / 570円とは期間別 evidence として分離する。1 区間先の隣接関係は公式路線図に基づく。
 
 | # | 方向 | 入口 → 出口 | 料金距離 | 普通車 ETC | ペア ID | 入口 way | 出口 way | 基準点（anchor）node |
 |---|------|------------|---------|-----------|---------|---------|---------|---------------------|
@@ -141,7 +139,7 @@
   - 料金距離・料金: `https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf`（旧 URL `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf` は 2026-09-10 時点で 404。首都高料金表 2025年4月改訂版 P.3「料金・距離表（ETC 普通車）」）
   - 路線図（1 区間先の隣接関係）: `https://www.shutoko.jp/use/network/map/`
   - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト）
-  - 2026-10-01 改定発表（OD 表は未確認）: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
+  - 2026-10-01 改定発表および OD 表 PDF: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`、`https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf`
   - 参照日: `2026-09-10`
 
 > **注記（内回り銀座入口の 1 区間先について）**:
@@ -149,9 +147,9 @@
 
 ### 3.1 `schemaVersion: 2` の混在 seed（parser実装済み）
 
-Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在させる。`data/billing-pairs-seed.json` は Issue #68 で `schemaVersion: 2` へ更新され、既存 C1 8要素の項目、値、意味は変更せず2件の diagnostic radial pair を追加した。`pairKind` を持たない要素は legacy ring pair と解釈する。
+Issue #42 で C1 legacy と2号 radial pair を同じ seed ファイルへ混在させる。`data/billing-pairs-seed.json` は Issue #68 で `schemaVersion: 2` へ更新され、既存 C1 8要素の項目、値、意味は変更せず2件の radial pair を追加した。`pairKind` を持たない要素は legacy ring pair と解釈する。
 
-Issue #62 で parser は `schemaVersion` を明示的に 1 / 2 へ dispatch し、全 nested struct の `deny_unknown_fields` を実装した。schema 2 では `pairKind` がない要素を legacy ring、`pairKind: "radialReturn"` と `routePlanVersion: 1` を持つ要素を diagnostic radial pair として読む。Issue #68 で実 seed の2件も graph-builder の diagnostic route-plan resolver に渡し、route/membership、mandatory lap、return corridor の検証を行う。Issue #65 で graph schema 4 reader は両 variant と binding / membership / resolved segment を読むが、exact binding 完了まで diagnostic radial pair を `Graph.billingPairs` へ昇格させない。以下の fail-closed 規則は fixture と unit test で検証済み。
+schema 2では `pairKind: "radialReturn"` と `routePlanVersion: 1` を必須とし、route/membership、mandatory lap、return corridor、exact bindingを検証する。検証済みの4 resolved segmentはschema 4の`radialReturn`として公開し、未解決候補はschema 2とmanifestの診断記録に閉じる。
 
 混在の規則は次のとおりである。
 
@@ -305,33 +303,43 @@ Issue #62 で parser は `schemaVersion` を明示的に 1 / 2 へ dispatch し�
       "firstGeneralExit": {
         "rule": "firstGeneralExit",
         "expectedRampId": "ramp:2-outbound:tengenji-exit",
-        "exactDirectedBinding": "unresolved"
+        "exactDirectedBinding": "verified_bound"
       }
     }
   },
   "routingCapability": "routable",
   "pairEligibility": {
-    "status": "unverified",
-    "oneSectionAheadVerified": false
+    "status": "verified_one_section_ahead",
+    "oneSectionAheadVerified": true
   },
   "loopValidation": {
     "status": "declared_route_validated"
   },
   "tariff": {
-    "status": "unpriced",
-    "amountYen": null,
-    "billingDistanceMeters": null,
-    "prices": []
+    "status": "priced",
+    "amountYen": 790,
+    "billingDistanceMeters": 19400,
+    "prices": [
+      {
+        "amountYen": 790,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z"
+      },
+      {
+        "amountYen": 860,
+        "effectiveFrom": "2026-09-30T15:00:00Z"
+      }
+    ]
   },
   "provenance": {
     "source": "https://www.shutoko.jp/use/network/map/",
-    "sourceDate": "2026-09-16",
-    "notes": "目黒入口から一ノ橋JCTのC1 inner長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。5 wayの有向鎖は2号下りのn:252175582から明治通りのn:1832672205へ到達するが、n:1832672162も明治通りへ接続するためexact ground endpointを一意に確定できず、bindingはunresolvedのままとする。"
+    "sourceDate": "2026-09-25",
+    "notes": "目黒入口から一ノ橋JCTのC1 inner長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。4 wayの有向鎖は2号下りのn:252175582から最初の一般道接続node n:1832672162へ到達し、groundWayIds=[258834790]としてverifiedにする。"
   }
 }
 ```
 
-endpoint は単一 OSM way を仮定しない。`supportState=verified_bound` では `directedSegments[]` に、解釈が確定した順に連続する `osmWayIds`、`osmNodeIds`、`edgeIds`、両端nodeとhashを必ず記録する。wayをまたぐ場合も1つのdirected segmentにまとめ、各要素の接続と順序を検証する。`supportState=unresolved` / `unsupported`では`directedSegments`を空にし、監査した候補だけを`bindingCandidates[]`に置く。天現寺候補は5 wayと18 node、17 Edgeの接続とhashを固定できるが、way `172358466`の始点`n:1832672162`も一般道・明治通りへ接続するため、ground endpointが一意でない。候補は`eligibilityStatus=verified_one_section_ahead`へ昇移できず、目黒出口や別施設IDで補完しない。schema 2の`Graph.ramps`と`ramps.json`にもcandidateを投影しない。
+endpoint は単一 OSM way を仮定しない。`supportState=verified_bound` では `directedSegments[]` に、解釈が確定した順に連続する `osmWayIds`、`osmNodeIds`、`edgeIds`、両端nodeとhashを必ず記録する。wayをまたぐ場合も1つのdirected segmentにまとめ、各要素の接続と順序を検証する。最初の接続nodeに複数のwayがある場合は `groundWayIds[]` に昇順でway IDを記録し、互換の `groundWayId` は先頭とする。天現寺は4 wayと18 node、16 Edgeの接続とhashを固定し、最初のnode `n:1832672162` の `groundWayIds=[258834790]` で `verified_bound` にする。way `172358466` を含む未prune chainは後続nodeへの接続があるため、診断候補としては unresolved として残すが昇格 evidenceには含めない。
 
 `edgeIdsSha256` は、順序を保った `edgeIds` を空白なしの JSON array へ直列化し、その UTF-8 バイト列を SHA-256 にした値とする。outer も同じ形を使い、`anchor.direction=outer`、M=`n:31297008`、B=`n:31297000`、mandatory lap の first / last Edge=`e:w24039737:24:f` / `e:w24039737:3:f`、除外 connector は way `24039737`、20 edges、461m、return initial Edge は `e:w4853805:0:f` とする。
 
@@ -355,7 +363,7 @@ mandatory lap 自身の境界は `routePlan.mandatoryLap.firstEdgeId` / `lastEdg
 | `entryOsmWayId` / `entryName` | `entryId` と `entryEndpoint` | graph Edge ID は build で解決し、way 変更として seed へ書き戻さない。 |
 | `exitOsmWayId` / `exitName` | `exitId` と `exitEndpoint` | 同上。 |
 | `status`, `oneSectionAheadVerified` | `pairEligibility.status`, `pairEligibility.oneSectionAheadVerified` | raw status は変更しない。`verified` は v2 の `verified_one_section_ahead` へ正規化する。 |
-| `prices[]` | `tariff.prices[]`, `tariff.status` | 6 ペアは 300 円→300 円、霞が関→代官町は改定前 570 円のみを保持する。radial は #41 まで空。 |
+| `prices[]` | `tariff.prices[]`, `tariff.status` | 8 legacy pairと2 radial pairは2025-04 / 2026-10の期間別priceを保持する。霞が関→代官町は12.4km / 570円と2.3km / 300円、2号目黒→天現寺は19.4km / 790円と19.4km / 860円。v3 assignmentが正本。 |
 | なし | `routePlanVersion`, `entryCorridor`, `anchor`, `mandatoryLap`, `returnCorridor` | radial variant だけを必須にする。 |
 | なし | `pairEligibility`, `loopValidation`, `tariff` の独立 status | endpoint support、routing capability、loop validation、料金状態を混在させない。 |
 
@@ -546,7 +554,7 @@ OSM route relation は mainline を列挙し、一般入口・出口の ramp way
 | `RouteMembershipIndex` | `membershipId`, `routeId`, `direction`, `directionMappingVersion`, `segments[]` | 路線・方向ごとに使う directed segment を束ねる。 |
 | `RouteMembershipSegment` | `segmentId`, `sourceKind`, `sourceRelationId`, `sourceSnapshotSha256`, `bindingEvidenceId`, `orderedEdgeIds`, `orderedEdgeIdsSha256`, `memberIndexes`, `memberOrderMatchesRelation` | `sourceKind=relationMainline` なら relation所属way、有向接続順序、member provenanceと順序診断を記録し、`sourceKind=boundRamp` なら exact binding を由来にする。 |
 
-`relationMainline` は `sourceRelationId` と `bindingEvidenceId=null` を要求し、そのrelationとroleの要求方向に属するwayだけを使う。順序の正本はrelation所属way間の一意な有向接続であり、member順はprovenanceと診断にだけ使う。各接続で後続がちょうど1つであることを要求し、分岐・行き止まりはsegmentを分けるかfail-closedで拒否し、onewayや要求directionに逆らうfallbackを拒否する。`memberIndexes`と`memberOrderMatchesRelation`を各segmentに記録する。`boundRamp` は `sourceRelationId=null` と非 null の `bindingEvidenceId` を要求し、正規ランプ台帳と exact directed binding の順序付き Edge 列、from/to endpoint、way順、Edge順、hash を使う。どちらも `orderedEdgeIdsSha256` を必須にする。天現寺候補はway順・node接続・Edge順・hashを監査できているが、ground endpointが一意でないためcandidateIdだけを`bindingEvidenceId`として`boundRamp`へ昇格させない。ground endpointを他根拠で一意に確定できた後に、#63が同じdirected segmentを`boundRamp`として変換する。
+`relationMainline` は `sourceRelationId` と `bindingEvidenceId=null` を要求し、そのrelationとroleの要求方向に属するwayだけを使う。順序の正本はrelation所属way間の一意な有向接続であり、member順はprovenanceと診断にだけ使う。各接続で後続がちょうど1つであることを要求し、分岐・行き止まりはsegmentを分けるかfail-closedで拒否し、onewayや要求directionに逆らうfallbackを拒否する。`memberIndexes`と`memberOrderMatchesRelation`を各segmentに記録する。`boundRamp` は `sourceRelationId=null` と非 null の `bindingEvidenceId` を要求し、正規ランプ台帳と exact directed binding の順序付き Edge 列、from/to endpoint、way順、Edge順、hash を使う。どちらも `orderedEdgeIdsSha256` を必須にする。天現寺は4-way / 16-Edgeの directed segment を `boundRamp` に昇格し、最初の一般道接続node `n:1832672162` と `groundWayIds=[258834790]` を保持する。
 
 次の synthetic fragment は、1つの entry approach と return corridor が mainline segment と bound ramp segment を組み合わせた wire shape を示す。
 
@@ -638,25 +646,25 @@ route planのlegは`sourceSegmentIds[]`でmainlineとrampの由来を明示し�
 4. 候補は return corridor 内の一般 Exitだけで、C1 の Exit、entry approach 中の Exit、boundary JCT を数えない。
 5. 禁止遷移を満たし、探索予算を明示して処理する。
 
-B から全グラフの最短 Exit を選ぶ処理は使わない。実データでは B から C1 芝公園 Exit が1,306m、天現寺候補の開始点が1,972mであり、route constraint なしで Exit を選ぶと誤る。graph-builder の `resolve_diagnostic_radial_route_plan` は seed の declared candidate を検証し、relationMainlineの複数segmentとoffsetを横断して候補の`fromNodeId`まで必ず探索する。天現寺候補が未解決なら `firstGeneralExit.exactDirectedBinding=unresolved` または `unsupported` と、到達したmainline Edge列を保持したまま次の supported Exit へ skip しない。候補へ到達する前に経路が尽きた場合は`ExitNotFound`、探索予算が尽きた場合は`BudgetExceeded`を返す。First Exit の幾何探索が成功しても、端点 support や pair eligibility の証拠にはしない。
+B から全グラフの最短 Exit を選ぶ処理は使わない。実データでは B から C1 芝公園 Exit が1,306m、天現寺候補の開始点が1,972mであり、route constraint なしで Exit を選ぶと誤る。graph-builder の `resolve_diagnostic_radial_route_plan` は seed の declared candidate を検証し、relationMainlineの複数segmentとoffsetを横断して候補の`fromNodeId`まで必ず探索する。候補の exact binding が `unresolved` または `unsupported` の場合は、到達したmainline Edge列を保持したまま次の supported Exit へ skip しない。候補へ到達する前に経路が尽きた場合は`ExitNotFound`、探索予算が尽きた場合は`BudgetExceeded`を返す。First Exit の幾何探索が成功しても、端点 support や pair eligibility の証拠にはしない。
 
 実装テストには次を含める。
 
 - inner / outer の M→B長弧を選び、B→Mの0.493km / 0.461km connectorを拒否する。
 - relation memberに目黒entryや天現寺exitを含めない現行snapshotで、対応するboundRamp segmentだけをevidence付きで許可する。
-- multi-way rampのway順、node接続、Edge順、from/to endpoint、hashを検証し、way `172358466`の始点`n:1832672162`も一般道へ接続するためcandidateをverified bindingへ昇格しない。
+- multi-way rampのway順、node接続、Edge順、from/to endpoint、hashを検証し、最初の合法な一般道接続nodeより後の別node接続がある場合だけcandidateをunresolvedにする。同じnodeへの複数way接続は `groundWayIds[]` に記録してverifiedにする。
 - entry corridorにC1 Exitがあっても、return corridorのExitと混同しない。
 - 逆方向、同名JCT、relation非所属mainline way、別armへの近道を拒否する。
 - segment内のEdge反復を拒否し、route planが宣言したsegment間反復を許す。
 - 探索予算超過を「Exitなし」と読み替えない。
-- 既存 C1 8 件の anchor、edge resolution、First Exit、6 件の 300 円→300 円と霞が関→代官町の改定前 570 円、verified 2 件・unverified 6 件を回帰テストで固定する。
+- 既存 C1 8 件の anchor、edge resolution、First Exit、7件のverified・1件のunverified、期間別料金、回帰テストで固定する。
 
 
 ### 3.4 2号計画の診断用データと公開 BillingPair を分ける
 
-本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、Issue #68 で同じ2件を実 `data/billing-pairs-seed.json` にも追加した。parser test、snapshot、実 seed の graph-builder contract test で同じ wire shape を確認する。`osmNodeIds`はentryで2件、天現寺候補で18件を必須とし、way順・Edge順・node順・hash・監査済みbinding candidateとの一致を検証する。graph-builder は両 route plan の M→B 長弧と return corridor を検証する。Issue #65 の synthetic graph / wire fragment は、完全な exact binding のみ graph schema 4 の radial pair として受理する。Issue #69では同じsynthetic graphの`radialReturn`から4 leg / 2 surface leg / 3つのstatusを持つ`RadialCandidate`を生成し、dynamic ODを`TopologyOnlyCandidate`へ分離した。天現寺 exact directed binding が未解決の間は、plan を `Graph.billingPairs` へ入れて公開候補にせず、manifest の `diagnostic-only` 記録だけを残す。`--graph-schema 2`ではradial pairを診断unionへ出さず、manifestへpair固有の`rejected`記録を残して暗黙に落とさない。
+本節で定義した inner / outer object は、Issue #62 で `fixtures/seed-v2/diagnostic-radial-v2.json` と `diagnostic-radial-v2.snapshot.json` に固定し、Issue #68 で同じ2件を実 `data/billing-pairs-seed.json` にも追加した。parser test、snapshot、実 seed の graph-builder contract test で同じ wire shape を確認する。天現寺 exit は4 way / 16 Edgeで、最初の合法な一般道接続 node `n:1832672162` と `groundWayIds=[258834790]` を `verified_bound` として保持する。way `172358466` を通る未prune chain は、後続 node `n:1832672205` でも一般道へ接続するため、診断では `AMBIGUOUS_GROUND_ENDPOINT` として unresolved にし、昇格する4-way evidenceには含めない。graph-builder は両 route plan の M→B 長弧と return corridorを検証し、4 resolved segmentと未解決でないFirst Exitが一致した両pairをschema 4 unionの`radialReturn`として公開する。`--graph-schema 2`ではradial pairを診断unionへ出さず、manifestへpair固有の`rejected`記録を残して暗黙に落とさない。
 
-binding issue では、multi-way ramp の全 way、ground ↔ mainline の接続、ramp ID の逆引き、公式施設順を同じ support evidence として扱う。今回は5 wayの連続性を確認したが、2号下りの`n:252175582`から`n:1832672205`へ至る間に、一般道・明治通りへ接続する`n:1832672162`も存在する。公式2号下りの出口番号順は201天現寺、203目黒、205戸越、207荏原で施設名とは矛盾しないが、地上端点の選択までは一意にしない。よって`data/osm-ramp-bindings.json`には`status=unresolved`、`publicProjection=excluded_unresolved`のcandidateとして保持し、現行schema 2の`Graph.ramps`と`ramps.json`へ投影しない。Issue #68 の実 seed も同じ5 way、18 node、17 Edgeの候補と unresolved 状態を保持し、route plan の検証結果だけを diagnostic として記録する。地上端点を他根拠で一意に確定し、`boundRamp`と`bindingEvidenceId`に変換した後は、4 resolved segmentと未解決でないFirst Exitを再検証してからgraph schema 4の`radialReturn`として昇格する。この昇格経路はverified synthetic fixtureとcore reader contractで検証済みである。昇格後もIssue #41までは`amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`を維持する。
+料金も v3 assignment の期間別 evidenceを正本とする。2025-04 は19.4km / 790円、2026-10 は19.4km / 860円を保持し、OSM driven distanceで補完しない。
 
 ## 4. 成果物の決定論的再生成手順
 
@@ -697,12 +705,12 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
-| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,637、Entry 168、Exit 182）、legacy billing pairs 8件、route memberships 46件、bound ramps 232件 | 7,282,910 bytes |
-| `ramps.json` | 1 | 正規台帳399件、うちbound 232件 | 277,569 bytes |
+| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,637、Entry 168、Exit 182）、legacy billing pairs 8件、route memberships 46件、bound ramps 232件 | 7,413,419 bytes |
+| `ramps.json` | 1 | 正規台帳399件、うちbound 232件 | 278,142 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
-| `manifest.json` | 1 | release、schema/route-plan/hash、artifact hash、byte length、unverified sections、provenance | 41,916 bytes |
+| `manifest.json` | 1 | release、schema/route-plan/hash、artifact hash、byte length、unverified sections、provenance | 43,386 bytes |
 
-`graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は `graph.json`、`ramps.json`、`snap-index.json` のpath・SHA-256・byte lengthを固定し、manifest自身のサイズとschemaは別情報として扱う。`all-real-v3` の `routeMembershipsSha256` は `239a847d575722493a342d03a682b5700a032eeb7ad0ea8feddfbb838344983b` であり、同一入力の2回の生成で一致する。
+`graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は `graph.json`、`ramps.json`、`snap-index.json` のpath・SHA-256・byte lengthを固定し、manifest自身のサイズとschemaは別情報として扱う。`all-real-v3` の `routeMembershipsSha256` は `ff8281f4d4c8f823051d1323eb2fbfc679a27dca758d2bcb31f2cce0d406a61b` であり、同一入力の2回の生成で一致する。
 
 ### `snap-index.json` の意味と `schemaVersion: 2`
 
@@ -721,7 +729,7 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
 現時点で課金ペアとして検証されていない入出口ランプ区間は、グラフビルダーによって`manifest.json`の`unverifiedSections[]`へ自動列挙する。
 - **自動列挙対象**: graph内のEntry / Exit Edgeのうち、verified billing pairのentry / exitへ採用されていないEdge。wayに`name`があれば「Edge ID（way name）」で記録する。
 - **通行規制のskip注記**: 現行`all-real-v3`はconditional 2件、via欠落2件、graph外要素16件を数える。`all` inputのため「C1以外の路線を除外した」という注記は出さない。
-- **現状**: `all-real-v3`は監査用legacy課金ペア8件を保持し、端点と公式施設名を照合できた2件だけを`verified`とする。残る6件は`unverified`としてpair検索から除外する。2号 radial pair 2件は seed には保持するが、天現寺 binding が `unresolved` のため graph の `billingPairs` には入らず、manifest の `diagnostic-only` 記録だけになる。active一般ランプ371件のうち232件をexact directed segmentへbindし、139件は根拠付き`unsupported`としてgraph外へ隔離する。
+- **現状**: `all-real-v3` は legacy 課金ペア8件（verified 7件、unverified 1件）と、schema 4 の radial pair 2件を保持する。天現寺は4-way / 16 Edgeの最初の一般道接続 node `n:1832672162` で `verified_bound` となり、`radialReturn` として公開集合に含まれる。active一般ランプ371件のうち232件を exact directed segment へ bind し、139件は根拠付き `unsupported` として graph外へ隔離する。
 
 ## 6. 全24路線・正規ランプ台帳（Canonical Ramp Inventory）
 
@@ -768,8 +776,8 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
   - `osmNodeId`: 一般道接続端点ノード（入口の乗込ノードまたは出口の流出ノード）
   - `motorwayNodeId`: 首都高本線（`motorway`）との分合流ノード ID
   - `sharedPhysicalOverrides`: 公式番号が異なる共有物理segmentである G15/G27/G53 の完全なメンバー集合、directed segment triplet、理由、証拠。同一facility・別directionも例外にせず、すべてのduplicate triplet集合とoverride集合の完全一致を強制する。方向一意性を立証できない旧22組は `unsupported` としbindingを削除した。
-  - `bindingCandidates[]`: `candidateId`, `rampId`, `status`, `publicProjection`, `direction`, 理由・reason code・根拠。`directedSegments[]` は順序付き`osmWayIds`、`osmNodeIds`、`edgeIds`、両端node、`edgeIdsSha256`を保持し、wayTags、route relation role、ground way、公式施設順をsnapshotと照合する。ground endpointが一意でないcandidateは`status=unresolved`、`publicProjection=excluded_unresolved`とし、`bindings[]`へ移してschema 2公開へ昇格させない。
-  - 天現寺出口候補の5 wayは`172358461` → `422023171` → `931759044` → `172358460` → `172358466`。17 Edgeのhashは`06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a`だが、`n:1832672162`と`n:1832672205`が一般道・明治通りに接続するため、`reasonCodes=[EARLY_SURFACE_CONNECTION,MULTIPLE_GROUND_CONNECTION_CANDIDATES]`のunresolvedを保持する。
+  - `bindingCandidates[]`: `candidateId`, `rampId`, `status`, `publicProjection`, `direction`, 理由・reason code・根拠。`directedSegments[]` は順序付き`osmWayIds`、`osmNodeIds`、`edgeIds`、両端node、`edgeIdsSha256`を保持し、wayTags、route relation role、ground way、公式施設順をsnapshotと照合する。最初の一般道接続nodeに複数のwayが接続する場合は `groundWayIds[]` を昇順で記録し、単数 `groundWayId` を先頭として保持する。最初の接続後に別nodeで一般道へ続く場合だけ `status=unresolved`、`publicProjection=excluded_unresolved` とする。
+  - 天現寺出口の4 way は `172358461` → `422023171` → `931759044` → `172358460`。16 Edgeのhashは`bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd`で、最初の接続nodeは `n:1832672162`、`groundWayIds=[258834790]`（明治通り）として `status=verified_bound`、`publicProjection=included_verified` にする。way `172358466` を含む未prune chainは後続接続があるため、診断上だけ `AMBIGUOUS_GROUND_ENDPOINT` とする。
 - **Overpass クエリ戦略**:
   - 首都高速道路のリレーション（全 24 路線）および `network="首都高速道路"` タグを起点とし、関連する `motorway_link` を多ホップ展開（1〜4 ホップ）して抽出。
   - 一般道との接続判定は、地表コンテキストウェイ（車両通行可能な `highway` ウェイ）のノード集合との積集合により機械的・決定論的に特定。
@@ -802,19 +810,17 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
   - `shutoko_distance_meters`: 首都高速上の実際の走行距離（エッジ長の積算値）。周回ループを含むため数十〜百キロ超になり得る。
   - `toll.billing_distance_meters`: 入口〜出口間の公称料金距離（OD テーブルまたはベースライン最短経路長）。
   - **OSM 幾何距離を公称料金距離として扱わない規律**: グラフ幾何から計算される実走距離（`shutoko_distance_meters`）を公称料金距離として勝手に流用しない。料金計算は `data/od-tariffs.json` の検証済み OD ペアまたは公式料金距離テーブルに明示された値のみを根拠とし、未定義区間では安易な幾何距離代用を行わず未計算（None）として誠実にモデル化する。
-  - 周回走行を行っても、料金距離は入口と出口の組み合わせで決める。現行 C1 8 件のうち 6 件は legacy price record が 300 円→300 円だが、霞が関→代官町は改定前 570 円、改定後は未確認である。2 号 radial pair の金額を「1 区間先だから 300 円」という理由だけで決めない。
+  - 周回走行を行っても、料金距離は入口と出口の組み合わせで決める。現行 C1 8件は v3 assignment の期間別 observed distanceを使い、霞が関→代官町は改定前 12.4km / 570円、改定後 2.3km / 300円を分ける。2号 radial pairも各assignmentの 19.4km / 790円・19.4km / 860円を使い、「1区間先だから300円」という理由だけで決めない。
 - **検証済み OD ペア**:
   - 頻出・代表的な OD ペア（C1 各ランプ、八重洲線接続、主要放射線連絡等）について公式料金距離および料金額を検証済みデータとして保持。
 
-### 9.1 料金 v3 データと 2026-10 OD 表の未確認状態
+### 9.1 料金 v3 データと 2026-10 OD 表の検証済み状態
 
-`data/od-tariffs.json` version 3 は `tariffRules`、期間ごとの `distanceEvidence`、10 件の一意な OD `assignments` を分離する。2025-04 の証拠はローカル保存した `2504_pamphlet_fee_table.pdf` に基づき、各レコードに PDF ページ、行、列、セル、基本料金区分、距離、SHA-256 を保持する。2025-04 の普通車規則は `[2022-03-31T15:00:00Z, 2026-09-30T15:00:00Z)` とする。2026-10 の規則は `2026-09-30T15:00:00Z` から開始し、1 km あたり 32.472 円、下限 300 円、上限 2,130 円、ターミナルチャージ 150 円、税率 1.10、距離量子 100 m、10 円単位の四捨五入、および下限費用が 300 円となる距離境界 3.9 km。改定後パラメータの根拠は SHA-256 `f80126994b3deee36e198f947f3f4f4c3219dd16473bbd9bc9dd296115345702` のローカル保存済み `31-toll-shiryo.pdf` P.5-6 であり、この資料は OD セル確認の証拠ではない。
+`data/od-tariffs.json` version 3 は `tariffRules`、期間ごとの `distanceEvidence`、10件の一意な OD `assignments` を分離する。2025-04 の証拠はローカル保存した `2504_pamphlet_fee_table.pdf` に基づき、2026-10 の証拠は SHA-256 `1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5` の `ryoukin-kaitei_toll_rates.pdf` に基づく。各レコードに PDF ページ、行、列、セル、基本料金区分、距離、SHA-256を保持する。
 
-2 号線の inner・outer 計画は目黒入口→天現寺出口の 1 件の一意な割当を共有する。2025-04 の確認済みセルは P.4、行 `目黒`、列 `天現寺`、19.4 km、790 円である。旧設計値の 14.2 km・630 円は別の列の値であるため採用しない。
+2025-04 の普通車規則は `[2022-03-31T15:00:00Z, 2026-09-30T15:00:00Z)`、2026-10 の規則は `2026-09-30T15:00:00Z` から開始する。2026-10 のパラメータは1kmあたり32.472円、下限300円、上限2,130円、ターミナルチャージ150円、税率1.10、距離量子100m、10円単位の四捨五入、3.9kmの下限境界である。改定後パラメータの根拠資料は SHA-256 `f80126994b3deee36e198f947f3f4f4c3219dd16473bbd9bc9dd296115345702` の `31-toll-shiryo.pdf` P.5-6 であり、ODセルの確認には別の2026-10 PDFを使う。
 
-各割当には 2025-04 の `priced` レコードと 2026-10 の `pending_pdf_review` レコードを 1 件ずつ保持する。未確認レコードには安定した evidence ID を保持するが、料金、距離、ページ、セルは null とする。実行時は未確認レコードを `unpriced` として扱い、規則または OSM 距離から代替金額を計算してはならない。legacy `verifiedOdPairs` は現行 reader との暫定互換投影であり、料金 v3 の正本ではない。
-
-利用者が `.cache/official-fare/ryoukin-kaitei_toll_rates.pdf` を配置した後、次の統合手順では SHA-256 を算出し、10 件すべてのページ・行・列のセルを 2 回確認する。該当する `pendingEvidence` を入力した後、2026-10 以降の各割当について確認済み金額、距離、`evidenceId`、`distanceEvidenceId` を更新する。規則計算値が確認済み PDF セルと一致する `priced` レコードだけを、実行時状態を `unpriced` から `priced` へ変更できる。
+2号線の inner・outer計画は目黒入口→天現寺出口の1件の一意なassignmentを共有する。2025-04はP.4の19.4km / 790円、2026-10は同じ距離で860円である。旧設計値の14.2km・630円は別の列の値であるため採用しない。C1 P.3の9 ODセルと2号 P.4の1セルも含めて、PDFのセルと規則計算値が一致することを確認済みで、`pendingEvidence` は空、各assignmentの2期間とも `priced` である。PDFとページ画像はgitignore済みcacheに置き、commitしない。legacy `verifiedOdPairs` は現行readerとの暫定互換投影であり、料金v3の正本ではない。
 
 ## 10. 成果物公開アーティファクト（`ramps.json`）
 

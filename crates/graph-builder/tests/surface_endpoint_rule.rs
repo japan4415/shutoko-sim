@@ -9,8 +9,8 @@
 //!      with explicit rejected/allowed taxonomies and fail-closed on unknown values.
 //!    - Step 3: Highway taxonomy whitelist/blacklist with `service=alley` only.
 //!    - Step 4: Oneway continuation/arrival legality for Exit and Entry.
-//!    - Step 5: Connection uniqueness (0 -> NO_GROUND_CONNECTION, 1 -> verified_bound,
-//!      multiple -> MULTIPLE_GROUND_CONNECTION_CANDIDATES).
+//!    - Step 5: Connection uniqueness (0 -> NO_GROUND_CONNECTION, one or more legal ways at the first node -> verified_bound,
+//!      a later legal connection -> AMBIGUOUS_GROUND_ENDPOINT).
 //! 3. Wire enums compliance:
 //!    - EndpointSupportState: verified_bound, unsupported, unresolved.
 //!    - LoopValidationStatus: declared_route_validated, unresolved, topology_only.
@@ -34,9 +34,9 @@ use shutoko_graph_builder::topology::{
     FirstPublicRoadConnectionResolution, RampFlowDirection, SurfaceWayConnectionAudit,
     ALLOWED_ACCESS_VALUES, ALLOWED_SERVICE_SUBTAGS, ALLOWED_SURFACE_HIGHWAYS,
     FIRST_PUBLIC_ROAD_CONNECTION_RULE, REASON_CONDITIONAL_ACCESS_RESTRICTION,
-    REASON_MULTIPLE_GROUND_CONNECTION_CANDIDATES, REASON_MULTIPLE_RAMP_SUCCESSORS,
-    REASON_NO_GROUND_CONNECTION, REASON_UNRECOGNIZED_TAG_FAIL_CLOSED, REJECTED_ACCESS_VALUES,
-    REJECTED_SERVICE_SUBTAGS, REJECTED_SURFACE_HIGHWAYS,
+    REASON_MULTIPLE_RAMP_SUCCESSORS, REASON_NO_GROUND_CONNECTION,
+    REASON_UNRECOGNIZED_TAG_FAIL_CLOSED, REJECTED_ACCESS_VALUES, REJECTED_SERVICE_SUBTAGS,
+    REJECTED_SURFACE_HIGHWAYS,
 };
 use std::collections::{BTreeMap, HashMap};
 
@@ -514,16 +514,16 @@ fn test_step_5_connection_uniqueness_scenarios() {
         RampFlowDirection::Exit,
         &way_map,
         &node_to_ways,
-        None,
+        Some(6001),
     );
     assert_eq!(
         res_multi_same_node.support_state,
-        EndpointSupportState::Unresolved
+        EndpointSupportState::VerifiedBound
     );
-    assert_eq!(
-        res_multi_same_node.reason_codes,
-        vec![REASON_MULTIPLE_GROUND_CONNECTION_CANDIDATES]
-    );
+    assert_eq!(res_multi_same_node.ground_node_id, Some(102));
+    assert_eq!(res_multi_same_node.ground_way_id, Some(6001));
+    assert_eq!(res_multi_same_node.ground_way_ids, vec![6001, 6002]);
+    assert!(res_multi_same_node.reason_codes.is_empty());
 
     let mut way_map_d = HashMap::new();
     let mut node_to_ways_d: HashMap<i64, Vec<i64>> = HashMap::new();
@@ -656,6 +656,105 @@ fn test_ramp_branch_and_illegal_road_continuation_are_unresolved() {
     assert_eq!(resolution.ground_way_id, Some(surface.id));
 }
 
+#[test]
+fn test_later_ground_connection_is_ambiguous() {
+    let ramp = make_test_way(
+        5701,
+        vec![100, 101, 102, 103],
+        vec![("highway", "motorway_link"), ("oneway", "yes")],
+    );
+    let first_surface = make_test_way(6701, vec![102, 201], vec![("highway", "primary")]);
+    let later_surface = make_test_way(6702, vec![103, 202], vec![("highway", "secondary")]);
+    let way_map = HashMap::from([
+        (ramp.id, &ramp),
+        (first_surface.id, &first_surface),
+        (later_surface.id, &later_surface),
+    ]);
+    let mut node_to_ways: HashMap<i64, Vec<i64>> = HashMap::new();
+    for node_id in [100, 101, 102, 103] {
+        node_to_ways.entry(node_id).or_default().push(ramp.id);
+    }
+    node_to_ways.entry(102).or_default().push(first_surface.id);
+    node_to_ways.entry(103).or_default().push(later_surface.id);
+    let resolution = resolve_first_public_road_connection(
+        &[100, 101, 102, 103],
+        RampFlowDirection::Exit,
+        &way_map,
+        &node_to_ways,
+        None,
+    );
+    assert_eq!(resolution.support_state, EndpointSupportState::Unresolved);
+    assert_eq!(
+        resolution.reason_codes,
+        vec![shutoko_graph_builder::topology::REASON_AMBIGUOUS_GROUND_ENDPOINT]
+    );
+    assert_eq!(resolution.ground_way_ids, vec![6701]);
+}
+
+#[test]
+fn test_hgv_conditional_is_not_a_passenger_car_restriction() {
+    let ramp = make_test_way(
+        5801,
+        vec![110, 111],
+        vec![
+            ("highway", "motorway_link"),
+            ("oneway", "yes"),
+            ("hgv:conditional", "no @ (Sa 22:00-24:00)"),
+        ],
+    );
+    let surface = make_test_way(6801, vec![111, 210], vec![("highway", "primary")]);
+    let way_map = HashMap::from([(ramp.id, &ramp), (surface.id, &surface)]);
+    let mut node_to_ways: HashMap<i64, Vec<i64>> = HashMap::new();
+    for node_id in [110, 111] {
+        node_to_ways.entry(node_id).or_default().push(ramp.id);
+    }
+    node_to_ways.entry(111).or_default().push(surface.id);
+    let resolution = resolve_first_public_road_connection(
+        &[110, 111],
+        RampFlowDirection::Exit,
+        &way_map,
+        &node_to_ways,
+        Some(surface.id),
+    );
+    assert_eq!(
+        resolution.support_state,
+        EndpointSupportState::VerifiedBound
+    );
+    assert_eq!(resolution.ground_node_id, Some(111));
+}
+
+#[test]
+fn test_oneway_conditional_on_ramp_remains_unresolved() {
+    let ramp = make_test_way(
+        5802,
+        vec![120, 121],
+        vec![
+            ("highway", "motorway_link"),
+            ("oneway", "yes"),
+            ("oneway:conditional", "no @ (Sa 22:00-24:00)"),
+        ],
+    );
+    let surface = make_test_way(6802, vec![121, 211], vec![("highway", "primary")]);
+    let way_map = HashMap::from([(ramp.id, &ramp), (surface.id, &surface)]);
+    let mut node_to_ways: HashMap<i64, Vec<i64>> = HashMap::new();
+    for node_id in [120, 121] {
+        node_to_ways.entry(node_id).or_default().push(ramp.id);
+    }
+    node_to_ways.entry(121).or_default().push(surface.id);
+    let resolution = resolve_first_public_road_connection(
+        &[120, 121],
+        RampFlowDirection::Exit,
+        &way_map,
+        &node_to_ways,
+        Some(surface.id),
+    );
+    assert_eq!(resolution.support_state, EndpointSupportState::Unresolved);
+    assert_eq!(
+        resolution.reason_codes,
+        vec![REASON_CONDITIONAL_ACCESS_RESTRICTION]
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Real Fixture Positive Test: Tengenji Exit (4-way, 16-edge -> verified_bound)
 // ---------------------------------------------------------------------------
@@ -784,13 +883,16 @@ fn test_tengenji_exit_positive_fixture_resolves_verified_bound() {
         &way_map,
         &node_to_ways,
     );
-    assert_eq!(discovery.support_state, EndpointSupportState::VerifiedBound);
+    assert_eq!(discovery.support_state, EndpointSupportState::Unresolved);
     assert_eq!(
         discovery.ground_node_id,
         Some(1832672162),
-        "first connection must stop at 1832672162, removing tail way 172358466"
+        "the first connection node remains the reported diagnostic node"
     );
-    assert_eq!(discovery.ground_way_id, Some(258834790));
+    assert_eq!(
+        discovery.reason_codes,
+        vec![shutoko_graph_builder::topology::REASON_AMBIGUOUS_GROUND_ENDPOINT]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -888,15 +990,15 @@ fn test_existing_binding_diagnostics_are_deterministic_and_non_blocking() {
     );
     assert_eq!(first.rule, FIRST_PUBLIC_ROAD_CONNECTION_RULE);
     assert_eq!(first.schema_binding_total, 235);
-    assert_eq!(first.schema_binding_matched, 186);
-    assert_eq!(first.schema_binding_mismatched, 49);
+    assert_eq!(first.schema_binding_matched, 235);
+    assert_eq!(first.schema_binding_mismatched, 0);
     assert_eq!(
         first
             .schema_binding_mismatches
             .iter()
             .filter(|mismatch| mismatch.ramp_id.starts_with("ramp:c1-"))
             .count(),
-        10
+        0
     );
     assert!(first
         .schema_binding_mismatches
@@ -907,8 +1009,7 @@ fn test_existing_binding_diagnostics_are_deterministic_and_non_blocking() {
         .iter()
         .map(|mismatch| mismatch.ramp_id.as_str())
         .collect::<std::collections::BTreeSet<_>>();
-    assert!(mismatch_ids.contains("ramp:c1-outer:takaracho-exit"));
-    assert!(mismatch_ids.contains("ramp:c1-outer:daikancho-exit"));
+    assert!(mismatch_ids.is_empty());
     assert_eq!(first.binding_candidate_total, 1);
     assert_eq!(first.binding_candidate_mismatched, 0);
 }

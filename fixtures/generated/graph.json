@@ -314570,14 +314570,33 @@
       "tariff": {
         "status": "priced",
         "amountYen": 300,
-        "billingDistanceMeters": null,
+        "observedBaseFareYen": 300,
+        "observedDistanceMeters": 2300,
+        "billingDistanceMeters": 2300,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
             "amountYen": 300,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
           }
-        ]
+        ],
+        "assignmentId": "assignment:c1-inner:daikancho-kasumigaseki",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p03:c1-daikancho-kasumigaseki",
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-daikancho-kasumigaseki",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
       }
     },
     {
@@ -314748,14 +314767,33 @@
       "tariff": {
         "status": "priced",
         "amountYen": 300,
+        "observedBaseFareYen": 300,
+        "observedDistanceMeters": 3700,
         "billingDistanceMeters": 3700,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
             "amountYen": 300,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
           }
-        ]
+        ],
+        "assignmentId": "assignment:c1-inner:kasumigaseki-shibakoen",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p03:c1-kasumigaseki-shibakoen",
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-shibakoen",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
       }
     },
     {
@@ -314875,14 +314913,33 @@
       "tariff": {
         "status": "priced",
         "amountYen": 300,
-        "billingDistanceMeters": null,
+        "observedBaseFareYen": 300,
+        "observedDistanceMeters": 2400,
+        "billingDistanceMeters": 2400,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
             "amountYen": 300,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
           }
-        ]
+        ],
+        "assignmentId": "assignment:c1-inner:shibakoen-shiodome",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p03:c1-shibakoen-shiodome",
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-shibakoen-shiodome",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
       }
     },
     {
@@ -315027,14 +315084,33 @@
       "tariff": {
         "status": "priced",
         "amountYen": 300,
-        "billingDistanceMeters": null,
+        "observedBaseFareYen": 300,
+        "observedDistanceMeters": 1700,
+        "billingDistanceMeters": 1700,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
             "amountYen": 300,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
           }
-        ]
+        ],
+        "assignmentId": "assignment:c1-inner:takaracho-kandabashi",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi",
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
       }
     },
     {
@@ -315195,14 +315271,33 @@
       "tariff": {
         "status": "priced",
         "amountYen": 300,
+        "observedBaseFareYen": 300,
+        "observedDistanceMeters": 3400,
         "billingDistanceMeters": 3400,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
             "amountYen": 300,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
           }
-        ]
+        ],
+        "assignmentId": "assignment:c1-outer:ginza-shibakoen",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p03:c1-ginza-shibakoen",
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-ginza-shibakoen",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
       }
     },
     {
@@ -315347,14 +315442,33 @@
       "tariff": {
         "status": "priced",
         "amountYen": 300,
+        "observedBaseFareYen": 300,
+        "observedDistanceMeters": 1700,
         "billingDistanceMeters": 1700,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
             "amountYen": 300,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
           }
-        ]
+        ],
+        "assignmentId": "assignment:c1-outer:kandabashi-takaracho",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p03:c1-kandabashi-takaracho",
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-kandabashi-takaracho",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
       }
     },
     {
@@ -315488,14 +315602,33 @@
       "tariff": {
         "status": "priced",
         "amountYen": 570,
+        "observedBaseFareYen": 570,
+        "observedDistanceMeters": 12400,
         "billingDistanceMeters": 12400,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
             "amountYen": 570,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
           }
-        ]
+        ],
+        "assignmentId": "assignment:c1-outer:kasumigaseki-daikancho",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
       }
     },
     {
@@ -315585,14 +315718,33 @@
       "tariff": {
         "status": "priced",
         "amountYen": 300,
-        "billingDistanceMeters": null,
+        "observedBaseFareYen": 300,
+        "observedDistanceMeters": 1600,
+        "billingDistanceMeters": 1600,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
             "amountYen": 300,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
           }
-        ]
+        ],
+        "assignmentId": "assignment:c1-outer:shibakoen-iikura",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p03:c1-shibakoen-iikura",
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-shibakoen-iikura",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
       }
     },
     {
@@ -316552,14 +316704,33 @@
       "tariff": {
         "status": "priced",
         "amountYen": 790,
+        "observedBaseFareYen": 790,
+        "observedDistanceMeters": 19400,
         "billingDistanceMeters": 19400,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
             "amountYen": 790,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 860,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
           }
-        ]
+        ],
+        "assignmentId": "assignment:2:meguro-tengenji",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+        "distanceEvidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
       }
     },
     {
@@ -317534,14 +317705,33 @@
       "tariff": {
         "status": "priced",
         "amountYen": 790,
+        "observedBaseFareYen": 790,
+        "observedDistanceMeters": 19400,
         "billingDistanceMeters": 19400,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
         "prices": [
           {
             "amountYen": 790,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 860,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
           }
-        ]
+        ],
+        "assignmentId": "assignment:2:meguro-tengenji",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+        "distanceEvidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
       }
     }
   ],
@@ -320215,7 +320405,8 @@
       "exitRampId": "ramp:c1-outer:takaracho-exit",
       "billingDistanceMeters": 1700,
       "amountYen": 300,
-      "effectiveFrom": "2022-03-31T15:00:00Z"
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
     },
     {
       "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
@@ -320226,41 +320417,1342 @@
       "effectiveTo": "2026-09-30T15:00:00Z"
     },
     {
-      "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
-      "exitRampId": "ramp:c1-outer:daikancho-exit",
-      "billingDistanceMeters": 12400,
-      "amountYen": null,
-      "effectiveFrom": "2026-09-30T15:00:00Z"
-    },
-    {
       "entryRampId": "ramp:c1-outer:ginza-entry",
       "exitRampId": "ramp:c1-outer:shibakoen-exit",
       "billingDistanceMeters": 3400,
       "amountYen": 300,
-      "effectiveFrom": "2022-03-31T15:00:00Z"
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
     },
     {
       "entryRampId": "ramp:c1-inner:kasumigaseki-entry",
       "exitRampId": "ramp:c1-inner:shibakoen-exit",
       "billingDistanceMeters": 3700,
       "amountYen": 300,
-      "effectiveFrom": "2022-03-31T15:00:00Z"
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
     },
     {
-      "entryRampId": "ramp:3-inbound:yoga-entry",
-      "exitRampId": "ramp:3-outbound:yoga-exit",
-      "billingDistanceMeters": 4300,
+      "entryRampId": "ramp:c1-inner:daikancho-entry",
+      "exitRampId": "ramp:c1-inner:kasumigaseki-exit",
+      "billingDistanceMeters": 2300,
       "amountYen": 300,
-      "effectiveFrom": "2022-03-31T15:00:00Z"
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
     },
     {
-      "entryRampId": "ramp:4-inbound:takaido-entry",
-      "exitRampId": "ramp:4-outbound:takaido-exit",
-      "billingDistanceMeters": 4300,
+      "entryRampId": "ramp:c1-inner:shibakoen-entry",
+      "exitRampId": "ramp:c1-inner:shiodome-exit",
+      "billingDistanceMeters": 2400,
       "amountYen": 300,
-      "effectiveFrom": "2022-03-31T15:00:00Z"
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c1-inner:takaracho-entry",
+      "exitRampId": "ramp:c1-inner:kandabashi-exit",
+      "billingDistanceMeters": 1700,
+      "amountYen": 300,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:2-inbound:meguro-entry",
+      "exitRampId": "ramp:2-outbound:tengenji-exit",
+      "billingDistanceMeters": 19400,
+      "amountYen": 790,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
     }
   ],
+  "odTariffsV3": {
+    "assignments": [
+      {
+        "assignmentId": "assignment:c1-outer:kandabashi-takaracho",
+        "billingDistanceMeters": 1700,
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-kandabashi-takaracho",
+        "endpointBindingReason": null,
+        "endpointBindingStatus": null,
+        "entryName": "神田橋入口",
+        "entryRampId": "ramp:c1-outer:kandabashi-entry",
+        "exitName": "宝町出口",
+        "exitRampId": "ramp:c1-outer:takaracho-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "c1-outer:kandabashi-takaracho",
+        "pairIds": [
+          "bp:c1-outer:kandabashi-takaracho"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-kandabashi-takaracho",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p03:c1-kandabashi-takaracho",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 1700,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-kandabashi-takaracho",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p03:c1-kandabashi-takaracho",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 1700,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      },
+      {
+        "assignmentId": "assignment:c1-outer:kasumigaseki-daikancho",
+        "billingDistanceMeters": 12400,
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
+        "endpointBindingReason": null,
+        "endpointBindingStatus": null,
+        "entryName": "霞が関入口",
+        "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
+        "exitName": "代官町出口",
+        "exitRampId": "ramp:c1-outer:daikancho-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "c1-outer:kasumigaseki-daikancho",
+        "pairIds": [
+          "bp:c1-outer:kasumigaseki-daikancho"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 570,
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
+            "observedBaseFareYen": 570,
+            "observedDistanceMeters": 12400,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-kasumigaseki-daikancho",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p03:c1-kasumigaseki-daikancho",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 2300,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      },
+      {
+        "assignmentId": "assignment:c1-outer:ginza-shibakoen",
+        "billingDistanceMeters": 3400,
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-ginza-shibakoen",
+        "endpointBindingReason": null,
+        "endpointBindingStatus": null,
+        "entryName": "銀座入口",
+        "entryRampId": "ramp:c1-outer:ginza-entry",
+        "exitName": "芝公園出口",
+        "exitRampId": "ramp:c1-outer:shibakoen-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "c1-outer:ginza-shibakoen",
+        "pairIds": [
+          "bp:c1-outer:ginza-shibakoen"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-ginza-shibakoen",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p03:c1-ginza-shibakoen",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 3400,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-ginza-shibakoen",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p03:c1-ginza-shibakoen",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 3400,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      },
+      {
+        "assignmentId": "assignment:c1-outer:shibakoen-iikura",
+        "billingDistanceMeters": 1600,
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-shibakoen-iikura",
+        "endpointBindingReason": null,
+        "endpointBindingStatus": null,
+        "entryName": "芝公園入口",
+        "entryRampId": "ramp:c1-outer:shibakoen-entry",
+        "exitName": "飯倉出口",
+        "exitRampId": "ramp:c1-outer:iikura-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "c1-outer:shibakoen-iikura",
+        "pairIds": [
+          "bp:c1-outer:shibakoen-iikura"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-shibakoen-iikura",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p03:c1-shibakoen-iikura",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 1600,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-shibakoen-iikura",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p03:c1-shibakoen-iikura",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 1600,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      },
+      {
+        "assignmentId": "assignment:c1-inner:kasumigaseki-shibakoen",
+        "billingDistanceMeters": 3700,
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-shibakoen",
+        "endpointBindingReason": null,
+        "endpointBindingStatus": null,
+        "entryName": "霞が関入口",
+        "entryRampId": "ramp:c1-inner:kasumigaseki-entry",
+        "exitName": "芝公園出口",
+        "exitRampId": "ramp:c1-inner:shibakoen-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "c1-inner:kasumigaseki-shibakoen",
+        "pairIds": [
+          "bp:c1-inner:kasumigaseki-shibakoen"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-shibakoen",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p03:c1-kasumigaseki-shibakoen",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 3700,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-kasumigaseki-shibakoen",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p03:c1-kasumigaseki-shibakoen",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 3700,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      },
+      {
+        "assignmentId": "assignment:c1-inner:daikancho-kasumigaseki",
+        "billingDistanceMeters": 2300,
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-daikancho-kasumigaseki",
+        "endpointBindingReason": null,
+        "endpointBindingStatus": null,
+        "entryName": "代官町入口",
+        "entryRampId": "ramp:c1-inner:daikancho-entry",
+        "exitName": "霞が関出口",
+        "exitRampId": "ramp:c1-inner:kasumigaseki-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "c1-inner:daikancho-kasumigaseki",
+        "pairIds": [
+          "bp:c1-inner:daikancho-kasumigaseki"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-daikancho-kasumigaseki",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p03:c1-daikancho-kasumigaseki",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 2300,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-daikancho-kasumigaseki",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p03:c1-daikancho-kasumigaseki",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 2300,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      },
+      {
+        "assignmentId": "assignment:c1-inner:shibakoen-shiodome",
+        "billingDistanceMeters": 2400,
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-shibakoen-shiodome",
+        "endpointBindingReason": null,
+        "endpointBindingStatus": null,
+        "entryName": "芝公園入口",
+        "entryRampId": "ramp:c1-inner:shibakoen-entry",
+        "exitName": "汐留出口",
+        "exitRampId": "ramp:c1-inner:shiodome-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "c1-inner:shibakoen-shiodome",
+        "pairIds": [
+          "bp:c1-inner:shibakoen-shiodome"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-shibakoen-shiodome",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p03:c1-shibakoen-shiodome",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 2400,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-shibakoen-shiodome",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p03:c1-shibakoen-shiodome",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 2400,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      },
+      {
+        "assignmentId": "assignment:c1-inner:takaracho-kandabashi",
+        "billingDistanceMeters": 1700,
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi",
+        "endpointBindingReason": null,
+        "endpointBindingStatus": null,
+        "entryName": "宝町入口",
+        "entryRampId": "ramp:c1-inner:takaracho-entry",
+        "exitName": "神田橋出口",
+        "exitRampId": "ramp:c1-inner:kandabashi-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "c1-inner:takaracho-kandabashi",
+        "pairIds": [
+          "bp:c1-inner:takaracho-kandabashi"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 1700,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-takaracho-kandabashi",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p03:c1-takaracho-kandabashi",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 1700,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      },
+      {
+        "assignmentId": "assignment:c1-inner:ginza-shintomicho",
+        "billingDistanceMeters": 400,
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-ginza-shintomicho",
+        "endpointBindingReason": "The tariff cell is verified, but the C1 inner exact exit binding and directed anchor remain unresolved.",
+        "endpointBindingStatus": "unresolved",
+        "entryName": "銀座入口",
+        "entryRampId": "ramp:c1-outer:ginza-entry",
+        "exitName": "新富町出口",
+        "exitRampId": "ramp:c1-inner:shintomicho-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "c1-inner:ginza-shintomicho",
+        "pairIds": [
+          "bp:c1-inner:ginza-shintomicho"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-ginza-shintomicho",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p03:c1-ginza-shintomicho",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 400,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 300,
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-ginza-shintomicho",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p03:c1-ginza-shintomicho",
+            "observedBaseFareYen": 300,
+            "observedDistanceMeters": 400,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      },
+      {
+        "assignmentId": "assignment:2:meguro-tengenji",
+        "billingDistanceMeters": 19400,
+        "distanceEvidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+        "endpointBindingReason": "The tariff cell and the reviewed 4-way/16-edge Tengenji endpoint binding are independent verified facts; both 2025-04 and 2026-10 price periods are verified.",
+        "endpointBindingStatus": "verified_bound",
+        "entryName": "目黒入口",
+        "entryRampId": "ramp:2-inbound:meguro-entry",
+        "exitName": "天現寺出口",
+        "exitRampId": "ramp:2-outbound:tengenji-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "2:meguro-tengenji",
+        "pairIds": [
+          "bp:2-inbound:meguro:c1-inner:tengenji",
+          "bp:2-inbound:meguro:c1-outer:tengenji"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 790,
+            "distanceEvidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+            "observedBaseFareYen": 790,
+            "observedDistanceMeters": 19400,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 860,
+            "distanceEvidenceId": "evidence:2026-10:p04:2-meguro-tengenji",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p04:2-meguro-tengenji",
+            "observedBaseFareYen": 860,
+            "observedDistanceMeters": 19400,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      }
+    ],
+    "deprecatedAssignments": [
+      {
+        "action": "deprecate",
+        "amountYen": null,
+        "billingDistanceMeters": null,
+        "entryRampId": "ramp:3-inbound:yoga-entry",
+        "exitRampId": "ramp:3-outbound:yoga-exit",
+        "legacyAssignmentKey": "ramp:3-inbound:yoga-entry->ramp:3-outbound:yoga-exit",
+        "reason": "The same-facility Yoga OD has no official cell in the phase-1 source set; no OSM-distance fallback is permitted.",
+        "tariffStatus": "unpriced"
+      },
+      {
+        "action": "deprecate",
+        "amountYen": null,
+        "billingDistanceMeters": null,
+        "entryRampId": "ramp:4-inbound:takaido-entry",
+        "exitRampId": "ramp:4-outbound:takaido-exit",
+        "legacyAssignmentKey": "ramp:4-inbound:takaido-entry->ramp:4-outbound:takaido-exit",
+        "reason": "The same-facility Takaido OD has no official cell in the phase-1 source set; no OSM-distance fallback is permitted.",
+        "tariffStatus": "unpriced"
+      }
+    ],
+    "discountsExcluded": [
+      "midnight_discount",
+      "central_tokyo_inflow_discount",
+      "environmental_road_pricing_discount",
+      "etc2_discount",
+      "frequent_user_discount"
+    ],
+    "distanceEvidence": [
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-kandabashi:column-c1-takaracho:base-etc:300yen:1.7km",
+        "columnLabel": "宝町",
+        "distanceLabel": "1.7km",
+        "distanceMeters": 1700,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:c1-outer:kandabashi-entry",
+        "evidenceId": "evidence:2025-04:p03:c1-kandabashi-takaracho",
+        "exitRampId": "ramp:c1-outer:takaracho-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "神田橋",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 570,
+        "cell": "p03:row-c1-kasumigaseki:column-c1-daikancho:base-etc:570yen:12.4km",
+        "columnLabel": "代官町",
+        "distanceLabel": "12.4km",
+        "distanceMeters": 12400,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
+        "evidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
+        "exitRampId": "ramp:c1-outer:daikancho-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 570,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "霞が関",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-ginza:column-c1-shibakoen:base-etc:300yen:3.4km",
+        "columnLabel": "芝公園",
+        "distanceLabel": "3.4km",
+        "distanceMeters": 3400,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:c1-outer:ginza-entry",
+        "evidenceId": "evidence:2025-04:p03:c1-ginza-shibakoen",
+        "exitRampId": "ramp:c1-outer:shibakoen-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "銀座",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-shibakoen:column-c1-iikura:base-etc:300yen:1.6km",
+        "columnLabel": "飯倉",
+        "distanceLabel": "1.6km",
+        "distanceMeters": 1600,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:c1-outer:shibakoen-entry",
+        "evidenceId": "evidence:2025-04:p03:c1-shibakoen-iikura",
+        "exitRampId": "ramp:c1-outer:iikura-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "芝公園",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-kasumigaseki:column-c1-shibakoen:base-etc:300yen:3.7km",
+        "columnLabel": "芝公園",
+        "distanceLabel": "3.7km",
+        "distanceMeters": 3700,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:c1-inner:kasumigaseki-entry",
+        "evidenceId": "evidence:2025-04:p03:c1-kasumigaseki-shibakoen",
+        "exitRampId": "ramp:c1-inner:shibakoen-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "霞が関",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-daikancho:column-c1-kasumigaseki:base-etc:300yen:2.3km",
+        "columnLabel": "霞が関",
+        "distanceLabel": "2.3km",
+        "distanceMeters": 2300,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:c1-inner:daikancho-entry",
+        "evidenceId": "evidence:2025-04:p03:c1-daikancho-kasumigaseki",
+        "exitRampId": "ramp:c1-inner:kasumigaseki-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "代官町",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-shibakoen:column-c1-shiodome:base-etc:300yen:2.4km",
+        "columnLabel": "汐留",
+        "distanceLabel": "2.4km",
+        "distanceMeters": 2400,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:c1-inner:shibakoen-entry",
+        "evidenceId": "evidence:2025-04:p03:c1-shibakoen-shiodome",
+        "exitRampId": "ramp:c1-inner:shiodome-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "芝公園",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-takaracho:column-c1-kandabashi:base-etc:300yen:1.7km",
+        "columnLabel": "神田橋",
+        "distanceLabel": "1.7km",
+        "distanceMeters": 1700,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:c1-inner:takaracho-entry",
+        "evidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi",
+        "exitRampId": "ramp:c1-inner:kandabashi-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "宝町",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-ginza:column-c1-shintomicho:base-etc:300yen:0.4km",
+        "columnLabel": "新富町",
+        "distanceLabel": "0.4km",
+        "distanceMeters": 400,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:c1-outer:ginza-entry",
+        "evidenceId": "evidence:2025-04:p03:c1-ginza-shintomicho",
+        "exitRampId": "ramp:c1-inner:shintomicho-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "銀座",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 790,
+        "cell": "p04:row-2-meguro:column-2-tengenji:base-etc:790yen:19.4km",
+        "columnLabel": "天現寺",
+        "distanceLabel": "19.4km",
+        "distanceMeters": 19400,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:2-inbound:meguro-entry",
+        "evidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+        "exitRampId": "ramp:2-outbound:tengenji-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 790,
+        "page": 4,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "2号目黒線",
+        "rowLabel": "目黒",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-kandabashi:column-c1-takaracho:base-etc:300yen:1.7km",
+        "columnLabel": "宝町",
+        "distanceLabel": "1.7km",
+        "distanceMeters": 1700,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:c1-outer:kandabashi-entry",
+        "evidenceId": "evidence:2026-10:p03:c1-kandabashi-takaracho",
+        "exitRampId": "ramp:c1-outer:takaracho-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "神田橋",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-kasumigaseki:column-c1-daikancho:base-etc:300yen:2.3km",
+        "columnLabel": "代官町",
+        "distanceLabel": "2.3km",
+        "distanceMeters": 2300,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
+        "evidenceId": "evidence:2026-10:p03:c1-kasumigaseki-daikancho",
+        "exitRampId": "ramp:c1-outer:daikancho-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "霞が関",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-ginza:column-c1-shibakoen:base-etc:300yen:3.4km",
+        "columnLabel": "芝公園",
+        "distanceLabel": "3.4km",
+        "distanceMeters": 3400,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:c1-outer:ginza-entry",
+        "evidenceId": "evidence:2026-10:p03:c1-ginza-shibakoen",
+        "exitRampId": "ramp:c1-outer:shibakoen-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "銀座",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-shibakoen:column-c1-iikura:base-etc:300yen:1.6km",
+        "columnLabel": "飯倉",
+        "distanceLabel": "1.6km",
+        "distanceMeters": 1600,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:c1-outer:shibakoen-entry",
+        "evidenceId": "evidence:2026-10:p03:c1-shibakoen-iikura",
+        "exitRampId": "ramp:c1-outer:iikura-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "芝公園",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-kasumigaseki:column-c1-shibakoen:base-etc:300yen:3.7km",
+        "columnLabel": "芝公園",
+        "distanceLabel": "3.7km",
+        "distanceMeters": 3700,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:c1-inner:kasumigaseki-entry",
+        "evidenceId": "evidence:2026-10:p03:c1-kasumigaseki-shibakoen",
+        "exitRampId": "ramp:c1-inner:shibakoen-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "霞が関",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-daikancho:column-c1-kasumigaseki:base-etc:300yen:2.3km",
+        "columnLabel": "霞が関",
+        "distanceLabel": "2.3km",
+        "distanceMeters": 2300,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:c1-inner:daikancho-entry",
+        "evidenceId": "evidence:2026-10:p03:c1-daikancho-kasumigaseki",
+        "exitRampId": "ramp:c1-inner:kasumigaseki-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "代官町",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-shibakoen:column-c1-shiodome:base-etc:300yen:2.4km",
+        "columnLabel": "汐留",
+        "distanceLabel": "2.4km",
+        "distanceMeters": 2400,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:c1-inner:shibakoen-entry",
+        "evidenceId": "evidence:2026-10:p03:c1-shibakoen-shiodome",
+        "exitRampId": "ramp:c1-inner:shiodome-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "芝公園",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-takaracho:column-c1-kandabashi:base-etc:300yen:1.7km",
+        "columnLabel": "神田橋",
+        "distanceLabel": "1.7km",
+        "distanceMeters": 1700,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:c1-inner:takaracho-entry",
+        "evidenceId": "evidence:2026-10:p03:c1-takaracho-kandabashi",
+        "exitRampId": "ramp:c1-inner:kandabashi-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "宝町",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 300,
+        "cell": "p03:row-c1-ginza:column-c1-shintomicho:base-etc:300yen:0.4km",
+        "columnLabel": "新富町",
+        "distanceLabel": "0.4km",
+        "distanceMeters": 400,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:c1-outer:ginza-entry",
+        "evidenceId": "evidence:2026-10:p03:c1-ginza-shintomicho",
+        "exitRampId": "ramp:c1-inner:shintomicho-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 300,
+        "page": 3,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "C1",
+        "rowLabel": "銀座",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 860,
+        "cell": "p04:row-2-meguro:column-2-tengenji:base-etc:860yen:19.4km",
+        "columnLabel": "天現寺",
+        "distanceLabel": "19.4km",
+        "distanceMeters": 19400,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:2-inbound:meguro-entry",
+        "evidenceId": "evidence:2026-10:p04:2-meguro-tengenji",
+        "exitRampId": "ramp:2-outbound:tengenji-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 860,
+        "page": 4,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "routeLabel": "2号目黒線",
+        "rowLabel": "目黒",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      }
+    ],
+    "documents": [
+      {
+        "cachePath": ".cache/official-fare/2504_pamphlet_fee_table.pdf",
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "manualAcquisitionRequired": false,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "status": "verified",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "cachePath": ".cache/official-fare/2604_pamphlet_guide.pdf",
+        "documentId": "shutoko-2026-04-fare-guide",
+        "documentSha256": "8221fca208884b7ab37d92c58dcb7bba2a09e416687588dd19d419bd312a1e45",
+        "edition": "2026-04",
+        "manualAcquisitionRequired": false,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "status": "verified_for_rule_structure",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2604_pamphlet_guide.pdf"
+      },
+      {
+        "cachePath": ".cache/31-toll-shiryo.pdf",
+        "documentId": "shutoko-2026-10-revision-material",
+        "documentSha256": "f80126994b3deee36e198f947f3f4f4c3219dd16473bbd9bc9dd296115345702",
+        "edition": "2026-10",
+        "manualAcquisitionRequired": false,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "status": "verified",
+        "url": "https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/"
+      },
+      {
+        "cachePath": ".cache/official-fare/ryoukin-kaitei_toll_rates.pdf",
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "manualAcquisitionRequired": false,
+        "reviewMethod": [
+          "page_image",
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-09-25T00:00:00Z",
+        "status": "verified",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf"
+      }
+    ],
+    "fareBasis": "base_toll_excluding_discounts",
+    "fareLabel": "普通車ETC基本料金（割引適用前）",
+    "migration": {
+      "addedAssignmentIds": [
+        "assignment:c1-outer:shibakoen-iikura",
+        "assignment:c1-inner:daikancho-kasumigaseki",
+        "assignment:c1-inner:shibakoen-shiodome",
+        "assignment:c1-inner:takaracho-kandabashi",
+        "assignment:c1-inner:ginza-shintomicho",
+        "assignment:2:meguro-tengenji"
+      ],
+      "deprecateLegacyPairs": [
+        "ramp:3-inbound:yoga-entry->ramp:3-outbound:yoga-exit",
+        "ramp:4-inbound:takaido-entry->ramp:4-outbound:takaido-exit"
+      ],
+      "keepAssignmentIds": [
+        "assignment:c1-outer:kandabashi-takaracho",
+        "assignment:c1-outer:kasumigaseki-daikancho",
+        "assignment:c1-outer:ginza-shibakoen",
+        "assignment:c1-inner:kasumigaseki-shibakoen"
+      ],
+      "policy": "Version 3 assignments, price periods, and distance evidence are the tariff authority. verifiedOdPairs is a legacy compatibility projection and contains no deprecated Yoga or Takaido assignment.",
+      "replaceAssignmentIds": []
+    },
+    "paymentMethod": "etc",
+    "pendingEvidence": [],
+    "pendingResolution": {
+      "cachePath": ".cache/official-fare/ryoukin-kaitei_toll_rates.pdf",
+      "documentId": "shutoko-2026-10-od-fare-table",
+      "runtimePolicy": "The verified 2026-10 price and distance are selected from the price period; the PDF and its rendered pages remain outside version control.",
+      "status": "completed_2026_10_pdf_review",
+      "steps": [
+        "The 2026-10 PDF was copied to the ignored cache and its SHA-256 was verified.",
+        "The C1 cells on page 3 and the Route 2 Meguro cell on page 4 were independently checked twice.",
+        "Each 2026-10 price was checked against the ordinary ETC rule, tax, rounding, minimum, and maximum bounds.",
+        "The PDF and rendered page images remain untracked cache files."
+      ]
+    },
+    "rules": {
+      "baseRatePerKmYen": 32.472,
+      "effectiveDate": "2026-10-01",
+      "fixedFeeYen": 150,
+      "maxTollYen": 2130,
+      "minDistanceMeters": 3900,
+      "minTollYen": 300,
+      "roundingYen": 10,
+      "taxRate": 1.1,
+      "vehicleProfile": "passenger-car-etc"
+    },
+    "source": "https://www.shutoko.jp/fee/fee-info/pay_etc/",
+    "sourceDate": "2026-09-16",
+    "tariffRules": [
+      {
+        "discountsExcluded": [
+          "midnight_discount",
+          "central_tokyo_inflow_discount",
+          "environmental_road_pricing_discount",
+          "etc2_discount",
+          "frequent_user_discount"
+        ],
+        "distanceUnitMeters": 100,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "fareBasis": "base_toll_excluding_discounts",
+        "maximumYen": 1950,
+        "minimumDistanceMeters": 4300,
+        "minimumYen": 300,
+        "paymentMethod": "etc",
+        "rateMicrosYenPerUnit": 2952000,
+        "rounding": {
+          "mode": "half_up",
+          "multipleYen": 10
+        },
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "sourceRefs": [
+          {
+            "documentId": "shutoko-2025-04-od-fare-table",
+            "location": "ETC ordinary OD fare and distance table",
+            "page": 3,
+            "source": null,
+            "status": null
+          },
+          {
+            "documentId": "shutoko-2025-04-od-fare-table",
+            "location": "ETC ordinary Route 2 OD fare and distance table",
+            "page": 4,
+            "source": null,
+            "status": null
+          },
+          {
+            "documentId": "shutoko-2026-04-fare-guide",
+            "location": "0.1 km quantum, half-up rounding to 10 yen, and ordinary fare bounds",
+            "page": 4,
+            "source": null,
+            "status": null
+          }
+        ],
+        "taxBasisPoints": 11000,
+        "terminalChargeYen": 150,
+        "vehicleClass": "ordinary"
+      },
+      {
+        "discountsExcluded": [
+          "midnight_discount",
+          "central_tokyo_inflow_discount",
+          "environmental_road_pricing_discount",
+          "etc2_discount",
+          "frequent_user_discount"
+        ],
+        "distanceUnitMeters": 100,
+        "effectiveFrom": "2026-09-30T15:00:00Z",
+        "effectiveTo": null,
+        "fareBasis": "base_toll_excluding_discounts",
+        "maximumYen": 2130,
+        "minimumDistanceMeters": 3900,
+        "minimumYen": 300,
+        "paymentMethod": "etc",
+        "rateMicrosYenPerUnit": 3247200,
+        "rounding": {
+          "mode": "half_up",
+          "multipleYen": 10
+        },
+        "ruleId": "shutoko-etc-ordinary-2026-10",
+        "sourceRefs": [
+          {
+            "documentId": "shutoko-2026-04-fare-guide",
+            "location": "0.1 km quantum, half-up rounding to 10 yen, and distance-based formula structure",
+            "page": 4,
+            "source": null,
+            "status": null
+          },
+          {
+            "documentId": "shutoko-2026-10-revision-material",
+            "location": "ordinary 32.472 yen/km, 300 yen minimum, 2130 yen maximum, and 150 yen terminal charge",
+            "page": 5,
+            "source": null,
+            "status": null
+          },
+          {
+            "documentId": "shutoko-2026-10-revision-material",
+            "location": "ordinary 300 yen minimum and 2130 yen maximum after the 2026-10 revision",
+            "page": 6,
+            "source": null,
+            "status": null
+          },
+          {
+            "documentId": "shutoko-2026-10-od-fare-table",
+            "location": "C1 OD fare and distance cells reviewed from the 2026-10 edition",
+            "page": 3,
+            "source": null,
+            "status": null
+          },
+          {
+            "documentId": "shutoko-2026-10-od-fare-table",
+            "location": "Route 2 Meguro OD fare and distance cells reviewed from the 2026-10 edition",
+            "page": 4,
+            "source": null,
+            "status": null
+          }
+        ],
+        "taxBasisPoints": 11000,
+        "terminalChargeYen": 150,
+        "vehicleClass": "ordinary"
+      }
+    ],
+    "vehicleClass": "ordinary",
+    "vehicleProfile": "passenger-car-etc",
+    "verifiedOdPairs": [
+      {
+        "amountYen": 300,
+        "billingDistanceMeters": 1700,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "entryRampId": "ramp:c1-outer:kandabashi-entry",
+        "exitRampId": "ramp:c1-outer:takaracho-exit"
+      },
+      {
+        "amountYen": 570,
+        "billingDistanceMeters": 12400,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
+        "exitRampId": "ramp:c1-outer:daikancho-exit"
+      },
+      {
+        "amountYen": 300,
+        "billingDistanceMeters": 3400,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "entryRampId": "ramp:c1-outer:ginza-entry",
+        "exitRampId": "ramp:c1-outer:shibakoen-exit"
+      },
+      {
+        "amountYen": 300,
+        "billingDistanceMeters": 3700,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "entryRampId": "ramp:c1-inner:kasumigaseki-entry",
+        "exitRampId": "ramp:c1-inner:shibakoen-exit"
+      },
+      {
+        "amountYen": 300,
+        "billingDistanceMeters": 2300,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "entryRampId": "ramp:c1-inner:daikancho-entry",
+        "exitRampId": "ramp:c1-inner:kasumigaseki-exit"
+      },
+      {
+        "amountYen": 300,
+        "billingDistanceMeters": 2400,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "entryRampId": "ramp:c1-inner:shibakoen-entry",
+        "exitRampId": "ramp:c1-inner:shiodome-exit"
+      },
+      {
+        "amountYen": 300,
+        "billingDistanceMeters": 1700,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "entryRampId": "ramp:c1-inner:takaracho-entry",
+        "exitRampId": "ramp:c1-inner:kandabashi-exit"
+      },
+      {
+        "amountYen": 790,
+        "billingDistanceMeters": 19400,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "entryRampId": "ramp:2-inbound:meguro-entry",
+        "exitRampId": "ramp:2-outbound:tengenji-exit"
+      }
+    ],
+    "version": 3
+  },
   "routeMemberships": [
     {
       "membershipId": "route:C1:inner",

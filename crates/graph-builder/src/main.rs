@@ -7,15 +7,15 @@ use shutoko_graph_builder::{
     apply_od_tariffs_to_graph, audit_first_public_road_connections, bind_ramps_to_graph,
     bound_ramp_evidence_from_inventory, build_manifest, build_route_membership_indices,
     build_topology_with_report, generate_diagnostic_radial_route_plans,
-    graph_schema_v4_to_deterministic_json_with_radial, manifest_to_deterministic_json,
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog, manifest_to_deterministic_json,
     parse_billing_pairs_seed, promote_verified_radial_pair, ramps_artifact_to_deterministic_json,
-    route_memberships_sha256, snap_index_to_deterministic_json, to_deterministic_json,
-    validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
-    validate_promoted_legacy_pairs_from_source, validate_radial_seed_binding_candidates,
-    validate_ramp_inventory, BillingPairProvenance, EdgeKind, EndpointSupportState, ManifestConfig,
-    OdTariffsFile, OsmRampBindingsFile, OverpassResponse, ParsedBillingPairsSeed,
-    RampInventoryFile, RampKind, RampsArtifact, RouteMembershipBuildOptions, TopologyConfig,
-    VerificationStatus,
+    route_memberships_sha256, snap_index_to_deterministic_json, tariff_overrides_from_catalog,
+    to_deterministic_json, validate_od_tariffs, validate_osm_ramp_bindings,
+    validate_osm_ramp_bindings_against_osm, validate_promoted_legacy_pairs_from_source,
+    validate_radial_seed_binding_candidates, validate_ramp_inventory, BillingPairProvenance,
+    EdgeKind, EndpointSupportState, ManifestConfig, OdTariffsFile, OsmRampBindingsFile,
+    OverpassResponse, ParsedBillingPairsSeed, RampInventoryFile, RampKind, RampsArtifact,
+    RouteMembershipBuildOptions, TopologyConfig, VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -383,6 +383,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3.5. Process canonical ramp inventory, OSM bindings, and OD tariffs if provided
     let mut route_membership_evidence = Vec::new();
+    let mut od_tariffs_v3 = None;
+    let mut tariff_overrides = HashMap::new();
     let mut ramps_artifact_opt: Option<(RampsArtifact, String)> = None;
     if let Some(inv_path) = &args.inventory_path {
         let inv_raw = fs::read_to_string(inv_path).map_err(|e| {
@@ -533,6 +535,21 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let tariffs: OdTariffsFile = serde_json::from_str(&tar_raw).map_err(|e| {
                 format!("failed to parse tariffs JSON {}: {}", tar_path.display(), e)
             })?;
+            if tariffs.version >= 3 {
+                let catalog: shutoko_routing_core::OdTariffsFileV3 = serde_json::from_str(&tar_raw)
+                    .map_err(|e| {
+                        format!(
+                            "failed to parse v3 tariffs catalog {}: {}",
+                            tar_path.display(),
+                            e
+                        )
+                    })?;
+                od_tariffs_v3 =
+                    Some(serde_json::to_value(&catalog).map_err(|error| {
+                        format!("failed to serialize tariffs catalog: {error}")
+                    })?);
+                tariff_overrides = tariff_overrides_from_catalog(&tariffs);
+            }
             validate_od_tariffs(&tariffs, &inv).map_err(|errs| {
                 format!(
                     "tariffs validation failed for {}:\n  {}",
@@ -540,7 +557,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     errs.join("\n  ")
                 )
             })?;
-            apply_od_tariffs_to_graph(&mut graph, &tariffs);
+            apply_od_tariffs_to_graph(&mut graph, &tariffs).map_err(std::io::Error::other)?;
         }
 
         shutoko_graph_builder::validate_verified_billing_pair_endpoints(&graph).map_err(
@@ -694,10 +711,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
     let graph_json = if args.graph_schema == 4 {
-        graph_schema_v4_to_deterministic_json_with_radial(
+        graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
             &graph,
             &route_memberships,
             radial_billing_pairs,
+            od_tariffs_v3,
+            tariff_overrides,
         )
         .map_err(|e| format!("graph schema 4 serialization failed: {}", e))?
     } else {

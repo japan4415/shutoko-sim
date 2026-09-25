@@ -131,7 +131,10 @@ describe("Releases delivery", () => {
     },
   );
 
-  it("manifest に無い成果物と未許可の成果物は 404 のまま", async () => {
+  // 404 にする機構は 3 つある: 未許可の release、成果物 allowlist に無い名前、
+  // そしてバケットにオブジェクトが無いこと。engine.json は成果物 allowlist に含まれるが
+  // all-real-v4 には配置されていない（= manifest を上げる前に読ませない）ため 404 のまま。
+  it("allowlist に無い成果物と、対象 release に配置されていない成果物は 404 のまま", async () => {
     const ctx = createExecutionContext();
     for (const artifact of ["engine.json", "od-tariffs-v2.json"]) {
       const res = await worker.fetch(

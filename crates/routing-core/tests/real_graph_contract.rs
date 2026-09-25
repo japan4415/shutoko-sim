@@ -2098,6 +2098,7 @@ fn meguro_explicit_ramp_pair_matches_coordinate_route() {
 /// （web/test/integration-wasm.test.ts）と同じ項目を engine 側でも照合する。
 /// - 最寄りの入口（access node と距離、候補の入口ランプ）
 /// - 候補の件数・並び・pairId / pairKind
+/// - 商品対象か（`productEligible`。Web 側の isProductEligible と同じ規則で判定する）
 /// - 料金（`tariffStatus` と 2026-10 改定をまたぐ 2 時点の金額・規則 ID・証拠 ID・適用期間）
 /// - 推薦バッジが先頭 1 件だけであること
 /// - 同じ入力の再実行がバイト完全一致（並びも決定的）であること
@@ -2216,6 +2217,12 @@ fn representative_locations_release_v4_contract() {
                     candidate["duration"]["planSeconds"], expected["planSeconds"],
                     "{where_pair}: plan seconds"
                 );
+                // 商品対象の判定は fixture を正とする（Web 側の isProductEligible と同じ規則）。
+                assert_eq!(
+                    is_product_eligible(candidate),
+                    expected["productEligible"].as_bool().unwrap(),
+                    "{where_pair}: product eligibility must match the fixture"
+                );
 
                 // 推薦バッジは fixture が指定した 1 件だけ。
                 let recommended = expected["recommended"].as_bool().unwrap();
@@ -2331,7 +2338,8 @@ fn representative_locations_release_v4_contract() {
 }
 
 /// 商品対象の判定（UI と同じ規則）。topologyOnly と未検証の radial は対象外で、
-/// legacyRing は常に対象。
+/// legacyRing は常に対象。representative_locations_release_v4_contract が
+/// fixture の productEligible と突き合わせる。
 fn is_product_eligible(candidate: &Value) -> bool {
     match candidate["pairKind"].as_str().unwrap_or("legacyRing") {
         "topologyOnly" => false,

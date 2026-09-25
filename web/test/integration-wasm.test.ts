@@ -917,40 +917,6 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
     }
   }, 120_000);
 
-  it("2026-10 改定をまたいで目黒の金額だけが変わる（それ以外は据え置き）", async () => {
-    const glue = await import(gluePath.href);
-    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
-    await glue.default({ module_or_path: toBinary(wasmBytes) });
-    const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
-    const releaseId = (JSON.parse(graphJson) as { releaseId: string }).releaseId;
-    const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
-    try {
-      for (const location of locationsFixture.locations) {
-        const amounts = new Map<string, (number | null)[]>();
-        for (const window of locationsFixture.pricingWindows) {
-          for (const expected of location.expectedCandidates) {
-            const pricing = expected.pricing.find((item) => item.window === window.id);
-            const list = amounts.get(expected.pairId) ?? [];
-            list.push(pricing?.amountYen ?? null);
-            amounts.set(expected.pairId, list);
-          }
-        }
-        for (const [pairId, series] of amounts) {
-          expect(series, `${location.label} ${pairId}`).toHaveLength(2);
-          if (location.id === "meguro-station") {
-            // 目黒→天現寺: 790 円（改定前）→ 860 円（改定後、2026-10 版 PDF の OD セル）。
-            expect(series, `${location.label} ${pairId}`).toEqual([790, 860]);
-          } else if (location.label === "東京駅") {
-            // C1 は改定後も 300 円（最低料金）。
-            expect(series, `${location.label} ${pairId}`).toEqual([300, 300]);
-          }
-        }
-      }
-    } finally {
-      pg.free();
-    }
-  });
-
   it("time_per_yen の並びは 首都高走行秒数/料金円 の降順で、推薦は最大効率の 1 件だけ", async () => {
     const glue = await import(gluePath.href);
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
@@ -1036,4 +1002,97 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
       pg.free();
     }
   }, 120_000);
+});
+
+// 改定前後の料金は engine ではなく料金表 v3（data/od-tariffs.json）と突き合わせる。
+// 実 WASM / 実 engine で同じ 2 時点を金額まで照合するのは
+// crates/routing-core/tests/real_graph_contract.rs の
+// representative_locations_release_v4_contract が担う。ここでは fixture が
+// 「2026-10 改定で何が変わるか」を過不足なく表しているかを固定する。
+describe("代表 4 地点の fixture（2026-10 改定と料金表 v3 の突き合わせ）", () => {
+  /** fixture の 1 候補ぶんの価格レコードを pricingWindows の順に並べる。 */
+  function pricingSeries(location: LocationFixture, expected: LocationCandidateFixture) {
+    const label = `${location.label} ${expected.pairId}`;
+    const series = locationsFixture.pricingWindows.map((window) => {
+      const pricing = expected.pricing.find((item) => item.window === window.id);
+      expect(pricing, `${label} ${window.id}`).toBeDefined();
+      if (pricing === undefined) throw new Error(`${label}: pricing window is missing`);
+      return pricing;
+    });
+    expect(series, label).toHaveLength(2);
+    return series;
+  }
+
+  it("fixture の 2 時点の金額は料金表 v3 の適用中レコードと一致する", async () => {
+    const catalog = JSON.parse(
+      await readFile(new URL("data/od-tariffs.json", root), "utf8"),
+    ) as OdTariffsFileV3;
+    let priced = 0;
+    let unpriced = 0;
+    for (const location of locationsFixture.locations) {
+      for (const expected of location.expectedCandidates) {
+        const label = `${location.label} ${expected.pairId}`;
+        const series = pricingSeries(location, expected);
+        for (const [index, window] of locationsFixture.pricingWindows.entries()) {
+          const pricing = series[index];
+          if (pricing === undefined) throw new Error(`${label}: pricing window is missing`);
+          if (expected.tariffStatus !== "priced") {
+            // 商品対象外の候補は 2 時点とも未価格のまま（金額も規則も証拠も無い）。
+            unpriced += 1;
+            expect(pricing.tariffStatus, label).toBe("unpriced");
+            expect(pricing.amountYen, label).toBeNull();
+            expect(pricing.ruleId, label).toBeNull();
+            expect(pricing.evidenceId, label).toBeNull();
+            expect(expected.assignmentId, label).toBeNull();
+            continue;
+          }
+          priced += 1;
+          const assignmentId = expected.assignmentId;
+          expect(assignmentId, label).not.toBeNull();
+          if (assignmentId === null) continue;
+          const price = activePrice(catalog, assignmentId, window.pricingAt);
+          expect(price, `${label} ${window.id}`).not.toBeNull();
+          if (price === null) continue;
+          expect(price.tariffStatus, label).toBe("priced");
+          expect(price.amountYen, label).toBe(pricing.amountYen);
+          expect(price.ruleId, label).toBe(pricing.ruleId);
+          expect(price.evidenceId, label).toBe(pricing.evidenceId);
+          expect(price.distanceEvidenceId, label).toBe(pricing.distanceEvidenceId);
+          expect(price.observedDistanceMeters, label).toBe(pricing.billingDistanceMeters);
+          expect(price.effectiveFrom, label).toBe(pricing.effectiveFrom);
+          expect(price.effectiveTo, label).toBe(pricing.effectiveTo);
+        }
+      }
+    }
+    // 4 地点のうち東京駅と目黒駅だけが料金付き。残りは未価格の topologyOnly。
+    expect(priced).toBeGreaterThan(0);
+    expect(unpriced).toBeGreaterThan(0);
+  });
+
+  it("2026-10 改定で金額が変わるのは目黒→天現寺だけで、他は据え置き（未価格のまま）", () => {
+    const changed: string[] = [];
+    for (const location of locationsFixture.locations) {
+      for (const expected of location.expectedCandidates) {
+        const label = `${location.label} ${expected.pairId}`;
+        const series = pricingSeries(location, expected);
+        const amounts = series.map((pricing) => pricing.amountYen);
+        if (amounts[0] !== amounts[1]) changed.push(expected.pairId);
+        if (location.id === "meguro-station") {
+          // 目黒→天現寺: 790 円（改定前）→ 860 円（改定後、2026-10 版 PDF の OD セル）。
+          expect(amounts, label).toEqual([790, 860]);
+        } else if (expected.tariffStatus === "priced") {
+          // C1 は改定後も 300 円（最低料金）。
+          expect(amounts, label).toEqual([300, 300]);
+        } else {
+          // 銀座・六本木は内回り入口からの 1 区間先に検証済みペアが無く未価格のまま。
+          expect(amounts, label).toEqual([null, null]);
+        }
+      }
+    }
+    // 「それ以外は据え置き」を、期待値を列挙せず差分で固定する。
+    expect(changed.sort()).toEqual([
+      "bp:2-inbound:meguro:c1-inner:tengenji",
+      "bp:2-inbound:meguro:c1-outer:tengenji",
+    ]);
+  });
 });

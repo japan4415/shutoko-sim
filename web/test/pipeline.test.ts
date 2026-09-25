@@ -302,7 +302,12 @@ describe("parseGraphDocument", () => {
     await expect(loadRelease(fetch, releaseId, async () => recordingGlue({ json: "" }))).rejects.toThrowError(
       /billingPairsVersion/,
     );
-    expect(calls.every((url) => !url.endsWith("graph.json"))).toBe(true);
+    // graph.json は route membership hash の照合に要るので取得する。WASM / glue へは進まない。
+    expect(calls).toEqual([
+      `/releases/${releaseId}/manifest.json`,
+      `/releases/${releaseId}/engine.json`,
+      `/releases/${releaseId}/graph.json`,
+    ]);
   });
 });
 

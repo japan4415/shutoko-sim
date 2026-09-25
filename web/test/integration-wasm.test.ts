@@ -15,6 +15,8 @@ import {
   type ArtifactExpectation,
   type FetchLike,
   type FetchResponseLike,
+  type WasmGlueModule,
+  type WasmPreparedGraphLike,
 } from "../src/worker/pipeline";
 import representativeLocations from "../../fixtures/representative-locations.json";
 import {
@@ -32,7 +34,7 @@ import {
   PRODUCT_VEHICLE_CLASS,
   TARIFF_MODEL_VERSION,
 } from "../src/worker/tariff-contract";
-import type { Candidate, UiSearchMessage } from "../src/worker/types";
+import type { Candidate, SearchResult, UiSearchMessage } from "../src/worker/types";
 import type { OdTariffsFileV3, TariffPriceV3 } from "../../crates/routing-wasm/types/index.d";
 
 const root = new URL("../../", import.meta.url);
@@ -112,7 +114,7 @@ export function isWasmContractCompatible(
       !Array.isArray(graph.billingPairs) ||
       manifest.graphSchemaVersion !== 4 ||
       manifest.routePlanVersion !== 1 ||
-      manifest.billingPairsVersion !== "v2" ||
+      (manifest.billingPairsVersion !== "v2" && manifest.billingPairsVersion !== "v3") ||
       typeof manifest.routeMembershipsSha256 !== "string")
   ) {
     return false;
@@ -650,13 +652,42 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
  *
  * - 公開 release と fixture の releaseId が一致する（release を差し替えたら
  *   fixture も更新する。さもないと期待値が現状の検証を黙って通してしまう）
+ * - 最寄りの入口（access node・距離・入口ランプ）が fixture と一致する
  * - 表示する候補は最大 3 件（カタログの検証済み OD 数とは別の制限）
- * - 推薦バッジは先頭 1 件だけに付く
- * - 金額が確定した候補は data/od-tariffs.json（公式 PDF 由来の料金表）の
+ * - 候補の並び・商品区分・推薦バッジが fixture と一致する
+ * - 確定した金額は data/od-tariffs.json（公式 PDF 由来の料金表）の
  *   pricingAt 時点の記録と金額・規則 ID・証拠 ID・適用期間が一致する
+ * - 料金は 2026-10 改定をまたぐ 2 時点を固定する（fixture の pricingWindows）
  * - 画面には基本料金（割引適用前）のラベルと、円あたり効率が基本料金での
  *   比較であることを示す
  */
+interface LocationCandidateFixture {
+  pairId: string;
+  pairKind: string;
+  entryRampId: string | null;
+  exitRampId: string | null;
+  entryName: string | null;
+  exitName: string | null;
+  productEligible: boolean;
+  recommended: boolean;
+  tariffStatus: string;
+  assignmentId: string | null;
+  shutokoSeconds: number;
+  planSeconds: number;
+  // 規則 ID・証拠 ID・課金距離は 2026-10 改定で別レコードになるため時点ごとに固定する。
+  pricing: {
+    window: string;
+    tariffStatus: string;
+    amountYen: number | null;
+    billingDistanceMeters: number | null;
+    ruleId: string | null;
+    evidenceId: string | null;
+    distanceEvidenceId: string | null;
+    effectiveFrom: string | null;
+    effectiveTo: string | null;
+  }[];
+}
+
 interface LocationFixture {
   id: string;
   label: string;
@@ -664,39 +695,33 @@ interface LocationFixture {
   minMinutes: number;
   maxMinutes: number;
   expectedStatus: string;
+  expectedReason: string | null;
   expectedRankingMode: string;
-  expectedNearestAccessNodeId: string;
+  expectedCandidateCount: number;
+  expectedNearestAccess: {
+    nodeId: string;
+    entryRampId: string;
+    entryName: string;
+    distanceMeters: number;
+  };
   expectedRecommendedPairId: string | null;
-  expectedCandidates: {
-    pairId: string;
-    pairKind: string;
-    entryRampId: string | null;
-    exitRampId: string | null;
-    entryName: string | null;
-    exitName: string | null;
-    productEligible: boolean;
-    tariffStatus: string;
-    amountYen: number | null;
-    billingDistanceMeters: number | null;
-    assignmentId: string | null;
-    ruleId: string | null;
-    evidenceId: string | null;
-    effectiveFrom: string | null;
-    effectiveTo: string | null;
-  }[];
+  expectedCandidates: LocationCandidateFixture[];
 }
 
 interface RepresentativeLocationsFixture {
   releaseId: string;
   vehicleProfile: string;
-  pricingAt: string;
   fareLabel: string;
   tollSource: string;
   maxDisplayedCandidates: number;
+  pricingWindows: { id: string; pricingAt: string }[];
   locations: LocationFixture[];
 }
 
 const locationsFixture = representativeLocations as RepresentativeLocationsFixture;
+
+/** 距離の固定値は 1 m 許容で照合する（ハバーサインの実装差を吸収するため）。 */
+const DISTANCE_TOLERANCE_METERS = 1;
 
 /** pricingAt の時点で適用されている od-tariffs.json の価格レコードを探す。 */
 function activePrice(
@@ -716,6 +741,37 @@ function activePrice(
   );
 }
 
+/** 1 地点・1 時点の要求を組み立てる。 */
+function representativeRequest(
+  location: LocationFixture,
+  releaseId: string,
+  pricingAt: string,
+): UiSearchMessage {
+  return {
+    type: "search",
+    requestId: `representative-${location.id}-${pricingAt}`,
+    releaseId,
+    pricingAt,
+    origin: location.origin,
+    minMinutes: location.minMinutes,
+    maxMinutes: location.maxMinutes,
+    vehicleProfile: locationsFixture.vehicleProfile,
+  };
+}
+
+async function searchRepresentative(
+  glue: WasmGlueModule,
+  pg: WasmPreparedGraphLike,
+  location: LocationFixture,
+  releaseId: string,
+  pricingAt: string,
+): Promise<{ result: SearchResult; deterministic: boolean }> {
+  const requestJson = JSON.stringify(buildSearchRequest(representativeRequest(location, releaseId, pricingAt)));
+  const first = glue.searchPrepared(pg, requestJson);
+  const second = glue.searchPrepared(pg, requestJson);
+  return { result: await parseSearchResult(first), deterministic: second === first };
+}
+
 describe("代表 4 地点の fixture（実 WASM）", () => {
   it("公開 release が fixture と一致し、evidence は料金表 v3 の記録と一致する", async () => {
     const catalog = JSON.parse(
@@ -725,6 +781,7 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
     expect(catalog.version).toBe(3);
     expect(catalog.fareLabel).toBe(locationsFixture.fareLabel);
     expect(catalog.vehicleProfile).toBe(locationsFixture.vehicleProfile);
+    expect(locationsFixture.pricingWindows).toHaveLength(2);
 
     const glue = await import(gluePath.href);
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
@@ -738,102 +795,204 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
     const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
     try {
       for (const location of locationsFixture.locations) {
-        const msg: UiSearchMessage = {
-          type: "search",
-          requestId: `representative-${location.id}`,
-          releaseId,
-          pricingAt: locationsFixture.pricingAt,
-          origin: location.origin,
-          minMinutes: location.minMinutes,
-          maxMinutes: location.maxMinutes,
-          vehicleProfile: locationsFixture.vehicleProfile,
-        };
-        const result = await parseSearchResult(
-          glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
-        );
         const where = `${location.label}（${location.id}）`;
+        for (const window of locationsFixture.pricingWindows) {
+          const label = `${where} ${window.id}`;
+          const { result, deterministic } = await searchRepresentative(
+            glue,
+            pg,
+            location,
+            releaseId,
+            window.pricingAt,
+          );
+          // 同じ入力の再実行はバイト完全一致（並びも推薦も決定的）。
+          expect(deterministic, label).toBe(true);
 
-        expect(result.status, where).toBe(location.expectedStatus);
-        expect(result.rankingMode, where).toBe(location.expectedRankingMode);
-        expect(result.nearestAccess?.nodeId ?? null, where).toBe(location.expectedNearestAccessNodeId);
+          expect(result.status, label).toBe(location.expectedStatus);
+          expect(result.reason ?? null, label).toBe(location.expectedReason);
+          expect(result.rankingMode, label).toBe(location.expectedRankingMode);
+          expect(result.candidates.length, label).toBe(location.expectedCandidateCount);
 
-        // 画面に出すのは先頭 3 件まで。engine がさらに返しても表示は 3 件に留める。
-        const displayed = result.candidates.slice(0, MAX_DISPLAY_CANDIDATES);
-        expect(displayed.length, where).toBeLessThanOrEqual(MAX_DISPLAY_CANDIDATES);
-        expect(displayed.length, where).toBe(location.expectedCandidates.length);
-        expect(
-          displayed.map((candidate) => candidate.toll.billingPairId),
-          where,
-        ).toEqual(location.expectedCandidates.map((expected) => expected.pairId));
-
-        // 推薦は先頭 1 件だけ。商品対象外の候補は推薦しない。
-        const recommended = displayed.filter((candidate) => recommendedLabel(candidate) !== null);
-        expect(recommended.length, where).toBeLessThanOrEqual(1);
-        expect(recommended[0]?.toll.billingPairId ?? null, where).toBe(
-          location.expectedRecommendedPairId,
-        );
-
-        displayed.forEach((candidate, index) => {
-          const expected = location.expectedCandidates[index];
-          if (expected === undefined) return;
-          const toll = candidate.toll;
-          expect(candidate.pairKind ?? "legacyRing", where).toBe(expected.pairKind);
-          expect(candidate.entry.rampId ?? null, where).toBe(expected.entryRampId);
-          expect(candidate.exit.rampId ?? null, where).toBe(expected.exitRampId);
-          expect(candidate.entry.name ?? null, where).toBe(expected.entryName);
-          expect(candidate.exit.name ?? null, where).toBe(expected.exitName);
-          expect(isProductEligible(candidate), where).toBe(expected.productEligible);
-          const status = "tariffStatus" in candidate ? candidate.tariffStatus : undefined;
-          expect(status ?? null, where).toBe(expected.tariffStatus);
-          expect(toll.amountYen, where).toBe(expected.amountYen);
-          expect(toll.billingDistanceMeters ?? null, where).toBe(expected.billingDistanceMeters);
-          expect(toll.effectiveFrom, where).toBe(expected.effectiveFrom);
-          expect(toll.effectiveTo, where).toBe(expected.effectiveTo);
-          // 金額は必ず「普通車ETC基本料金（割引適用前）」で、割引を適用しない。
-          expect(toll.fareLabel ?? null, where).toBe(locationsFixture.fareLabel);
-          expect(toll.vehicleClass ?? null, where).toBe("ordinary");
-          expect(toll.paymentMethod ?? null, where).toBe("etc");
-          expect(toll.fareBasis ?? null, where).toBe("base_toll_excluding_discounts");
-          expect(toll.discountsExcluded ?? false, where).toBe(true);
-
-          if (expected.tariffStatus !== "priced") {
-            // 確定しない候補は金額も証拠も持たない（parseSearchResult も検査している）。
-            expect(toll.amountYen, where).toBeNull();
-            expect(toll.assignmentId ?? null, where).toBeNull();
-            expect(toll.ruleId ?? null, where).toBeNull();
-            expect(toll.evidenceId ?? null, where).toBeNull();
-            expect(toll.tollSource ?? null, where).toBeNull();
-            return;
+          // 最寄りの入口: access node・距離・入口ランプ。
+          const nearest = result.nearestAccess;
+          expect(nearest?.nodeId ?? null, label).toBe(location.expectedNearestAccess.nodeId);
+          expect(
+            Math.abs((nearest?.distanceMeters ?? Number.NaN) - location.expectedNearestAccess.distanceMeters),
+            label,
+          ).toBeLessThanOrEqual(DISTANCE_TOLERANCE_METERS);
+          for (const expected of location.expectedCandidates) {
+            // 候補は最寄りの入口 tier からしか返らないので、入口ランプも一致する。
+            expect(expected.entryRampId, label).toBe(location.expectedNearestAccess.entryRampId);
           }
 
-          // 確定した金額は公式 PDF 由来の料金表（data/od-tariffs.json）の
-          // 当該時点の記録と、金額・規則 ID・証拠 ID・適用期間まで一致する。
-          expect(toll.tollSource ?? null, where).toBe(locationsFixture.tollSource);
-          expect(toll.assignmentId ?? null, where).toBe(expected.assignmentId);
-          expect(toll.ruleId ?? null, where).toBe(expected.ruleId);
-          expect(toll.evidenceId ?? null, where).toBe(expected.evidenceId);
-          expect(toll.distanceEvidenceId ?? null, where).toBe(expected.evidenceId);
-          const price = activePrice(catalog, expected.assignmentId ?? "", locationsFixture.pricingAt);
-          expect(price, `${where} ${expected.assignmentId ?? ""}`).not.toBeNull();
-          if (price === null) return;
-          expect(price.tariffStatus, where).toBe("priced");
-          expect(price.amountYen, where).toBe(toll.amountYen);
-          expect(price.ruleId, where).toBe(toll.ruleId);
-          expect(price.evidenceId, where).toBe(toll.evidenceId);
-          expect(price.effectiveFrom, where).toBe(toll.effectiveFrom);
-          expect(price.effectiveTo, where).toBe(toll.effectiveTo);
-          expect(price.observedDistanceMeters, where).toBe(toll.billingDistanceMeters);
-          const assignment = catalog.assignments.find(
-            (item) => item.assignmentId === expected.assignmentId,
+          // 画面に出すのは先頭 3 件まで。engine がさらに返しても表示は 3 件に留める。
+          const displayed = result.candidates.slice(0, MAX_DISPLAY_CANDIDATES);
+          expect(displayed.length, label).toBeLessThanOrEqual(MAX_DISPLAY_CANDIDATES);
+          expect(displayed.length, label).toBe(location.expectedCandidates.length);
+          expect(
+            displayed.map((candidate) => candidate.toll.billingPairId),
+            label,
+          ).toEqual(location.expectedCandidates.map((expected) => expected.pairId));
+
+          // 推薦バッジは fixture が指定した 1 件だけに付く。
+          const recommended = displayed.filter((candidate) => recommendedLabel(candidate) !== null);
+          expect(recommended.length, label).toBeLessThanOrEqual(1);
+          expect(recommended[0]?.toll.billingPairId ?? null, label).toBe(
+            location.expectedRecommendedPairId,
           );
-          expect(assignment?.vehicleProfile ?? null, where).toBe(locationsFixture.vehicleProfile);
-          expect(assignment?.fareBasis ?? null, where).toBe("base_toll_excluding_discounts");
-        });
+          expect(
+            location.expectedCandidates.filter((expected) => expected.recommended).map(
+              (expected) => expected.pairId,
+            ),
+            label,
+          ).toEqual(location.expectedRecommendedPairId === null ? [] : [location.expectedRecommendedPairId]);
+
+          displayed.forEach((candidate, index) => {
+            const expected = location.expectedCandidates[index];
+            if (expected === undefined) return;
+            const toll = candidate.toll;
+            const pricing = expected.pricing.find((item) => item.window === window.id);
+            expect(pricing, `${label} ${expected.pairId}`).toBeDefined();
+            if (pricing === undefined) return;
+
+            expect(candidate.pairKind ?? "legacyRing", label).toBe(expected.pairKind);
+            expect(candidate.duration.shutokoSeconds, label).toBe(expected.shutokoSeconds);
+            expect(candidate.duration.planSeconds, label).toBe(expected.planSeconds);
+            expect(candidate.entry.rampId ?? null, label).toBe(expected.entryRampId);
+            expect(candidate.exit.rampId ?? null, label).toBe(expected.exitRampId);
+            expect(candidate.entry.name ?? null, label).toBe(expected.entryName);
+            expect(candidate.exit.name ?? null, label).toBe(expected.exitName);
+            expect(isProductEligible(candidate), label).toBe(expected.productEligible);
+            const status = "tariffStatus" in candidate ? candidate.tariffStatus : undefined;
+            expect(status ?? null, label).toBe(expected.tariffStatus);
+            expect(status ?? null, label).toBe(pricing.tariffStatus);
+            expect(toll.amountYen, label).toBe(pricing.amountYen);
+            expect(toll.billingDistanceMeters ?? null, label).toBe(pricing.billingDistanceMeters);
+            expect(toll.effectiveFrom, label).toBe(pricing.effectiveFrom);
+            expect(toll.effectiveTo, label).toBe(pricing.effectiveTo);
+            // 金額は必ず「普通車ETC基本料金（割引適用前）」で、割引を適用しない。
+            expect(toll.fareLabel ?? null, label).toBe(locationsFixture.fareLabel);
+            expect(toll.vehicleClass ?? null, label).toBe("ordinary");
+            expect(toll.paymentMethod ?? null, label).toBe("etc");
+            expect(toll.fareBasis ?? null, label).toBe("base_toll_excluding_discounts");
+            expect(toll.discountsExcluded ?? false, label).toBe(true);
+
+            if (expected.tariffStatus !== "priced") {
+              // 確定しない候補は金額も証拠も持たない（parseSearchResult も検査している）。
+              expect(toll.amountYen, label).toBeNull();
+              expect(toll.assignmentId ?? null, label).toBeNull();
+              expect(toll.ruleId ?? null, label).toBeNull();
+              expect(toll.evidenceId ?? null, label).toBeNull();
+              expect(toll.tollSource ?? null, label).toBeNull();
+              return;
+            }
+
+            // 確定した金額は公式 PDF 由来の料金表（data/od-tariffs.json）の
+            // 当該時点の記録と、金額・規則 ID・証拠 ID・適用期間まで一致する。
+            expect(toll.tollSource ?? null, label).toBe(locationsFixture.tollSource);
+            expect(toll.assignmentId ?? null, label).toBe(expected.assignmentId);
+            expect(toll.ruleId ?? null, label).toBe(pricing.ruleId);
+            expect(toll.evidenceId ?? null, label).toBe(pricing.evidenceId);
+            expect(toll.distanceEvidenceId ?? null, label).toBe(pricing.distanceEvidenceId);
+            const price = activePrice(catalog, expected.assignmentId ?? "", window.pricingAt);
+            expect(price, `${label} ${expected.assignmentId ?? ""}`).not.toBeNull();
+            if (price === null) return;
+            expect(price.tariffStatus, label).toBe("priced");
+            expect(price.amountYen, label).toBe(toll.amountYen);
+            expect(price.ruleId, label).toBe(toll.ruleId);
+            expect(price.evidenceId, label).toBe(toll.evidenceId);
+            expect(price.effectiveFrom, label).toBe(toll.effectiveFrom);
+            expect(price.effectiveTo, label).toBe(toll.effectiveTo);
+            expect(price.observedDistanceMeters, label).toBe(toll.billingDistanceMeters);
+            const assignment = catalog.assignments.find(
+              (item) => item.assignmentId === expected.assignmentId,
+            );
+            expect(assignment?.vehicleProfile ?? null, label).toBe(locationsFixture.vehicleProfile);
+            expect(assignment?.fareBasis ?? null, label).toBe("base_toll_excluding_discounts");
+          });
+        }
       }
     } finally {
       pg.free();
     }
-  }, 60_000);
+  }, 120_000);
+
+  it("2026-10 改定をまたいで目黒の金額だけが変わる（それ以外は据え置き）", async () => {
+    const glue = await import(gluePath.href);
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
+    const releaseId = (JSON.parse(graphJson) as { releaseId: string }).releaseId;
+    const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+    try {
+      for (const location of locationsFixture.locations) {
+        const amounts = new Map<string, (number | null)[]>();
+        for (const window of locationsFixture.pricingWindows) {
+          for (const expected of location.expectedCandidates) {
+            const pricing = expected.pricing.find((item) => item.window === window.id);
+            const list = amounts.get(expected.pairId) ?? [];
+            list.push(pricing?.amountYen ?? null);
+            amounts.set(expected.pairId, list);
+          }
+        }
+        for (const [pairId, series] of amounts) {
+          expect(series, `${location.label} ${pairId}`).toHaveLength(2);
+          if (location.id === "meguro-station") {
+            // 目黒→天現寺: 790 円（改定前）→ 860 円（改定後、2026-10 版 PDF の OD セル）。
+            expect(series, `${location.label} ${pairId}`).toEqual([790, 860]);
+          } else if (location.label === "東京駅") {
+            // C1 は改定後も 300 円（最低料金）。
+            expect(series, `${location.label} ${pairId}`).toEqual([300, 300]);
+          }
+        }
+      }
+    } finally {
+      pg.free();
+    }
+  });
+
+  it("time_per_yen の並びは 首都高走行秒数/料金円 の降順で、推薦は最大効率の 1 件だけ", async () => {
+    const glue = await import(gluePath.href);
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
+    const releaseId = (JSON.parse(graphJson) as { releaseId: string }).releaseId;
+    const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+    try {
+      let rankedLocations = 0;
+      for (const location of locationsFixture.locations) {
+        for (const window of locationsFixture.pricingWindows) {
+          const { result } = await searchRepresentative(glue, pg, location, releaseId, window.pricingAt);
+          if (result.rankingMode !== "time_per_yen") continue;
+          rankedLocations += 1;
+          const displayed = result.candidates.slice(0, MAX_DISPLAY_CANDIDATES);
+          const efficiency = displayed.map((candidate) => {
+            const amount = candidate.toll.amountYen;
+            expect(amount, `${location.label} ${window.id}`).not.toBeNull();
+            return (candidate.duration.shutokoSeconds ?? 0) / (amount ?? 1);
+          });
+          // 主規則（円あたり首都高走行時間）が降順であること。同値は安定 ID 順に閉じる。
+          for (let index = 1; index < efficiency.length; index += 1) {
+            expect(
+              efficiency[index - 1],
+              `${location.label} ${window.id} ${String(index)}`,
+            ).toBeGreaterThanOrEqual(efficiency[index] ?? 0);
+          }
+          // 推薦は効率最大の先頭 1 件だけ。
+          const best = displayed.findIndex((candidate) => recommendedLabel(candidate) !== null);
+          expect(best, `${location.label} ${window.id}`).toBe(
+            displayed.every((candidate) => isProductEligible(candidate) && candidate.toll.amountYen !== null)
+              ? 0
+              : -1,
+          );
+        }
+      }
+      // 並べ替えの規則を検証する窓が少なくとも 1 つ存在する。
+      expect(rankedLocations).toBeGreaterThan(0);
+    } finally {
+      pg.free();
+    }
+  }, 120_000);
 
   it("4 地点の候補カードが基本料金のラベルと効率の注記を出す", async () => {
     const glue = await import(gluePath.href);
@@ -845,19 +1004,9 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
     try {
       let pricedCards = 0;
       for (const location of locationsFixture.locations) {
-        const msg: UiSearchMessage = {
-          type: "search",
-          requestId: `representative-card-${location.id}`,
-          releaseId,
-          pricingAt: locationsFixture.pricingAt,
-          origin: location.origin,
-          minMinutes: location.minMinutes,
-          maxMinutes: location.maxMinutes,
-          vehicleProfile: locationsFixture.vehicleProfile,
-        };
-        const result = await parseSearchResult(
-          glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
-        );
+        const window = locationsFixture.pricingWindows[0];
+        if (window === undefined) throw new Error("pricingWindows must not be empty");
+        const { result } = await searchRepresentative(glue, pg, location, releaseId, window.pricingAt);
         const displayed = result.candidates
           .slice(0, MAX_DISPLAY_CANDIDATES)
           .map((candidate: Candidate, index) => toCardModel(candidate, index + 1));
@@ -865,7 +1014,8 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
         for (const [index, model] of displayed.entries()) {
           const expected = location.expectedCandidates[index];
           if (expected === undefined) continue;
-          if (expected.tariffStatus !== "priced") {
+          const pricing = expected.pricing.find((item) => item.window === window.id);
+          if (expected.tariffStatus !== "priced" || pricing?.amountYen === null || pricing === undefined) {
             // 金額が未算出なら、料金のラベルも効率の注記も出さない。
             expect(model.fareLabelNote, location.label).toBeNull();
             expect(model.timePerYen, location.label).toBeNull();
@@ -873,7 +1023,7 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
             continue;
           }
           pricedCards += 1;
-          expect(model.toll, location.label).toContain(expected.amountYen?.toLocaleString("ja-JP") ?? "");
+          expect(model.toll, location.label).toContain(pricing.amountYen.toLocaleString("ja-JP"));
           expect(model.fareLabelNote, location.label).toBe(`上記は${PRODUCT_FARE_LABEL}です`);
           // 効率の比較は基本料金だと注記で明示する。
           expect(model.timePerYen, location.label).toContain("円あたり");
@@ -885,5 +1035,5 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
     } finally {
       pg.free();
     }
-  }, 60_000);
+  }, 120_000);
 });

@@ -1,6 +1,15 @@
 // UI 用の純粋関数群。DOM を触らず、Vitest から決定論的に検証できる。
 // 文言対応表は scout-002 F5（docs/interfaces.md:96-104 の status/reason コード）に従う。
-import type { Candidate, GeoJsonLineString, SearchResult, SnappedOrigin, Toll } from "../worker/types";
+import type {
+  Candidate,
+  EstimatedLeg,
+  GeoJsonLineString,
+  MapsHandoffLegRole,
+  RoutePlanSegmentRole,
+  SearchResult,
+  SnappedOrigin,
+  Toll,
+} from "../worker/types";
 
 import { DEFAULT_RELEASE_ID } from "../worker/artifact-hashes";
 
@@ -455,6 +464,8 @@ export function reasonText(code: string): string {
       return "首都高滞在時間が最長";
     case "ONE_SECTION_TOLL":
       return "1区間料金（最低料金）";
+    case "TOPOLOGY_ONLY":
+      return "商品対象外（道路形状のみ）";
     default:
       return code;
   }
@@ -482,6 +493,30 @@ export function distanceText(meters: number): string {
  */
 export function formatRank(allPriced: boolean, index: number): string | null {
   return allPriced ? `最安順位 ${String(index)} 位` : null;
+}
+
+export function isProductEligible(candidate: Candidate): boolean {
+  if (candidate.pairKind === "topologyOnly") {
+    return false;
+  }
+  if (candidate.pairKind === "radialReturn") {
+    return (
+      candidate.eligibilityStatus === "verified_one_section_ahead" &&
+      candidate.loopValidationStatus === "declared_route_validated"
+    );
+  }
+  return true;
+}
+
+export function canRankByPrice(
+  rankingMode: SearchResult["rankingMode"],
+  candidates: readonly Candidate[],
+): boolean {
+  return (
+    rankingMode === "time_per_yen" &&
+    candidates.length > 0 &&
+    candidates.every((candidate) => isProductEligible(candidate) && candidate.toll.amountYen !== null)
+  );
 }
 
 /** 推薦ラベル。BEST_* 系の理由を持つ先頭候補にのみ付ける。 */
@@ -549,6 +584,50 @@ export function geolocationErrorMessage(code: number): string {
   }
 }
 
+export type RouteLineStyle = "solid" | "dotted" | "dashed" | "dash-dot";
+
+export interface RouteLegModel {
+  number: number;
+  role: RoutePlanSegmentRole;
+  label: string;
+  lineStyle: RouteLineStyle;
+  lineStyleText: string;
+  edgeCount: number;
+}
+
+export interface EstimatedLegModel {
+  role: EstimatedLeg["role"];
+  label: string;
+  distanceKm: number;
+  durationMinutes: number;
+}
+
+export interface RouteOverviewStepModel {
+  number: number;
+  label: string;
+  lineStyle: RouteLineStyle;
+  lineStyleText: string;
+  detail: string;
+}
+
+export const RADIAL_HANDOFF_NOTICE =
+  "Google マップへの引き継ぎは、実機での確認が済むまで利用できません";
+export const TOPOLOGY_HANDOFF_NOTICE =
+  "この候補は道路形状のみの参考経路のため、Google マップへの引き継ぎはできません";
+
+export interface MapsLegModel {
+  role: MapsHandoffLegRole;
+  label: string;
+  mapsUrl: string;
+  urlSha256: string;
+}
+
+const MAPS_LEG_LABELS: Record<MapsHandoffLegRole, string> = {
+  surface_access: "1. 出発地 → 入口",
+  loop_transfer: "2. 入口 → 周回 → 戻り",
+  surface_return: "3. 出口 → 出発地",
+};
+
 /** 候補カードの描画モデル。 */
 export interface CardModel {
   id: string;
@@ -562,6 +641,11 @@ export interface CardModel {
   returnMinutes: number;
   bufferMinutes: number;
   distanceKm: number;
+  shutokoDistanceKm: number;
+  routeLegs: RouteLegModel[];
+  estimatedLegs: EstimatedLegModel[];
+  routeOverview: RouteOverviewStepModel[];
+  pathSummary: string | null;
   toll: string;
   tollShort: string;
   timePerYen: string | null;
@@ -572,6 +656,8 @@ export interface CardModel {
   chargedSection: string;
   warnings: string[];
   mapsUrl: string;
+  mapsLegUrls: MapsLegModel[];
+  mapsHandoffNotice: string | null;
   geometry: GeoJsonLineString;
   entryId: string;
   exitId: string;
@@ -584,6 +670,91 @@ function rampName(candidate: Candidate, which: "entry" | "exit"): string {
   return name ?? candidate[which === "entry" ? "entryId" : "exitId"];
 }
 
+const ROUTE_LEG_PRESENTATION: Record<
+  RoutePlanSegmentRole,
+  { label: string; lineStyle: RouteLineStyle; lineStyleText: string }
+> = {
+  entry_approach: { label: "入口アプローチ", lineStyle: "solid", lineStyleText: "実線" },
+  mandatory_lap: { label: "必須周回", lineStyle: "dotted", lineStyleText: "点線" },
+  return_corridor: { label: "戻り経路", lineStyle: "dashed", lineStyleText: "破線" },
+  exit_approach: { label: "出口アプローチ", lineStyle: "dash-dot", lineStyleText: "一点鎖線" },
+};
+
+function routeLegModels(candidate: Candidate): RouteLegModel[] {
+  if (candidate.pairKind !== "radialReturn") {
+    return [];
+  }
+  return candidate.edgeRouteLegs.map((leg, index) => {
+    const presentation = ROUTE_LEG_PRESENTATION[leg.role];
+    return {
+      number: index + 1,
+      role: leg.role,
+      label: presentation.label,
+      lineStyle: presentation.lineStyle,
+      lineStyleText: presentation.lineStyleText,
+      edgeCount: leg.endEdgeIndexExclusive - leg.startEdgeIndex,
+    };
+  });
+}
+
+function estimatedLegModels(candidate: Candidate): EstimatedLegModel[] {
+  if (!("estimatedLegs" in candidate)) {
+    return [];
+  }
+  return candidate.estimatedLegs.map((leg) => ({
+    role: leg.role,
+    label: leg.role === "surface_access" ? "出発地 → 入口" : "出口 → 出発地",
+    distanceKm: Number((leg.distanceMeters / 1000).toFixed(1)),
+    durationMinutes: minutesCeilFromSeconds(leg.durationSeconds),
+  }));
+}
+
+function topologyRouteOverview(
+  candidate: Candidate,
+  estimated: EstimatedLegModel[],
+): RouteOverviewStepModel[] {
+  if (candidate.pairKind !== "topologyOnly") {
+    return [];
+  }
+  const access = estimated.find((leg) => leg.role === "surface_access");
+  const surfaceReturn = estimated.find((leg) => leg.role === "surface_return");
+  return [
+    {
+      number: 1,
+      label: "一般道アクセス（推定）",
+      lineStyle: "dashed",
+      lineStyleText: "破線（地図非表示）",
+      detail: access === undefined ? "" : `推定 ${String(access.distanceKm)} km / 約${String(access.durationMinutes)}分`,
+    },
+    {
+      number: 2,
+      label: "首都高の道路形状",
+      lineStyle: "solid",
+      lineStyleText: "実線",
+      detail: `${rampName(candidate, "entry")} → ${rampName(candidate, "exit")}（商品対象外）`,
+    },
+    {
+      number: 3,
+      label: "一般道帰路（推定）",
+      lineStyle: "dashed",
+      lineStyleText: "破線（地図非表示）",
+      detail: surfaceReturn === undefined
+        ? ""
+        : `推定 ${String(surfaceReturn.distanceKm)} km / 約${String(surfaceReturn.durationMinutes)}分`,
+    },
+  ];
+}
+
+function pathSummary(candidate: Candidate): string | null {
+  if (candidate.pairKind === "radialReturn") {
+    return "出発地 →（一般道・推定）→ 入口 → 首都高4区間 → 出口 →（一般道・推定）→ 出発地";
+  }
+  if (candidate.pairKind === "topologyOnly") {
+    return "出発地 →（一般道・推定）→ 入口 → 首都高の道路形状 → 出口 →（一般道・推定）→ 出発地";
+  }
+  return null;
+}
+
 /** 料金の短縮表記（カード上部のバッジ向け）。未算出は「未算出」。 */
 function tollShortText(toll: Toll): string {
   return toll.amountYen === null
@@ -591,11 +762,23 @@ function tollShortText(toll: Toll): string {
     : `${toll.amountYen.toLocaleString("ja-JP")} 円`;
 }
 
+function referenceTollText(toll: Toll): string {
+  return toll.amountYen === null
+    ? "参考料金: 未算出"
+    : `参考料金: ${toll.amountYen.toLocaleString("ja-JP")} 円`;
+}
+
 /**
  * 円あたり効率（首都高時間 / 料金）。amountYen が null のときは算出しない。
  * 「1区間の料金で首都高を約 s 分走る」の比較値をカードに添えるための文字列。
  */
 function timePerYenText(candidate: Candidate): string | null {
+  if (!isProductEligible(candidate)) {
+    return null;
+  }
+  if ("tariffStatus" in candidate && candidate.tariffStatus !== "priced") {
+    return null;
+  }
   const amount = candidate.toll.amountYen;
   if (amount === null || amount <= 0) {
     return null;
@@ -612,6 +795,45 @@ function timePerYenText(candidate: Candidate): string | null {
 export function toCardModel(candidate: Candidate, index = 1): CardModel {
   const entry = rampName(candidate, "entry");
   const exit = rampName(candidate, "exit");
+  const isRadial = candidate.pairKind === "radialReturn";
+  const isTopologyOnly = candidate.pairKind === "topologyOnly";
+  const productEligible = isProductEligible(candidate);
+  const suppressTopologyHandoff =
+    isTopologyOnly &&
+    candidate.entry.rampId === "ramp:2-inbound:meguro-entry" &&
+    candidate.exit.rampId === "ramp:2-outbound:meguro-exit";
+  const mapsUrl = isRadial || suppressTopologyHandoff ? "" : candidate.handoff.mapsUrl;
+  const mapsLegUrls = isRadial && candidate.handoff.enabled
+    ? candidate.handoff.legUrls.map((leg) => ({
+        role: leg.role,
+        label: MAPS_LEG_LABELS[leg.role],
+        mapsUrl: leg.mapsUrl,
+        urlSha256: leg.urlSha256,
+      }))
+    : [];
+  const mapsHandoffNotice = isRadial
+    ? candidate.handoff.enabled
+      ? null
+      : RADIAL_HANDOFF_NOTICE
+    : suppressTopologyHandoff
+      ? TOPOLOGY_HANDOFF_NOTICE
+      : null;
+  const chargedSection = isTopologyOnly
+    ? "道路形状のみ（商品対象外）"
+    : isRadial && !productEligible
+      ? "首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）"
+      : isRadial
+        ? "首都高区間: 入口 → 周回 → 戻り"
+        : `課金対象: ${entry} → ${exit} の1区間`;
+  const loopEdgeIds = isRadial
+    ? candidate.edgeRouteLegs
+        .filter((leg) => leg.role === "mandatory_lap")
+        .flatMap((leg) => candidate.edgeIds.slice(leg.startEdgeIndex, leg.endEdgeIndexExclusive))
+    : candidate.loop.edgeIds;
+  const routeLegs = routeLegModels(candidate);
+  const estimatedLegs = estimatedLegModels(candidate);
+  const routeOverview = topologyRouteOverview(candidate, estimatedLegs);
+  const routePathSummary = pathSummary(candidate);
   return {
     id: candidate.id,
     index,
@@ -622,20 +844,33 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     returnMinutes: minutesFromSeconds(candidate.duration.returnSeconds),
     bufferMinutes: minutesFromSeconds(candidate.duration.bufferSeconds),
     distanceKm: Number((candidate.distanceMeters / 1000).toFixed(1)),
-    toll: tollText(candidate.toll),
+    shutokoDistanceKm: Number((candidate.shutokoDistanceMeters / 1000).toFixed(1)),
+    routeLegs,
+    estimatedLegs,
+    routeOverview,
+    pathSummary: routePathSummary,
+    toll: isTopologyOnly ? referenceTollText(candidate.toll) : tollText(candidate.toll),
     tollShort: tollShortText(candidate.toll),
     timePerYen: timePerYenText(candidate),
     rankLabel: null,
-    reasons: candidate.reasons.map(reasonText),
+    reasons: candidate.reasons
+      .filter(
+        (code) =>
+          (candidate.pairKind !== "radialReturn" && candidate.pairKind !== "topologyOnly") ||
+          code !== "ONE_SECTION_TOLL",
+      )
+      .map(reasonText),
     route: `${entry} → ${exit}`,
     roadNames: candidate.roadNames,
-    chargedSection: `課金対象: ${entry} → ${exit} の1区間`,
+    chargedSection,
     warnings: candidate.warnings.map(warningText),
-    mapsUrl: candidate.handoff.mapsUrl,
+    mapsUrl,
+    mapsLegUrls,
+    mapsHandoffNotice,
     geometry: candidate.geometry,
     entryId: candidate.entryId,
     exitId: candidate.exitId,
-    loopEdgeIds: candidate.loop.edgeIds,
+    loopEdgeIds,
     edgeIds: candidate.edgeIds,
   };
 }

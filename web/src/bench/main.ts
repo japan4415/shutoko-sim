@@ -239,9 +239,28 @@ function renderCard(model: ReturnType<typeof toCardModel>): HTMLElement {
     p.textContent = text;
     card.appendChild(p);
   }
-  const button = document.createElement("button");
-  button.textContent = "出発する（Google マップを開く）";
-  card.appendChild(button);
+  if (model.mapsHandoffNotice !== null) {
+    const notice = document.createElement("p");
+    notice.className = "maps-handoff-notice";
+    notice.textContent = model.mapsHandoffNotice;
+    card.appendChild(notice);
+  }
+  for (const leg of model.mapsLegUrls) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "depart maps-leg-depart";
+    button.dataset.mapsRole = leg.role;
+    button.textContent = `${leg.label}（Google マップを開く）`;
+    button.addEventListener("click", () => {
+      window.open(leg.mapsUrl, "_blank", "noopener");
+    });
+    card.appendChild(button);
+  }
+  if (model.mapsUrl !== "") {
+    const button = document.createElement("button");
+    button.textContent = "出発する（Google マップを開く）";
+    card.appendChild(button);
+  }
   return card;
 }
 

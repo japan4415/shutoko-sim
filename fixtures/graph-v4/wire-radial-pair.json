@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 4,
+  "billingPairs": [
+    {
+      "id": "fixture:radial",
+      "pairKind": "radialReturn",
+      "routePlanVersion": 1,
+      "vehicleProfile": "passenger-car-etc",
+      "entryId": "e:w1001:0:f",
+      "exitId": "e:w2001:0:f",
+      "entryEndpoint": {
+        "rampId": "fixture:ramp:entry",
+        "name": "fixture entry",
+        "supportState": "verified_bound",
+        "directedSegments": [
+          {
+            "segmentId": "fixture:binding:entry:0",
+            "osmWayIds": [1001],
+            "osmNodeIds": [10001, 10002],
+            "edgeIds": ["e:w1001:0:f"],
+            "fromNodeId": "fixture:node:entry:ground",
+            "toNodeId": "fixture:node:entry:ramp-end",
+            "edgeIdsSha256": "3bd278b5466bf3fcc1430252a31af1235a51b2429b03631760ccd61b1ee33dd4"
+          }
+        ]
+      },
+      "exitEndpoint": {
+        "rampId": "fixture:ramp:exit",
+        "name": "fixture exit",
+        "supportState": "verified_bound",
+        "directedSegments": [
+          {
+            "segmentId": "fixture:binding:exit:0",
+            "osmWayIds": [2001],
+            "osmNodeIds": [20001, 20002],
+            "edgeIds": ["e:w2001:0:f"],
+            "fromNodeId": "fixture:node:exit:connector",
+            "toNodeId": "fixture:node:exit:ground",
+            "edgeIdsSha256": "724a7c8e35a3744a010a1cb14117a33e4416a97a81f59c4c50dbba4c9a7ee9c5"
+          }
+        ]
+      },
+      "routePlan": {
+        "entryCorridor": {
+          "membershipId": "route:fixture:R1:inbound",
+          "terminalEdgeId": "fixture:edge:merge:mainline",
+          "mergeNodeId": "fixture:node:merge"
+        },
+        "anchor": {
+          "anchorKind": "directedJunction",
+          "routeId": "fixture:loop",
+          "direction": "forward",
+          "mergeNodeId": "fixture:node:merge",
+          "branchNodeId": "fixture:node:branch",
+          "mergeTerminalEdgeId": "fixture:edge:merge:mainline",
+          "branchInitialEdgeId": "fixture:edge:return:mainline",
+          "arcPolicy": "ordinaryLongArc",
+          "excludedShortConnector": {
+            "fromNodeId": "fixture:node:branch",
+            "toNodeId": "fixture:node:merge",
+            "osmWayId": 3001,
+            "edgeCount": 1,
+            "distanceMeters": 100
+          }
+        },
+        "mandatoryLap": {
+          "membershipId": "route:fixture:loop:forward",
+          "firstEdgeId": "fixture:edge:lap:1",
+          "lastEdgeId": "fixture:edge:lap:2",
+          "lapCount": 1
+        },
+        "returnCorridor": {
+          "membershipId": "route:fixture:R1:outbound",
+          "startNodeId": "fixture:node:branch",
+          "initialEdgeId": "fixture:edge:return:mainline",
+          "firstGeneralExit": {
+            "rule": "firstGeneralExit",
+            "expectedRampId": "fixture:ramp:exit",
+            "exactDirectedBinding": "verified_bound"
+          }
+        }
+      },
+      "resolvedRouteSegments": [
+        {
+          "resolvedSegmentId": "fixture:resolved:entry",
+          "role": "entry_approach",
+          "membershipId": "route:fixture:R1:inbound",
+          "sourceSegmentIds": ["fixture:binding:entry:0", "fixture:relation:r1:inbound:main"],
+          "edgeIds": ["e:w1001:0:f", "fixture:edge:entry:mainline", "fixture:edge:merge:mainline"],
+          "edgeIdsSha256": "e5af06421dd3aa889f69f1f72a94ab927c6bb8d77ce99ac076ef3c390600a4f5"
+        },
+        {
+          "resolvedSegmentId": "fixture:resolved:lap",
+          "role": "mandatory_lap",
+          "membershipId": "route:fixture:loop:forward",
+          "sourceSegmentIds": ["fixture:relation:loop:forward:main"],
+          "edgeIds": ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+          "edgeIdsSha256": "99ddf4b7771edc3fe3c04034d2465719932ca1c2d2104c0d05bab41d6e462a43"
+        },
+        {
+          "resolvedSegmentId": "fixture:resolved:return",
+          "role": "return_corridor",
+          "membershipId": "route:fixture:R1:outbound",
+          "sourceSegmentIds": ["fixture:relation:r1:outbound:main"],
+          "edgeIds": ["fixture:edge:return:mainline"],
+          "edgeIdsSha256": "ba825c8c0f6236ca476824f7553aefe8bf09a94a5343c2470cde33b1bb443e1b"
+        },
+        {
+          "resolvedSegmentId": "fixture:resolved:exit",
+          "role": "exit_approach",
+          "membershipId": "route:fixture:R1:outbound",
+          "sourceSegmentIds": ["fixture:binding:exit:0"],
+          "edgeIds": ["e:w2001:0:f"],
+          "edgeIdsSha256": "724a7c8e35a3744a010a1cb14117a33e4416a97a81f59c4c50dbba4c9a7ee9c5"
+        }
+      ],
+      "routingCapability": "routable",
+      "pairEligibility": {
+        "status": "verified_one_section_ahead",
+        "oneSectionAheadVerified": true
+      },
+      "loopValidation": { "status": "declared_route_validated" },
+      "tariff": {
+        "status": "unpriced",
+        "amountYen": null,
+        "billingDistanceMeters": null,
+        "prices": []
+      }
+    }
+  ]
+}

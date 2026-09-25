@@ -2,8 +2,11 @@
 // fetch と import は引数注入にし、Vitest からモックで決定論的に検証できるようにする。
 
 import { KNOWN_RELEASES } from "./artifact-hashes";
+import bundledDeviceVerificationManifest from "../../../data/device-verification-manifest.json?raw";
 import type {
   BenchPayload,
+  GraphDocument,
+  RoutePlanSegmentRole,
   SearchResult,
   SearchRequest,
   UiSearchMessage,
@@ -32,10 +35,21 @@ export const ENGINE_SCHEMA_VERSION = 1;
  */
 export const MAX_ACCESS_DISTANCE_METERS = 46_000;
 
+export const DEVICE_VERIFICATION_MANIFEST_JSON = bundledDeviceVerificationManifest;
+export const DEVICE_VERIFICATION_EVALUATED_AT = "2026-09-25T00:00:00Z";
+
+export function buildSearchLimitsJson(
+  manifestJson: string = DEVICE_VERIFICATION_MANIFEST_JSON,
+  evaluatedAt: string = DEVICE_VERIFICATION_EVALUATED_AT,
+): string {
+  return JSON.stringify({
+    maxAccessDistanceMeters: MAX_ACCESS_DISTANCE_METERS,
+    deviceVerification: { manifestJson, evaluatedAt },
+  });
+}
+
 /** `prepare` の第 2 引数へ渡す SearchLimits JSON。 */
-export const SEARCH_LIMITS_JSON = JSON.stringify({
-  maxAccessDistanceMeters: MAX_ACCESS_DISTANCE_METERS,
-});
+export const SEARCH_LIMITS_JSON = buildSearchLimitsJson();
 /** engine.json で期待値を持つ成果物（照合対象）。 */
 export const WASM_ARTIFACT_PATH = "shutoko_routing_bg.wasm";
 export const GLUE_ARTIFACT_PATH = "shutoko_routing.js";
@@ -48,6 +62,85 @@ export class PipelineError extends Error {
     super(message);
     this.code = code;
   }
+}
+
+export const SUPPORTED_GRAPH_SCHEMA_VERSIONS = [2, 3, 4] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function graphContractMismatch(message: string): PipelineError {
+  return new PipelineError("ARTIFACT_MISMATCH", message);
+}
+
+function validateSchema4BillingPair(value: unknown, index: number): void {
+  if (!isRecord(value) || (value.pairKind !== "legacyRing" && value.pairKind !== "radialReturn")) {
+    throw graphContractMismatch(`graph.json: billingPairs[${String(index)}] の pairKind が不正`);
+  }
+  if (value.pairKind === "legacyRing") {
+    if (
+      !isRecord(value.anchor) ||
+      value.anchor.anchorKind !== "sameNode" ||
+      !Array.isArray(value.entryToAnchorEdgeIds) ||
+      !Array.isArray(value.anchorToExitEdgeIds)
+    ) {
+      throw graphContractMismatch(`graph.json: billingPairs[${String(index)}] の legacyRing contract が不正`);
+    }
+  } else if (
+    value.routePlanVersion !== 1 ||
+    !isRecord(value.routePlan) ||
+    !isRecord(value.routePlan.anchor) ||
+    value.routePlan.anchor.anchorKind !== "directedJunction" ||
+    !Array.isArray(value.resolvedRouteSegments)
+  ) {
+    throw graphContractMismatch(`graph.json: billingPairs[${String(index)}] の radialReturn contract が不正`);
+  }
+}
+
+export function parseGraphDocument(graphJson: string): GraphDocument {
+  let value: unknown;
+  try {
+    value = JSON.parse(graphJson);
+  } catch {
+    throw graphContractMismatch("graph.json: JSON デコード失敗");
+  }
+  if (!isRecord(value)) {
+    throw graphContractMismatch("graph.json: top-level がオブジェクトではありません");
+  }
+  const schemaVersion = value.schemaVersion;
+  if (
+    typeof schemaVersion !== "number" ||
+    !SUPPORTED_GRAPH_SCHEMA_VERSIONS.includes(schemaVersion as 2 | 3 | 4)
+  ) {
+    throw graphContractMismatch("graph.json: schemaVersion が 2 / 3 / 4 以外です");
+  }
+  if (
+    typeof value.releaseId !== "string" ||
+    typeof value.vehicleProfile !== "string" ||
+    !Array.isArray(value.nodes) ||
+    !Array.isArray(value.edges) ||
+    !Array.isArray(value.billingPairs)
+  ) {
+    throw graphContractMismatch("graph.json: 必須 field が欠落または型違いです");
+  }
+  if (schemaVersion === 4) {
+    if (!Array.isArray(value.routeMemberships)) {
+      throw graphContractMismatch("graph.json: schema 4 の routeMemberships がありません");
+    }
+    value.billingPairs.forEach(validateSchema4BillingPair);
+  } else if (value.routeMemberships !== undefined) {
+    throw graphContractMismatch("graph.json: schema 2 / 3 は routeMemberships を持ちません");
+  } else {
+    value.billingPairs.forEach((pair, index) => {
+      if (isRecord(pair) && pair.pairKind !== undefined) {
+        throw graphContractMismatch(
+          `graph.json: billingPairs[${String(index)}] の pairKind は schema 4 専用です`,
+        );
+      }
+    });
+  }
+  return value as unknown as GraphDocument;
 }
 
 /** fetch の最小互換（テストでは同一形状のモックを注入する）。 */
@@ -88,6 +181,107 @@ export async function hexDigest(buf: ArrayBuffer): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+function requiredString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw graphContractMismatch(`${label} が非空文字列ではありません`);
+  }
+  return value;
+}
+
+function requiredStringArray(value: unknown, label: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw graphContractMismatch(`${label} が非空文字列配列ではありません`);
+  }
+  return value;
+}
+
+function canonicalRouteMemberships(value: unknown): string {
+  if (!Array.isArray(value)) {
+    throw graphContractMismatch("graph.json: routeMemberships が配列ではありません");
+  }
+  const memberships = value.map((membership, membershipIndex) => {
+    if (!isRecord(membership)) {
+      throw graphContractMismatch(`routeMemberships[${String(membershipIndex)}] がオブジェクトではありません`);
+    }
+    if (!Array.isArray(membership.segments)) {
+      throw graphContractMismatch(`routeMemberships[${String(membershipIndex)}].segments が配列ではありません`);
+    }
+    const segments = membership.segments.map((segment, segmentIndex) => {
+      if (!isRecord(segment)) {
+        throw graphContractMismatch(
+          `routeMemberships[${String(membershipIndex)}].segments[${String(segmentIndex)}] がオブジェクトではありません`,
+        );
+      }
+      const optionalString = (field: string): string | null => {
+        const fieldValue = segment[field];
+        if (fieldValue === undefined || fieldValue === null) return null;
+        return requiredString(fieldValue, `routeMemberships segment ${field}`);
+      };
+      const optionalNonNegativeIntegerArray = (field: string): number[] | undefined => {
+        const fieldValue = segment[field];
+        if (fieldValue === undefined || fieldValue === null) return undefined;
+        if (
+          !Array.isArray(fieldValue) ||
+          fieldValue.some((item) => !Number.isSafeInteger(item) || item < 0)
+        ) {
+          throw graphContractMismatch(
+            `routeMemberships segment ${field} が非負整数配列ではありません`,
+          );
+        }
+        return fieldValue;
+      };
+      const optionalBoolean = (field: string): boolean | undefined => {
+        const fieldValue = segment[field];
+        if (fieldValue === undefined || fieldValue === null) return undefined;
+        if (typeof fieldValue !== "boolean") {
+          throw graphContractMismatch(`routeMemberships segment ${field} が boolean ではありません`);
+        }
+        return fieldValue;
+      };
+      const memberIndexes = optionalNonNegativeIntegerArray("memberIndexes");
+      const memberOrderMatchesRelation = optionalBoolean("memberOrderMatchesRelation");
+      return {
+        segmentId: requiredString(segment.segmentId, "routeMemberships segmentId"),
+        sourceKind: requiredString(segment.sourceKind, "routeMemberships sourceKind"),
+        sourceRelationId: optionalString("sourceRelationId"),
+        sourceSnapshotSha256: requiredString(
+          segment.sourceSnapshotSha256,
+          "routeMemberships sourceSnapshotSha256",
+        ),
+        bindingEvidenceId: optionalString("bindingEvidenceId"),
+        orderedEdgeIds: requiredStringArray(
+          segment.orderedEdgeIds,
+          "routeMemberships orderedEdgeIds",
+        ),
+        orderedEdgeIdsSha256: requiredString(
+          segment.orderedEdgeIdsSha256,
+          "routeMemberships orderedEdgeIdsSha256",
+        ),
+        ...(memberIndexes === undefined ? {} : { memberIndexes }),
+        ...(memberOrderMatchesRelation === undefined
+          ? {}
+          : { memberOrderMatchesRelation }),
+      };
+    });
+    return {
+      membershipId: requiredString(membership.membershipId, "routeMemberships membershipId"),
+      routeId: requiredString(membership.routeId, "routeMemberships routeId"),
+      direction: requiredString(membership.direction, "routeMemberships direction"),
+      directionMappingVersion: requiredString(
+        membership.directionMappingVersion,
+        "routeMemberships directionMappingVersion",
+      ),
+      segments,
+    };
+  });
+  return JSON.stringify(memberships);
+}
+
+export async function routeMembershipsSha256(value: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(canonicalRouteMemberships(value));
+  return hexDigest(bytes.buffer as ArrayBuffer);
 }
 
 /** バイト長と SHA-256 の両方が一致するか。 */
@@ -180,6 +374,12 @@ async function verifyOrStop(name: string, bytes: Uint8Array, expected: ArtifactE
 }
 
 interface ManifestLike {
+  schemaVersion?: unknown;
+  releaseId?: unknown;
+  graphSchemaVersion?: unknown;
+  routePlanVersion?: unknown;
+  billingPairsVersion?: unknown;
+  routeMembershipsSha256?: unknown;
   artifacts?: { path: string; sha256: string; byteLength: number }[];
 }
 
@@ -209,6 +409,65 @@ function engineExpectation(engine: EngineLike, path: string, engineUrl: string):
   return { sha256: entry.sha256, byteLength: entry.byteLength };
 }
 
+function validateManifestEnvelope(manifest: ManifestLike, releaseId: string): void {
+  if (manifest.schemaVersion !== undefined && manifest.schemaVersion !== 1) {
+    throw graphContractMismatch("manifest.json: schemaVersion が 1 以外です");
+  }
+  if (manifest.releaseId !== undefined && manifest.releaseId !== releaseId) {
+    throw graphContractMismatch(
+      `manifest.json: releaseId が不正です（expected ${releaseId}）`,
+    );
+  }
+}
+
+async function validateGraphManifestContract(
+  manifest: ManifestLike,
+  graph: GraphDocument,
+  releaseId: string,
+): Promise<void> {
+  if (graph.releaseId !== releaseId) {
+    throw graphContractMismatch("graph.json: releaseId が要求された releaseId と一致しません");
+  }
+  const graphSchemaVersion = graph.schemaVersion;
+  if (
+    manifest.graphSchemaVersion !== undefined &&
+    manifest.graphSchemaVersion !== graphSchemaVersion
+  ) {
+    throw graphContractMismatch(
+      `manifest.json: graphSchemaVersion が graph.json と一致しません（expected ${String(graphSchemaVersion)}）`,
+    );
+  }
+  if (graphSchemaVersion !== 4) return;
+  if (manifest.schemaVersion !== 1) {
+    throw graphContractMismatch("manifest.json: schemaVersion=1 の記録が必要です");
+  }
+  if (manifest.releaseId !== releaseId) {
+    throw graphContractMismatch(
+      `manifest.json: releaseId が要求された releaseId と一致しません（expected ${releaseId}）`,
+    );
+  }
+  if (manifest.graphSchemaVersion !== 4) {
+    throw graphContractMismatch("manifest.json: graphSchemaVersion=4 の記録が必要です");
+  }
+  if (manifest.billingPairsVersion !== "v2") {
+    throw graphContractMismatch("manifest.json: billingPairsVersion=v2 の記録が必要です");
+  }
+  if (manifest.routePlanVersion !== 1) {
+    throw graphContractMismatch("manifest.json: routePlanVersion=1 の記録が必要です");
+  }
+  const expectedHash = requiredString(
+    manifest.routeMembershipsSha256,
+    "manifest.json: routeMembershipsSha256",
+  );
+  if (!/^[0-9a-f]{64}$/.test(expectedHash)) {
+    throw graphContractMismatch("manifest.json: routeMembershipsSha256 が lowercase SHA-256 ではありません");
+  }
+  const actualHash = await routeMembershipsSha256(graph.routeMemberships);
+  if (actualHash !== expectedHash) {
+    throw graphContractMismatch("manifest.json: routeMembershipsSha256 が graph.json と一致しません");
+  }
+}
+
 /** loadRelease の任意オプション（計測ページ専用。通常 UI は指定しない）。 */
 export interface LoadReleaseOptions {
   /**
@@ -218,6 +477,8 @@ export interface LoadReleaseOptions {
    * 省略時は URL を一切変えない（通常経路の挙動は不変）。
    */
   cacheBust?: string;
+  deviceVerificationManifestJson?: string;
+  deviceVerificationEvaluatedAt?: string;
 }
 
 /**
@@ -255,9 +516,16 @@ export async function loadRelease(
   } catch {
     throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: JSON デコード失敗`);
   }
+  validateManifestEnvelope(manifest, releaseId);
   const graphEntry = (manifest.artifacts ?? []).find((a) => a.path === "graph.json");
-  if (!graphEntry) {
-    throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: artifacts に graph.json 無し`);
+  if (
+    graphEntry === undefined ||
+    typeof graphEntry.sha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(graphEntry.sha256) ||
+    !Number.isSafeInteger(graphEntry.byteLength) ||
+    graphEntry.byteLength < 0
+  ) {
+    throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: graph.json の有効な descriptor が無い`);
   }
 
   const engineUrl = `${base}/engine.json${query}`;
@@ -286,6 +554,8 @@ export async function loadRelease(
   const graphBytes = await fetchBytes(fetchImpl, graphUrl, signal);
   await verifyOrStop(graphUrl, graphBytes, graphEntry);
   const graphJson = new TextDecoder().decode(graphBytes);
+  const graph = parseGraphDocument(graphJson);
+  await validateGraphManifestContract(manifest, graph, releaseId);
 
   const wasmUrl = `${base}/${WASM_ARTIFACT_PATH}${query}`;
   const wasmBytes = await fetchBytes(fetchImpl, wasmUrl, signal);
@@ -298,7 +568,13 @@ export async function loadRelease(
 
   await glue.default({ module_or_path: wasmBytes });
 
-  const preparedGraph = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+  const preparedGraph = glue.prepare(
+    graphJson,
+    buildSearchLimitsJson(
+      options.deviceVerificationManifestJson,
+      options.deviceVerificationEvaluatedAt,
+    ),
+  );
 
   let refCount = 1;
   let freed = false;
@@ -348,7 +624,7 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 /** 有限かつ非負（距離・秒数は負にならない）。 */
-function assertFiniteNonNegative(value: unknown, label: string): void {
+function assertFiniteNonNegative(value: unknown, label: string): asserts value is number {
   if (!isFiniteNumber(value) || value < 0) {
     throw contractMismatch(`${label} が有限の非負数値ではありません（${String(value)}）`);
   }
@@ -390,12 +666,476 @@ function assertDiagnostics(result: Record<string, unknown>): void {
   }
 }
 
+const ROUTE_ROLES: RoutePlanSegmentRole[] = [
+  "entry_approach",
+  "mandatory_lap",
+  "return_corridor",
+  "exit_approach",
+];
+
+const MAPS_HANDOFF_ROLES = ["surface_access", "loop_transfer", "surface_return"] as const;
+
+function assertStringArray(value: unknown, label: string): asserts value is string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw contractMismatch(`${label} が非空文字列配列ではありません`);
+  }
+}
+
+function assertSha256(value: unknown, label: string): asserts value is string {
+  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) {
+    throw contractMismatch(`${label} が lowercase SHA-256 ではありません`);
+  }
+}
+
+function assertFiniteCoordinate(value: unknown, label: string): asserts value is number {
+  if (!isFiniteNumber(value)) {
+    throw contractMismatch(`${label} が有限数値ではありません`);
+  }
+}
+
+function assertMapsCoordinate(value: unknown, label: string): void {
+  if (typeof value !== "string") {
+    throw contractMismatch(`${label} の座標形式が不正です`);
+  }
+  const parts = value.split(",");
+  if (
+    parts.length !== 2 ||
+    !/^-?(?:0|[1-9]\d{0,2})\.\d{6}$/.test(parts[0] ?? "") ||
+    !/^-?(?:0|[1-9]\d{0,2})\.\d{6}$/.test(parts[1] ?? "")
+  ) {
+    throw contractMismatch(`${label} の座標形式が不正です`);
+  }
+  const latitude = Number(parts[0]);
+  const longitude = Number(parts[1]);
+  if (!Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) {
+    throw contractMismatch(`${label} の座標範囲が不正です`);
+  }
+}
+
+function validateMapsUrl(value: unknown, label: string): asserts value is string {
+  if (typeof value !== "string" || value.length > 2048) {
+    throw contractMismatch(`${label} の URL が不正です`);
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw contractMismatch(`${label} の URL が不正です`);
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.hostname !== "www.google.com" ||
+    parsed.port !== "" ||
+    parsed.pathname !== "/maps/dir/" ||
+    parsed.hash !== "" ||
+    parsed.username !== "" ||
+    parsed.password !== ""
+  ) {
+    throw contractMismatch(`${label} の URL 許可範囲が不正です`);
+  }
+  const params = parsed.searchParams;
+  const keys = [...params.keys()];
+  const allowed = new Set(["api", "origin", "destination", "travelmode", "waypoints"]);
+  if (keys.some((key) => !allowed.has(key)) || new Set(keys).size !== keys.length) {
+    throw contractMismatch(`${label} の URL パラメータが不正です`);
+  }
+  for (const key of ["api", "origin", "destination", "travelmode"]) {
+    if (params.getAll(key).length !== 1) {
+      throw contractMismatch(`${label} の URL パラメータが不正です`);
+    }
+  }
+  if (params.get("api") !== "1" || params.get("travelmode") !== "driving") {
+    throw contractMismatch(`${label} の URL パラメータが不正です`);
+  }
+  assertMapsCoordinate(params.get("origin"), `${label}.origin`);
+  assertMapsCoordinate(params.get("destination"), `${label}.destination`);
+  const waypoints = params.get("waypoints");
+  if (waypoints !== null) {
+    const values = waypoints.split("|");
+    if (values.length < 1 || values.length > 3) {
+      throw contractMismatch(`${label} の waypoints 数が不正です`);
+    }
+    values.forEach((point, index) => {
+      assertMapsCoordinate(point, `${label}.waypoints[${String(index)}]`);
+    });
+  }
+}
+
+async function validateSingleMapsHandoff(value: unknown, label: string): Promise<void> {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.origin) ||
+    !isRecord(value.destination) ||
+    !Array.isArray(value.waypoints) ||
+    value.waypoints.length > 3 ||
+    !(value.verificationSetVersion === null || typeof value.verificationSetVersion === "string")
+  ) {
+    throw contractMismatch(`${label} の handoff が不正です`);
+  }
+  assertFiniteCoordinate(value.origin.lat, `${label}.origin.lat`);
+  assertFiniteCoordinate(value.origin.lon, `${label}.origin.lon`);
+  assertFiniteCoordinate(value.destination.lat, `${label}.destination.lat`);
+  assertFiniteCoordinate(value.destination.lon, `${label}.destination.lon`);
+  if (value.origin.lat < -90 || value.origin.lat > 90 || value.origin.lon < -180 || value.origin.lon > 180) {
+    throw contractMismatch(`${label} の origin 座標範囲が不正です`);
+  }
+  if (value.destination.lat < -90 || value.destination.lat > 90 || value.destination.lon < -180 || value.destination.lon > 180) {
+    throw contractMismatch(`${label} の destination 座標範囲が不正です`);
+  }
+  for (const [index, point] of value.waypoints.entries()) {
+    if (!isRecord(point)) {
+      throw contractMismatch(`${label}.waypoints[${String(index)}] が不正です`);
+    }
+    assertFiniteCoordinate(point.lat, `${label}.waypoints[${String(index)}].lat`);
+    assertFiniteCoordinate(point.lon, `${label}.waypoints[${String(index)}].lon`);
+    if (point.lat < -90 || point.lat > 90 || point.lon < -180 || point.lon > 180) {
+      throw contractMismatch(`${label}.waypoints[${String(index)}] の座標範囲が不正です`);
+    }
+  }
+  validateMapsUrl(value.mapsUrl, `${label}.mapsUrl`);
+}
+
+function validateCandidateBase(candidate: Record<string, unknown>, label: string): void {
+  for (const field of ["id", "releaseId", "originNodeId", "entryId", "exitId"]) {
+    requiredString(candidate[field], `${label}.${field}`);
+  }
+  assertStringArray(candidate.edgeIds, `${label}.edgeIds`);
+  if (candidate.edgeIds.length > 20_000 || !isRecord(candidate.entry) || !isRecord(candidate.exit)) {
+    throw contractMismatch(`${label} の entry / exit が不正です`);
+  }
+  if (
+    candidate.entry.edgeId !== candidate.entryId ||
+    candidate.exit.edgeId !== candidate.exitId ||
+    !isRecord(candidate.geometry) ||
+    candidate.geometry.type !== "LineString" ||
+    !Array.isArray(candidate.geometry.coordinates) ||
+    candidate.geometry.coordinates.length !== candidate.edgeIds.length + 1
+  ) {
+    throw contractMismatch(`${label} の entry / exit / geometry が不正です`);
+  }
+  for (const [index, point] of candidate.geometry.coordinates.entries()) {
+    if (!Array.isArray(point) || point.length !== 2 || !isFiniteNumber(point[0]) || !isFiniteNumber(point[1])) {
+      throw contractMismatch(`${label}.geometry.coordinates[${String(index)}] が不正です`);
+    }
+    if (point[0] < -180 || point[0] > 180 || point[1] < -90 || point[1] > 90) {
+      throw contractMismatch(`${label}.geometry.coordinates[${String(index)}] の範囲が不正です`);
+    }
+  }
+  if (candidate.origin !== null) {
+    if (!isRecord(candidate.origin)) {
+      throw contractMismatch(`${label}.origin が不正です`);
+    }
+    assertFiniteCoordinate(candidate.origin.lat, `${label}.origin.lat`);
+    assertFiniteCoordinate(candidate.origin.lon, `${label}.origin.lon`);
+  }
+  assertStringArray(candidate.roadNames, `${label}.roadNames`);
+  assertStringArray(candidate.reasons, `${label}.reasons`);
+  assertStringArray(candidate.warnings, `${label}.warnings`);
+  if (!isRecord(candidate.toll)) {
+    throw contractMismatch(`${label}.toll が不正です`);
+  }
+  requiredString(candidate.toll.billingPairId, `${label}.toll.billingPairId`);
+  assertFiniteNonNegative(candidate.distanceMeters, `${label}.distanceMeters`);
+  assertFiniteNonNegative(candidate.shutokoDistanceMeters, `${label}.shutokoDistanceMeters`);
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0;
+}
+
+function validateEstimatedLegsAndTotals(candidate: Record<string, unknown>, label: string): void {
+  const estimated = candidate.estimatedLegs;
+  if (!Array.isArray(estimated) || estimated.length !== 2) {
+    throw contractMismatch(`${label} estimatedLegs が 2 件ではありません`);
+  }
+  const expectedRoles = ["surface_access", "surface_return"];
+  const allowedFields = new Set(["role", "estimated", "distanceMeters", "durationSeconds"]);
+  let surfaceDistance = 0;
+  for (let index = 0; index < estimated.length; index += 1) {
+    const leg = estimated[index];
+    if (
+      !isRecord(leg) ||
+      Object.keys(leg).length !== allowedFields.size ||
+      Object.keys(leg).some((field) => !allowedFields.has(field)) ||
+      leg.role !== expectedRoles[index] ||
+      leg.estimated !== true ||
+      !isNonNegativeSafeInteger(leg.distanceMeters) ||
+      !isNonNegativeSafeInteger(leg.durationSeconds) ||
+      (leg.distanceMeters === 0) !== (leg.durationSeconds === 0)
+    ) {
+      throw contractMismatch(`${label} estimatedLegs[${String(index)}] が不正です`);
+    }
+    surfaceDistance += leg.distanceMeters;
+  }
+  const duration = candidate.duration;
+  if (
+    !isRecord(duration) ||
+    !isNonNegativeSafeInteger(duration.accessSeconds) ||
+    !isNonNegativeSafeInteger(duration.shutokoSeconds) ||
+    !isNonNegativeSafeInteger(duration.returnSeconds) ||
+    !isNonNegativeSafeInteger(duration.baseSeconds) ||
+    !isNonNegativeSafeInteger(duration.bufferSeconds) ||
+    !isNonNegativeSafeInteger(duration.planSeconds)
+  ) {
+    throw contractMismatch(`${label} duration が不正です`);
+  }
+  const baseSeconds = duration.accessSeconds + duration.shutokoSeconds + duration.returnSeconds;
+  const bufferSeconds = Math.max(300, Math.ceil(baseSeconds / 5));
+  if (
+    duration.accessSeconds !== estimated[0].durationSeconds ||
+    duration.returnSeconds !== estimated[1].durationSeconds ||
+    duration.baseSeconds !== baseSeconds ||
+    duration.bufferSeconds !== bufferSeconds ||
+    duration.planSeconds !== baseSeconds + bufferSeconds
+  ) {
+    throw contractMismatch(`${label} duration と estimatedLegs が一致しません`);
+  }
+  if (
+    !isNonNegativeSafeInteger(candidate.distanceMeters) ||
+    !isNonNegativeSafeInteger(candidate.shutokoDistanceMeters) ||
+    !Number.isSafeInteger(surfaceDistance)
+  ) {
+    throw contractMismatch(`${label} distance が不正です`);
+  }
+  if (candidate.distanceMeters !== candidate.shutokoDistanceMeters + surfaceDistance) {
+    throw contractMismatch(`${label} distanceMeters の式が一致しません`);
+  }
+}
+
+function validateTariffStatus(
+  candidate: Record<string, unknown>,
+  label: string,
+  unpricedBillingMustBeNull: boolean,
+): void {
+  const toll = candidate.toll;
+  const amountYen = isRecord(toll) ? toll.amountYen : undefined;
+  const amountValid = amountYen === null || isNonNegativeSafeInteger(amountYen);
+  if (
+    !isRecord(toll) ||
+    !["priced", "unpriced", "expired", "not_applicable"].includes(String(candidate.tariffStatus)) ||
+    !amountValid ||
+    (candidate.tariffStatus === "priced" ? amountYen === null : amountYen !== null) ||
+    (unpricedBillingMustBeNull &&
+      candidate.tariffStatus === "unpriced" &&
+      toll.billingDistanceMeters != null)
+  ) {
+    throw contractMismatch(`${label} tariffStatus が toll と一致しません`);
+  }
+}
+
+async function validateRadialHandoff(value: unknown): Promise<void> {
+  if (
+    !isRecord(value) ||
+    typeof value.enabled !== "boolean" ||
+    !Array.isArray(value.legUrls) ||
+    !(value.disabledReason === null || typeof value.disabledReason === "string")
+  ) {
+    throw contractMismatch("radialReturn handoff の device verification 状態が不正です");
+  }
+  if (value.enabled === false) {
+    if (value.legUrls.length !== 0 || value.disabledReason !== "device_verification_pending") {
+      throw contractMismatch("radialReturn handoff が device verification 待ちで無効ではありません");
+    }
+    return;
+  }
+  if (value.disabledReason !== null || value.legUrls.length !== MAPS_HANDOFF_ROLES.length) {
+    throw contractMismatch("radialReturn handoff の enabled 状態と device verification が不一致です");
+  }
+  for (let index = 0; index < MAPS_HANDOFF_ROLES.length; index += 1) {
+    const leg = value.legUrls[index];
+    if (
+      !isRecord(leg) ||
+      Object.keys(leg).length !== 3 ||
+      Object.keys(leg).some((field) => !["role", "mapsUrl", "urlSha256"].includes(field)) ||
+      leg.role !== MAPS_HANDOFF_ROLES[index]
+    ) {
+      throw contractMismatch("radialReturn handoff の Maps leg が不正です");
+    }
+    validateMapsUrl(leg.mapsUrl, `radialReturn handoff.legUrls[${String(index)}].mapsUrl`);
+    assertSha256(leg.urlSha256, `radialReturn handoff.legUrls[${String(index)}].urlSha256`);
+    const digest = await hexDigest(new TextEncoder().encode(leg.mapsUrl).buffer as ArrayBuffer);
+    if (digest !== leg.urlSha256) {
+      throw contractMismatch("radialReturn handoff の URL と SHA-256 が一致しません");
+    }
+  }
+}
+
+async function validateTopologyOnlyCandidate(candidate: Record<string, unknown>): Promise<void> {
+  validateCandidateBase(candidate, "topologyOnly");
+  if (
+    candidate.eligibilityStatus !== "topology_only" ||
+    candidate.loopValidationStatus !== "topology_only" ||
+    !isRecord(candidate.loop) ||
+    candidate.loop.validated !== false ||
+    "anchor" in candidate ||
+    "routePlan" in candidate ||
+    "edgeRouteLegs" in candidate ||
+    !isRecord(candidate.toll) ||
+    "chargedSectionCount" in candidate.toll ||
+    !Array.isArray(candidate.reasons) ||
+    !candidate.reasons.includes("TOPOLOGY_ONLY") ||
+    candidate.reasons.some(
+      (reason) => reason === "ONE_SECTION_TOLL" || reason === "BEST_TIME_PER_YEN" || reason === "BEST_SHUTOKO_TIME",
+    )
+  ) {
+    throw contractMismatch("topologyOnly candidate の status / loop / toll / reasons が不正です");
+  }
+  requiredString(candidate.loop.anchorNodeId, "topologyOnly loop.anchorNodeId");
+  assertStringArray(candidate.loop.edgeIds, "topologyOnly loop.edgeIds");
+  assertFiniteNonNegative(candidate.loop.durationSeconds, "topologyOnly loop.durationSeconds");
+  assertFiniteNonNegative(candidate.loop.distanceMeters, "topologyOnly loop.distanceMeters");
+  validateTariffStatus(candidate, "topologyOnly", false);
+  validateEstimatedLegsAndTotals(candidate, "topologyOnly");
+  await validateSingleMapsHandoff(candidate.handoff, "topologyOnly handoff");
+}
+
+async function validateLegacyCandidate(candidate: Record<string, unknown>): Promise<void> {
+  validateCandidateBase(candidate, "legacy");
+  if (
+    !isRecord(candidate.loop) ||
+    candidate.loop.validated !== true ||
+    !isRecord(candidate.toll) ||
+    candidate.toll.chargedSectionCount !== 1
+  ) {
+    throw contractMismatch("legacy candidate の loop / toll が不正です");
+  }
+  requiredString(candidate.loop.anchorNodeId, "legacy loop.anchorNodeId");
+  assertStringArray(candidate.loop.edgeIds, "legacy loop.edgeIds");
+  assertFiniteNonNegative(candidate.loop.durationSeconds, "legacy loop.durationSeconds");
+  assertFiniteNonNegative(candidate.loop.distanceMeters, "legacy loop.distanceMeters");
+  await validateSingleMapsHandoff(candidate.handoff, "legacy handoff");
+}
+
+async function validateRadialCandidate(candidate: unknown): Promise<void> {
+  if (
+    !isRecord(candidate) ||
+    candidate.routePlanVersion !== 1 ||
+    !isRecord(candidate.anchor) ||
+    candidate.anchor.anchorKind !== "directedJunction" ||
+    candidate.anchor.arcPolicy !== "ordinaryLongArc" ||
+    !isRecord(candidate.anchor.excludedShortConnector) ||
+    !isRecord(candidate.routePlan) ||
+    !Array.isArray(candidate.edgeRouteLegs) ||
+    candidate.edgeRouteLegs.length !== ROUTE_ROLES.length
+  ) {
+    throw contractMismatch("radialReturn candidate の anchor / routePlan / edgeRouteLegs が不正です");
+  }
+  validateCandidateBase(candidate, "radialReturn");
+  assertStringArray(candidate.edgeIds, "radialReturn candidate.edgeIds");
+  for (const field of ["mergeNodeId", "branchNodeId", "mergeTerminalEdgeId", "branchInitialEdgeId", "routeId", "direction"]) {
+    requiredString(candidate.anchor[field], `radialReturn anchor.${field}`);
+  }
+  const connector = candidate.anchor.excludedShortConnector;
+  for (const field of ["fromNodeId", "toNodeId"]) {
+    requiredString(connector[field], `radialReturn anchor.excludedShortConnector.${field}`);
+  }
+  for (const field of ["osmWayId", "edgeCount", "distanceMeters"]) {
+    if (!isNonNegativeSafeInteger(connector[field]) || connector[field] === 0) {
+      throw contractMismatch("radialReturn anchor.excludedShortConnector が不正です");
+    }
+  }
+  validateEstimatedLegsAndTotals(candidate, "radialReturn");
+  const productEligible =
+    candidate.eligibilityStatus === "verified_one_section_ahead" &&
+    candidate.loopValidationStatus === "declared_route_validated";
+  if (
+    !["verified_one_section_ahead", "unverified", "topology_only"].includes(
+      String(candidate.eligibilityStatus),
+    ) ||
+    !["declared_route_validated", "unresolved", "topology_only"].includes(
+      String(candidate.loopValidationStatus),
+    ) ||
+    !Array.isArray(candidate.reasons) ||
+    candidate.reasons.includes("ONE_SECTION_TOLL") ||
+    (!productEligible &&
+      candidate.reasons.some(
+        (reason) => reason === "BEST_TIME_PER_YEN" || reason === "BEST_SHUTOKO_TIME",
+      ))
+  ) {
+    throw contractMismatch("radialReturn candidate reasons が不正です");
+  }
+  assertStringArray(candidate.routePlan.membershipIds, "radialReturn routePlan.membershipIds");
+  if (new Set(candidate.routePlan.membershipIds).size !== candidate.routePlan.membershipIds.length) {
+    throw contractMismatch("radialReturn routePlan.membershipIds に重複があります");
+  }
+  const resolved = candidate.routePlan.resolvedRouteSegments;
+  if (!Array.isArray(resolved) || resolved.length !== ROUTE_ROLES.length) {
+    throw contractMismatch("radialReturn resolvedRouteSegments は 4 件である必要があります");
+  }
+  const resolvedById = new Map<string, Record<string, unknown>>();
+  for (let index = 0; index < resolved.length; index += 1) {
+    const segment = resolved[index];
+    if (
+      !isRecord(segment) ||
+      segment.role !== ROUTE_ROLES[index] ||
+      typeof segment.resolvedSegmentId !== "string" ||
+      resolvedById.has(segment.resolvedSegmentId) ||
+      typeof segment.membershipId !== "string" ||
+      !candidate.routePlan.membershipIds.includes(segment.membershipId)
+    ) {
+      throw contractMismatch("radialReturn resolvedRouteSegments の role / 参照が不正です");
+    }
+    assertStringArray(segment.sourceSegmentIds, "resolvedRouteSegment.sourceSegmentIds");
+    if (new Set(segment.sourceSegmentIds).size !== segment.sourceSegmentIds.length) {
+      throw contractMismatch("resolvedRouteSegment.sourceSegmentIds に重複があります");
+    }
+    assertSha256(segment.edgeIdsSha256, "resolvedRouteSegment.edgeIdsSha256");
+    resolvedById.set(segment.resolvedSegmentId, segment);
+  }
+  let nextIndex = 0;
+  const covered = new Set<number>();
+  for (let index = 0; index < candidate.edgeRouteLegs.length; index += 1) {
+    const leg = candidate.edgeRouteLegs[index];
+    if (!isRecord(leg) || leg.role !== ROUTE_ROLES[index]) {
+      throw contractMismatch("edgeRouteLegs の role が不正です");
+    }
+    const segment = resolvedById.get(String(leg.resolvedSegmentId));
+    if (
+      segment === undefined ||
+      segment.role !== leg.role ||
+      !Number.isInteger(leg.startEdgeIndex) ||
+      typeof leg.startEdgeIndex !== "number" ||
+      leg.startEdgeIndex !== nextIndex ||
+      !Number.isInteger(leg.endEdgeIndexExclusive) ||
+      typeof leg.endEdgeIndexExclusive !== "number" ||
+      leg.endEdgeIndexExclusive <= leg.startEdgeIndex ||
+      leg.endEdgeIndexExclusive > candidate.edgeIds.length
+    ) {
+      throw contractMismatch("edgeRouteLegs に重複・欠落があります");
+    }
+    const expectedHash = segment.edgeIdsSha256;
+    assertSha256(expectedHash, "resolvedRouteSegment.edgeIdsSha256");
+    const bytes = new TextEncoder().encode(
+      JSON.stringify(candidate.edgeIds.slice(leg.startEdgeIndex, leg.endEdgeIndexExclusive)),
+    );
+    const actualHash = await hexDigest(bytes.buffer as ArrayBuffer);
+    if (actualHash !== expectedHash) {
+      throw contractMismatch("edgeRouteLegs の edgeIds スライスと hash が一致しません");
+    }
+    for (let edgeIndex = leg.startEdgeIndex; edgeIndex < leg.endEdgeIndexExclusive; edgeIndex += 1) {
+      if (covered.has(edgeIndex)) {
+        throw contractMismatch("edgeRouteLegs に重複があります");
+      }
+      covered.add(edgeIndex);
+    }
+    nextIndex = leg.endEdgeIndexExclusive;
+  }
+  if (nextIndex !== candidate.edgeIds.length || covered.size !== candidate.edgeIds.length) {
+    throw contractMismatch("edgeRouteLegs が edgeIds を完全分割していません");
+  }
+  if (!isRecord(candidate.toll) || "chargedSectionCount" in candidate.toll) {
+    throw contractMismatch("radialReturn toll に chargedSectionCount があります");
+  }
+  validateTariffStatus(candidate, "radialReturn", true);
+  await validateRadialHandoff(candidate.handoff);
+}
+
 /**
  * search() の戻り値 JSON 文字列を SearchResult に展開する。
  * 必須診断フィールドを実行時検証し、欠落・型違いは RESULT_CONTRACT_MISMATCH で停止する
  * （http レイヤの ARTIFACT_MISMATCH と同様、部分データを UI に流さない）。
  */
-export function parseSearchResult(resultJson: string): SearchResult {
+export async function parseSearchResult(resultJson: string): Promise<SearchResult> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(resultJson);
@@ -416,6 +1156,20 @@ export function parseSearchResult(resultJson: string): SearchResult {
     throw contractMismatch("reason が文字列でも null でもありません");
   }
   assertDiagnostics(result);
+  for (const value of result.candidates) {
+    if (!isRecord(value)) {
+      throw contractMismatch("candidate がオブジェクトではありません");
+    }
+    if (value.pairKind === "radialReturn") {
+      await validateRadialCandidate(value);
+    } else if (value.pairKind === "topologyOnly") {
+      await validateTopologyOnlyCandidate(value);
+    } else if (value.pairKind === undefined || value.pairKind === "legacyRing") {
+      await validateLegacyCandidate(value);
+    } else {
+      throw contractMismatch("candidate.pairKind が未知です");
+    }
+  }
   return parsed as SearchResult;
 }
 

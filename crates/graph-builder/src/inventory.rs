@@ -70,6 +70,48 @@ pub struct OsmRampBinding {
     pub notes: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OsmRampDirectedSegment {
+    pub segment_id: String,
+    pub osm_way_ids: Vec<i64>,
+    pub osm_node_ids: Vec<i64>,
+    pub edge_ids: Vec<String>,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub edge_ids_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OsmRampRouteEvidence {
+    pub route_id: String,
+    pub direction: String,
+    pub relation_id: i64,
+    pub relation_member_way_id: i64,
+    pub relation_member_role: String,
+    pub official_exit_number: String,
+    pub official_downstream_exit_numbers: Vec<String>,
+    pub ground_way_id: i64,
+    pub ground_way_name: String,
+    pub first_exit_after_branch: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OsmRampBindingCandidate {
+    pub candidate_id: String,
+    pub ramp_id: String,
+    pub status: String,
+    pub public_projection: String,
+    pub direction: String,
+    pub unresolved_reason: String,
+    pub unresolved_reason_codes: Vec<String>,
+    pub directed_segments: Vec<OsmRampDirectedSegment>,
+    pub route_evidence: OsmRampRouteEvidence,
+    pub support_evidence: Vec<String>,
+}
+
 /// Reviewed exception for multiple official IDs sharing one physical segment.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -91,6 +133,8 @@ pub struct OsmRampBindingsFile {
     pub version: u32,
     pub source_date: String,
     pub bindings: Vec<OsmRampBinding>,
+    #[serde(default)]
+    pub binding_candidates: Vec<OsmRampBindingCandidate>,
     #[serde(default)]
     pub shared_physical_overrides: Vec<SharedPhysicalOverride>,
 }
@@ -389,6 +433,143 @@ pub fn validate_osm_ramp_bindings(
         }
     }
 
+    if !bindings.binding_candidates.is_empty() && bindings.version < 4 {
+        errors.push("bindingCandidates require bindings version 4 or newer".into());
+    }
+    let mut candidate_ids = HashSet::new();
+    let mut candidate_ramp_ids = HashSet::new();
+    let mut candidate_segment_ids = HashSet::new();
+    for (i, candidate) in bindings.binding_candidates.iter().enumerate() {
+        if candidate.candidate_id.is_empty() {
+            errors.push(format!("bindingCandidate[{}] has empty candidateId", i));
+        } else if !candidate_ids.insert(candidate.candidate_id.as_str()) {
+            errors.push(format!(
+                "duplicate binding candidate id '{}'",
+                candidate.candidate_id
+            ));
+        }
+        if !candidate_ramp_ids.insert(candidate.ramp_id.as_str()) {
+            errors.push(format!(
+                "multiple binding candidates reference ramp '{}'",
+                candidate.ramp_id
+            ));
+        }
+        match inventory_by_ramp_id.get(candidate.ramp_id.as_str()) {
+            None => errors.push(format!(
+                "binding candidate '{}' references unknown ramp '{}'",
+                candidate.candidate_id, candidate.ramp_id
+            )),
+            Some(ramp)
+                if ramp.status != "active"
+                    || !matches!(ramp.kind, RampKind::GeneralEntry | RampKind::GeneralExit) =>
+            {
+                errors.push(format!(
+                    "binding candidate '{}' references non-general ramp '{}'",
+                    candidate.candidate_id, candidate.ramp_id
+                ));
+            }
+            Some(ramp) if ramp.direction != candidate.direction => errors.push(format!(
+                "binding candidate '{}' has direction '{}' but inventory requires '{}'",
+                candidate.candidate_id, candidate.direction, ramp.direction
+            )),
+            Some(ramp) if ramp.support_state.as_deref() != Some("unsupported") => {
+                errors.push(format!(
+                    "binding candidate '{}' must retain unsupported schema-2 inventory projection",
+                    candidate.candidate_id
+                ))
+            }
+            Some(_) => {}
+        }
+        if bound_ramp_ids.contains(candidate.ramp_id.as_str()) {
+            errors.push(format!(
+                "binding candidate '{}' must not also have a schema-2 binding",
+                candidate.candidate_id
+            ));
+        }
+        if !matches!(candidate.status.as_str(), "unresolved" | "unsupported") {
+            errors.push(format!(
+                "binding candidate '{}' has invalid status '{}'",
+                candidate.candidate_id, candidate.status
+            ));
+        }
+        if candidate.public_projection != "excluded_unresolved" {
+            errors.push(format!(
+                "binding candidate '{}' has invalid publicProjection '{}'",
+                candidate.candidate_id, candidate.public_projection
+            ));
+        }
+        if candidate.unresolved_reason.trim().is_empty()
+            || candidate.unresolved_reason_codes.is_empty()
+            || candidate.support_evidence.is_empty()
+        {
+            errors.push(format!(
+                "binding candidate '{}' lacks reason/reasonCodes/evidence",
+                candidate.candidate_id
+            ));
+        }
+        if candidate.directed_segments.len() != 1 {
+            errors.push(format!(
+                "binding candidate '{}' must have exactly one directed segment",
+                candidate.candidate_id
+            ));
+        }
+        for segment in &candidate.directed_segments {
+            if segment.segment_id.is_empty()
+                || !candidate_segment_ids.insert(segment.segment_id.as_str())
+            {
+                errors.push(format!(
+                    "binding candidate '{}' has empty or duplicate segmentId '{}'",
+                    candidate.candidate_id, segment.segment_id
+                ));
+            }
+            if segment.osm_way_ids.len() < 2
+                || segment.osm_node_ids.len() < 3
+                || segment.edge_ids.len() < 2
+            {
+                errors.push(format!(
+                    "binding candidate '{}' has a non-multi-way directed segment",
+                    candidate.candidate_id
+                ));
+            }
+            if segment.osm_way_ids.iter().any(|way_id| *way_id <= 0)
+                || segment.osm_node_ids.iter().any(|node_id| *node_id <= 0)
+                || segment.edge_ids.iter().any(String::is_empty)
+            {
+                errors.push(format!(
+                    "binding candidate '{}' has invalid way/node/edge IDs",
+                    candidate.candidate_id
+                ));
+            }
+            let expected_hash = crate::manifest::compute_sha256(
+                serde_json::to_string(&segment.edge_ids)
+                    .unwrap_or_default()
+                    .as_bytes(),
+            );
+            if segment.edge_ids_sha256 != expected_hash {
+                errors.push(format!(
+                    "binding candidate '{}' has invalid edgeIdsSha256",
+                    candidate.candidate_id
+                ));
+            }
+        }
+        let route = &candidate.route_evidence;
+        if route.direction != candidate.direction
+            || route.relation_id <= 0
+            || route.relation_member_way_id <= 0
+            || route.relation_member_role.is_empty()
+            || route.official_exit_number.is_empty()
+            || route.official_downstream_exit_numbers.is_empty()
+            || route.ground_way_id <= 0
+            || route.ground_way_name.is_empty()
+            || !route.first_exit_after_branch
+        {
+            errors.push(format!(
+                "binding candidate '{}' has incomplete route/facility evidence",
+                candidate.candidate_id
+            ));
+        }
+    }
+
     // Active general records are exhaustively classified: verified records
     // must have exactly one binding, unsupported records must have none.
     for r in &inv.ramps {
@@ -628,8 +809,402 @@ pub fn validate_osm_ramp_bindings_against_osm(
         }
     }
 
+    for candidate in &bindings.binding_candidates {
+        if let Err(candidate_errors) =
+            audit_osm_ramp_binding_candidate_against_osm(candidate, inv, osm_resp)
+        {
+            errors.extend(
+                candidate_errors.into_iter().map(|error| {
+                    format!("binding candidate '{}': {error}", candidate.candidate_id)
+                }),
+            );
+        }
+    }
+
     if errors.is_empty() {
         Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+pub fn audit_osm_ramp_binding_candidate_against_osm(
+    candidate: &OsmRampBindingCandidate,
+    inv: &RampInventoryFile,
+    osm_resp: &crate::osm::OverpassResponse,
+) -> Result<Vec<String>, Vec<String>> {
+    let mut errors = Vec::new();
+    let Some(ramp) = inv
+        .ramps
+        .iter()
+        .find(|ramp| ramp.ramp_id == candidate.ramp_id)
+    else {
+        return Err(vec![format!(
+            "binding candidate '{}' references unknown ramp '{}'",
+            candidate.candidate_id, candidate.ramp_id
+        )]);
+    };
+    if ramp.direction != candidate.direction {
+        errors.push(format!(
+            "binding candidate '{}' direction '{}' does not match inventory '{}'",
+            candidate.candidate_id, candidate.direction, ramp.direction
+        ));
+    }
+    let [segment] = candidate.directed_segments.as_slice() else {
+        return Err(vec![format!(
+            "binding candidate '{}' must have exactly one directed segment",
+            candidate.candidate_id
+        )]);
+    };
+    if segment.osm_node_ids.len() < 2 {
+        return Err(vec![format!(
+            "binding candidate '{}' has fewer than two directed nodes",
+            candidate.candidate_id
+        )]);
+    }
+
+    let mut node_map: HashMap<i64, &crate::osm::OsmElement> = HashMap::new();
+    let mut way_map: HashMap<i64, &crate::osm::OsmElement> = HashMap::new();
+    let mut relation_map: HashMap<i64, &crate::osm::OsmElement> = HashMap::new();
+    for element in &osm_resp.elements {
+        if element.is_node() {
+            node_map.insert(element.id, element);
+        } else if element.is_way() {
+            way_map.insert(element.id, element);
+        } else if element.is_relation() {
+            relation_map.insert(element.id, element);
+        }
+    }
+
+    let mut surface_nodes: HashSet<i64> = HashSet::new();
+    let mut mainline_nodes: HashSet<i64> = HashSet::new();
+    let mut network_outgoing: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
+    for way in way_map.values() {
+        let highway = way.get_tag("highway");
+        let Some(nodes) = way.nodes.as_ref() else {
+            continue;
+        };
+        if crate::topology::is_vehicle_highway(highway.unwrap_or_default(), way.get_tag("service"))
+            == Some(true)
+        {
+            surface_nodes.extend(nodes.iter().copied());
+        }
+        if highway == Some("motorway") {
+            mainline_nodes.extend(nodes.iter().copied());
+        }
+        if !matches!(highway, Some("motorway" | "motorway_link")) || nodes.len() < 2 {
+            continue;
+        }
+        let oneway = crate::topology::parse_oneway(way);
+        if oneway != crate::topology::OnewayDirection::ReverseOnly {
+            for (edge_index, (from, to)) in nodes.iter().zip(nodes.iter().skip(1)).enumerate() {
+                network_outgoing
+                    .entry(*from)
+                    .or_default()
+                    .push((*to, format!("e:w{}:{}:f", way.id, edge_index)));
+            }
+        }
+        if oneway != crate::topology::OnewayDirection::ForwardOnly {
+            for (edge_index, (from, to)) in nodes.iter().zip(nodes.iter().skip(1)).enumerate() {
+                network_outgoing
+                    .entry(*to)
+                    .or_default()
+                    .push((*from, format!("e:w{}:{}:r", way.id, edge_index)));
+            }
+        }
+    }
+
+    let mut expected_node_ids = Vec::new();
+    let mut expected_edge_ids = Vec::new();
+    for (way_index, way_id) in segment.osm_way_ids.iter().enumerate() {
+        let Some(way) = way_map.get(way_id) else {
+            errors.push(format!(
+                "binding candidate '{}' references missing way {}",
+                candidate.candidate_id, way_id
+            ));
+            continue;
+        };
+        if way.get_tag("highway") != Some("motorway_link") {
+            errors.push(format!(
+                "binding candidate '{}' way {} is not motorway_link",
+                candidate.candidate_id, way_id
+            ));
+        }
+        if crate::topology::parse_oneway(way) != crate::topology::OnewayDirection::ForwardOnly {
+            errors.push(format!(
+                "binding candidate '{}' way {} is not forward-only",
+                candidate.candidate_id, way_id
+            ));
+        }
+        if let Some(name) = way.get_tag("name") {
+            if !name.contains(&ramp.facility_name) || !name.contains("出口") {
+                errors.push(format!(
+                    "binding candidate '{}' way {} has conflicting name '{}'",
+                    candidate.candidate_id, way_id, name
+                ));
+            }
+        }
+        if let Some(destination) = way.get_tag("destination") {
+            if destination.contains("入口")
+                || (destination.contains("出口") && !destination.contains(&ramp.facility_name))
+            {
+                errors.push(format!(
+                    "binding candidate '{}' way {} has conflicting destination '{}'",
+                    candidate.candidate_id, way_id, destination
+                ));
+            }
+        }
+        let Some(nodes) = way.nodes.as_ref().filter(|nodes| nodes.len() >= 2) else {
+            errors.push(format!(
+                "binding candidate '{}' way {} has fewer than two nodes",
+                candidate.candidate_id, way_id
+            ));
+            continue;
+        };
+        if way_index == 0 {
+            expected_node_ids.extend(nodes.iter().copied());
+        } else {
+            expected_node_ids.extend(nodes.iter().skip(1).copied());
+        }
+        expected_edge_ids.extend(
+            (0..nodes.len() - 1).map(|edge_index| format!("e:w{}:{}:f", way_id, edge_index)),
+        );
+    }
+
+    if segment.osm_node_ids != expected_node_ids {
+        errors.push(format!(
+            "binding candidate '{}' osmNodeIds do not match ordered way nodes",
+            candidate.candidate_id
+        ));
+    }
+    if segment.edge_ids != expected_edge_ids {
+        errors.push(format!(
+            "binding candidate '{}' edgeIds do not match ordered forward way segments",
+            candidate.candidate_id
+        ));
+    }
+    let expected_hash = crate::manifest::compute_sha256(
+        serde_json::to_string(&segment.edge_ids)
+            .unwrap_or_default()
+            .as_bytes(),
+    );
+    if segment.edge_ids_sha256 != expected_hash {
+        errors.push(format!(
+            "binding candidate '{}' has invalid edgeIdsSha256",
+            candidate.candidate_id
+        ));
+    }
+    let Some((mainline_node_id, ground_node_id)) = segment
+        .osm_node_ids
+        .first()
+        .zip(segment.osm_node_ids.last())
+    else {
+        return Err(vec![format!(
+            "binding candidate '{}' has no endpoints",
+            candidate.candidate_id
+        )]);
+    };
+    if segment.from_node_id != format!("n:{mainline_node_id}")
+        || segment.to_node_id != format!("n:{ground_node_id}")
+    {
+        errors.push(format!(
+            "binding candidate '{}' endpoint IDs do not match node order",
+            candidate.candidate_id
+        ));
+    }
+
+    let route = &candidate.route_evidence;
+    if route.direction != candidate.direction {
+        errors.push(format!(
+            "binding candidate '{}' route direction does not match candidate direction",
+            candidate.candidate_id
+        ));
+    }
+    let Some(start_node) = node_map.get(mainline_node_id) else {
+        errors.push(format!(
+            "binding candidate '{}' references missing mainline node {}",
+            candidate.candidate_id, mainline_node_id
+        ));
+        return Err(errors);
+    };
+    let expected_start_name = format!("{}出口", ramp.facility_name);
+    if start_node.get_tag("highway") != Some("motorway_junction")
+        || start_node.get_tag("name") != Some(expected_start_name.as_str())
+        || start_node.get_tag("ref") != Some(route.official_exit_number.as_str())
+    {
+        errors.push(format!(
+            "binding candidate '{}' mainline node is not the official {} exit {}",
+            candidate.candidate_id, ramp.facility_name, route.official_exit_number
+        ));
+    }
+    let Some(mainline_way) = way_map.get(&route.relation_member_way_id) else {
+        errors.push(format!(
+            "binding candidate '{}' references missing route member way {}",
+            candidate.candidate_id, route.relation_member_way_id
+        ));
+        return Err(errors);
+    };
+    if mainline_way.get_tag("highway") != Some("motorway")
+        || !mainline_way
+            .nodes
+            .as_ref()
+            .is_some_and(|nodes| nodes.contains(mainline_node_id))
+    {
+        errors.push(format!(
+            "binding candidate '{}' start is not on declared mainline way {}",
+            candidate.candidate_id, route.relation_member_way_id
+        ));
+    }
+    let Some(relation) = relation_map.get(&route.relation_id) else {
+        errors.push(format!(
+            "binding candidate '{}' references missing route relation {}",
+            candidate.candidate_id, route.relation_id
+        ));
+        return Err(errors);
+    };
+    if relation.get_tag("ref") != Some(route.route_id.as_str()) {
+        errors.push(format!(
+            "binding candidate '{}' relation {} is not route {}",
+            candidate.candidate_id, route.relation_id, route.route_id
+        ));
+    }
+    let members = relation.members.as_deref().unwrap_or_default();
+    if !members.iter().any(|member| {
+        member.member_type == "way"
+            && member.ref_id == route.relation_member_way_id
+            && member.role == route.relation_member_role
+    }) {
+        errors.push(format!(
+            "binding candidate '{}' relation {} lacks way {} role {}",
+            candidate.candidate_id,
+            route.relation_id,
+            route.relation_member_way_id,
+            route.relation_member_role
+        ));
+    }
+    for way_id in &segment.osm_way_ids {
+        if members
+            .iter()
+            .any(|member| member.member_type == "way" && member.ref_id == *way_id)
+        {
+            errors.push(format!(
+                "binding candidate '{}' ramp way {} must not be a route relation member",
+                candidate.candidate_id, way_id
+            ));
+        }
+    }
+
+    let Some(ground_way) = way_map.get(&route.ground_way_id) else {
+        errors.push(format!(
+            "binding candidate '{}' references missing ground way {}",
+            candidate.candidate_id, route.ground_way_id
+        ));
+        return Err(errors);
+    };
+    if crate::topology::is_vehicle_highway(
+        ground_way.get_tag("highway").unwrap_or_default(),
+        ground_way.get_tag("service"),
+    ) != Some(true)
+        || ground_way.get_tag("name") != Some(route.ground_way_name.as_str())
+        || !ground_way
+            .nodes
+            .as_ref()
+            .is_some_and(|nodes| nodes.contains(ground_node_id))
+    {
+        errors.push(format!(
+            "binding candidate '{}' endpoint {} is not on declared ground way {}",
+            candidate.candidate_id, ground_node_id, route.ground_way_id
+        ));
+    }
+
+    if !route.first_exit_after_branch
+        || route.official_downstream_exit_numbers.first() != Some(&route.official_exit_number)
+    {
+        errors.push(format!(
+            "binding candidate '{}' official exit {} is not first after the branch",
+            candidate.candidate_id, route.official_exit_number
+        ));
+    }
+    let official_numbers = route
+        .official_downstream_exit_numbers
+        .iter()
+        .filter_map(|number| number.parse::<u32>().ok())
+        .collect::<Vec<_>>();
+    let declared_official_number = route.official_exit_number.parse::<u32>().ok();
+    if official_numbers.len() != route.official_downstream_exit_numbers.len()
+        || official_numbers.first() != declared_official_number.as_ref()
+        || official_numbers.windows(2).any(|pair| pair[0] >= pair[1])
+    {
+        errors.push(format!(
+            "binding candidate '{}' has invalid official downstream order",
+            candidate.candidate_id
+        ));
+    }
+
+    let expected_next_edge = expected_node_ids
+        .windows(2)
+        .zip(&expected_edge_ids)
+        .map(|(nodes, edge_id)| (nodes[0], edge_id))
+        .collect::<HashMap<_, _>>();
+    let mut reason_codes = HashSet::new();
+    let mut early_surface_nodes = Vec::new();
+    for node_id in segment
+        .osm_node_ids
+        .iter()
+        .skip(1)
+        .take(segment.osm_node_ids.len() - 2)
+    {
+        if mainline_nodes.contains(node_id) {
+            errors.push(format!(
+                "binding candidate '{}' has an intermediate mainline branch at node {}",
+                candidate.candidate_id, node_id
+            ));
+        }
+        if surface_nodes.contains(node_id) {
+            early_surface_nodes.push(*node_id);
+        }
+        if let Some(outgoing) = network_outgoing.get(node_id) {
+            if let Some(expected_edge_id) = expected_next_edge.get(node_id) {
+                let alternatives = outgoing
+                    .iter()
+                    .filter(|(_, edge_id)| edge_id.as_str() != expected_edge_id.as_str())
+                    .collect::<Vec<_>>();
+                if !alternatives.is_empty() {
+                    errors.push(format!(
+                        "binding candidate '{}' has an ambiguous internal branch at node {}",
+                        candidate.candidate_id, node_id
+                    ));
+                }
+            }
+        }
+    }
+    if !early_surface_nodes.is_empty() {
+        reason_codes.insert("EARLY_SURFACE_CONNECTION".to_string());
+        reason_codes.insert("MULTIPLE_GROUND_CONNECTION_CANDIDATES".to_string());
+    }
+
+    let declared_codes = candidate
+        .unresolved_reason_codes
+        .iter()
+        .cloned()
+        .collect::<HashSet<_>>();
+    if candidate.status == "unresolved" && reason_codes.is_empty() {
+        errors.push(format!(
+            "binding candidate '{}' is unresolved without a topology reason",
+            candidate.candidate_id
+        ));
+    }
+    if candidate.status == "unresolved" && declared_codes != reason_codes {
+        errors.push(format!(
+            "binding candidate '{}' unresolved reason codes {:?} do not match audit {:?}",
+            candidate.candidate_id, candidate.unresolved_reason_codes, reason_codes
+        ));
+    }
+
+    if errors.is_empty() {
+        let mut reason_codes = reason_codes.into_iter().collect::<Vec<_>>();
+        reason_codes.sort();
+        Ok(reason_codes)
     } else {
         Err(errors)
     }
@@ -1197,6 +1772,7 @@ pub fn ramps_artifact_to_deterministic_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use std::fs;
     use std::path::Path;
 
@@ -1215,6 +1791,33 @@ mod tests {
             return p3;
         }
         panic!("data file '{}' not found in test search paths", relative);
+    }
+
+    fn load_binding_candidate_fixture() -> (
+        RampInventoryFile,
+        OsmRampBindingsFile,
+        crate::osm::OverpassResponse,
+        OsmRampBindingCandidate,
+    ) {
+        let inv: RampInventoryFile = serde_json::from_str(
+            &fs::read_to_string(find_data_file("data/ramp-inventory.json")).unwrap(),
+        )
+        .unwrap();
+        let bindings: OsmRampBindingsFile = serde_json::from_str(
+            &fs::read_to_string(find_data_file("data/osm-ramp-bindings.json")).unwrap(),
+        )
+        .unwrap();
+        let osm: crate::osm::OverpassResponse = serde_json::from_str(
+            &fs::read_to_string(find_data_file("fixtures/osm/shutoko-all.json")).unwrap(),
+        )
+        .unwrap();
+        let candidate = bindings
+            .binding_candidates
+            .iter()
+            .find(|candidate| candidate.ramp_id == "ramp:2-outbound:tengenji-exit")
+            .unwrap()
+            .clone();
+        (inv, bindings, osm, candidate)
     }
 
     #[test]
@@ -1464,7 +2067,11 @@ mod tests {
 
         // Every verified binding names the exact directed graph edge and kind.
         let graph_path = find_data_file("fixtures/generated/graph.json");
-        let graph: Graph = serde_json::from_str(&fs::read_to_string(graph_path).unwrap()).unwrap();
+        let graph: Graph =
+            shutoko_routing_core::prepare_json(&fs::read_to_string(graph_path).unwrap(), "{}")
+                .expect("generated graph must pass the schema-aware reader")
+                .graph()
+                .clone();
         assert_eq!(
             classify_endpoint_capabilities(&graph)
                 .values()
@@ -1586,6 +2193,180 @@ mod tests {
                 assert!(!binding_by_id.contains_key(ramp.ramp_id.as_str()));
             }
         }
+    }
+
+    #[test]
+    fn test_tengenji_multi_way_candidate_is_audited_unresolved() {
+        let (inv, bindings, osm, candidate) = load_binding_candidate_fixture();
+        assert_eq!(bindings.version, 4);
+        assert_eq!(bindings.binding_candidates.len(), 1);
+        assert!(validate_osm_ramp_bindings(&bindings, &inv).is_ok());
+        assert!(validate_osm_ramp_bindings_against_osm(&bindings, &inv, &osm).is_ok());
+        assert!(!bindings
+            .bindings
+            .iter()
+            .any(|binding| binding.ramp_id == "ramp:2-outbound:tengenji-exit"));
+        let generated_graph: serde_json::Value =
+            serde_json::from_str(include_str!("../../../fixtures/generated/graph.json")).unwrap();
+        assert!(generated_graph["ramps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|ramp| ramp["id"] != "ramp:2-outbound:tengenji-exit"));
+        let generated_ramps: serde_json::Value =
+            serde_json::from_str(include_str!("../../../fixtures/generated/ramps.json")).unwrap();
+        let published_tengenji = generated_ramps["ramps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|ramp| ramp["id"] == "ramp:2-outbound:tengenji-exit")
+            .unwrap();
+        assert_eq!(published_tengenji["supportState"], "unsupported");
+        assert_eq!(published_tengenji["bound"], false);
+        assert!(published_tengenji["edgeId"].is_null());
+        assert_eq!(candidate.status, "unresolved");
+        assert_eq!(candidate.public_projection, "excluded_unresolved");
+        assert_eq!(candidate.directed_segments.len(), 1);
+        let segment = &candidate.directed_segments[0];
+        assert_eq!(
+            segment.osm_way_ids,
+            vec![172358461, 422023171, 931759044, 172358460, 172358466]
+        );
+        assert_eq!(segment.osm_node_ids.len(), 18);
+        assert_eq!(segment.edge_ids.len(), 17);
+        assert_eq!(segment.from_node_id, "n:252175582");
+        assert_eq!(segment.to_node_id, "n:1832672205");
+        assert_eq!(
+            segment.edge_ids_sha256,
+            "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+        );
+        assert_eq!(
+            audit_osm_ramp_binding_candidate_against_osm(&candidate, &inv, &osm).unwrap(),
+            vec![
+                "EARLY_SURFACE_CONNECTION".to_string(),
+                "MULTIPLE_GROUND_CONNECTION_CANDIDATES".to_string()
+            ]
+        );
+
+        let official: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(find_data_file("data/official-population-snapshot.json")).unwrap(),
+        )
+        .unwrap();
+        let mut outbound_exits = official["generalExits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|exit| {
+                exit["route"] == "2"
+                    && exit["direction"] == "outbound"
+                    && exit["kind"] == "general_exit"
+            })
+            .map(|exit| {
+                (
+                    exit["inoutNumber"].as_str().unwrap().to_string(),
+                    exit["facilityName"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect::<Vec<_>>();
+        outbound_exits.sort_by_key(|exit| exit.0.parse::<u32>().unwrap());
+        assert_eq!(
+            outbound_exits,
+            vec![
+                ("201".to_string(), "天現寺".to_string()),
+                ("203".to_string(), "目黒".to_string()),
+                ("205".to_string(), "戸越".to_string()),
+                ("207".to_string(), "荏原".to_string())
+            ]
+        );
+
+        let decisions: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(find_data_file("data/ramp-support-decisions.json")).unwrap(),
+        )
+        .unwrap();
+        let decision = decisions["decisions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|decision| decision["rampId"] == candidate.ramp_id)
+            .unwrap();
+        assert_eq!(decision["supportState"], "unsupported");
+        assert_eq!(
+            decision["bindingCandidateEvidence"]["rampIdInverseMap"]["rampId"],
+            candidate.ramp_id
+        );
+        assert_eq!(
+            decision["bindingCandidateEvidence"]["rampIdInverseMap"]["candidateId"],
+            candidate.candidate_id
+        );
+        assert_eq!(
+            decision["bindingCandidateEvidence"]["officialFacilityOrder"]["exitNumbers"],
+            json!(["201", "203", "205", "207"])
+        );
+        assert_eq!(
+            decision["bindingCandidateEvidence"]["unresolvedReasonCodes"],
+            json!(candidate.unresolved_reason_codes)
+        );
+    }
+
+    #[test]
+    fn test_reject_disconnected_reversed_and_incomplete_binding_candidates() {
+        let (inv, _bindings, osm, candidate) = load_binding_candidate_fixture();
+
+        let mut disconnected = candidate.clone();
+        disconnected.directed_segments[0].osm_node_ids[6] = 99_999_999;
+        assert!(audit_osm_ramp_binding_candidate_against_osm(&disconnected, &inv, &osm).is_err());
+
+        let mut reversed = candidate.clone();
+        reversed.directed_segments[0].osm_way_ids.reverse();
+        assert!(audit_osm_ramp_binding_candidate_against_osm(&reversed, &inv, &osm).is_err());
+
+        let mut missing_way = candidate;
+        missing_way.directed_segments[0].osm_way_ids.remove(2);
+        assert!(audit_osm_ramp_binding_candidate_against_osm(&missing_way, &inv, &osm).is_err());
+    }
+
+    #[test]
+    fn test_reject_ambiguous_internal_branch_and_non_surface_endpoint() {
+        let (inv, _bindings, osm, candidate) = load_binding_candidate_fixture();
+        let mut osm_value = serde_json::to_value(&osm).unwrap();
+        osm_value["elements"].as_array_mut().unwrap().push(json!({
+            "type": "node",
+            "id": 999999999,
+            "lat": 35.646,
+            "lon": 139.725
+        }));
+        osm_value["elements"].as_array_mut().unwrap().push(json!({
+            "type": "way",
+            "id": 999999998,
+            "nodes": [1832672214, 999999999],
+            "tags": {
+                "highway": "motorway_link",
+                "oneway": "yes"
+            }
+        }));
+        let branched_osm: crate::osm::OverpassResponse = serde_json::from_value(osm_value).unwrap();
+        let errors = audit_osm_ramp_binding_candidate_against_osm(&candidate, &inv, &branched_osm)
+            .unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("ambiguous internal branch")));
+
+        let mut non_surface = candidate;
+        let segment = &mut non_surface.directed_segments[0];
+        segment.osm_way_ids.truncate(2);
+        segment.edge_ids.truncate(9);
+        segment.osm_node_ids.truncate(10);
+        segment.to_node_id = "n:1832672090".into();
+        segment.edge_ids_sha256 = crate::manifest::compute_sha256(
+            serde_json::to_string(&segment.edge_ids)
+                .unwrap_or_default()
+                .as_bytes(),
+        );
+        let errors =
+            audit_osm_ramp_binding_candidate_against_osm(&non_surface, &inv, &osm).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("endpoint 1832672090 is not on declared ground way")));
     }
 
     #[test]

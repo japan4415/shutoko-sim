@@ -1,13 +1,14 @@
 // 地図セグメント導出（src/map/segments.ts）のユニットテスト。
 import { describe, expect, it } from "vitest";
+import radialCandidateJson from "../../fixtures/candidate-v2/radial-valid.json?raw";
 import { boundsOf, deriveSegments } from "../src/map/segments";
-import type { Candidate } from "../src/worker/types";
+import type { LegacyCandidate, RadialCandidate, TopologyOnlyCandidate } from "../src/worker/types";
 
 /**
  * 4 エッジ・5 座標のサンプル。edgeIds は access(e:acc) → loop(e:L1,e:L2) → return(e:ret)。
  * loop の連続部分列は index 1..2。entry/exit は loop 内の e:L1 / e:L2。
  */
-function sampleCandidate(overrides: Partial<Candidate> = {}): Candidate {
+function sampleCandidate(overrides: Partial<LegacyCandidate> = {}): LegacyCandidate {
   return {
     id: "cand-1",
     releaseId: "c1-real-v1",
@@ -94,6 +95,51 @@ describe("deriveSegments", () => {
     expect(segments.main).toEqual(sampleCandidate().geometry.coordinates);
   });
 
+  it("radialReturn は4 roleを描くため全経路のcharged overlayを作らない", () => {
+    const candidate = JSON.parse(radialCandidateJson) as RadialCandidate;
+    const segments = deriveSegments(candidate);
+    expect(segments.access).toHaveLength(4);
+    expect(segments.loop).toEqual([
+      [139.103, 35.103],
+      [139.104, 35.104],
+      [139.105, 35.105],
+    ]);
+    expect(segments.return).toEqual([
+      [139.105, 35.105],
+      [139.106, 35.106],
+      [139.107, 35.107],
+    ]);
+    expect(segments.routeLegs.map((leg) => [leg.role, leg.coords.length])).toEqual([
+      ["entry_approach", 4],
+      ["mandatory_lap", 3],
+      ["return_corridor", 2],
+      ["exit_approach", 2],
+    ]);
+    expect(segments.charged).toEqual([]);
+  });
+
+  it("topologyOnly は道路形状を描画しても課金区間のオーバーレイを生成しない", () => {
+    const value = JSON.parse(radialCandidateJson) as Record<string, unknown>;
+    value.pairKind = "topologyOnly";
+    value.eligibilityStatus = "topology_only";
+    value.loopValidationStatus = "topology_only";
+    value.loop = {
+      anchorNodeId: "fixture:node:merge",
+      edgeIds: ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+      durationSeconds: 1200,
+      distanceMeters: 20000,
+      validated: false,
+    };
+    value.reasons = ["TOPOLOGY_ONLY"];
+    delete value.anchor;
+    delete value.routePlan;
+    delete value.edgeRouteLegs;
+    const segments = deriveSegments(value as unknown as TopologyOnlyCandidate);
+    expect(segments.loop).toHaveLength(3);
+    expect(segments.routeLegs).toEqual([]);
+    expect(segments.charged).toEqual([]);
+  });
+
   it("loop が先頭・末尾でも境界が成立する", () => {
     const segments = deriveSegments(
       sampleCandidate({
@@ -160,7 +206,7 @@ describe("deriveSegments", () => {
     const segments = deriveSegments(
       sampleCandidate({ geometry: { type: "LineString", coordinates: [] } }),
     );
-    expect(segments).toEqual({ access: [], loop: [], return: [], charged: [], main: [] });
+    expect(segments).toEqual({ access: [], loop: [], return: [], charged: [], routeLegs: [], main: [] });
   });
 
   it("exit index < entry index なら charged のみ空、他は分解する", () => {

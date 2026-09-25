@@ -2,11 +2,46 @@
 
 ## 現在地
 
-Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v2` は22,824 nodes / 22,987 edgesで、証拠がある232件だけを exact directed segment に bind する。残るactive一般139件は理由・証拠付き `unsupported`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み232件は `routable` 197件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。課金ペア8件中、両端点を一意なverified-boundランプへ逆引きできる2件だけを `verified` とし、残る6件は `unverified` とする。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
+Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v3` は graph schema 4 で、22,824 nodes / 22,987 edges、46 route memberships、8 legacy billing pairs、証拠がある232件だけを exact directed segment に bind する。残るactive一般139件は理由・証拠付き `unsupported`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み232件は `routable` 197件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。課金ペア8件中、両端点を一意なverified-boundランプへ逆引きできる2件だけを `verified` とし、残る6件は `unverified` とする。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
 
 このverified pairの縮退と最近接入口優先（Issue #57）は正確性優先の設計である。座標検索は最近接の構造的に利用可能な入口 tier を優先し、東京駅の現行実測は最近接の宝町入口 tier（`ramp:c1-inner:takaracho-entry` → `ramp:c1-outer:takaracho-exit`）が選択され、`minPlanSeconds=1,610`秒（約26.83分）となる。15〜26分窓では最近接 tier の周回が上限を超えるため `no_candidates/TIME_WINDOW` 診断となり、15〜27分窓で成立する。また、30〜60分窓でも同一の宝町 tier から計画時間 2,795 秒・周回 20,205 m の候補が成立する（料金は未算出、`shutoko_time`）。release real-graph test はこの26/27分境界および30〜60分窓の成立、さらに目黒代表座標での最近接目黒ランプ選択を明示的に固定する。
 
-## 実装順序と完了条件
+## `all-real-v3` の atomic release runbook
+
+**重要: `all-real-v3` の R2 投入とread-backが完了するまで、v3をmergeしない。manifestは全artifactのread-back後に最後に投入する。**
+
+Issue #66 のコード変更だけでは本番の release は切り替わらない。`all-real-v3` の公開を承認済みの Manager が、次の順序で単一の R2 seed プロセスを実行する。今回の実装作業では R2 への upload、Wrangler deploy、Cloudflare への書き込みを行わない。release artifactの投入完了・read-back・manifestの最終投入がmergeとproduction deployの前提となる。
+
+1. **同一入力で成果物を生成する**:
+   ```bash
+   bash scripts/generate-fixtures.sh
+   git diff --exit-code -- fixtures/generated
+   ```
+   `graph.json` の schema/version、manifest の `graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v2`、`routeMembershipsSha256`、artifact の SHA-256/byteLength を確認する。生成差分がゼロであることを確認する。
+2. **WASM と release metadata を用意する**:
+   ```bash
+   bash scripts/build-wasm.sh
+   npm --prefix workers ci
+   npm --prefix web ci
+   npm --prefix web run typecheck
+   npm --prefix web test
+   npm --prefix workers run typecheck
+   npm --prefix workers test
+   ```
+   `engine.json` の hash は実ファイルから生成し、変更されうる固定 hash をソースコードへ追加しない。
+3. **未使用の versioned ID に本番 R2 を投入する**:
+   ```bash
+   node workers/scripts/seed-local-r2.mjs --remote
+   ```
+   seed script は既存の `releases/all-real-v3/manifest.json` を拒否し、manifestの`artifacts[]`順に`graph.json`、`ramps.json`、`snap-index.json`、WASM、glue、型定義、`engine.json`を先に投入する。各 payload と `engine.json` を read-back して bytes、length、SHA-256 を照合し、全件成功した後の最後に `manifest.json` を投入して read-back する。`manifest.json` の投入前は Worker が新 release を公開しない。**この工程とread-backが終わるまでPRをmergeしない。**
+4. **公開後の切替を確認する**: Worker と Web の release allowlist が `all-real-v3` を含み、`all-real-v2` も許可されていることを確認し、manifest → engine → graph → WASM/glue の取得・hash・schema 4 照合、build-time device manifestのbinding、C1 legacy 回帰を再実行する。異常時は Worker/Web の参照を `all-real-v2` に戻し、旧 release の manifest を上書き・削除しない。
+5. **merge と production deploy を行う**: R2 artifactとmanifestのread-back、以及Web/Workerのrelease検証が成功した後に限り、PRをmergeし、続けてCloudflare WorkersとWebのproduction deployを別Managerが行う。R2のread-back確認前にmergeまたはproduction deployを実行しない。mainへのmerge/pushがCloudflare Buildsの自動deployを誘発する構成では、R2 v3 manifestの存在確認とread-backをmanual approval / feature gateとして確認する。
+
+### Rollback
+
+`all-real-v3` の公開後に異常を確認した場合は、R2の旧releaseを上書き・削除せず、WebとWorkerのrelease source定数を`all-real-v2`へ戻すrollback commitを作成して再deployする。実行時にrelease pointerを切り替える運用は行わない。rollback後も`all-real-v2` のmanifest → engine → graph → WASM/glue のhash/schemaとC1 legacy回帰を再確認し、古いWeb/Worker cacheが新しいrelease参照を保持していないことを確認する。
+
+
 
 | 段階 | 実施内容 | 次へ進む条件 |
 | --- | --- | --- |
@@ -74,6 +109,27 @@ Issue #8（Google マップ引き継ぎの実機成立性検証）に関する�
 | URL 長上限（2,048文字）到達条件 | 未測定 |
 
 残条件の検証が完了するまで、候補の `warnings` に `HANDOFF_WAYPOINTS_UNVERIFIED` を付与し続ける（[インターフェース設計](interfaces.md) 参照）。
+
+### Issue #72: 放射線 split Maps の4環境検証
+
+上のIssue #8記録はC1 legacyの単一URL検証であり、#71で追加した3 leg handoffの証拠とは分ける。リポジトリ内の未検証記録は`data/device-verification-manifest.json`で、現状はschema 4 fixtureのroute plan / release / leg hashへ対応付けた4系列とも`missing`である。これは実機検証済みではなく、gateを閉じるための記録である。実際の放射線release候補では、同じcontractを検証対象の`routePlanId`と`releaseId`へ更新し、loop transfer legのURLとSHA-256を照合する。surface legのoriginを含むURLはbinding hashに含めず、構造と3 legの実測を確認する。`fixtures/device-verification/valid.json`とinvalid fixtureはcontract test用なので、実測値の上書き先にはしない。
+
+| 環境 | client | 必須手順 | 現行状態 |
+| --- | --- | --- | --- |
+| Android × Web | Chrome | 3 legを順に開き、各legの`expectedRoad` / `expectedDirection`、originへの帰着、意図しない入口・出口変更がないことを確認する | `missing` |
+| Android × app | Google Mapsアプリ | 同じ3 legと同一route planをアプリから開き、Webと同じ道路・向き・帰着を確認する | `missing` |
+| iOS × Web | Safari | 同じ3 legをSafariで開き、Webと同じ道路・向き・帰着を確認する | `missing` |
+| iOS × app | Google Mapsアプリ | 同じ3 legをアプリから開き、Webと同じ道路・向き・帰着を確認する | `missing` |
+
+各系列で以下を手動確認し、manifestのverification recordへ記録する。
+
+1. 端末のOS version、Webならbrowser名とversion、appならapp名とversionを、画面表示のAbout等地から控える。`passed`のrecordへ`unverified`を残さない。
+2. `surface_access`、`loop_transfer`、`surface_return`をこの順で手動継続する。各Maps URLの構造・長さ・waypoint数を検査し、loop transfer legのSHA-256がmanifestの値と一致し、画面が`expectedRoad`と`expectedDirection`を満たすことを確認する。短絡、反対方向、誤ったarm、意図しない入口・出口への変更があれば`failed`とする。
+3. UTC RFC3339の`verifiedAt`と、それより後の`expiresAt`を記録する。未着手または未検証は`verifiedAt=null`、`expiresAt=null`、`result=missing`とする。期限切れを検出した系列は再検証し、新しい`verifiedAt`と`expiresAt`を記録して古い`passed`を残さない。
+4. release gateの判定時刻をUTCで固定し、`prepare` / `search`のリリース設定`deviceVerification.evaluatedAt`へ渡す。検索要求の`pricingAt`はgate判定には使わない。4系列がすべて`passed`で、判定時刻が各`[verifiedAt, expiresAt)`にあり、route plan、release、builder version、loop transfer hashのbindingも一致し、surface legの構造検証も通った場合だけ公開handoffを許可する。1件でもmissing、failed、未開始、期限切れ、manifest欠落・不正、binding不一致なら`enabled=false`、`legUrls=[]`を維持する。
+5. C1 legacyについて既存のURL生成、handoff、`HANDOFF_WAYPOINTS_UNVERIFIED`が変わらないことを既存contract testで確認する。
+
+Issue #72のコード実装、release設定、物理端末の4系列検証、公開handoffの有効化は分離して扱う。現時点では明示設定で検証済みmanifestを接続できるが、物理検証と公開handoffの有効化はユーザー作業待ちである。
 
 ## 未決事項と判断時点
 

@@ -148,7 +148,8 @@ export function createSearchWorkerHandler(options: SearchWorkerHandlerOptions) {
               resources: collectResources(releaseId),
               memory: benchState.memory,
             };
-      post(buildResultResponse(msg.requestId, parseSearchResult(resultJson), bench));
+      const result = await parseSearchResult(resultJson);
+      post(buildResultResponse(msg.requestId, result, bench));
     } catch (err) {
       if (err instanceof PipelineError) {
         post({ type: "error", requestId: msg.requestId, code: err.code, message: err.message });

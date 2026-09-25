@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "device-verification-manifest.schema.json",
+  "title": "Device verification manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "routePlanId",
+    "releaseId",
+    "urlBuilderVersion",
+    "legs",
+    "verifications"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "routePlanId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "urlBuilderVersion": {
+      "const": "google-maps-split/v1"
+    },
+    "legs": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": false,
+      "prefixItems": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/leg" },
+            { "properties": { "role": { "const": "surface_access" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/leg" },
+            { "properties": { "role": { "const": "loop_transfer" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/leg" },
+            { "properties": { "role": { "const": "surface_return" } } }
+          ]
+        }
+      ]
+    },
+    "verifications": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/$defs/verification"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "os": { "const": "android" },
+              "client": { "const": "web" }
+            },
+            "required": ["os", "client"]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "os": { "const": "android" },
+              "client": { "const": "app" }
+            },
+            "required": ["os", "client"]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "os": { "const": "ios" },
+              "client": { "const": "web" }
+            },
+            "required": ["os", "client"]
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "os": { "const": "ios" },
+              "client": { "const": "app" }
+            },
+            "required": ["os", "client"]
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "leg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "urlSha256", "expectedRoad", "expectedDirection"],
+      "properties": {
+        "role": {
+          "enum": ["surface_access", "loop_transfer", "surface_return"]
+        },
+        "urlSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "expectedRoad": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "expectedDirection": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "osVersion",
+        "client",
+        "clientName",
+        "clientVersion",
+        "verifiedAt",
+        "result",
+        "expiresAt"
+      ],
+      "properties": {
+        "os": {
+          "enum": ["android", "ios"]
+        },
+        "osVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "client": {
+          "enum": ["web", "app"]
+        },
+        "clientName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "clientVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "verifiedAt": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "result": {
+          "enum": ["passed", "failed", "missing", "expired"]
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/utcTimestamp"
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "verifiedAt": { "$ref": "#/$defs/utcTimestampString" },
+                "result": { "enum": ["passed", "failed", "expired"] },
+                "expiresAt": { "$ref": "#/$defs/utcTimestampString" }
+              }
+            },
+            {
+              "properties": {
+                "verifiedAt": { "type": "null" },
+                "result": { "const": "missing" },
+                "expiresAt": { "type": "null" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "os": { "const": "android" },
+                  "client": { "const": "web" }
+                },
+                "required": ["os", "client"]
+              },
+              "then": {
+                "properties": { "clientName": { "const": "chrome" } }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "os": { "const": "android" },
+                  "client": { "const": "app" }
+                },
+                "required": ["os", "client"]
+              },
+              "then": {
+                "properties": { "clientName": { "const": "google_maps" } }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "os": { "const": "ios" },
+                  "client": { "const": "web" }
+                },
+                "required": ["os", "client"]
+              },
+              "then": {
+                "properties": { "clientName": { "const": "safari" } }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "os": { "const": "ios" },
+                  "client": { "const": "app" }
+                },
+                "required": ["os", "client"]
+              },
+              "then": {
+                "properties": { "clientName": { "const": "google_maps" } }
+              }
+            },
+            {
+              "if": {
+                "properties": { "result": { "const": "passed" } },
+                "required": ["result"]
+              },
+              "then": {
+                "properties": {
+                  "osVersion": {
+                    "not": { "enum": ["unverified", "unknown", "n/a", "not verified"] }
+                  },
+                  "clientVersion": {
+                    "not": { "enum": ["unverified", "unknown", "n/a", "not verified"] }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "utcTimestamp": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/utcTimestampString" }
+      ]
+    },
+    "utcTimestampString": {
+      "type": "string",
+      "maxLength": 40,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?Z$"
+    }
+  }
+}

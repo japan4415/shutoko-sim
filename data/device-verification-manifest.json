@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "routePlanId": "fixture:radial",
+  "releaseId": "graph-v4-fixture-v1",
+  "urlBuilderVersion": "google-maps-split/v1",
+  "legs": [
+    {
+      "role": "surface_access",
+      "urlSha256": "8790daed7cbd88dcf1edbe954cff52c41ff3904ddd8a0f56c814de40691aa4ae",
+      "expectedRoad": "首都高速道路",
+      "expectedDirection": "目黒入口から2号線外回りへ"
+    },
+    {
+      "role": "loop_transfer",
+      "urlSha256": "8119da24106c10c0a9a6356d764daa1019538e21264c20b77d2e8bfad018c621",
+      "expectedRoad": "首都高速2号線",
+      "expectedDirection": "2号線外回りで天現寺JCTまで"
+    },
+    {
+      "role": "surface_return",
+      "urlSha256": "157b37796922a72a9f633bc9002c85813f9d0f2dd1bada9b4300bfbb0a462bd7",
+      "expectedRoad": "首都高速道路",
+      "expectedDirection": "天現寺出口から出発地点へ"
+    }
+  ],
+  "verifications": [
+    {
+      "os": "android",
+      "osVersion": "unverified",
+      "client": "web",
+      "clientName": "chrome",
+      "clientVersion": "unverified",
+      "verifiedAt": null,
+      "result": "missing",
+      "expiresAt": null
+    },
+    {
+      "os": "android",
+      "osVersion": "unverified",
+      "client": "app",
+      "clientName": "google_maps",
+      "clientVersion": "unverified",
+      "verifiedAt": null,
+      "result": "missing",
+      "expiresAt": null
+    },
+    {
+      "os": "ios",
+      "osVersion": "unverified",
+      "client": "web",
+      "clientName": "safari",
+      "clientVersion": "unverified",
+      "verifiedAt": null,
+      "result": "missing",
+      "expiresAt": null
+    },
+    {
+      "os": "ios",
+      "osVersion": "unverified",
+      "client": "app",
+      "clientName": "google_maps",
+      "clientVersion": "unverified",
+      "verifiedAt": null,
+      "result": "missing",
+      "expiresAt": null
+    }
+  ]
+}

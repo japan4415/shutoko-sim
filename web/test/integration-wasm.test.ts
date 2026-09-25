@@ -10,6 +10,7 @@ import {
   hexDigest,
   loadRelease,
   parseSearchResult,
+  routeMembershipsSha256,
   SEARCH_LIMITS_JSON,
   type ArtifactExpectation,
   type FetchLike,
@@ -26,7 +27,9 @@ interface WasmBuildContract {
   contractVersion: number;
   engineVersion: string;
   graphSchemaVersion: number;
+  supportedGraphSchemaVersions: number[];
   requiredGraphFields: string[];
+  requiredGraphSchema4Fields: string[];
 }
 
 function toBytes(text: string): Uint8Array {
@@ -47,10 +50,50 @@ export function isWasmContractCompatible(
     return false;
   }
   if (
-    graph.schemaVersion !== current.graphSchemaVersion ||
+    !current.supportedGraphSchemaVersions.includes(Number(graph.schemaVersion)) ||
+    manifest.schemaVersion !== 1 ||
+    manifest.releaseId !== graph.releaseId ||
     manifest.engineVersion !== current.engineVersion ||
     !Array.isArray(graph.odTariffs) ||
     !Array.isArray(graph.ramps)
+  ) {
+    return false;
+  }
+  if (
+    graph.schemaVersion === 4 &&
+    (!Array.isArray(graph.routeMemberships) ||
+      !Array.isArray(graph.billingPairs) ||
+      manifest.graphSchemaVersion !== 4 ||
+      manifest.routePlanVersion !== 1 ||
+      manifest.billingPairsVersion !== "v2" ||
+      typeof manifest.routeMembershipsSha256 !== "string")
+  ) {
+    return false;
+  }
+  if (
+    graph.schemaVersion === 4 &&
+    !(graph.billingPairs as unknown[]).every((value) => {
+      if (typeof value !== "object" || value === null) return false;
+      const pair = value as Record<string, unknown>;
+      if (typeof pair.pairKind !== "string") return false;
+      if (pair.pairKind === "legacyRing") {
+        return (
+          typeof pair.anchor === "object" &&
+          pair.anchor !== null &&
+          (pair.anchor as Record<string, unknown>).anchorKind === "sameNode"
+        );
+      }
+      if (pair.pairKind !== "radialReturn") return false;
+      const routePlan = pair.routePlan;
+      return (
+        typeof routePlan === "object" &&
+        routePlan !== null &&
+        typeof (routePlan as Record<string, unknown>).anchor === "object" &&
+        (routePlan as Record<string, unknown>).anchor !== null &&
+        ((routePlan as Record<string, unknown>).anchor as Record<string, unknown>).anchorKind ===
+          "directedJunction"
+      );
+    })
   ) {
     return false;
   }
@@ -76,12 +119,18 @@ async function wasmBuildIsCurrent(): Promise<boolean> {
     readFile(new URL("fixtures/generated/graph.json", root), "utf8"),
     readFile(new URL("fixtures/generated/manifest.json", root), "utf8"),
   ]);
-  return isWasmContractCompatible(
+  const parsedGraph = JSON.parse(graph) as Record<string, unknown>;
+  const parsedManifest = JSON.parse(manifest) as Record<string, unknown>;
+  if (!isWasmContractCompatible(
     JSON.parse(current) as WasmBuildContract,
     JSON.parse(built) as WasmBuildContract,
-    JSON.parse(graph) as Record<string, unknown>,
-    JSON.parse(manifest) as Record<string, unknown>,
-  );
+    parsedGraph,
+    parsedManifest,
+  )) {
+    return false;
+  }
+  if (parsedGraph.schemaVersion !== 4) return true;
+  return (await routeMembershipsSha256(parsedGraph.routeMemberships)) === parsedManifest.routeMembershipsSha256;
 }
 
 beforeAll(async () => {
@@ -101,10 +150,17 @@ function fileURLToPathSafe(url: URL): string {
 describe("実 WASM 統合（fetch モック → loadRelease → search）", () => {
   it("旧graph契約のbuild metadataをstaleとして判定する", () => {
     const current: WasmBuildContract = {
-      contractVersion: 1,
+      contractVersion: 4,
       engineVersion: "0.1.0",
-      graphSchemaVersion: 2,
+      graphSchemaVersion: 4,
+      supportedGraphSchemaVersions: [2, 3, 4],
       requiredGraphFields: ["odTariffs", "ramps[].id", "ramps[].mainlineNodeId"],
+      requiredGraphSchema4Fields: [
+        "routeMemberships",
+        "billingPairs[].pairKind",
+        "billingPairs[].anchor.anchorKind",
+        "billingPairs[].routePlan.anchor.anchorKind",
+      ],
     };
     const stale = { ...current, graphSchemaVersion: 1 };
     const graph = {
@@ -206,12 +262,17 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
     };
 
     const started = performance.now();
-    const result = parseSearchResult(state.searchPrepared(JSON.stringify(buildSearchRequest(msg))));
+    const result = await parseSearchResult(state.searchPrepared(JSON.stringify(buildSearchRequest(msg))));
     const elapsedMs = performance.now() - started;
 
     expect(result.status).toBe("ok");
     expect(result.candidates.length).toBeGreaterThan(0);
-    expect(result.candidates[0]?.handoff.mapsUrl.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);
+    const firstCandidate = result.candidates[0];
+    expect(firstCandidate).toBeDefined();
+    expect(firstCandidate?.pairKind).not.toBe("radialReturn");
+    if (firstCandidate !== undefined && firstCandidate.pairKind !== "radialReturn") {
+      expect(firstCandidate.handoff.mapsUrl.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);
+    }
     console.info(
       `[integration-wasm] candidates=${String(result.candidates.length)} elapsed=${elapsedMs.toFixed(1)}ms`,
     );
@@ -274,7 +335,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         maxMinutes: 240,
         vehicleProfile: "passenger-car-etc",
       };
-      const result = parseSearchResult(
+      const result = await parseSearchResult(
         glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
       );
       expect(result.status).toBe("ok");
@@ -313,13 +374,17 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       const first = glue.searchPrepared(pg, requestJson);
       const second = glue.searchPrepared(pg, requestJson);
       expect(second).toBe(first);
-      const result = parseSearchResult(first);
+      const result = await parseSearchResult(first);
       expect(result.status).toBe("ok");
       expect(result.reason).toBeNull();
       expect(result.expandedStates).toBeLessThan(100_000);
       expect(result.candidates[0]?.entry.rampId).toBe(msg.entryRampId);
       expect(result.candidates[0]?.exit.rampId).toBe(msg.exitRampId);
-      expect(result.candidates[0]?.loop.distanceMeters).toBeGreaterThanOrEqual(5_000);
+      const candidate = result.candidates[0];
+      expect(candidate).toBeDefined();
+      if (candidate !== undefined && candidate.pairKind !== "radialReturn") {
+        expect(candidate.loop.distanceMeters).toBeGreaterThanOrEqual(5_000);
+      }
       expect(result.candidates[0]?.toll.amountYen).toBeNull();
     } finally {
       pg.free();
@@ -345,7 +410,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         maxMinutes: 60,
         vehicleProfile: "passenger-car-etc",
       };
-      const result = parseSearchResult(
+      const result = await parseSearchResult(
         glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
       );
       // Issue #57: 立川駅の最近接入口 tier (4号高井戸) は完全評価され、合法周回を
@@ -357,6 +422,61 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
       expect(result.minPlanSeconds).toBe(10_727);
       expect(result.candidates).toHaveLength(0);
       expect(result.expandedStates).toBeLessThan(100_000);
+    } finally {
+      pg.free();
+    }
+  }, 30_000);
+
+  it("release gate の passed manifest を WASM 境界と Web reader まで通す", async () => {
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    const glue = await import(gluePath.href);
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(
+      new URL("fixtures/graph-v4/graph-radial-fixture.json", root),
+      "utf8",
+    );
+    const manifest = JSON.parse(
+      await readFile(new URL("data/device-verification-manifest.json", root), "utf8"),
+    ) as Record<string, unknown>;
+    for (const record of manifest.verifications as Record<string, unknown>[]) {
+      record.osVersion = "test-os";
+      record.clientVersion = "test-client";
+      record.verifiedAt = "2026-09-24T00:00:00Z";
+      record.result = "passed";
+      record.expiresAt = "2026-10-24T00:00:00Z";
+    }
+    const pg = glue.prepare(
+      graphJson,
+      JSON.stringify({
+        deviceVerification: {
+          manifestJson: JSON.stringify(manifest),
+          evaluatedAt: "2026-09-25T00:00:00Z",
+        },
+      }),
+    );
+    try {
+      const result = await parseSearchResult(
+        glue.searchPrepared(
+          pg,
+          JSON.stringify({
+            requestId: "device-gate-wasm",
+            releaseId: "graph-v4-fixture-v1",
+            originNodeId: "fixture:node:entry:ground",
+            minMinutes: 1,
+            maxMinutes: 60,
+            vehicleProfile: "passenger-car-etc",
+            pricingAt: "2020-01-01T00:00:00Z",
+          }),
+        ),
+      );
+      const candidate = result.candidates[0];
+      expect(candidate?.pairKind).toBe("radialReturn");
+      if (candidate?.pairKind === "radialReturn") {
+        expect(candidate.handoff.enabled).toBe(true);
+        if (candidate.handoff.enabled) {
+          expect(candidate.handoff.legUrls).toHaveLength(3);
+        }
+      }
     } finally {
       pg.free();
     }
@@ -396,7 +516,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         const second = glue.searchPrepared(pg, requestJson);
         // 同一入力の再実行はバイト完全一致（決定論）。
         expect(second).toBe(first);
-        const result = parseSearchResult(first);
+        const result = await parseSearchResult(first);
         expect(result.status).toBe("ok");
         expect(result.candidates.length).toBeGreaterThan(0);
         expect(result.expandedStates).toBeLessThanOrEqual(100_000);

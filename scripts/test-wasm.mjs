@@ -4,9 +4,97 @@ import { readFile } from 'node:fs/promises';
 import init, { search, prepare, searchPrepared } from '../dist/wasm/shutoko_routing.js';
 
 const graph = await readFile(new URL('../fixtures/synthetic-graph.json', import.meta.url), 'utf8');
+const schema4Graph = await readFile(
+  new URL('../fixtures/graph-v4/graph-radial-fixture.json', import.meta.url),
+  'utf8',
+);
+const generatedGraph = await readFile(
+  new URL('../fixtures/generated/graph.json', import.meta.url),
+  'utf8',
+);
+const generatedManifest = JSON.parse(
+  await readFile(new URL('../fixtures/generated/manifest.json', import.meta.url), 'utf8'),
+);
+const deviceVerificationManifest = JSON.parse(
+  await readFile(new URL('../data/device-verification-manifest.json', import.meta.url), 'utf8'),
+);
 const request = await readFile(new URL('../fixtures/synthetic-request.json', import.meta.url), 'utf8');
 const bytes = await readFile(new URL('../dist/wasm/shutoko_routing_bg.wasm', import.meta.url));
 await init({ module_or_path: bytes });
+const schema4Pg = prepare(schema4Graph, '{}');
+const radialRequest = JSON.stringify({
+  requestId: 'schema4-radial',
+  releaseId: 'graph-v4-fixture-v1',
+  originNodeId: 'fixture:node:entry:ground',
+  minMinutes: 1,
+  maxMinutes: 60,
+  vehicleProfile: 'passenger-car-etc',
+  pricingAt: '2026-09-16T00:00:00Z',
+});
+const radialJson = searchPrepared(schema4Pg, radialRequest);
+const radialResult = JSON.parse(radialJson);
+assert.equal(radialResult.status, 'ok');
+const radialCandidate = radialResult.candidates[0];
+assert.equal(radialCandidate.pairKind, 'radialReturn');
+assert.equal(radialCandidate.duration.shutokoSeconds, 1440);
+assert.equal(radialCandidate.shutokoDistanceMeters, 23400);
+assert.equal(radialCandidate.edgeRouteLegs.length, 4);
+assert.equal(radialCandidate.estimatedLegs.length, 2);
+assert.deepEqual(radialCandidate.handoff, {
+  enabled: false,
+  legUrls: [],
+  disabledReason: 'device_verification_pending',
+});
+assert.equal(
+  radialCandidate.distanceMeters,
+  radialCandidate.shutokoDistanceMeters +
+    radialCandidate.estimatedLegs.reduce((total, leg) => total + leg.distanceMeters, 0),
+);
+assert.equal('chargedSectionCount' in radialCandidate.toll, false);
+assert.equal(radialCandidate.reasons.includes('ONE_SECTION_TOLL'), false);
+assert.equal(searchPrepared(schema4Pg, radialRequest), radialJson);
+schema4Pg.free();
+const generatedPg = prepare(generatedGraph, '{}');
+generatedPg.free();
+assert.equal(JSON.parse(generatedGraph).schemaVersion, 4);
+assert.equal(generatedManifest.graphSchemaVersion, 4);
+assert.equal(generatedManifest.billingPairsVersion, 'v2');
+assert.equal(generatedManifest.routePlanVersion, 1);
+assert.match(generatedManifest.routeMembershipsSha256, /^[0-9a-f]{64}$/);
+
+for (const record of deviceVerificationManifest.verifications) {
+  record.osVersion = 'test-os';
+  record.clientVersion = 'test-client';
+  record.verifiedAt = '2026-09-24T00:00:00Z';
+  record.result = 'passed';
+  record.expiresAt = '2026-10-24T00:00:00Z';
+}
+const verifiedSchema4Pg = prepare(
+  schema4Graph,
+  JSON.stringify({
+    deviceVerification: {
+      manifestJson: JSON.stringify(deviceVerificationManifest),
+      evaluatedAt: '2026-09-25T00:00:00Z',
+    },
+  }),
+);
+const verifiedRadialResult = JSON.parse(searchPrepared(verifiedSchema4Pg, radialRequest));
+const verifiedHandoff = verifiedRadialResult.candidates[0].handoff;
+assert.equal(verifiedHandoff.enabled, true);
+assert.equal(verifiedHandoff.disabledReason, null);
+assert.deepEqual(
+  verifiedHandoff.legUrls.map((leg) => leg.role),
+  ['surface_access', 'loop_transfer', 'surface_return'],
+);
+assert.deepEqual(
+  verifiedHandoff.legUrls.map((leg) => leg.urlSha256),
+  deviceVerificationManifest.legs.map((leg) => leg.urlSha256),
+);
+verifiedSchema4Pg.free();
+assert.throws(
+  () => prepare(JSON.stringify({ ...JSON.parse(schema4Graph), schemaVersion: 5 }), '{}'),
+  'unknown graph schema version must throw',
+);
 const first = search(graph, request, '{}');
 const result = JSON.parse(first);
 assert.equal(result.status, 'ok');
@@ -52,6 +140,42 @@ const coordCand = coordRes.candidates[0];
 assert.equal(coordCand.snappedOrigin.nodeId, 'i');
 assert.ok(coordCand.snappedOrigin.distanceMeters < 100.0);
 assert.deepEqual(coordCand.origin, { lat: 35.681, lon: 139.7671 });
+
+const topologyGraph = JSON.parse(schema4Graph);
+topologyGraph.billingPairs = [];
+topologyGraph.ramps[0].facilityId = topologyGraph.ramps[1].facilityId;
+topologyGraph.edges.push({
+  id: 'fixture:edge:topology:cycle',
+  from: 'fixture:node:exit:connector',
+  to: 'fixture:node:entry:ramp-end',
+  kind: 'shutoko',
+  durationSeconds: 600,
+  distanceMeters: 10000,
+});
+const topologyResult = JSON.parse(
+  search(
+    JSON.stringify(topologyGraph),
+    JSON.stringify({
+      requestId: 'topology-only',
+      releaseId: 'graph-v4-fixture-v1',
+      origin: { lat: 35.1, lon: 139.1 },
+      minMinutes: 1,
+      maxMinutes: 120,
+      vehicleProfile: 'passenger-car-etc',
+      pricingAt: '2026-09-16T00:00:00Z',
+    }),
+    '{}',
+  ),
+);
+assert.equal(topologyResult.status, 'ok');
+const topologyCandidate = topologyResult.candidates[0];
+assert.equal(topologyCandidate.pairKind, 'topologyOnly');
+assert.equal(topologyCandidate.eligibilityStatus, 'topology_only');
+assert.equal(topologyCandidate.loopValidationStatus, 'topology_only');
+assert.equal(topologyCandidate.tariffStatus, 'unpriced');
+assert.equal('chargedSectionCount' in topologyCandidate.toll, false);
+assert.equal(topologyCandidate.reasons.includes('ONE_SECTION_TOLL'), false);
+assert.equal('edgeRouteLegs' in topologyCandidate, false);
 
 // NO_CONNECTION case when coordinates are beyond 30 km from the nearest Entry access point
 const noConnReq = JSON.parse(request);
@@ -122,5 +246,5 @@ pg.free();
 assert.throws(() => searchPrepared(pg, request), 'use-after-free on WasmPreparedGraph must throw');
 
 console.log(`[bench] prepare=${avgPrepareMs.toFixed(2)}ms / search=${avgSearchMs.toFixed(2)}ms / searchPrepared=${avgSearchPreparedMs.toFixed(2)}ms`);
-console.log('Web-target WASM loaded; synthetic loop search, new fields, coordinate snap, NO_CONNECTION, determinism, PreparedGraph and errors passed.');
+console.log('Web-target WASM loaded; schema 2/4 readers, synthetic search, coordinate snap, determinism, PreparedGraph and errors passed.');
 

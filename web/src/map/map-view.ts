@@ -2,7 +2,7 @@
 // モジュール import 自体は副作用を持たない（Vitest から安全に読み込めるようにする）。
 // 座標は GeoJSON が [lon, lat]、Leaflet が [lat, lon] のため、境界で必ず反転する。
 import L from "leaflet";
-import type { Candidate } from "../worker/types";
+import type { Candidate, RoutePlanSegmentRole } from "../worker/types";
 import { fitBoundsAnimation, planOriginFocus } from "./focus";
 import { deriveSegments } from "./segments";
 import type { Coords } from "./segments";
@@ -49,12 +49,13 @@ export interface MapView {
 
 /** 線の役割。選択・非選択のスタイル切り替えを役割単位で行う。 */
 type SegmentRole = "access" | "loop" | "return";
+type LineStyleRole = SegmentRole | RoutePlanSegmentRole;
 
 /** 候補 1 件分の描画レイヤー（基準スタイルを再適用できるよう保持する）。 */
 interface CandidateLayer {
   id: string;
   /** 役割ごとの線。 */
-  lines: { role: SegmentRole; line: L.Polyline }[];
+  lines: { role: LineStyleRole; line: L.Polyline }[];
   /** 課金対象区間。選択状態に依らず常時強調する。特定できなければ null。 */
   charged: L.Polyline | null;
   /** 経路全体の外接矩形算出に使う。 */
@@ -62,23 +63,41 @@ interface CandidateLayer {
 }
 
 // 基準スタイル（非選択）。色に依存せず選択可否が分かるよう、選択時は太さ・不透明度も変える。
-const BASE_STYLE: Record<SegmentRole, L.PathOptions> = {
+const BASE_STYLE: Record<LineStyleRole, L.PathOptions> = {
   access: { color: "#5a5f66", weight: 3, opacity: 0.55 },
   loop: { color: "#1c1e21", weight: 5, opacity: 0.7 },
   return: { color: "#5a5f66", weight: 3, opacity: 0.55, dashArray: "6 6" },
+  entry_approach: { color: "#173f68", weight: 4, opacity: 0.9 },
+  mandatory_lap: { color: "#173f68", weight: 6, opacity: 0.95, dashArray: "2 6" },
+  return_corridor: { color: "#173f68", weight: 5, opacity: 0.95, dashArray: "12 6" },
+  exit_approach: { color: "#173f68", weight: 4, opacity: 0.9, dashArray: "10 4 2 4" },
 };
-const SELECTED_STYLE: Record<SegmentRole, L.PathOptions> = {
+const SELECTED_STYLE: Record<LineStyleRole, L.PathOptions> = {
   access: { color: "#0b5cad", weight: 6, opacity: 1 },
   loop: { color: "#0b5cad", weight: 8, opacity: 1 },
   return: { color: "#0b5cad", weight: 4, opacity: 0.9, dashArray: "6 6" },
+  entry_approach: { color: "#0b5cad", weight: 6, opacity: 1 },
+  mandatory_lap: { color: "#0b5cad", weight: 8, opacity: 1, dashArray: "2 6" },
+  return_corridor: { color: "#0b5cad", weight: 7, opacity: 1, dashArray: "12 6" },
+  exit_approach: { color: "#0b5cad", weight: 6, opacity: 1, dashArray: "10 4 2 4" },
 };
 // 課金対象は色と破線の二重符号化で示す（色覚多様性に配慮）。
 const CHARGED_STYLE: L.PathOptions = { color: "#c2410c", weight: 6, opacity: 0.95, dashArray: "2 8" };
 const CHARGED_DIM_STYLE: L.PathOptions = { ...CHARGED_STYLE, opacity: 0.45 };
-const DIM_STYLE: Record<SegmentRole, L.PathOptions> = {
+const DIM_STYLE: Record<LineStyleRole, L.PathOptions> = {
   access: { ...BASE_STYLE.access, opacity: 0.18 },
   loop: { ...BASE_STYLE.loop, opacity: 0.25 },
   return: { ...BASE_STYLE.return, opacity: 0.18 },
+  entry_approach: { ...BASE_STYLE.entry_approach, opacity: 0.2 },
+  mandatory_lap: { ...BASE_STYLE.mandatory_lap, opacity: 0.28 },
+  return_corridor: { ...BASE_STYLE.return_corridor, opacity: 0.2 },
+  exit_approach: { ...BASE_STYLE.exit_approach, opacity: 0.2 },
+};
+const ROUTE_LEG_LABELS: Record<RoutePlanSegmentRole, string> = {
+  entry_approach: "入口アプローチ（実線）",
+  mandatory_lap: "必須周回（点線）",
+  return_corridor: "戻り経路（破線）",
+  exit_approach: "出口アプローチ（一点鎖線）",
 };
 
 /** [lon, lat] を Leaflet の [lat, lon] へ反転する。 */
@@ -278,23 +297,39 @@ export function createMapView(
     for (const candidate of candidates) {
       const segments = deriveSegments(candidate);
       const bounds = L.latLngBounds([]);
-      const lines: { role: SegmentRole; line: L.Polyline }[] = [];
+      const lines: { role: LineStyleRole; line: L.Polyline }[] = [];
 
-      // access・loop・return を役割付きで描く。スタイルは applyStyles が一括で決める。
-      const parts: { role: SegmentRole; coords: Coords[] }[] = [
-        { role: "access", coords: segments.access },
-        { role: "loop", coords: segments.loop },
-        { role: "return", coords: segments.return },
-      ];
-      for (const { role, coords } of parts) {
-        if (coords.length < 2) {
-          continue;
+      if (segments.routeLegs.length > 0) {
+        segments.routeLegs.forEach((part, index) => {
+          if (part.coords.length < 2) {
+            return;
+          }
+          const latlngs = toLatLngs(part.coords);
+          const line = L.polyline(latlngs, BASE_STYLE[part.role]);
+          line.bindTooltip(`${String(index + 1)} ${ROUTE_LEG_LABELS[part.role]}`, { sticky: true });
+          line.addTo(map);
+          lines.push({ role: part.role, line });
+          extendBounds(bounds, latlngs);
+        });
+      } else {
+        const parts: { role: SegmentRole; coords: Coords[] }[] = [
+          { role: "access", coords: segments.access },
+          { role: "loop", coords: segments.loop },
+          { role: "return", coords: segments.return },
+        ];
+        for (const { role, coords } of parts) {
+          if (coords.length < 2) {
+            continue;
+          }
+          const latlngs = toLatLngs(coords);
+          const line = L.polyline(latlngs, BASE_STYLE[role]);
+          if (candidate.pairKind === "topologyOnly" && role === "loop") {
+            line.bindTooltip("首都高の道路形状（商品対象外）", { sticky: true });
+          }
+          line.addTo(map);
+          lines.push({ role, line });
+          extendBounds(bounds, latlngs);
         }
-        const latlngs = toLatLngs(coords);
-        const line = L.polyline(latlngs, BASE_STYLE[role]);
-        line.addTo(map);
-        lines.push({ role, line });
-        extendBounds(bounds, latlngs);
       }
       // 区間分解に失敗した場合は main（全経路）を 1 本の基準線として描く。
       if (lines.length === 0 && segments.main.length >= 2) {
@@ -310,7 +345,10 @@ export function createMapView(
         const chargedLatLngs = toLatLngs(segments.charged);
         charged = L.polyline(chargedLatLngs, CHARGED_STYLE);
         charged.addTo(map);
-        charged.bindTooltip("課金対象 1区間", { sticky: true });
+        charged.bindTooltip(
+          candidate.pairKind === "radialReturn" ? "首都高区間" : "課金対象 1区間",
+          { sticky: true },
+        );
         extendBounds(bounds, chargedLatLngs);
       }
 

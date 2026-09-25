@@ -7,6 +7,10 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+fn default_graph_schema_version() -> u32 {
+    2
+}
+
 /// Root release manifest document.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,6 +26,18 @@ pub struct Manifest {
 
     /// Graph dataset version.
     pub graph_version: String,
+
+    /// Graph JSON schema version emitted by the builder.
+    #[serde(default = "default_graph_schema_version")]
+    pub graph_schema_version: u32,
+
+    /// Route plan version used by schema 4 billing pairs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_plan_version: Option<u8>,
+
+    /// SHA-256 of the deterministic route membership JSON array.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_memberships_sha256: Option<String>,
 
     /// Fixed ISO 8601 UTC build timestamp provided externally (never generated from local clock).
     pub built_at: String,
@@ -134,6 +150,9 @@ pub struct ManifestConfig {
     pub release_id: String,
     pub engine_version: String,
     pub graph_version: String,
+    pub graph_schema_version: u32,
+    pub route_plan_version: Option<u8>,
+    pub route_memberships_sha256: Option<String>,
     pub built_at: String,
     pub source_date: String,
     pub coverage_area: String,
@@ -154,6 +173,9 @@ impl Default for ManifestConfig {
             release_id: "default-release".into(),
             engine_version: shutoko_routing_core::VERSION.into(),
             graph_version: "1.0.0".into(),
+            graph_schema_version: default_graph_schema_version(),
+            route_plan_version: None,
+            route_memberships_sha256: None,
             built_at: "2026-09-10T00:00:00Z".into(),
             source_date: "2026-09-10".into(),
             coverage_area: "Tokyo Inner Circular Route (C1) and Metropolitan Expressway".into(),
@@ -221,6 +243,9 @@ pub fn build_manifest(
         release_id: config.release_id.clone(),
         engine_version: config.engine_version.clone(),
         graph_version: config.graph_version.clone(),
+        graph_schema_version: config.graph_schema_version,
+        route_plan_version: config.route_plan_version,
+        route_memberships_sha256: config.route_memberships_sha256.clone(),
         built_at: config.built_at.clone(),
         source_date: config.source_date.clone(),
         coverage: ManifestCoverage {

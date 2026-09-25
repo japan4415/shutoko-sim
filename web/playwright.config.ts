@@ -14,7 +14,7 @@ export default defineConfig({
   webServer: {
     command: "npx wrangler dev --port 8787",
     cwd: "../workers",
-    url: "http://localhost:8787/releases/all-real-v2/manifest.json",
+    url: "http://localhost:8787/releases/all-real-v3/manifest.json",
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

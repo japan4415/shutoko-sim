@@ -1,8 +1,8 @@
 # Rust / WASM 開発
 
-ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
+ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、schema 2 / 3 / 4 の対応表、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。schema 4 では `routeMemberships` と `billingPairs[].pairKind` / anchor kind も必須にする。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
 
-ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。これらを変えない純粋なエンジン内部の挙動変更はstaleとして検出できないため、探索結果やWASM境界の挙動を変える変更では、実装者が該当versionを明示的にbumpしてcontractを更新しなければならない。現状を自動hash追跡済みとは表現しない。
+ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65 で WASM 境界が schema 4 pair union と Candidate v2 契約を受け付けるため `graphSchemaVersion=4`、`supportedGraphSchemaVersions=[2,3,4]` に更新した。engine package version は C1 release との互換性維持のため `engineVersion=0.1.0` のままにする。Issue #69 で `LegacyCandidate | TopologyOnlyCandidate | RadialCandidate` の3種類、dynamic topology-only、synthetic radial検索を追加し、Issue #71 でradial handoffの`disabledReason`と将来gate用の`MapsHandoffLegWire` wire型を追加したため `contractVersion=4` へ更新した。Issue #72 では `SearchLimits.deviceVerification` をリリース時固定のmanifest / 判定時刻の入力として追加し、`RadialHandoff` を enabled / disabled の判別可能な型へ修正した。search requestや`SearchResult`の既定shapeは変えず、設定なしではradial handoffが閉じる。Issue #66 で公開 graph の既定 schema を4へ切り替え、release `all-real-v3` のmanifestに`graphSchemaVersion=4`、`routePlanVersion=1`、`routeMembershipsSha256` を記録する。Web Worker はmanifestのgraph schema、billing pair version、route plan version、route membership hashをgraph artifactと照合してからWASM prepareを実行する。
 
 ## 今回の実装範囲
 
@@ -10,7 +10,7 @@
 
 `crates/routing-core` は Rust の純粋な探索処理、`crates/routing-wasm` は JSON 文字列を受け渡す JavaScript 向け境界。ネットワーク、DOM、住所検索には依存しない。`fixtures` は架空の道路・料金データで、実走行案内には使わない。
 
-出発地点は `origin: { lat, lon }` または `originNodeId` のどちらかで指定する（排他）。座標指定時は WASM 内部で 200m 以内の一般道ノードへ空間スナップされる。OSM 実データからのグラフ生成、幾何データ合成、Google マップ引き継ぎ URL 生成に対応している。ブラウザ Web Worker の制御や実機検証（#8）は後続とする。[インターフェース設計](interfaces.md)に詳細な契約表を記載している。
+出発地点は `origin: { lat, lon }` または `originNodeId` のどちらかで指定する（排他）。座標指定時は WASM 内部の空間グリッドから構造的に利用できる一般道Entryを距離順に選択し、固定の200m半径では切り捨てない。Entryノードが存在しない場合だけ `NO_CONNECTION` になる。OSM 実データからのグラフ生成、幾何データ合成、Google マップ引き継ぎ URL 生成に対応している。ブラウザ Web Worker はdevice manifestをbuild時にbundleしてgateへ渡す。実機検証の完了と公開handoffの有効化はユーザー作業待ちである。[インターフェース設計](interfaces.md)に詳細な契約表を記載している。
 
 ## 準備
 
@@ -37,15 +37,17 @@ node scripts/test-wasm.mjs
 `dist/wasm/` に `.wasm`、ES module の JS glue、および TypeScript 型定義を生成する。
 - TypeScript 正典型定義: `crates/routing-wasm/types/index.d.ts`
 - ビルドスクリプト（`scripts/build-wasm.sh`）がビルド完了時に `dist/wasm/index.d.ts` へコピーし、npm パッケージ / Web Worker から直接型参照可能にする。
-- 定義される主要型: `SearchRequest`, `SearchLimits`, `SearchResult`, `Candidate`, `Handoff`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
+- 定義される主要型: `SearchRequest`, `SearchLimits`, `DeviceVerificationReleaseConfig`, `SearchResult`, `LegacyCandidate`, `TopologyOnlyCandidate`, `RadialCandidate`, `Candidate`, `GraphBillingPairV2`, `RouteMembershipIndex`, `EdgeRouteLeg`, `EstimatedLeg`, `Handoff`, `MapsHandoffLegWire`, `RadialHandoff`, `DeviceVerificationManifest`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`
 
 `test-wasm.mjs` は配信用と同じ `--target web` の glue と WASM を Node.js でロードし、以下を自動検証する:
-1. 合成グラフに対する `originNodeId` 探索および期待されるエッジ列・時間・料金の算出
-2. 決定論性（同一入力による連続実行でバイト完全一致）
-3. 候補の新フィールド構造（GeoJSON `LineString` 幾何、`mapsUrl` 形式および長さ ≤ 2,048、`snappedOrigin`、`warnings` への `HANDOFF_WAYPOINTS_UNVERIFIED` の包含）
-4. 座標入力（`origin: { lat, lon }`）による空間スナップ探索
-5. 200m 超過座標における接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
-6. 異常入力の拒否と JavaScript Error（Error の `message` に `RoutingErrorPayload { code: "INVALID_INPUT", message }` の JSON 文字列）のスロー検証
+1. graph schema 2 / 4 の prepare、schema 4 `legacyRing` / `radialReturn` と `sameNode` / `directedJunction` の reader 契約
+2. 合成グラフに対する `originNodeId` 探索および期待されるエッジ列・時間・料金の算出
+3. 決定論性（同一入力による連続実行でバイト完全一致）
+4. 候補の新フィールド構造（GeoJSON `LineString` 幾何、`mapsUrl` 形式および長さ ≤ 2,048、`snappedOrigin`、`warnings` への `HANDOFF_WAYPOINTS_UNVERIFIED` の包含）
+5. schema 4のsynthetic radial pairから4 highway leg / 2 surface leg / 距離式を持つ`RadialCandidate`と、`chargedSectionCount`を持たない`TopologyOnlyCandidate`の生成。device verification設定なしではradial handoffを`enabled=false`、`legUrls=[]`、`disabledReason=device_verification_pending`に固定し、明示したtest manifestでは固定順3 legとURL hashを検証して`enabled=true`にする
+6. 座標入力（`origin: { lat, lon }`）による空間スナップ探索
+7. Entryノードが空のグラフにおける接続不可（`status: "no_candidates"`, `reason: "NO_CONNECTION"`）
+8. 異常入力の拒否と JavaScript Error（Error の `message` に `RoutingErrorPayload { code: "INVALID_INPUT", message }` の JSON 文字列）のスロー検証
 
 ## 呼び出し
 
@@ -57,13 +59,13 @@ await init();
 const result = JSON.parse(search(graphJson, requestJson, '{}'));
 ```
 
-引数は順にグラフ JSON、検索条件 JSON、探索上限 JSON の文字列。`{}` は既定の探索上限を選ぶ。入力不備は JavaScript `Error`（`message` に `RoutingErrorPayload` JSON 文字列）としてスローされるため、呼び出し元で捕捉する。戻り値も JSON 文字列で、候補なしや探索打ち切りは正常な探索結果として扱う。
+引数は順にグラフ JSON、検索条件 JSON、探索上限兼release設定 JSON の文字列。`{}` は既定の探索上限を選び、device verification gateも閉じる。Web Workerは`data/device-verification-manifest.json`をbuild時にbundleし、リリースで検証済みmanifestを使う場合だけ、このJSONへ`{"deviceVerification":{"manifestJson":"...","evaluatedAt":"..."}}`を含める。`evaluatedAt`はリリース時刻のUTC値であり、検索条件の`pricingAt`から補わない。入力不備は JavaScript `Error`（`message` に `RoutingErrorPayload` JSON 文字列）としてスローされるため、呼び出し元で捕捉する。戻り値も JSON 文字列で、候補なしや探索打ち切りは正常な探索結果として扱う。
 
 Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `search_json` を利用できる。動作する入力例は [人工グラフ](../fixtures/synthetic-graph.json) と [検索条件](../fixtures/synthetic-request.json) を参照する。
 
 ## 初期データ契約
 
-グラフには `schemaVersion: 2`、`releaseId`、`vehicleProfile`、ノード、エッジ、課金ペア、禁止エッジ列を格納する。エッジ種別は `local` / `entry` / `shutoko` / `exit`。上下線は異なるノード・エッジで表す。料金ペアは入口から基準点への経路、基準点から出口への経路を明示し、間に非空の一周を挿入する。`entryId` / `exitId` はこの初期契約では実際の入退出エッジ ID と一致させる。二つの接続路を結んだ直接経路は単純路とし、そこに追加の周回を埋め込めない。一方、挿入する一周と接続路のエッジ共有は許す。
+公開中・生成 fixture の現行 graph は `schemaVersion: 4`、`releaseId`、`vehicleProfile`、ノード、エッジ、legacy 課金ペア、route memberships、禁止エッジ列を格納する。reader は schema 2 / 3 の legacy pair と schema 4 の `legacyRing` / `radialReturn` union を受理する。エッジ種別は `local` / `entry` / `shutoko` / `exit`。上下線は異なるノード・エッジで表す。legacy 料金ペアは入口から基準点への経路、基準点から出口への経路を明示し、間に非空の一周を挿入する。`entryId` / `exitId` は実際の入退出エッジ ID と一致させる。二つの接続路を結んだ直接経路は単純路とし、そこに追加の周回を埋め込めない。一方、挿入する一周と接続路のエッジ共有は許す。
 
 時間と距離は正の整数で秒・mを用いる。料金は実走行距離から計算せず、ペアに登録された有効期間の金額を使う。期間は開始を含み終了を含まない。検索入力の `pricingAt` に固定して判定する。入力検証はデータの構造を検証するもので、実際の道路や課金関係を認定しない。
 
@@ -96,7 +98,7 @@ Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `sear
 - 照合は 2 段階。`graph.json` は manifest の `artifacts`（sha256・byteLength）と照合し、`wasm` / glue は配信側 `engine.json` の `artifacts`（sha256・byteLength）と照合する。不一致は `ARTIFACT_MISMATCH`、取得失敗は `FETCH_FAILED` で停止し、以降の取得は行わない。
   - **期待値をソースに固定値で持たない理由**: wasm のビルドは環境をまたいでバイト一致しない（ローカル macOS と CI の ubuntu で sha256 が変わる）。固定定数だと CI だけが落ちるため、`engine.json` は `workers/scripts/seed-local-r2.mjs` が投入時に実ファイルから計算する。
   - `engine.json` の形式不正（JSON デコード失敗、`schemaVersion` が 1 以外、`releaseId` 不一致、`artifacts` に `shutoko_routing_bg.wasm` / `shutoko_routing.js` の有効なエントリが無い）も `ARTIFACT_MISMATCH` として停止する。
-  - `web/src/worker/artifact-hashes.ts` は wasm/glue のハッシュを持たず、releaseId allowlist だけを持つ。新規探索は `all-real-v2` を使い、`all-real-v1` と C1 旧版はキャッシュ済み旧クライアント向けに保持する。
+  - `web/src/worker/artifact-hashes.ts` は wasm/glue のハッシュを持たず、releaseId allowlist だけを持つ。新規探索は `all-real-v3` を使い、`all-real-v1` / `all-real-v2` と C1 旧版はキャッシュ済み旧クライアント向けに保持する。
 - glue はテキスト取得・照合後に同一 URL を `import()` し、`init({ module_or_path: wasmBytes })` で初期化する。`graph.json` は文字列のまま Worker のモジュール変数に保持し、検索ごとに `search(graphJson, requestJson, "{}")` へ渡す。
 - メッセージ契約は [インターフェース設計](interfaces.md) の「ブラウザの探索境界」のとおり。初期化完了で `ready`、検索応答は `requestId` 付きの `result` / `error` を返す。
 - 10 秒タイムアウトと `terminate()` は UI 側の実装。押下時に `setTimeout(10000)` を開始し、超過で Worker を terminate して `TIMEOUT` 文言を表示、次回検索時に Worker を再生成して `ready` を待ってから送信する。古い `requestId` の応答は無視する。

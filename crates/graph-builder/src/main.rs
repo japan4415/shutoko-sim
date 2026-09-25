@@ -4,13 +4,17 @@
 //! from OSM Overpass export JSON and human-verified billing pair seeds.
 
 use shutoko_graph_builder::{
-    apply_od_tariffs_to_graph, bind_ramps_to_graph, build_manifest, build_topology_with_report,
-    generate_and_validate_billing_pairs, manifest_to_deterministic_json,
-    ramps_artifact_to_deterministic_json, snap_index_to_deterministic_json, to_deterministic_json,
+    apply_od_tariffs_to_graph, bind_ramps_to_graph, bound_ramp_evidence_from_inventory,
+    build_manifest, build_route_membership_indices, build_topology_with_report,
+    generate_and_validate_parsed_billing_pairs, generate_diagnostic_radial_route_plans,
+    graph_schema_v4_to_deterministic_json_with_radial, manifest_to_deterministic_json,
+    parse_billing_pairs_seed, promote_verified_radial_pair, ramps_artifact_to_deterministic_json,
+    route_memberships_sha256, snap_index_to_deterministic_json, to_deterministic_json,
     validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
-    validate_ramp_inventory, BillingPairProvenance, BillingPairsSeedFile, EdgeKind, ManifestConfig,
-    OdTariffsFile, OsmRampBindingsFile, OverpassResponse, RampInventoryFile, RampKind,
-    RampsArtifact, TopologyConfig, VerificationStatus,
+    validate_radial_seed_binding_candidates, validate_ramp_inventory, BillingPairProvenance,
+    EdgeKind, EndpointSupportState, ManifestConfig, OdTariffsFile, OsmRampBindingsFile,
+    OverpassResponse, ParsedBillingPairsSeed, RampInventoryFile, RampKind, RampsArtifact,
+    RouteMembershipBuildOptions, TopologyConfig, VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -40,12 +44,34 @@ OPTIONS:
     --source-date <DATE>    Data capture date (YYYY-MM-DD) [default: "2026-09-10"]
     --coverage-area <STR>   Textual coverage scope description [default: "Tokyo Inner Circular Route (C1) and Metropolitan Expressway"]
     --graph-version <VER>   Graph dataset version [default: "1.0.0"]
+    --graph-schema <2|4>     Graph JSON schema [default: 4]
     --unverified-section <S> Unverified section to record in manifest (can be specified multiple times)
     --strict                Fail with non-zero exit code if no verified billing pairs are generated
     -h, --help              Print help information
     -V, --version           Print version information
 "#
     );
+}
+
+const ROUTE_MEMBERSHIP_RELATION_IDS: &[i64] = &[4256008, 4256339];
+
+fn default_route_membership_relation_ids(response: &OverpassResponse) -> Option<Vec<i64>> {
+    if ROUTE_MEMBERSHIP_RELATION_IDS
+        .iter()
+        .all(|id| response.elements.iter().any(|element| element.id == *id))
+    {
+        Some(ROUTE_MEMBERSHIP_RELATION_IDS.to_vec())
+    } else {
+        None
+    }
+}
+
+fn endpoint_support_state_wire_value(state: EndpointSupportState) -> &'static str {
+    match state {
+        EndpointSupportState::VerifiedBound => "verified_bound",
+        EndpointSupportState::Unresolved => "unresolved",
+        EndpointSupportState::Unsupported => "unsupported",
+    }
 }
 
 struct CliArgs {
@@ -61,6 +87,7 @@ struct CliArgs {
     source_date: String,
     coverage_area: String,
     graph_version: String,
+    graph_schema: u32,
     unverified_sections: Vec<String>,
     strict: bool,
 }
@@ -86,6 +113,7 @@ fn parse_args() -> Result<CliArgs, String> {
     let mut coverage_area =
         "Tokyo Inner Circular Route (C1) and Metropolitan Expressway".to_string();
     let mut graph_version = "1.0.0".to_string();
+    let mut graph_schema = 4u32;
     let mut unverified_sections: Vec<String> = Vec::new();
     let mut strict = false;
 
@@ -184,6 +212,15 @@ fn parse_args() -> Result<CliArgs, String> {
                 }
                 graph_version = raw_args[i].clone();
             }
+            "--graph-schema" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err("--graph-schema requires 2 or 4".into());
+                }
+                graph_schema = raw_args[i]
+                    .parse::<u32>()
+                    .map_err(|_| "--graph-schema requires 2 or 4".to_string())?;
+            }
             "--unverified-section" => {
                 i += 1;
                 if i >= raw_args.len() {
@@ -203,6 +240,9 @@ fn parse_args() -> Result<CliArgs, String> {
 
     let osm_path = osm_path.ok_or_else(|| "missing required argument: --osm".to_string())?;
     let out_dir = out_dir.ok_or_else(|| "missing required argument: --out-dir".to_string())?;
+    if graph_schema != 2 && graph_schema != 4 {
+        return Err("--graph-schema must be 2 or 4".into());
+    }
 
     Ok(CliArgs {
         osm_path,
@@ -217,6 +257,7 @@ fn parse_args() -> Result<CliArgs, String> {
         source_date,
         coverage_area,
         graph_version,
+        graph_schema,
         unverified_sections,
         strict,
     })
@@ -260,6 +301,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // 3. Process declarative billing pair seeds if provided
     let mut unverified_from_seeds = Vec::new();
     let mut billing_provenances = Vec::new();
+    let mut parsed_seed_file: Option<ParsedBillingPairsSeed> = None;
 
     if let Some(seed_file_path) = &args.seed_path {
         let seed_raw = fs::read_to_string(seed_file_path).map_err(|e| {
@@ -269,15 +311,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 e
             )
         })?;
-        let seed_file: BillingPairsSeedFile = serde_json::from_str(&seed_raw).map_err(|e| {
+        let seed_file = parse_billing_pairs_seed(&seed_raw).map_err(|e| {
             format!(
                 "failed to parse seed JSON {}: {}",
                 seed_file_path.display(),
                 e
             )
         })?;
+        parsed_seed_file = Some(seed_file.clone());
 
-        let report = generate_and_validate_billing_pairs(&graph, &seed_file);
+        let report = generate_and_validate_parsed_billing_pairs(&graph, &seed_file);
 
         if !report.rejected_pairs.is_empty() {
             eprintln!(
@@ -286,13 +329,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
             for rej in &report.rejected_pairs {
                 eprintln!("  - {}: {}", rej.seed_id, rej.reason);
-                unverified_from_seeds.push(format!("rejected:{}:{}", rej.seed_id, rej.reason));
+                if args.graph_schema == 2
+                    || !rej
+                        .reason
+                        .starts_with("radialReturn pair requires schema 4 route-plan resolution")
+                {
+                    unverified_from_seeds.push(format!("rejected:{}:{}", rej.seed_id, rej.reason));
+                }
             }
         }
 
+        let legacy_seeds = seed_file.legacy_pairs();
         for pair in &report.valid_pairs {
             if pair.status == VerificationStatus::Verified {
-                if let Some(s) = seed_file.billing_pairs.iter().find(|s| s.id == pair.id) {
+                if let Some(s) = legacy_seeds.iter().find(|seed| seed.id == pair.id) {
                     billing_provenances.push(BillingPairProvenance {
                         id: s.id.clone(),
                         source: s.provenance.source.clone(),
@@ -318,6 +368,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 3.5. Process canonical ramp inventory, OSM bindings, and OD tariffs if provided
+    let mut route_membership_evidence = Vec::new();
     let mut ramps_artifact_opt: Option<(RampsArtifact, String)> = None;
     if let Some(inv_path) = &args.inventory_path {
         let inv_raw = fs::read_to_string(inv_path).map_err(|e| {
@@ -353,6 +404,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     e
                 )
             })?;
+            if let Some(seed_file) = &parsed_seed_file {
+                validate_radial_seed_binding_candidates(seed_file, &b).map_err(|error| {
+                    format!(
+                        "radial seed binding evidence validation failed for {}:\n  {}",
+                        bin_path.display(),
+                        error
+                    )
+                })?;
+            }
             validate_osm_ramp_bindings(&b, &inv).map_err(|errs| {
                 format!(
                     "bindings validation failed for {}:\n  {}",
@@ -373,6 +433,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 version: 1,
                 source_date: args.source_date.clone(),
                 bindings: Vec::new(),
+                binding_candidates: Vec::new(),
                 shared_physical_overrides: Vec::new(),
             }
         };
@@ -380,6 +441,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let (bound_ramps, ramp_artifact_entries, unbound_notes) =
             bind_ramps_to_graph(&graph, &inv, &bindings_file);
         graph.ramps = bound_ramps;
+        if args.graph_schema == 4 {
+            route_membership_evidence =
+                bound_ramp_evidence_from_inventory(&graph, &inv, &bindings_file)
+                    .map_err(|error| format!("route membership binding build failed: {}", error))?;
+        }
         if inv.version >= 3 {
             shutoko_graph_builder::validate_endpoint_capability_contract(&graph, &inv).map_err(
                 |errs| {
@@ -480,8 +546,87 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 4. Serialize graph.json and snap-index.json deterministically
-    let graph_json =
-        to_deterministic_json(&graph).map_err(|e| format!("graph serialization failed: {}", e))?;
+    let route_memberships = if args.graph_schema == 4 {
+        let source_snapshot_sha256 = shutoko_graph_builder::compute_sha256(osm_raw.as_bytes());
+        let options = RouteMembershipBuildOptions {
+            source_snapshot_sha256,
+            relation_ids: default_route_membership_relation_ids(&overpass_resp),
+            bound_ramp_evidence: route_membership_evidence,
+        };
+        build_route_membership_indices(&overpass_resp, &graph, &options)
+            .map_err(|error| format!("route membership build failed: {}", error))?
+    } else {
+        Vec::new()
+    };
+    let mut radial_billing_pairs = Vec::new();
+    if args.graph_schema == 4 {
+        if let Some(seed_file) = &parsed_seed_file {
+            for plan in
+                generate_diagnostic_radial_route_plans(&graph, &route_memberships, seed_file)
+            {
+                if let Some(error) = plan.error {
+                    return Err(format!(
+                        "diagnostic radial route plan {} failed: {}",
+                        plan.seed_id, error
+                    )
+                    .into());
+                }
+                let Some(resolution) = plan.resolution.as_ref() else {
+                    return Err(format!(
+                        "diagnostic radial route plan {} produced no resolution",
+                        plan.seed_id
+                    )
+                    .into());
+                };
+                let support_state =
+                    endpoint_support_state_wire_value(resolution.first_exit.exact_directed_binding);
+                if resolution.first_exit.exit.is_some() {
+                    let seed = seed_file
+                        .radial_pairs()
+                        .into_iter()
+                        .find(|seed| seed.id == plan.seed_id)
+                        .ok_or_else(|| {
+                            format!(
+                                "resolved radial route plan {} has no matching seed",
+                                plan.seed_id
+                            )
+                        })?;
+                    radial_billing_pairs.push(
+                        promote_verified_radial_pair(&graph, &route_memberships, seed, resolution)
+                            .map_err(|error| {
+                                format!(
+                                    "radial route plan {} public promotion failed: {}",
+                                    plan.seed_id, error
+                                )
+                            })?,
+                    );
+                } else {
+                    unverified_from_seeds.push(format!(
+                        "diagnostic-only:{}:exact_directed_binding_{}",
+                        plan.seed_id, support_state
+                    ));
+                }
+            }
+        }
+    }
+    let route_memberships_digest = if args.graph_schema == 4 {
+        Some(
+            route_memberships_sha256(&route_memberships)
+                .map_err(|error| format!("route membership manifest hash failed: {}", error))?,
+        )
+    } else {
+        None
+    };
+    let graph_json = if args.graph_schema == 4 {
+        graph_schema_v4_to_deterministic_json_with_radial(
+            &graph,
+            &route_memberships,
+            radial_billing_pairs,
+        )
+        .map_err(|e| format!("graph schema 4 serialization failed: {}", e))?
+    } else {
+        to_deterministic_json(&graph).map_err(|e| format!("graph serialization failed: {}", e))?
+    };
     let snap_json = snap_index_to_deterministic_json(&snap_index)
         .map_err(|e| format!("snap index serialization failed: {}", e))?;
 
@@ -643,12 +788,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         release_id: args.release_id.clone(),
         engine_version: shutoko_routing_core::VERSION.into(),
         graph_version: args.graph_version,
+        graph_schema_version: args.graph_schema,
+        route_plan_version: (args.graph_schema == 4).then_some(1),
+        route_memberships_sha256: route_memberships_digest,
         built_at: args.built_at,
         source_date: args.source_date,
         coverage_area: args.coverage_area,
         vehicle_profile: args.vehicle_profile,
         time_model_version: "v1-static-speeds".into(),
-        billing_pairs_version: "v1".into(),
+        billing_pairs_version: if args.graph_schema == 4 { "v2" } else { "v1" }.into(),
         unverified_sections: all_unverified,
         provenance: billing_provenances,
         routable_entry_ramp_ids: capability_ids(RampKind::GeneralEntry, "routable"),

@@ -1,15 +1,19 @@
 // UI 純粋関数（src/ui/model.ts）のユニットテスト。
 import { describe, expect, it } from "vitest";
+import radialCandidateJson from "../../fixtures/candidate-v2/radial-valid.json?raw";
 import {
   MAX_ACCESS_DISTANCE_METERS,
   MAX_PRODUCT_MINUTES,
   MAX_PRODUCT_SECONDS,
+  RADIAL_HANDOFF_NOTICE,
+  TOPOLOGY_HANDOFF_NOTICE,
   SEARCH_TIMEOUT_MS,
   SUPPORTED_AREA_TEXT,
   TIMEOUT_TEXT,
   accessMinutesFromMeters,
   accessSecondsFromMeters,
   baseSecondsFromPlanSeconds,
+  canRankByPrice,
   classifyNoCandidates,
   coordinateLabel,
   distanceText,
@@ -38,9 +42,15 @@ import {
   warningText,
 } from "../src/ui/model";
 import { MAX_ACCESS_DISTANCE_METERS as PIPELINE_MAX_ACCESS_DISTANCE_METERS } from "../src/worker/pipeline";
-import type { Candidate, SearchResult, SnappedOrigin } from "../src/worker/types";
+import type {
+  LegacyCandidate,
+  RadialCandidate,
+  SearchResult,
+  SnappedOrigin,
+  TopologyOnlyCandidate,
+} from "../src/worker/types";
 
-function sampleCandidate(overrides: Partial<Candidate> = {}): Candidate {
+function sampleCandidate(overrides: Partial<LegacyCandidate> = {}): LegacyCandidate {
   return {
     id: "cand-1",
     releaseId: "c1-real-v1",
@@ -482,6 +492,7 @@ describe("toCardModel", () => {
       "静的速度に基づく推定（渋滞・規制は未反映）",
     ]);
     expect(model.mapsUrl.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);
+    expect(model.mapsHandoffNotice).toBeNull();
   });
 
   it("4 桁以上の料金は 3 桁区切りで表示する（design-review-002 C3）", () => {
@@ -516,6 +527,151 @@ describe("toCardModel", () => {
     expect(model.toll).toBe("料金額: 未算出");
   });
 
+  it("radialReturn は4区間・一般道概算・距離定義を分けて表示する", () => {
+    const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
+    const model = toCardModel(radial);
+    expect(model.mapsUrl).toBe("");
+    expect(model.mapsLegUrls).toEqual([]);
+    expect(model.mapsHandoffNotice).toBe(RADIAL_HANDOFF_NOTICE);
+    expect(model.chargedSection).toBe("首都高区間: 入口 → 周回 → 戻り");
+    expect(model.loopEdgeIds).toEqual(["fixture:edge:lap:1", "fixture:edge:lap:2"]);
+    expect(model.tollShort).toBe("未算出");
+    expect(model.routeLegs.map((leg) => [leg.number, leg.role, leg.lineStyle, leg.edgeCount])).toEqual([
+      [1, "entry_approach", "solid", 3],
+      [2, "mandatory_lap", "dotted", 2],
+      [3, "return_corridor", "dashed", 1],
+      [4, "exit_approach", "dash-dot", 1],
+    ]);
+    expect(model.estimatedLegs).toEqual([
+      { role: "surface_access", label: "出発地 → 入口", distanceKm: 1.2, durationMinutes: 4 },
+      { role: "surface_return", label: "出口 → 出発地", distanceKm: 0.8, durationMinutes: 3 },
+    ]);
+    expect(model.pathSummary).toContain("首都高4区間");
+    expect(model.distanceKm).toBe(25.4);
+    expect(model.shutokoDistanceKm).toBe(23.4);
+  });
+
+  it("実機確認済みの radial は Maps の3区間と区間名を保持する", () => {
+    const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
+    radial.handoff = {
+      enabled: true,
+      legUrls: [
+        {
+          role: "surface_access",
+          mapsUrl: "https://www.google.com/maps/dir/?api=1&origin=35.100000,139.100000&destination=35.200000,139.200000&travelmode=driving",
+          urlSha256: "0".repeat(64),
+        },
+        {
+          role: "loop_transfer",
+          mapsUrl: "https://www.google.com/maps/dir/?api=1&origin=35.200000,139.200000&destination=35.400000,139.400000&travelmode=driving",
+          urlSha256: "1".repeat(64),
+        },
+        {
+          role: "surface_return",
+          mapsUrl: "https://www.google.com/maps/dir/?api=1&origin=35.400000,139.400000&destination=35.100000,139.100000&travelmode=driving",
+          urlSha256: "2".repeat(64),
+        },
+      ],
+      disabledReason: null,
+    };
+    const model = toCardModel(radial);
+    expect(model.mapsUrl).toBe("");
+    expect(model.mapsHandoffNotice).toBeNull();
+    expect(model.mapsLegUrls.map((leg) => [leg.role, leg.label])).toEqual([
+      ["surface_access", "1. 出発地 → 入口"],
+      ["loop_transfer", "2. 入口 → 周回 → 戻り"],
+      ["surface_return", "3. 出口 → 出発地"],
+    ]);
+  });
+
+  it("unpriced radial は1区間文案と円あたり効率を表示しない", () => {
+    const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
+    radial.reasons = ["ONE_SECTION_TOLL"];
+    const model = toCardModel(radial);
+    expect(radial.tariffStatus).toBe("unpriced");
+    expect(model.reasons).toEqual([]);
+    expect(model.timePerYen).toBeNull();
+    expect(model.chargedSection).not.toContain("1区間");
+  });
+
+  it("pricedでも商品cohort外のradialは効率・最安順位を表示しない", () => {
+    const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
+    radial.eligibilityStatus = "unverified";
+    radial.loopValidationStatus = "unresolved";
+    radial.tariffStatus = "priced";
+    radial.toll.amountYen = 500;
+    radial.toll.effectiveFrom = "2026-01-01T00:00:00Z";
+
+    const model = toCardModel(radial);
+
+    expect(model.toll).toBe("料金額: 500 円");
+    expect(model.timePerYen).toBeNull();
+    expect(model.chargedSection).toBe("首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）");
+    expect(canRankByPrice("time_per_yen", [radial])).toBe(false);
+    expect(canRankByPrice("shutoko_time", [sampleCandidate()])).toBe(false);
+    expect(canRankByPrice("time_per_yen", [sampleCandidate()])).toBe(true);
+  });
+
+  it("topologyOnly は商品対象外として参考料金だけを表示する", () => {
+    const topology = JSON.parse(radialCandidateJson) as Record<string, unknown>;
+    topology.pairKind = "topologyOnly";
+    topology.entry = {
+      ...(topology.entry as Record<string, unknown>),
+      rampId: "ramp:2-inbound:meguro-entry",
+    };
+    topology.exit = {
+      ...(topology.exit as Record<string, unknown>),
+      rampId: "ramp:2-outbound:meguro-exit",
+    };
+    topology.eligibilityStatus = "topology_only";
+    topology.loopValidationStatus = "topology_only";
+    topology.tariffStatus = "priced";
+    topology.toll = {
+      ...(topology.toll as Record<string, unknown>),
+      amountYen: 500,
+      effectiveFrom: "2026-01-01T00:00:00Z",
+    };
+    topology.reasons = ["TOPOLOGY_ONLY"];
+    topology.loop = {
+      anchorNodeId: "fixture:node:merge",
+      edgeIds: ["fixture:edge:lap:1", "fixture:edge:lap:2"],
+      durationSeconds: 1200,
+      distanceMeters: 20000,
+      validated: false,
+    };
+    topology.handoff = {
+      origin: { lat: 35.1, lon: 139.1 },
+      destination: { lat: 35.1, lon: 139.1 },
+      waypoints: [],
+      mapsUrl: "https://www.google.com/maps/dir/?api=1",
+      verificationSetVersion: null,
+    };
+    delete topology.anchor;
+    delete topology.routePlan;
+    delete topology.edgeRouteLegs;
+    const candidate = topology as unknown as TopologyOnlyCandidate;
+    const model = toCardModel(candidate);
+    expect(model.chargedSection).toBe("道路形状のみ（商品対象外）");
+    expect(model.chargedSection).not.toContain("1区間");
+    expect(model.toll).toBe("参考料金: 500 円");
+    expect(model.mapsUrl).toBe("");
+    expect(model.mapsLegUrls).toEqual([]);
+    expect(model.mapsHandoffNotice).toBe(TOPOLOGY_HANDOFF_NOTICE);
+    expect(model.timePerYen).toBeNull();
+    expect(model.routeLegs).toEqual([]);
+    expect(model.routeOverview.map((step) => [step.number, step.label, step.lineStyle])).toEqual([
+      [1, "一般道アクセス（推定）", "dashed"],
+      [2, "首都高の道路形状", "solid"],
+      [3, "一般道帰路（推定）", "dashed"],
+    ]);
+    expect(model.pathSummary).toContain("首都高の道路形状");
+    expect(model.estimatedLegs).toHaveLength(2);
+    expect(recommendedLabel(candidate)).toBeNull();
+    candidate.entry.rampId = "fixture:ramp:entry";
+    candidate.exit.rampId = "fixture:ramp:exit";
+    expect(toCardModel(candidate).mapsUrl).toBe("https://www.google.com/maps/dir/?api=1");
+  });
+
   it("warningText と minutesFromSeconds の境界", () => {
     expect(warningText("UNKNOWN_CODE")).toBe("UNKNOWN_CODE");
     expect(minutesFromSeconds(0)).toBe(0);
@@ -532,6 +688,11 @@ describe("toCardModel の新フィールド", () => {
     expect(model.returnMinutes).toBe(2); // 120s
     expect(model.bufferMinutes).toBe(2); // 121s → 2 分
     expect(model.distanceKm).toBe(8); // 8000m → 8 km（小数 1 桁）
+    expect(model.shutokoDistanceKm).toBe(5);
+    expect(model.routeLegs).toEqual([]);
+    expect(model.estimatedLegs).toEqual([]);
+    expect(model.routeOverview).toEqual([]);
+    expect(model.pathSummary).toBeNull();
     expect(model.tollShort).toBe("300 円");
     expect(model.timePerYen).toBe("1 円あたり 約 0.08 分");
     expect(model.reasons).toEqual(["時間あたりの料金効率が最良", "1区間料金（最低料金）"]);
@@ -589,6 +750,7 @@ describe("reasonText / timeBreakdownText", () => {
     expect(reasonText("BEST_TIME_PER_YEN")).toBe("時間あたりの料金効率が最良");
     expect(reasonText("BEST_SHUTOKO_TIME")).toBe("首都高滞在時間が最長");
     expect(reasonText("ONE_SECTION_TOLL")).toBe("1区間料金（最低料金）");
+    expect(reasonText("TOPOLOGY_ONLY")).toBe("商品対象外（道路形状のみ）");
     expect(reasonText("UNKNOWN")).toBe("UNKNOWN");
   });
 
@@ -655,7 +817,7 @@ describe("selectCandidate", () => {
 });
 
 describe("timePerYen の料金ゲーティング", () => {
-  function withAmount(amountYen: number | null): Candidate {
+  function withAmount(amountYen: number | null): LegacyCandidate {
     return sampleCandidate({
       toll: {
         billingPairId: "bp:x",

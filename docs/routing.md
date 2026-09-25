@@ -1,6 +1,6 @@
 # ルート探索設計
 
-本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は「設計（未実装）」と明示し、両方を同じ実装済み契約として扱わない。
+本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は graph-builder、schema 4 reader、core/WASM/Web consumer、公開 release の atomic activation まで実装済みとする。公開 release は `all-real-v3` を次の候補として扱い、`all-real-v2` は rollback 用に残す。
 
 ## 探索問題
 
@@ -15,13 +15,13 @@
 課金対象: 入口 → 1区間先の出口（実走行の一周分を加算しない）
 ```
 
-「1区間先」は緯度経度の近さや出口番号の加算では決めない。方向・接続・課金条件を確認した `billingPair` で指定する。現行 schema 2/3 の C1 legacy は、そのペアに定義した本線の基準点へ、同じ進行方向で戻る非空の有向閉路を一周とする。単に道路名が環状線であることや、一般道で出発地へ戻ることを一周とは数えない。放射線を含む一般化は、後述する Directed Route-Plan Lap v1（設計・未実装）で定義する。
+「1区間先」は緯度経度の近さや出口番号の加算では決めない。方向・接続・課金条件を確認した `billingPair` で指定する。現行 schema 2/3 の C1 legacy は、そのペアに定義した本線の基準点へ、同じ進行方向で戻る非空の有向閉路を一周とする。単に道路名が環状線であることや、一般道で出発地へ戻ることを一周とは数えない。放射線を含む一般化は、後述する Directed Route-Plan Lap v1（builder・reader・consumer・release wiring 実装済み）で定義する。
 
 [首都高の料金距離説明](https://www.shutoko.jp/fee/fee-info/pay_etc/distance/)は、複数経路がある場合に入口出口間の首都高最短経路を料金距離とする原則を示している。具体的なペアの料金と利用条件は別途確認し、実走行距離へ単価を掛けて料金を計算しない。
 
-## Issue #42: Directed Route-Plan Lap v1（設計・未実装）
+## Issue #42: Directed Route-Plan Lap v1（route membership・mandatory lap・return First Exit 実装済み）
 
-本節は、環状線だけを扱う現行モデル、放射線から環状線を通って元の路線へ戻る経路まで拡張するための設計である。まだ実装していない。データ・生成コード・探索コード・公開成果物への反映は別の implementation issue で行い、それまでは現行 C1 8 ペアの挙動を変えない。
+本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路を設計したもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型を実装し、Issue #63 で graph-builder 内限定の `RouteMembershipIndex`、relation mainline / bound ramp の生成・検証を実装した。Issue #64 で `routePlanLapV1` の M→B 長弧生成、cyclic relation segment の wrap-around、short connector 除外、return corridor 制約付き `find_first_exit_on_corridor`、未解決 binding の保持、route-plan segment の反復規則を実装した。Issue #65 で schema 2 / 3 / 4 dispatch、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の fail-closed reader と WASM/Web consumer 契約を追加した。Issue #69 で `LegacyCandidate` / `RadialCandidate` / `TopologyOnlyCandidate` の3種類、schema 4 radial pair のcore検索、4 highway leg・2 surface leg・商品・tariff statusの生成を実装した。Issue #66 で graph-builder の既定を schema 4 に切り替え、`graph.json` の最上位 `routeMemberships[]`、manifest の `graphSchemaVersion` / `routePlanVersion` / `routeMembershipsSha256`、Web/Workers の release allowlist を `all-real-v3` に接続した。`--graph-schema 2` を明示した場合だけ legacy 出力とする。現行 C1 8 ペアの挙動は変えない。
 
 ### 採用案は「指定 route の長弧を1周する」
 
@@ -85,29 +85,29 @@ mandatory lap自身のfirst / last Edgeは`routePlan.mandatoryLap.firstEdgeId` /
 
 ### route と direction は本線relationとramp bindingを別々に証明する
 
-現行Edgeにはroute membershipと走行方向がない。edge kindだけでFirst Exitを求めると、B付近のC1出口や別armへの近道を先に拾う。そこでgraph schema 4のtop-level `routeMemberships[]`へ`RouteMembershipIndex`を出す。
+現行 Edge には route membership と走行方向がない。edge kind だけで First Exit を求めると、B 付近の C1 出口や別 arm への近道を先に拾う。Issue #63 で、graph-builder の明示的な `--graph-schema 4` 出力に top-level `routeMemberships[]` を追加した。`RouteMembershipIndex` は OSM route relation の way member と graph の directed path を `relationMainline` として写像し、正規ランプ台帳と exact directed binding を `boundRamp` として別々に保持する。
 
-1つの`RouteMembershipIndex`は`membershipId`、`routeId`、`direction`、`segments[]`を持つ。各`RouteMembershipSegment`は`sourceKind`で由来を分ける。
+1つの`RouteMembershipIndex`は`membershipId`、`routeId`、`direction`、`directionMappingVersion`、`segments[]`を持つ。direction mapping は `osm-relation-role/v1` の固定バージョンを出力し、OSM relation の `forward` / `backward` を路線 2 では `outbound` / `inbound` に正規化し、C1 の `inner` / `outer` は保持する。各`RouteMembershipSegment`は`sourceKind`で由来を分ける。
 
-- `sourceKind=relationMainline`: OSM route relationのordered memberとwayのnode順をgraph Edgeへ写像する。`sourceRelationId`とsnapshot hashを必須にする。
-- `sourceKind=boundRamp`: 正規ランプ台帳とexact directed bindingから、wayをまたぐ順序付きEdge列を作る。`bindingEvidenceId`を必須にし、relation memberであることを求めない。
+- `sourceKind=relationMainline`: 所属の正本は OSM route relation とし、そのrelationとroleの要求方向に属するwayだけを使う。各wayのnode順をgraph Edgeへ写像し、順序の正本は relation 所属way間の要求方向の有向接続とする。各接続で後続がちょうど1つであることを要求し、way IDのソート、member順、graph上の別pathによる並べ替えや補完は行わない。分岐・行き止まりはsegment境界として切り出すかfail-closedで拒否し、onewayや要求directionに逆らったfallbackは拒否する。各segmentにはRelationMemberEdgesの`memberIndexes`と、graph順序がrelation member順と一致したかを示す`memberOrderMatchesRelation`を記録する。`sourceRelationId`とsnapshot hashを必須にする。graph 上に存在し、route ref または relation name が一致する `motorway` / `motorway_link` だけを受け入れ、名前で明示された入口・出口や別 route の ref/nat_ref を持つ link は除外する。
+- `sourceKind=boundRamp`: 正規ランプ台帳とexact directed bindingから、wayをまたぐ順序付きEdge列を作る。`bindingEvidenceId`、`fromNodeId`、`toNodeId`、`edgeIdsSha256` を保持し、graph の端点・way順・Edge順・hashを個別に照合する。relation memberであることを求めない。
 
-OSM route relationはmainlineを列挙し、目黒entry way `207535708`や天現寺exit候補way `172358461` / `422023171`を含まない。rampをrelationの連続Edge列へ強制すると、正しいbindingを誤って無検証にする。mainlineとrampを同じ`sourceKind`へ混ぜない。
+OSM route relationのmainline候補にはJCT linkやway tagの欠落が混在するため、builderはroute identity、relation member、wayのノード順、graphのShutoko Edgeでmainline候補を確定する。目黒entry way `207535708`や天現寺exit候補way `172358461` / `422023171` / `931759044` / `172358460` / `172358466`を無検証なrelation連続Edge列へ強制しない。rampをrelationの連続Edge列へ強制すると、正しいbindingを誤って無検証にする。mainlineとrampを同じ`sourceKind`へ混ぜない。
 
-route planのlegは`sourceSegmentIds[]`でmainlineとrampの由来を明示する。`mandatory_lap`は1つの`relationMainline`の連続部分列でなければならない。entry、return、exitは`relationMainline`と`boundRamp`を順番に連結できるが、各segment内部のEdge順、node接続、hash、binding証拠を検証する。Edgeごとにroute metadataを複製せず、indexから検索・検証し、manifestへhashを渡す。名前や最接近nodeだけで所属を補わない。
+route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を明示する。`mandatory_lap` は 1 つの `relationMainline` の連続部分列でなければならない。graph-builder は `generate_route_plan_lap_v1` で M→B の通常の長弧を生成し、relation segment の終端をまたぐ場合は directed order の wrap-around として继续保持する。`validate_directed_junction_mandatory_lap` は anchor の M/B、route/direction、first/last Edge、lapCount=1、arm-boundary、除外 short connector の way/Edge数/距離をまとめて検証する。entry、return、exit は `relationMainline` と `boundRamp` を順番に連結できるが、各 segment 内部の Edge 順、node 接続、hash、binding 証拠を個別に検証する。return corridor は初期Edgeからdeclared First Exit候補の`fromNodeId`までrelation membershipの複数segmentとoffsetを横断して探索し、候補へ到達できなければ`ExitNotFound`、予算超過なら`BudgetExceeded`とする。resolved segment 内の Edge 反復は拒否し、別 segment として宣言された反復は接続性と hash を満たす限り許可する。Edge ごとに route metadata を複製せず、index から検索・検証する。名前や最接近 node だけで所属を補わない。
 
-次の異常系テストを必須とする。
+次の異常系は graph-builder の synthetic fixture と Issue #63 実装で検証する。
 
 - C1内回りを要求しているのにouterのmember Edgeを使う。
 - 一ノ橋JCTで別armへ切り替える近道を使う。
 - relationに含まれないmainline wayを使う。
 - relationに含まれないrampをbinding証拠なしで使う。
-- multi-way rampのway順、node接続、Edge順、hashを検証する。
+- multi-way rampのway順、node接続、Edge順、from/to endpoint、hashを検証し、終点前に別の一般道nodeがあれば`boundRamp`へ昇格しない。
 - 同名または近接した別JCTのEdgeを使う。
 - excluded short connectorをmandatory lapとして選ぶ。
-- relationの順序と逆順にたどる。
+- relationのmember順とgraphの有向接続順の不一致は、memberOrderMatchesRelation=falseの診断として記録し、接続順序をmember順に補完しない。GitHub issue #63 の「relationの順序と逆順のたどりを拒否する」完了条件は、onewayとroleに逆らう有向接続を拒否することで満たす。
 
-### 2号目黒線の課金ペア形状（設計・未実装）
+### 2号目黒線の課金ペア形状（seed統合・診断 route plan 実装済み・公開昇格はbinding unresolved）
 
 目黒入口から2号上り、一ノ橋 JCT で C1 に入る。entry Edge は `e:w207535708:0:f`、ramp ID は `ramp:2-inbound:meguro-entry` であり、現行 binding は `verified_bound` である。C1 を長弧で1通りした後、2号下りへ戻り、次の一般 Exit 候補を天現寺とする。
 
@@ -121,15 +121,15 @@ route planのlegは`sourceSegmentIds[]`でmainlineとrampの由来を明示す�
 | 除外する B → M 短 connector | way `23297444`、23 edges、493m | way `24039737`、20 edges、461m |
 | B 後の2号下り initial Edge | `e:w45248411:0:f` | `e:w4853805:0:f` |
 | 天現寺候補までの距離 | 1,972m | 1,846m |
-| 天現寺 Exit の exact binding | 未解決 | 未解決 |
+| 天現寺 Exit の exact binding | `unresolved`：5 way鎖は連続するがground nodeが2候補 | `unresolved`：5 way鎖は連続するがground nodeが2候補 |
 | 公開可否 | `unverified`、公開 blocked | `unverified`、公開 blocked |
 | 料金 | `unpriced`、`amountYen=null`、`billingDistanceMeters=null` | 同左 |
 
-この2件は本PRでwire-level schemaとroute shapeを確定した課金ペア設計である。実装issueでは、schema適合のdiagnostic fixtureとC1非回帰テストを作る。天現寺exact directed bindingが解決し、route/direction、First Exit、全端点がすべて通ったときだけ`Graph.billingPairs`の`radialReturn`として昇格する。解決前のplanをpublic candidateとして出さない。
+この2件は、wire-level schemaとroute shapeを確定した課金ペア設計である。Issue #62でschema適合のinner / outer diagnostic fixture、parser test、snapshot、C1非回帰テストを追加した。Issue #67では5 wayの順序、17 Edge、18 nodeとhash、2号下りrelation、公式施設順を監査したが、`n:1832672162`と`n:1832672205`が一般道へ接続するためground endpointが未確定である。Issue #68で両radial pairを`data/billing-pairs-seed.json`へ統合し、graph-builderがBから天現寺候補まで.inner 85 Edge / outer 84 Edgeのreturn corridorを解決する診断経路を追加した。現在のbinding unresolvedを理由に、`Graph.billingPairs`とpublic candidateは8件のlegacy pairのままとし、manifestには2件のdiagnostic-only記録だけを残す。ground endpoint、route/direction、First Exit、全端点がすべて通った4 resolved segmentだけをschema 4 unionの`radialReturn`として昇格する経路とverified synthetic fixtureを実装済みである。
 
-目黒入口 → 目黒出口の現行dynamic ODは別分類にする。entry Edgeは`e:w207535708:0:f`、exit Edgeは`e:w207535709:0:f`で、routing topology上は到達可能である。しかし物理的には天現寺Exitが先であり、exact bindingがなければ目黒を「1区間先」にできない。routing v2では`topology_only`とし、「1区間先」「最低料金」、`time_per_yen`の対象から外す。`routingCapability=routable`は道路を追跡できることを示すが、商品eligibilityの証拠ではない。現行pre-v2 outputは後述の互換fieldをdynamic ODにも残しているため、公開契約への移行完了まではこの節の`topology_only`を実装済みと読まない。
+目黒入口 → 目黒出口のdynamic ODは別分類にする。entry Edgeは`e:w207535708:0:f`、exit Edgeは`e:w207535709:0:f`で、routing topology上は到達可能である。しかし物理的には天現寺Exitが先であり、exact bindingがなければ目黒を「1区間先」にできない。Issue #69以降は`TopologyOnlyCandidate`として`topology_only`を返し、「1区間先」「最低料金」、`time_per_yen`の対象から外す。`routingCapability=routable`は道路を追跡できることを示すが、商品eligibilityの証拠ではない。
 
-天現寺・荏原・戸越入口については、現行support dataでentry / exitのexact directed bindingが未解決である。候補wayや施設名をnearest nodeへ割り当てて補わない。天現寺binding issueは、multi-way ramp候補を順序付き`osmWayIds`と`edgeIds`で表し、ground ↔ mainline接続、ramp IDの逆引き、公式施設順、node接続とhashを同じevidence modelで扱う。`supportState=verified_bound`では解決した`directedSegments[]`を必須とし、`unresolved` / `unsupported`では空配列と`bindingCandidates[]`だけを許す。
+天現寺・荏原・戸越入口については、現行support dataでentry / exitのexact directed bindingが未解決である。候補wayや施設名をnearest nodeへ割り当てて補わない。天現寺binding issueは、multi-way ramp候補を順序付き`osmWayIds`、`osmNodeIds`、`edgeIds`、両端nodeとhashで表し、ground ↔ mainline接続、ramp IDの逆引き、公式施設順を同じevidence modelで扱う。実装済みcandidateは5 wayの連続性を保っていてもground endpointが二候補となるため、`status=unresolved`と`publicProjection=excluded_unresolved`を保持する。`supportState=verified_bound`では解決した`directedSegments[]`を必須とし、`unresolved` / `unsupported`では空配列と`bindingCandidates[]`だけを許す。
 
 ### C1 8ペアは legacy adapter で変更しない
 
@@ -164,31 +164,44 @@ Candidate v2は高速道路の区間と一般道の概算区間を別配列に�
 - `shutokoDistanceMeters`は`edgeIds`に対応する首都高Edge距離の合計とする。
 - `distanceMeters`は`shutokoDistanceMeters`に`surface_access`と`surface_return`の`distanceMeters`を加えた利用者側の総距離とする。
 - `duration.shutokoSeconds`は4つの`edgeRouteLegs`に対応するEdge時間の合計、`accessSeconds`と`returnSeconds`は各`estimatedLegs.durationSeconds`と一致させる。
+- `estimatedLegs.distanceMeters`は直線距離に迂回係数1.3を掛けて切り上げる。`durationSeconds`は同じ推定距離÷30km/hを切り上げる。
 - `duration.baseSeconds=accessSeconds+shutokoSeconds+returnSeconds`とし、bufferとplan timeは現行式を保つ。
 
-現行pre-v2 Candidateは`distanceMeters`と`shutokoDistanceMeters`をどちらも首都高Edge距離へ設定し、surface距離と時間をDurationだけで表現する。routing v2への移行では、上の定義へ揃えたcore回帰testとUI表示を同時に更新する。
+C1 `LegacyCandidate`は後方互換のため`distanceMeters`と`shutokoDistanceMeters`をどちらも首都高Edge距離へ設定する。Issue #69で実装した`RadialCandidate`と`TopologyOnlyCandidate`では、上式の`distanceMeters`と`shutokoDistanceMeters`を分け、surface access / returnの推定距離と時間を両variantの`estimatedLegs`から再計算できる。
 
 `geometry`は首都高Edgeに対応する線分を連結したもので、Webが推定する一般道区間は含めない。地図と詳細画面には`entry_approach → mandatory_lap → return_corridor → exit_approach`を番号とテキストで示す。色だけで順序を示さず、surface access / returnはEdge付き経路に含めず、推定距離と時間として別に表示する。
+
+Issue #70でWeb UIと地図を実装した。`RadialCandidate`は4区間を1〜4の番号、名称、「実線・点線・破線・一点鎖線」の線種で示し、地図の4本にも対応する線種を割り当てる。`surface_access`と`surface_return`は別セクションに推定距離・時間を出し、地図の線には含めない。距離は`distanceMeters`を「総距離」、`shutokoDistanceMeters`を「首都高距離」として同じ定義で表示する。`TopologyOnlyCandidate`は4 roleを捏造せず、一般道アクセス・首都高の道路形状・一般道帰路という3段の順序を色と線種だけに依存せず表示する。`unpriced` radialと`topology_only`は「1区間」「最低料金」を表示せず、商品対象外を明示する。
 
 ### Google Maps URL は道路・方向を保証しない
 
 Google Maps の URL は origin、destination、waypoint を渡せるが、近接 JCT の arm や C1 の道路・向きを強制できない。Waypoint の順序だけを示しても、Google が M/B へ正しく snap し、長弧を維持することは保証されない。この制約を正式に採用し、放射線候補の公開 handoff は既定で無効とする。
 
-将来の実装候補は、leg 単位の split handoff である。
+Issue #71でleg単位のsplit handoff builderを実装した。生成順と意味は次のとおり固定する。
 
 1. surface access: origin → 目黒入口
 2. loop transfer: 目黒入口 → M → C1 長弧の距離中点 → B
 3. surface return: B → 天現寺 Exit → origin
 
-各 URL は waypoint 3点以下、完成長2,048文字以下とし、Google の自動 nav は開始しない。leg ごとの確認と手動継続は利用者に委ねる。ただし、この分割化だけでは道路・向きを保証できない。実装 issue 10 で URL 生成、unit test、E2E を実装し、issue 11 で Android / iOS、Web / app の実機 matrix と release gate を別に作る。
+各legは`role`、`origin`、`destination`、`waypoints`、`mapsUrl`を持つ。waypointは3点以下、完成長2,048文字以下、座標は小数6桁、waypoint区切りは`%7C`とし、`nav=1`などのGoogle自動ナビ指定を含めない。URLは経路確認画面用であり、legごとに利用者が確認して手動で次のlegへ継続する。ただし、この分割化だけでは道路・向きを保証できない。
 
-device verification manifest には `routePlanId`、`releaseId`、URL builder version、leg URL hash、期待する道路・向き、OS / browser / app version、検証日時、結果、期限を記録する。必要条件の1件でも missing、failed、expired の場合、放射線候補の public departure を必ず無効にする。C1 legacy の単一 URL と warning は現行互換として残せるが、同じ保証を radial へ転用しない。
+builder versionは`google-maps-split/v1`、leg URLのSHA-256はURL bytesの小文字hexで算出する。gateが開いたとき`legUrls`へ入れるwire型は`role`、`mapsUrl`、`urlSha256`の3項目だけを持つ。実機検証とrelease gateが開くまで公開Candidateを`enabled=false`、`legUrls=[]`、`disabledReason=device_verification_pending`へ固定し、WebはGoogleマップのボタンではなく実機検証待ちの理由を表示する。C1 legacyの単一URLとwarningは現行互換のまま維持する。
+
+Issue #71でdevice verification manifestの形式を確定した。正式なJSON Schemaは`fixtures/device-verification/device-verification-manifest.schema.json`、Rust / TypeScript型の`DeviceVerificationManifest`も同形にする。`fixtures/device-verification/valid.json`とinvalid fixtureはcontract test専用で、実機検証の証拠にはしない。リポジトリ内の未検証記録は`data/device-verification-manifest.json`に置き、現在はschema 4 fixtureのroute plan、release、3 leg hashへ対応付けたうえで4環境とも`result=missing`とする。これは実測結果ではなく、fixtureに対するgateの閉鎖状態を固定する記録である。manifestの必須fieldは`schemaVersion`、`routePlanId`、`releaseId`、`urlBuilderVersion`、3要素の`legs`、4要素の`verifications`である。
+
+`legs`は`surface_access`、`loop_transfer`、`surface_return`の固定順で、各legの`urlSha256`、検証時点で期待する`expectedRoad`と`expectedDirection`を記録する。`verifications`はAndroid / iOS × Web / appの4組み合わせを重複なく持ち、各recordに`os`、OS version、client、Webならbrowser名・version、appならapp名・versionとなる`clientName` / `clientVersion`、`verifiedAt`、`result`、`expiresAt`を記録する。`result`は`passed`、`failed`、`missing`、`expired`のみ許可し、`missing`だけは`verifiedAt`と`expiresAt`を`null`にする。ほかの値はUTC RFC3339で、`verifiedAt < expiresAt`であることを必須とする。
+
+Rust validatorは型の未知fieldを拒否し、3 legのrole順とSHA-256形式、4環境の一意な完全matrix、時刻、builder versionを検証する。`passed` recordのOS / client versionに`unverified`、`unknown`、`n/a`、`not verified`を拒否し、Android Webは`chrome`、iOS Webは`safari`、両OSのappは`google_maps`のclient nameも契約化する。`validate_binding(routePlanId, releaseId, handoff)`はmanifestのroute plan ID、release ID、URL builder version、およびoriginを含まない`loop_transfer` legのURL SHA-256を実際のsplit handoffと照合する。`surface_access`と`surface_return`はユーザーoriginを含むためbinding hashの対象にせず、URL builder version・role順・waypoint数・座標・host/path・長さの構造検証で担保する。radial探索ではbilling pair IDを`routePlanId`として判定する。
+
+Issue #72で`evaluate_device_verification_gate(manifest, routePlanId, releaseId, handoff, evaluatedAt)`を実装した。判定はmanifestのparse / schema検証、route plan・release・builder・origin非依存の`loop_transfer` leg hash binding、4 recordの`passed`、および`verifiedAt <= evaluatedAt < expiresAt`をすべて満たす場合だけ公開を許可する。manifest欠落、schema不正、binding不一致、時刻不正、`missing`、`failed`、未開始、`expired`はいずれもfail-closedで、`CandidateV2Handoff`は`enabled=false`、`legUrls=[]`を返す。open decisionにはroute plan ID、release ID、builder version、loop transfer hashを保存し、handoff生成時に同じbindingを再照合するため、別routeや別loop geometryへdecisionを再利用できない。surface legのorigin変更だけではbindingを破らない。
+
+リリースでdevice manifestを使う場合、Web Workerはbuild時に`data/device-verification-manifest.json`をbundleし、`prepare` / `search`的第3引数JSONへ`deviceVerification: { manifestJson, evaluatedAt }`として渡す。`evaluatedAt`はrelease時刻として固定したUTC値で、検索要求の料金判定用`pricingAt`とは独立させる。設定省略時の既定はmanifest欠落としてgateを閉じる。WASM / Web型とreaderは明示設定で`enabled=true`、固定順3 leg、loop transferのURLとSHA-256一致まで受理するが、現行releaseの既定出力は引き続き`enabled=false`で変更しない。surface legはoriginを含むためbinding hashには含めず、URL builder versionと構造検証で担保する。
 
 ### Issue #41 までは1区間の商品状態と金額を分離する
 
 新routing contractでは`eligibilityStatus`、`amountYen`、`billingDistanceMeters`、`tariffStatus`を正本にする。`chargedSectionCount=1`と`ONE_SECTION_TOLL`は、`legacyRing` adapterだけで維持し、radial outputには出さない。「1区間先関係」と「料金制度上の1区間」を同じ表示にしない。
 
-現行pre-v2 dynamic ODは、seed由来かどうかに関係なく`chargedSectionCount=1`と`ONE_SECTION_TOLL`を生成し、`status=ok`、`rankingMode=shutoko_time`で返す。UIも全候補を「1区間料金」と表示する。これは商品eligibilityの証拠ではなく、移行前の互換fieldである。routing v2ではdynamic ODを`eligibilityStatus=topology_only`へ移し、reason、charged section、UI表示を撤去する。移行を完了するまで現行挙動を設計済みと読まない。
+Issue #69でdynamic ODを`TopologyOnlyCandidate`へ移行した。`eligibilityStatus`と`loopValidationStatus`をともに`topology_only`へ固定し、商品推薦のreasonは`TOPOLOGY_ONLY`だけとする。`toll.chargedSectionCount`と`ONE_SECTION_TOLL`は生成せず、料金データがあれば`tariffStatus`と金額だけを反映する。dynamic ODは結果から削除せず、商品推薦の対象外として返す。
 
 Issue #41で公式billing distanceと版管理済み料金規則を確定するまでは、次の規律を適用する。
 
@@ -202,28 +215,28 @@ Issue #41で公式billing distanceと版管理済み料金規則を確定する�
 
 ### 実装 issue は単独で検証できる順に分ける
 
-graph schema 4をbuilderだけが先に出力する段階は作らない。現行graph readerはunknown fieldを拒否するが、現行seed parserは拒否しない。両者のschema dispatch、reader、release wiringが揃うまで、公開builderの既定出力は現行schemaのまま維持する。
+graph schema 4 は reader/consumer と `all-real-v3` の atomic activation まで実装した。builder の既定出力、generated fixtures、manifest、WASM contract、Web pipeline、Workers allowlist、versioned release ID を同時に整合させ、旧 `all-real-v2` は rollback 用に残す。`--graph-schema 2` を明示した場合だけ legacy schema 2 を生成する。
 
 | Issue | 実装範囲 | 主な受け入れ条件 | 依存 |
 | ---: | --- | --- | --- |
 | 1 | seed schema v2 と diagnostic pair 型 | `schemaVersion`を明示的に1 / 2へdispatchし、全nested structでunknown fieldを拒否する。未知version / kind / field fixtureを通し、既存C1 8要素のID・意味・価格・状態・anchorを保つ。radial endpointは`directedSegments[]`と未解決`bindingCandidates[]`を区別する。 | なし |
-| 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance | `relationMainline`と`boundRamp`を別segmentとして生成し、way順、node接続、Edge順、hash、binding証拠を検証する。逆方向、同名JCT、非所属mainline way、ramp証拠なし、別arm近道、short connectorを拒否する。 | 1 |
-| 3 | directed mandatory lap と return-corridor First Exit | synthetic radial fixtureでM→B長弧、return corridor、first general Exitを分解する。C1 legacyを完全維持し、segment内反復を拒否しつつ、route planが宣言したsegment間反復を許可する。 | 1, 2 |
-| 4 | graph schema 4 reader と consumer 契約 | core、WASM型、Web Workerがschema 2 / 3 / 4を読む。`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`を判別し、wire fragmentとfield failure fixtureを追加する。未知kind / version、部分data、route legの重複・欠落を拒否する。 | 1, 3 |
-| 5 | graph schema 4 の atomic release activation | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
-| 6 | 天現寺 exact directed binding | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。候補から一意な`directedSegments[]`だけ昇格し、way順・node接続・Edge順・hashを固定する。解決できなければ根拠付きunresolved / unsupportedのままにする。 | なし |
-| 7 | 2号 inner / outer radial pair 統合 | schema適合fixtureとC1 non-regressionが通る。exact binding未完ならdiagnostic planのみとする。完了時だけGraph radial pairとpublic eligibilityへ昇格し、#41までtariffは未算出とする。 | 3, 5, 6 |
-| 8 | Candidate route legs と product / tariff 状態 | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。pre-v2 dynamic ODのcharged section / reasonを撤去し、radialに`chargedSectionCount`と`ONE_SECTION_TOLL`を出さない。 | 4 |
-| 9 | Web の順序表示 | entry / lap / return / exitを番号・線種・テキストで提示し、surface概算とhighway経路を混同しない。総距離とhighway距離を同じ定義で表示し、unpriced / topology_onlyへ「1区間料金」を出さない。C1 UI regressionを維持する。 | 5, 8 |
-| 10 | split Maps URL 生成 | 3 waypoint / 2,048文字制限、legごとの手動継続、URL builder unit / E2Eを実装する。道路・向きを強制できないため、実機gate通過までpublic handoffを無効にする。 | 8 |
-| 11 | Maps 実機検証と release gate | Android / iOS × Web / appの必要matrixをmanifestへ記録する。失敗・期限切れでradial public departureを無効にし、C1への副作用がないことを確認する。device未接続でもcode issue 10は完了可能とする。 | 10 |
+| 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance（#63実装済み） | `--graph-schema 4` の明示時だけ `relationMainline` と `boundRamp` を別 segment として生成し、way順、node接続、Edge順、hash、binding証拠を個別に検証する。逆方向、同名JCT、非所属mainline way、ramp証拠なし、別arm近道、short connector、relationの逆順を拒否する。#64のradial route plan生成・検証を同じindex上で実行する。 | 1 |
+| 3 | directed mandatory lap と return-corridor First Exit（#64実装済み） | synthetic radial fixtureと実 inner/outer snapshotでM→B長弧、return corridor、first general Exitを分解する。C1 legacyを完全維持し、segment内反復を拒否しつつ、route planが宣言したsegment間反復を許可する。 | 1, 2 |
+| 4 | graph schema 4 reader と consumer 契約（#65実装済み） | core、WASM型、Web Workerがschema 2 / 3 / 4を読む。`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`を判別し、wire fragmentとfield failure fixtureを追加する。未知kind / version、部分data、route legの重複・欠落を拒否する。 | 1, 3 |
+| 5 | graph schema 4 の atomic release activation（#66実装済み） | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
+| 6 | 天現寺 exact directed binding（#67診断完了・unresolved） | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。way `172358461` → `422023171` → `931759044` → `172358460` → `172358466`のway順・18 node・17 Edge・hashは固定した。`n:1832672162`も一般道へ接続するためground endpointは未確定で、根拠付きunresolved candidateのままにする。 | なし |
+| 7 | 2号 inner / outer radial pair 統合（#68診断統合済み） | schema2 seedへ2件を追加し、graph-builderが両route planを検証する。exact binding未完ならdiagnostic planとmanifest記録だけとし、Graph radial pairとpublic eligibilityへ昇格しない。#41までtariffは未算出とする。 | 3, 5, 6 |
+| 8 | Candidate route legs と商品・tariff状態（#69実装済み） | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。dynamic ODは`TopologyOnlyCandidate`として`chargedSectionCount` / `ONE_SECTION_TOLL`を撤去し、radialにも同じ項目を出さない。 | 4 |
+| 9 | Web の順序表示（#70実装済み） | entry / lap / return / exitを番号・線種・テキストで提示し、surface概算とhighway経路を混同しない。総距離とhighway距離を同じ定義で表示し、unpriced / topology_onlyへ「1区間料金」を出さない。C1 UI regressionを維持する。 | 5, 8 |
+| 10 | split Maps URL 生成（#71実装済み） | 3 waypoint / 2,048文字制限、legごとの手動継続、URL builder unit / E2Eを実装する。device verification manifestの型、JSON Schema、fixture、validator、handoff bindingを確定し、道路・向きを強制できないため実機gate通過までpublic handoffを無効にする。 | 8 |
+| 11 | Maps 実機検証と release gate（#72コード実装済み、実機検証待ち） | Issue #71で確定したmanifestを`data/device-verification-manifest.json`へ未検証状態で置く。gateはmanifest欠落・失敗・期限切れ・binding不一致でradial public departureを無効にし、C1への副作用がないことを確認する。Android / iOS × Web / appの実測完了までは公開handoffを閉じ続ける。 | 10 |
 | 12 | Issue #41 後の tariff 統合 | 公式billing distance、車種、税率、単価、最低・上限、丸め、effective intervalを版管理し、C1 8件と2号代表pairを再検証する。OSM distance fallbackとradialの`time_per_yen`無効状態を維持しない。 | #41, 7, 8 |
 
 Issue #42 の設計完了は、この節と seed / graph の wire-level schema により2号課金ペア形状を確定することとする。実装済み verified public pair を Issue #42 の design 完了条件には含めない。天現寺 binding、schema 実装、device gate はそれぞれ実装上の公開を止める条件として残す。
 
 ## 時間条件（現行 C1 legacy と routing v2 の共通式）
 
-この節以降の探索と検証の中心は、現行pre-v2 C1 / dynamic OD契約である。routing v2が引き継ぐのは、時間予算、buffer、一般道access / returnの概算方法だけである。現行の`anchor`、一周、`T_entry_to_anchor`という語をradial designへそのまま適用しない。
+この節以降の探索と検証では、C1 `LegacyCandidate`とdynamic `TopologyOnlyCandidate`の共通式を使う。`RadialCandidate`は4 legのEdge時間を同じ時間予算へ合計する。現行の`anchor`、一周、`T_entry_to_anchor`という語をradial designへそのまま適用しない。
 
 内部では秒を使う。
 
@@ -267,9 +280,9 @@ T_plan = T_base + buffer
 3. **帰路の経路特定**: 出口から出発地点への経路は1本に確定せず、時間も概算値になる。
 4. **`snappedOrigin` の一意性**: 入口アクセス地点は最大 `SearchLimits.max_access_entries`（デフォルト 0 = 無制限、全 Entry アクセス地点）件あり、候補ごとに異なる入口アクセス地点を持ちうる。
 
-## 現行 pre-v2 の探索手順
+## C1 legacy / topology-only dynamic の探索手順
 
-この手順は現行graph schema 2、C1 legacy pair、最近接入口tier、dynamic ODを前提とする。routing v2では、手順3のanchor / SCC閉路カタログを`routePlan`、`resolvedRouteSegments`、route / direction proofへ置き換え、手順4の分解を4つの正規legで行う。時間予算、access / returnの概算、最近接入口の診断は共通する。
+この手順はC1 legacy pair、最近接入口tier、dynamic ODを前提とする。`RadialCandidate`では、手順3のanchor / SCC閉路カタログを`routePlan`、`resolvedRouteSegments`、route / direction proofへ置き換え、手順4の分解を4つの正規legで行う。時間予算、access / returnの概算、最近接入口の診断は共通する。
 
 1. **入口アクセス地点の選定**: リクエストが座標（`origin: { lat, lon }`）の場合、WASM 内で Entry エッジの from ノード（入口アクセス地点）を対象に等距円筒近似（Equirectangular approximation、東京付近 `cos(lat)` 補正）で距離を計算し、近い順に最大 `SearchLimits.max_access_entries`（デフォルト 0 = 無制限、全 Entry アクセス地点）件を選ぶ。最寄りの入口アクセス地点が `SearchLimits.max_access_distance_meters`（デフォルト 30,000 m、0 は無制限）を超える場合も探索を行わず `status: "no_candidates"`, `reason: "NO_CONNECTION"` を返す。入口アクセス地点が1件も得られない場合、および従来の検証済み課金ペア探索において `max_access_entries` の制限で課金ペアの入口がいずれも選ばれない場合も同じ `NO_CONNECTION` を返す。`originNodeId` が直接指定された場合はその Entry エッジの from ノードを単一の入口アクセス地点として採用する。
    - 候補の有無にかかわらず、座標入力では最近接の入口アクセス地点を `nearestAccess`（`{ nodeId, lat, lon, distanceMeters }`）として返す。
@@ -319,7 +332,7 @@ Google マップ上でのナビゲーションにおいて、一周を短絡（�
 
 ## コスパの評価（現行 ranking と v2 の分離）
 
-この節では、現行C1 pairとdynamic ODのrankingを説明する。routing v2のradial候補は`eligibilityStatus=verified_one_section_ahead`だけを商品cohortへ入れ、`unverified`と`topology_only`を除外する。金額比較の規則は同じだが、legacy / radial adapterの混在を許さない。
+この節では、C1 pairとtopology-only dynamicのrankingを説明する。`RadialCandidate`は`eligibilityStatus=verified_one_section_ahead`かつ`loopValidationStatus=declared_route_validated`だけを商品cohortへ入れ、`unverified`と`topology_only`を除外する。`TopologyOnlyCandidate`は結果に残すが商品推薦せず、`rankingMode=shutoko_time`とする。
 
 最初に「一周後に1区間先で退出」という必須条件で絞る。1区間だからすべての入出口ペアが同額とは仮定しない。
 
@@ -333,6 +346,6 @@ Google マップ上でのナビゲーションにおいて、一周を短絡（�
 
 現行C1 / dynamic ODは、人工グラフで空閉路、anchorへの帰還、帰還時の禁止遷移、入口から出口への短絡、間違った1区間先、二周、途中退出・再入場、マイクロループ排除を検出する。接続区間と一周部分の重複を誤って落とさないことも確認する。小規模では全列挙した閉路と比較し、探索打ち切りによる候補欠落と不正経路を区別する。
 
-routing v2は別に、4 legのindex完全被覆、segment内反復、relation / ramp由来、multi-way binding、First Exit exact binding、`distanceMeters`の距離式、unpriced / topology_onlyの非表示、pre-v2 dynamic compatibility fieldの撤去を検証する。
+routing v2は別に、4 legのindex完全被覆、segment内反復、relation / ramp由来、multi-way binding、First Exit exact binding、`distanceMeters`の距離式、unverified / topology_onlyの商品推薦除外、dynamic compatibility fieldの撤去を検証する。Issue #69ではsynthetic schema 4 graphから`RadialCandidate`を生成し、同じgraphを動的ODへ変更したfixtureから`TopologyOnlyCandidate`を生成する。Issue #64 の builder 側では、routePlanLapV1 の M/B・route/direction・wrap-around・short connector、return corridor の declared Exit candidate、exact binding state、`CORRIDOR_EXIT_STATE_BUDGET` を synthetic contract test と real schema4 opt-in test で検証する。
 
 実データでは方向別入出口ペア、一周の道路列、JCT、高架、データ境界を人手でも検証する。通行可能性と課金ペアの確認は別項目とし、どちらかが未確認なら公開候補に使わない。

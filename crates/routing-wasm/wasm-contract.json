@@ -1,10 +1,17 @@
 {
-  "contractVersion": 1,
+  "contractVersion": 4,
   "engineVersion": "0.1.0",
-  "graphSchemaVersion": 2,
+  "graphSchemaVersion": 4,
+  "supportedGraphSchemaVersions": [2, 3, 4],
   "requiredGraphFields": [
     "odTariffs",
     "ramps[].id",
     "ramps[].mainlineNodeId"
+  ],
+  "requiredGraphSchema4Fields": [
+    "routeMemberships",
+    "billingPairs[].pairKind",
+    "billingPairs[].anchor.anchorKind",
+    "billingPairs[].routePlan.anchor.anchorKind"
   ]
 }

@@ -1,0 +1,335 @@
+{
+  "schemaVersion": 2,
+  "description": "Issue 62 schema-v2 parser fixture with legacy and diagnostic radial pairs",
+  "billingPairs": [
+    {
+      "id": "fixture:legacy:c1",
+      "entryOsmWayId": 1001,
+      "entryName": "fixture legacy entry",
+      "exitOsmWayId": 2001,
+      "exitName": "fixture legacy exit",
+      "anchorOsmNodeId": 3001,
+      "vehicleProfile": "passenger-car-etc",
+      "status": "unverified",
+      "oneSectionAheadVerified": false,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-16"
+      },
+      "prices": [
+        {
+          "amountYen": 300,
+          "effectiveFrom": "2026-09-30T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bp:2-inbound:meguro:c1-inner:tengenji",
+      "pairKind": "radialReturn",
+      "routePlanVersion": 1,
+      "vehicleProfile": "passenger-car-etc",
+      "entryEndpoint": {
+        "rampId": "ramp:2-inbound:meguro-entry",
+        "name": "目黒入口",
+        "supportState": "verified_bound",
+        "directedSegments": [
+          {
+            "segmentId": "ramp:2-inbound:meguro-entry:segment:0",
+            "osmWayIds": [
+              207535708
+            ],
+            "osmNodeIds": [
+              2177935837,
+              2177935839
+            ],
+            "edgeIds": [
+              "e:w207535708:0:f"
+            ],
+            "fromNodeId": "n:2177935837",
+            "toNodeId": "n:2177935839",
+            "edgeIdsSha256": "6af7e1b129f1f8fdb3a48e829c809c8ea9c276d57c5e83481d7bac03c285db79"
+          }
+        ]
+      },
+      "exitEndpoint": {
+        "rampId": "ramp:2-outbound:tengenji-exit",
+        "name": "天現寺出口",
+        "supportState": "unresolved",
+        "directedSegments": [],
+        "bindingCandidates": [
+          {
+            "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460-172358466",
+            "status": "unresolved",
+            "directedSegments": [
+              {
+                "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
+                "osmWayIds": [
+                  172358461,
+                  422023171,
+                  931759044,
+                  172358460,
+                  172358466
+                ],
+                "osmNodeIds": [
+                  252175582,
+                  1832672250,
+                  1832672244,
+                  1832672214,
+                  1832672165,
+                  1832672133,
+                  1832672121,
+                  1832672108,
+                  1832672093,
+                  1832672090,
+                  1832672098,
+                  8638072333,
+                  1832672096,
+                  1832672105,
+                  1832672128,
+                  1832672146,
+                  1832672162,
+                  1832672205
+                ],
+                "edgeIds": [
+                  "e:w172358461:0:f",
+                  "e:w172358461:1:f",
+                  "e:w172358461:2:f",
+                  "e:w172358461:3:f",
+                  "e:w172358461:4:f",
+                  "e:w172358461:5:f",
+                  "e:w422023171:0:f",
+                  "e:w422023171:1:f",
+                  "e:w422023171:2:f",
+                  "e:w931759044:0:f",
+                  "e:w172358460:0:f",
+                  "e:w172358460:1:f",
+                  "e:w172358460:2:f",
+                  "e:w172358460:3:f",
+                  "e:w172358460:4:f",
+                  "e:w172358460:5:f",
+                  "e:w172358466:0:f"
+                ],
+                "fromNodeId": "n:252175582",
+                "toNodeId": "n:1832672205",
+                "edgeIdsSha256": "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+              }
+            ]
+          }
+        ]
+      },
+      "routePlan": {
+        "entryCorridor": {
+          "membershipId": "route:2:inbound",
+          "terminalEdgeId": "e:w4853804:16:f",
+          "mergeNodeId": "n:574460576"
+        },
+        "anchor": {
+          "anchorKind": "directedJunction",
+          "routeId": "C1",
+          "direction": "inner",
+          "mergeNodeId": "n:574460576",
+          "branchNodeId": "n:574460605",
+          "mergeTerminalEdgeId": "e:w4853804:16:f",
+          "branchInitialEdgeId": "e:w45248411:0:f",
+          "arcPolicy": "ordinaryLongArc",
+          "excludedShortConnector": {
+            "fromNodeId": "n:574460605",
+            "toNodeId": "n:574460576",
+            "osmWayId": 23297444,
+            "edgeCount": 23,
+            "distanceMeters": 493
+          }
+        },
+        "mandatoryLap": {
+          "membershipId": "route:C1:inner",
+          "firstEdgeId": "e:w23297444:43:f",
+          "lastEdgeId": "e:w23297444:19:f",
+          "lapCount": 1
+        },
+        "returnCorridor": {
+          "membershipId": "route:2:outbound",
+          "startNodeId": "n:574460605",
+          "initialEdgeId": "e:w45248411:0:f",
+          "firstGeneralExit": {
+            "rule": "firstGeneralExit",
+            "expectedRampId": "ramp:2-outbound:tengenji-exit",
+            "exactDirectedBinding": "unresolved"
+          }
+        }
+      },
+      "routingCapability": "routable",
+      "pairEligibility": {
+        "status": "unverified",
+        "oneSectionAheadVerified": false
+      },
+      "loopValidation": {
+        "status": "declared_route_validated"
+      },
+      "tariff": {
+        "status": "unpriced",
+        "amountYen": null,
+        "billingDistanceMeters": null,
+        "prices": []
+      },
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-16",
+        "notes": "目黒入口から一ノ橋JCTのC1 inner長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。天現寺exitの5 way候補は連続するが、n:1832672162とn:1832672205がともに一般道へ接続するためexact directed bindingは未解決。"
+      }
+    },
+    {
+      "id": "bp:2-inbound:meguro:c1-outer:tengenji",
+      "pairKind": "radialReturn",
+      "routePlanVersion": 1,
+      "vehicleProfile": "passenger-car-etc",
+      "entryEndpoint": {
+        "rampId": "ramp:2-inbound:meguro-entry",
+        "name": "目黒入口",
+        "supportState": "verified_bound",
+        "directedSegments": [
+          {
+            "segmentId": "ramp:2-inbound:meguro-entry:segment:0",
+            "osmWayIds": [
+              207535708
+            ],
+            "osmNodeIds": [
+              2177935837,
+              2177935839
+            ],
+            "edgeIds": [
+              "e:w207535708:0:f"
+            ],
+            "fromNodeId": "n:2177935837",
+            "toNodeId": "n:2177935839",
+            "edgeIdsSha256": "6af7e1b129f1f8fdb3a48e829c809c8ea9c276d57c5e83481d7bac03c285db79"
+          }
+        ]
+      },
+      "exitEndpoint": {
+        "rampId": "ramp:2-outbound:tengenji-exit",
+        "name": "天現寺出口",
+        "supportState": "unresolved",
+        "directedSegments": [],
+        "bindingCandidates": [
+          {
+            "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460-172358466",
+            "status": "unresolved",
+            "directedSegments": [
+              {
+                "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
+                "osmWayIds": [
+                  172358461,
+                  422023171,
+                  931759044,
+                  172358460,
+                  172358466
+                ],
+                "osmNodeIds": [
+                  252175582,
+                  1832672250,
+                  1832672244,
+                  1832672214,
+                  1832672165,
+                  1832672133,
+                  1832672121,
+                  1832672108,
+                  1832672093,
+                  1832672090,
+                  1832672098,
+                  8638072333,
+                  1832672096,
+                  1832672105,
+                  1832672128,
+                  1832672146,
+                  1832672162,
+                  1832672205
+                ],
+                "edgeIds": [
+                  "e:w172358461:0:f",
+                  "e:w172358461:1:f",
+                  "e:w172358461:2:f",
+                  "e:w172358461:3:f",
+                  "e:w172358461:4:f",
+                  "e:w172358461:5:f",
+                  "e:w422023171:0:f",
+                  "e:w422023171:1:f",
+                  "e:w422023171:2:f",
+                  "e:w931759044:0:f",
+                  "e:w172358460:0:f",
+                  "e:w172358460:1:f",
+                  "e:w172358460:2:f",
+                  "e:w172358460:3:f",
+                  "e:w172358460:4:f",
+                  "e:w172358460:5:f",
+                  "e:w172358466:0:f"
+                ],
+                "fromNodeId": "n:252175582",
+                "toNodeId": "n:1832672205",
+                "edgeIdsSha256": "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+              }
+            ]
+          }
+        ]
+      },
+      "routePlan": {
+        "entryCorridor": {
+          "membershipId": "route:2:inbound",
+          "terminalEdgeId": "e:w45248631:3:f",
+          "mergeNodeId": "n:31297008"
+        },
+        "anchor": {
+          "anchorKind": "directedJunction",
+          "routeId": "C1",
+          "direction": "outer",
+          "mergeNodeId": "n:31297008",
+          "branchNodeId": "n:31297000",
+          "mergeTerminalEdgeId": "e:w45248631:3:f",
+          "branchInitialEdgeId": "e:w4853805:0:f",
+          "arcPolicy": "ordinaryLongArc",
+          "excludedShortConnector": {
+            "fromNodeId": "n:31297000",
+            "toNodeId": "n:31297008",
+            "osmWayId": 24039737,
+            "edgeCount": 20,
+            "distanceMeters": 461
+          }
+        },
+        "mandatoryLap": {
+          "membershipId": "route:C1:outer",
+          "firstEdgeId": "e:w24039737:24:f",
+          "lastEdgeId": "e:w24039737:3:f",
+          "lapCount": 1
+        },
+        "returnCorridor": {
+          "membershipId": "route:2:outbound",
+          "startNodeId": "n:31297000",
+          "initialEdgeId": "e:w4853805:0:f",
+          "firstGeneralExit": {
+            "rule": "firstGeneralExit",
+            "expectedRampId": "ramp:2-outbound:tengenji-exit",
+            "exactDirectedBinding": "unresolved"
+          }
+        }
+      },
+      "routingCapability": "routable",
+      "pairEligibility": {
+        "status": "unverified",
+        "oneSectionAheadVerified": false
+      },
+      "loopValidation": {
+        "status": "declared_route_validated"
+      },
+      "tariff": {
+        "status": "unpriced",
+        "amountYen": null,
+        "billingDistanceMeters": null,
+        "prices": []
+      },
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/",
+        "sourceDate": "2026-09-16",
+        "notes": "目黒入口から一ノ橋JCTのC1 outer長弧を通り、2号下りへ戻った最初の一般Exit候補を天現寺とする。天現寺exitの5 way候補は連続するが、n:1832672162とn:1832672205がともに一般道へ接続するためexact directed bindingは未解決。"
+      }
+    }
+  ]
+}

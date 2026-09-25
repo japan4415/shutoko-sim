@@ -33,7 +33,9 @@ async function expectationOf(bytes: Uint8Array): Promise<{ sha256: string; byteL
 }
 
 async function buildReleaseFiles(releaseId: string): Promise<Record<string, Uint8Array>> {
-  const graphBytes = encoder.encode(JSON.stringify({ releaseId, nodes: [], edges: [] }));
+  const graphBytes = encoder.encode(
+    JSON.stringify({ schemaVersion: 2, releaseId, vehicleProfile: "passenger-car-etc", nodes: [], edges: [], billingPairs: [] }),
+  );
   const wasmBytes = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
   const glueBytes = encoder.encode(`export default function init() { return Promise.resolve(); }`);
 
@@ -118,17 +120,7 @@ describe("search-worker: 並行リリース切り替え時のライフサイク�
             reason: null,
             nearestAccess: null,
             minPlanSeconds: null,
-            candidates: [
-              {
-                edgeIds: ["e1"],
-                duration: { baseSeconds: 100, planSeconds: 120 },
-                toll: { amountYen: 300, chargedSectionCount: 1 },
-                geometry: { type: "LineString", coordinates: [] },
-                handoff: { mapsUrl: "https://maps.example.com" },
-                snappedOrigin: { nodeId: "n1", distanceMeters: 0 },
-                warnings: [],
-              },
-            ],
+            candidates: [],
           });
         },
       };
@@ -382,17 +374,7 @@ describe("search-worker: 並行リリース切り替え時のライフサイク�
             reason: null,
             nearestAccess: null,
             minPlanSeconds: null,
-            candidates: [
-              {
-                edgeIds: ["e1"],
-                duration: { baseSeconds: 100, planSeconds: 120 },
-                toll: { amountYen: 300, chargedSectionCount: 1 },
-                geometry: { type: "LineString", coordinates: [] },
-                handoff: { mapsUrl: "https://maps.example.com" },
-                snappedOrigin: { nodeId: "n1", distanceMeters: 0 },
-                warnings: [],
-              },
-            ],
+            candidates: [],
           });
         },
       };

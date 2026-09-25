@@ -128,10 +128,10 @@ fn large_graph_smoke_search() {
             pair_id
         );
 
-        let own_pair = res1
-            .candidates
-            .iter()
-            .any(|c| c.toll.billing_pair_id == pair_id);
+        let own_pair = res1.candidates.iter().any(|c| {
+            c.as_legacy()
+                .is_some_and(|candidate| candidate.toll.billing_pair_id == pair_id)
+        });
 
         eprintln!(
             "{:<50}  {:>10}  {:>4}  {:>8}  {:>8.1}  {:>8.1}  {:>8.1}  {}",
@@ -256,10 +256,10 @@ fn large_graph_smoke_search_extended_limits() {
         let res = search_prepared(&pg, &req).unwrap_or_else(|e| panic!("search: {}", e));
         let ms = t.elapsed().as_secs_f64() * 1000.0;
 
-        let own_pair = res
-            .candidates
-            .iter()
-            .any(|c| c.toll.billing_pair_id == pair_id);
+        let own_pair = res.candidates.iter().any(|c| {
+            c.as_legacy()
+                .is_some_and(|candidate| candidate.toll.billing_pair_id == pair_id)
+        });
         eprintln!(
             "{:<50}  {:>10}  {:>4}  {:>8}  {:>8.1}  {}",
             pair_id,

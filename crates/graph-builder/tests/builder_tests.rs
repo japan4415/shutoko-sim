@@ -1,8 +1,72 @@
-use serde_json::json;
+use serde_json::{json, Value};
 use shutoko_graph_builder::{
-    build_topology, build_topology_with_report, haversine_distance_meters, to_deterministic_json,
-    EdgeKind, OverpassResponse, TopologyConfig, LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
+    bound_ramp_evidence_from_inventory, build_route_membership_indices, build_topology,
+    build_topology_with_report, generate_route_plan_lap_v1, haversine_distance_meters,
+    ordered_edge_ids_sha256, route_memberships_sha256, to_deterministic_json, EdgeKind, Graph,
+    OverpassResponse, RouteMembershipBuildOptions, RouteMembershipIndex, TopologyConfig,
+    LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
 };
+use std::collections::HashMap;
+
+fn generated_legacy_graph() -> Graph {
+    let graph_json = include_str!("../../../fixtures/generated/graph.json");
+    let mut wire: serde_json::Value = serde_json::from_str(graph_json).unwrap();
+    assert_eq!(wire["schemaVersion"], 4);
+    wire["schemaVersion"] = json!(2);
+    wire.as_object_mut().unwrap().remove("routeMemberships");
+    let ramp_data = wire["ramps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|ramp| {
+            (
+                ramp["edgeId"].as_str().unwrap().to_owned(),
+                (
+                    ramp["id"].as_str().unwrap().to_owned(),
+                    ramp["name"].as_str().unwrap_or_default().to_owned(),
+                ),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    for pair in wire["billingPairs"].as_array_mut().unwrap() {
+        let status = if pair["pairEligibility"]["status"] == json!("verified_one_section_ahead") {
+            "verified"
+        } else {
+            "unverified"
+        };
+        let entry_id = pair["entryId"].as_str().unwrap().to_owned();
+        let exit_id = pair["exitId"].as_str().unwrap().to_owned();
+        let entry_ramp = ramp_data.get(&entry_id);
+        let exit_ramp = ramp_data.get(&exit_id);
+        let entry_name = pair
+            .get("entryName")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+            .or_else(|| entry_ramp.map(|(_, name)| name.clone()));
+        let exit_name = pair
+            .get("exitName")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+            .or_else(|| exit_ramp.map(|(_, name)| name.clone()));
+        *pair = json!({
+            "id": pair["id"],
+            "entryId": entry_id,
+            "exitId": exit_id,
+            "anchorNodeId": pair["anchor"]["nodeId"],
+            "entryToAnchorEdgeIds": pair["entryToAnchorEdgeIds"],
+            "anchorToExitEdgeIds": pair["anchorToExitEdgeIds"],
+            "status": status,
+            "vehicleProfile": pair["vehicleProfile"],
+            "prices": pair["tariff"]["prices"],
+            "entryName": entry_name,
+            "exitName": exit_name,
+            "entryRampId": entry_ramp.map(|(id, _)| id.as_str()),
+            "exitRampId": exit_ramp.map(|(id, _)| id.as_str()),
+            "billingDistanceMeters": pair["tariff"]["billingDistanceMeters"],
+        });
+    }
+    serde_json::from_value(wire).unwrap()
+}
 
 #[test]
 fn test_haversine_and_speed_constants() {
@@ -505,9 +569,12 @@ fn test_routing_core_search_integration() {
     let res = search(&graph, &req, &limits).expect("search should succeed");
     assert_eq!(res.status, "ok");
     assert!(!res.candidates.is_empty(), "expected candidates found");
-    assert_eq!(res.candidates[0].entry_id, "e:w2:0:f");
-    assert_eq!(res.candidates[0].exit_id, "e:w6:0:f");
-    assert_eq!(res.candidates[0].toll.amount_yen, Some(300));
+    let candidate = res.candidates[0]
+        .as_legacy()
+        .expect("seed-backed search must return LegacyCandidate");
+    assert_eq!(candidate.entry_id, "e:w2:0:f");
+    assert_eq!(candidate.exit_id, "e:w6:0:f");
+    assert_eq!(candidate.toll.amount_yen, Some(300));
 }
 
 // =========================================================================
@@ -515,10 +582,11 @@ fn test_routing_core_search_integration() {
 // =========================================================================
 
 use shutoko_graph_builder::{
-    build_manifest, compute_sha256, generate_and_validate_billing_pairs, generate_billing_pair,
-    manifest_to_deterministic_json, snap_index_to_deterministic_json, validate_billing_pair,
-    BillingError, BillingPair, BillingPairSeed, BillingPairsSeedFile, ManifestConfig, Price,
-    SeedPrice, SeedProvenance, VerificationStatus,
+    build_manifest, compute_sha256, generate_and_validate_billing_pairs,
+    generate_and_validate_parsed_billing_pairs, generate_billing_pair,
+    manifest_to_deterministic_json, parse_billing_pairs_seed, snap_index_to_deterministic_json,
+    validate_billing_pair, BillingError, BillingPair, BillingPairSeed, BillingPairsSeedFile,
+    ManifestConfig, Price, SeedPrice, SeedProvenance, VerificationStatus,
 };
 
 fn create_test_loop_graph() -> (
@@ -648,7 +716,14 @@ fn test_billing_pair_seed_and_pathfinding_success() {
     };
     let res = shutoko_routing_core::search(&graph, &req, &limits).expect("search should succeed");
     assert_eq!(res.status, "ok");
-    assert_eq!(res.candidates[0].toll.amount_yen, Some(300));
+    assert_eq!(
+        res.candidates[0]
+            .as_legacy()
+            .expect("seed-backed search must return LegacyCandidate")
+            .toll
+            .amount_yen,
+        Some(300)
+    );
 }
 
 #[test]
@@ -1027,6 +1102,9 @@ fn test_manifest_generation_and_checksum_verification() {
         release_id: "rel-manifest-test".into(),
         engine_version: "0.1.0".into(),
         graph_version: "1.0.0".into(),
+        graph_schema_version: 2,
+        route_plan_version: None,
+        route_memberships_sha256: None,
         built_at: "2026-09-10T00:00:00Z".into(),
         source_date: "2026-09-10".into(),
         coverage_area: "Tokyo C1 Inner Circular".into(),
@@ -1109,6 +1187,9 @@ fn test_deterministic_byte_identical_output_two_runs() {
         release_id: "fixed-release-id".into(),
         engine_version: "0.1.0".into(),
         graph_version: "1.0.0".into(),
+        graph_schema_version: 2,
+        route_plan_version: None,
+        route_memberships_sha256: None,
         built_at: "2026-09-10T12:00:00Z".into(),
         source_date: "2026-09-10".into(),
         coverage_area: "Deterministic Area".into(),
@@ -1231,6 +1312,8 @@ fn test_cli_full_end_to_end_execution() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
         ])
         .status()
         .expect("failed to execute binary (run 1)");
@@ -1251,6 +1334,8 @@ fn test_cli_full_end_to_end_execution() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
         ])
         .status()
         .expect("failed to execute binary (run 2)");
@@ -1999,6 +2084,8 @@ fn test_cli_strict_mode() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
             "--strict",
         ])
         .status()
@@ -2023,6 +2110,8 @@ fn test_cli_strict_mode() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
         ])
         .status()
         .expect("failed to execute binary (case 2)");
@@ -2046,6 +2135,8 @@ fn test_cli_strict_mode() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
             "--strict",
         ])
         .status()
@@ -3378,16 +3469,27 @@ fn test_issue6_item4_invalid_dates_and_engine_version() {
 
 #[test]
 fn test_billing_pair_seed_status_and_output_match_full_network() {
-    use shutoko_graph_builder::{BillingPairsSeedFile, Graph, VerificationStatus};
+    use shutoko_graph_builder::{
+        parse_billing_pairs_seed, ParsedBillingPairsSeed, VerificationStatus,
+    };
 
     // 1. Verify that the declarative seed keeps all 8 audited billing pairs.
     let seed_str = include_str!("../../../data/billing-pairs-seed.json");
-    let seed_file: BillingPairsSeedFile =
-        serde_json::from_str(seed_str).expect("data/billing-pairs-seed.json must deserialize");
+    let parsed_seed = parse_billing_pairs_seed(seed_str)
+        .expect("data/billing-pairs-seed.json must use the supported seed parser");
+    let seed_file = match parsed_seed {
+        ParsedBillingPairsSeed::Schema2(seed) => seed,
+        ParsedBillingPairsSeed::Schema1(_) => panic!("seed must use schema 2"),
+    };
+    let legacy_pairs: Vec<_> = seed_file
+        .billing_pairs
+        .iter()
+        .filter_map(shutoko_graph_builder::BillingPairSeedEntry::as_legacy_ring)
+        .collect();
     assert_eq!(
-        seed_file.billing_pairs.len(),
+        legacy_pairs.len(),
         8,
-        "seed must have exactly 8 billing pairs"
+        "seed must retain exactly 8 legacy billing pairs"
     );
 
     let verified_pair_ids = [
@@ -3404,8 +3506,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     ];
 
     for expected_id in &verified_pair_ids {
-        let seed_pair = seed_file
-            .billing_pairs
+        let seed_pair = legacy_pairs
             .iter()
             .find(|p| p.id == *expected_id)
             .unwrap_or_else(|| panic!("seed pair {} not found in seed file", expected_id));
@@ -3429,8 +3530,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
         assert_eq!(seed_pair.prices[1].effective_to, None);
     }
     for unverified_id in &unverified_pair_ids {
-        let seed_pair = seed_file
-            .billing_pairs
+        let seed_pair = legacy_pairs
             .iter()
             .find(|p| p.id == *unverified_id)
             .unwrap_or_else(|| panic!("seed pair {} not found in seed file", unverified_id));
@@ -3441,9 +3541,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     // 2. The full-network graph retains all audited pairs, but the two
     // FIRST_EXIT_MISMATCH pairs must remain explicitly unverified so
     // routing-core will not make them searchable.
-    let graph_str = include_str!("../../../fixtures/generated/graph.json");
-    let graph: Graph =
-        serde_json::from_str(graph_str).expect("fixtures/generated/graph.json must deserialize");
+    let graph = generated_legacy_graph();
     assert_eq!(
         graph.billing_pairs.len(),
         8,
@@ -3486,14 +3584,21 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
 
 #[test]
 fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
-    use shutoko_graph_builder::{BillingPairsSeedFile, Graph};
+    use shutoko_graph_builder::{parse_billing_pairs_seed, ParsedBillingPairsSeed};
 
-    let graph_str = include_str!("../../../fixtures/generated/graph.json");
-    let graph: Graph =
-        serde_json::from_str(graph_str).expect("fixtures/generated/graph.json must deserialize");
+    let graph = generated_legacy_graph();
     let seed_str = include_str!("../../../data/billing-pairs-seed.json");
-    let seed_file: BillingPairsSeedFile =
-        serde_json::from_str(seed_str).expect("data/billing-pairs-seed.json must deserialize");
+    let parsed_seed = parse_billing_pairs_seed(seed_str)
+        .expect("data/billing-pairs-seed.json must use the supported seed parser");
+    let seed_file = match parsed_seed {
+        ParsedBillingPairsSeed::Schema2(seed) => seed,
+        ParsedBillingPairsSeed::Schema1(_) => panic!("seed must use schema 2"),
+    };
+    let legacy_pairs: Vec<_> = seed_file
+        .billing_pairs
+        .iter()
+        .filter_map(shutoko_graph_builder::BillingPairSeedEntry::as_legacy_ring)
+        .collect();
 
     // 1. All nodes must have finite, valid coordinates in Tokyo bounds
     assert!(!graph.nodes.is_empty(), "nodes must not be empty");
@@ -3526,8 +3631,8 @@ fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
     }
 
     // 3. Billing pair entryName and exitName propagation from seed
-    assert_eq!(seed_file.billing_pairs.len(), 8);
-    for seed_pair in &seed_file.billing_pairs {
+    assert_eq!(legacy_pairs.len(), 8);
+    for seed_pair in &legacy_pairs {
         let graph_pair = graph
             .billing_pairs
             .iter()
@@ -4007,6 +4112,8 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
         ])
         .status()
         .expect("failed to execute binary (run 1)");
@@ -4033,6 +4140,8 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
             "2026-09-10T00:00:00Z",
             "--source-date",
             "2026-09-10",
+            "--graph-schema",
+            "2",
         ])
         .status()
         .expect("failed to execute binary (run 2)");
@@ -4072,6 +4181,29 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
 
     // Clean up
     let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_schema_v2_diagnostic_radial_pairs_are_not_published() {
+    let (graph, _snap) = create_test_loop_graph();
+    let raw = include_str!("../../../fixtures/seed-v2/diagnostic-radial-v2.json");
+    let seed = parse_billing_pairs_seed(raw).unwrap();
+    let report = generate_and_validate_parsed_billing_pairs(&graph, &seed);
+
+    assert!(report.valid_pairs.is_empty());
+    let radial_rejections: Vec<&str> = report
+        .rejected_pairs
+        .iter()
+        .filter(|rejected| rejected.reason.contains("schema 4 route-plan resolution"))
+        .map(|rejected| rejected.seed_id.as_str())
+        .collect();
+    assert_eq!(
+        radial_rejections,
+        vec![
+            "bp:2-inbound:meguro:c1-inner:tengenji",
+            "bp:2-inbound:meguro:c1-outer:tengenji"
+        ]
+    );
 }
 
 #[test]
@@ -4118,6 +4250,35 @@ fn test_cli_with_full_fixtures() {
         .status()
         .expect("failed to execute binary with full fixtures");
     assert!(status.success(), "CLI run with full fixtures failed");
+
+    let graph_raw = std::fs::read_to_string(out_dir.join("graph.json")).unwrap();
+    let graph_json: serde_json::Value = serde_json::from_str(&graph_raw).unwrap();
+    let manifest_raw = std::fs::read_to_string(out_dir.join("manifest.json")).unwrap();
+    let manifest_json: serde_json::Value = serde_json::from_str(&manifest_raw).unwrap();
+    assert_eq!(graph_json["schemaVersion"], 4);
+    assert_eq!(manifest_json["graphSchemaVersion"], 4);
+    assert_eq!(manifest_json["routePlanVersion"], 1);
+    assert_eq!(manifest_json["billingPairsVersion"], "v2");
+    let diagnostic_only = manifest_json["unverifiedSections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|section| section.starts_with("diagnostic-only:"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        diagnostic_only,
+        vec![
+            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved",
+            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved",
+        ]
+    );
+    let route_memberships: Vec<RouteMembershipIndex> =
+        serde_json::from_value(graph_json["routeMemberships"].clone()).unwrap();
+    assert_eq!(
+        manifest_json["routeMembershipsSha256"],
+        route_memberships_sha256(&route_memberships).unwrap()
+    );
 
     let ramps_raw = std::fs::read_to_string(out_dir.join("ramps.json")).unwrap();
     let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
@@ -4173,6 +4334,403 @@ fn test_cli_with_full_fixtures() {
         r["status"] == "active"
             && matches!(r["kind"].as_str(), Some("general_entry" | "general_exit"))
     }));
+
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let osm_path = manifest_dir.join("../../fixtures/osm/shutoko-all.json");
+    if !osm_path.exists() {
+        return;
+    }
+    let osm: OverpassResponse =
+        serde_json::from_str(&std::fs::read_to_string(&osm_path).unwrap()).unwrap();
+    let (mut graph, _snap) = build_topology(&osm, &TopologyConfig::default()).unwrap();
+    let inventory: shutoko_graph_builder::RampInventoryFile = serde_json::from_str(
+        &std::fs::read_to_string(manifest_dir.join("../../data/ramp-inventory.json")).unwrap(),
+    )
+    .unwrap();
+    let bindings: shutoko_graph_builder::OsmRampBindingsFile = serde_json::from_str(
+        &std::fs::read_to_string(manifest_dir.join("../../data/osm-ramp-bindings.json")).unwrap(),
+    )
+    .unwrap();
+    shutoko_graph_builder::validate_ramp_inventory(&inventory).unwrap();
+    shutoko_graph_builder::validate_osm_ramp_bindings(&bindings, &inventory).unwrap();
+    let (ramps, _artifact, _notes) =
+        shutoko_graph_builder::bind_ramps_to_graph(&graph, &inventory, &bindings);
+    graph.ramps = ramps;
+    let source_snapshot_sha256 = compute_sha256(&std::fs::read(&osm_path).unwrap());
+    let evidence = bound_ramp_evidence_from_inventory(&graph, &inventory, &bindings).unwrap();
+    let memberships = build_route_membership_indices(
+        &osm,
+        &graph,
+        &RouteMembershipBuildOptions {
+            source_snapshot_sha256,
+            relation_ids: Some(vec![4256008, 4256339]),
+            bound_ramp_evidence: evidence,
+        },
+    )
+    .unwrap();
+    let seed =
+        parse_billing_pairs_seed(include_str!("../../../data/billing-pairs-seed.json")).unwrap();
+    let generated_plans =
+        shutoko_graph_builder::generate_diagnostic_radial_route_plans(&graph, &memberships, &seed);
+    assert_eq!(generated_plans.len(), 2);
+    assert!(generated_plans.iter().all(|plan| plan.error.is_none()));
+    assert!(generated_plans.iter().all(|plan| plan
+        .resolution
+        .as_ref()
+        .unwrap()
+        .first_exit
+        .exit
+        .is_none()));
+    let radial_pairs = seed.radial_pairs();
+    assert_eq!(radial_pairs.len(), 2);
+    assert_eq!(
+        radial_pairs
+            .iter()
+            .map(|pair| pair.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "bp:2-inbound:meguro:c1-inner:tengenji",
+            "bp:2-inbound:meguro:c1-outer:tengenji"
+        ]
+    );
+    for pair in radial_pairs {
+        assert_eq!(
+            pair.pair_eligibility.status,
+            shutoko_graph_builder::PairEligibilityStatus::Unverified
+        );
+        assert_eq!(
+            pair.tariff.status,
+            shutoko_graph_builder::TariffStatus::Unpriced
+        );
+        assert!(pair.tariff.amount_yen.is_none());
+        assert!(pair.tariff.billing_distance_meters.is_none());
+        let lap =
+            generate_route_plan_lap_v1(&graph, &memberships, &pair.route_plan.anchor).unwrap();
+        assert_eq!(lap.merge_node_id, pair.route_plan.anchor.merge_node_id);
+        assert_eq!(lap.branch_node_id, pair.route_plan.anchor.branch_node_id);
+        assert_eq!(lap.route_id, pair.route_plan.anchor.route_id);
+        assert_eq!(lap.direction, pair.route_plan.anchor.direction);
+        assert_eq!(
+            lap.first_edge_id,
+            pair.route_plan.mandatory_lap.first_edge_id
+        );
+        assert_eq!(lap.last_edge_id, pair.route_plan.mandatory_lap.last_edge_id);
+        assert_eq!(lap.lap_count, 1);
+        let expected_length = if pair.route_plan.anchor.direction == "inner" {
+            527
+        } else {
+            546
+        };
+        assert_eq!(lap.edge_ids.len(), expected_length);
+        let resolution =
+            shutoko_graph_builder::resolve_diagnostic_radial_route_plan(&graph, &memberships, pair)
+                .unwrap();
+        assert_eq!(
+            resolution.first_exit.exact_directed_binding,
+            pair.route_plan
+                .return_corridor
+                .first_general_exit
+                .exact_directed_binding
+        );
+        assert!(resolution.first_exit.exit.is_none());
+        assert_eq!(
+            resolution.first_exit.exact_directed_binding,
+            shutoko_graph_builder::EndpointSupportState::Unresolved
+        );
+        let expected_return_length = if pair.route_plan.anchor.direction == "inner" {
+            85
+        } else {
+            84
+        };
+        assert_eq!(
+            resolution.first_exit.mainline_edge_ids.len(),
+            expected_return_length
+        );
+        assert!(!resolution.first_exit.mainline_source_segment_ids.is_empty());
+        assert_eq!(
+            resolution.first_exit.blocked_ramp_id.as_deref(),
+            Some("ramp:2-outbound:tengenji-exit")
+        );
+        assert_eq!(
+            resolution.first_exit.blocked_exit_edge_id.as_deref(),
+            Some("e:w172358461:0:f")
+        );
+        let return_end_node_id = graph
+            .edges
+            .iter()
+            .find(|edge| edge.id == *resolution.first_exit.mainline_edge_ids.last().unwrap())
+            .map(|edge| edge.to.as_str());
+        assert_eq!(
+            return_end_node_id,
+            Some(
+                pair.exit_endpoint.binding_candidates[0].directed_segments[0]
+                    .from_node_id
+                    .as_str()
+            )
+        );
+    }
+}
+
+#[test]
+fn test_cli_schema2_retains_pair_specific_radial_rejections() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let osm_path = manifest_dir.join("../../fixtures/osm/shutoko-all.json");
+    if !osm_path.exists() {
+        return;
+    }
+    let seed_path = manifest_dir.join("../../data/billing-pairs-seed.json");
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "shutoko-test-schema2-radial-rejections-{}",
+        std::process::id()
+    ));
+    let out_dir = tmp_dir.join("out");
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+    let _ = std::fs::create_dir_all(&out_dir);
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_shutoko-graph-builder"))
+        .args([
+            "--osm",
+            osm_path.to_str().unwrap(),
+            "--seed",
+            seed_path.to_str().unwrap(),
+            "--out-dir",
+            out_dir.to_str().unwrap(),
+            "--release-id",
+            "schema2-radial-rejections",
+            "--graph-schema",
+            "2",
+        ])
+        .status()
+        .expect("failed to execute schema 2 CLI");
+    assert!(status.success());
+    let graph: Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("graph.json")).unwrap())
+            .unwrap();
+    assert_eq!(graph["schemaVersion"], 2);
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 8);
+    let manifest: Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("manifest.json")).unwrap())
+            .unwrap();
+    let sections = manifest["unverifiedSections"].as_array().unwrap();
+    for id in [
+        "bp:2-inbound:meguro:c1-inner:tengenji",
+        "bp:2-inbound:meguro:c1-outer:tengenji",
+    ] {
+        assert!(sections.iter().any(|section| {
+            section
+                .as_str()
+                .is_some_and(|section| section.starts_with(&format!("rejected:{id}:")))
+        }));
+    }
+    assert!(!sections.iter().any(|section| {
+        section
+            .as_str()
+            .is_some_and(|section| section.starts_with("diagnostic-only:"))
+    }));
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[test]
+fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let osm_path = manifest_dir.join("../../fixtures/osm/shutoko-all.json");
+    if !osm_path.exists() {
+        return;
+    }
+    let seed_path = manifest_dir.join("../../data/billing-pairs-seed.json");
+    let inv_path = manifest_dir.join("../../data/ramp-inventory.json");
+    let bin_data_path = manifest_dir.join("../../data/osm-ramp-bindings.json");
+    let tar_path = manifest_dir.join("../../data/od-tariffs.json");
+    let tmp_dir =
+        std::env::temp_dir().join(format!("shutoko-test-schema4-cli-{}", std::process::id()));
+    let out_dir = tmp_dir.join("out");
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+    let _ = std::fs::create_dir_all(&out_dir);
+    let bin_path = env!("CARGO_BIN_EXE_shutoko-graph-builder");
+    let status = std::process::Command::new(bin_path)
+        .args([
+            "--osm",
+            osm_path.to_str().unwrap(),
+            "--seed",
+            seed_path.to_str().unwrap(),
+            "--inventory",
+            inv_path.to_str().unwrap(),
+            "--bindings",
+            bin_data_path.to_str().unwrap(),
+            "--tariffs",
+            tar_path.to_str().unwrap(),
+            "--out-dir",
+            out_dir.to_str().unwrap(),
+            "--release-id",
+            "all-real-schema4-test",
+            "--coverage-area",
+            "Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)",
+            "--built-at",
+            "2026-09-16T00:00:00Z",
+            "--source-date",
+            "2026-09-16",
+            "--graph-schema",
+            "4",
+        ])
+        .status()
+        .expect("failed to execute schema 4 CLI");
+    assert!(
+        status.success(),
+        "schema 4 CLI run with full fixtures failed"
+    );
+
+    let graph_raw = std::fs::read_to_string(out_dir.join("graph.json")).unwrap();
+    let graph_json: serde_json::Value = serde_json::from_str(&graph_raw).unwrap();
+    let manifest_json: Value =
+        serde_json::from_str(&std::fs::read_to_string(out_dir.join("manifest.json")).unwrap())
+            .unwrap();
+    let diagnostic_only = manifest_json["unverifiedSections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|section| section.starts_with("diagnostic-only:"))
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        diagnostic_only,
+        vec![
+            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved".to_owned(),
+            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved".to_owned(),
+        ]
+    );
+    assert_eq!(graph_json["schemaVersion"], 4);
+    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 8);
+    for pair in graph_json["billingPairs"].as_array().unwrap() {
+        assert_eq!(pair["pairKind"], "legacyRing");
+        assert_eq!(pair["anchor"]["anchorKind"], "sameNode");
+        assert_eq!(pair["anchor"]["arcPolicy"], "sameNodeLoop");
+        assert!(pair["pairEligibility"]["status"].is_string());
+        assert_eq!(pair["loopValidation"]["status"], "declared_route_validated");
+        assert!(pair["tariff"]["status"].is_string());
+    }
+    let prepared = shutoko_routing_core::prepare_json(&graph_raw, "{}").unwrap();
+    assert_eq!(prepared.graph().schema_version, 4);
+    assert_eq!(prepared.graph().billing_pairs.len(), 8);
+    assert!(prepared.radial_billing_pairs().is_empty());
+    let edge_ids = graph_json["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|edge| edge["id"].as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    let memberships = graph_json["routeMemberships"].as_array().unwrap();
+    let membership_ids = memberships
+        .iter()
+        .map(|membership| membership["membershipId"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    for expected in [
+        "route:C1:inner",
+        "route:C1:outer",
+        "route:2:inbound",
+        "route:2:outbound",
+    ] {
+        assert!(membership_ids.contains(&expected));
+    }
+    assert!(!membership_ids.contains(&"route:C1:backward"));
+    let c1_inner = memberships
+        .iter()
+        .find(|membership| membership["membershipId"] == "route:C1:inner")
+        .unwrap();
+    let c1_outer = memberships
+        .iter()
+        .find(|membership| membership["membershipId"] == "route:C1:outer")
+        .unwrap();
+    assert!(!c1_inner["segments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|segment| segment["orderedEdgeIds"].as_array().unwrap())
+        .any(|edge_id| edge_id == "e:w668292569:0:f"));
+    assert!(c1_outer["segments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|segment| segment["orderedEdgeIds"].as_array().unwrap())
+        .any(|edge_id| edge_id == "e:w668292569:0:f"));
+    for membership in memberships {
+        assert_eq!(
+            membership["directionMappingVersion"],
+            "osm-relation-role/v1"
+        );
+        for segment in membership["segments"].as_array().unwrap() {
+            let ordered_edge_ids = segment["orderedEdgeIds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|edge| edge.as_str().unwrap().to_owned())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                segment["orderedEdgeIdsSha256"],
+                ordered_edge_ids_sha256(&ordered_edge_ids).unwrap()
+            );
+            if segment["sourceKind"] == "relationMainline" {
+                assert!(!segment["memberIndexes"].as_array().unwrap().is_empty());
+                assert!(segment["memberOrderMatchesRelation"].is_boolean());
+            } else {
+                assert!(segment["memberIndexes"].is_null());
+                assert!(segment["memberOrderMatchesRelation"].is_null());
+            }
+            for edge_id in &ordered_edge_ids {
+                assert!(edge_ids.iter().any(|candidate| candidate == edge_id));
+                assert!(!edge_id.contains(":w378284491:"));
+                assert!(!edge_id.contains(":w4849055:"));
+                assert!(!edge_id.contains(":w378284507:"));
+                assert!(!edge_id.contains(":w45138860:"));
+                assert!(!edge_id.contains(":w706016194:"));
+            }
+        }
+    }
+    let route_two_inbound = memberships
+        .iter()
+        .find(|membership| membership["membershipId"] == "route:2:inbound")
+        .unwrap();
+    let route_two_outbound = memberships
+        .iter()
+        .find(|membership| membership["membershipId"] == "route:2:outbound")
+        .unwrap();
+    assert!(route_two_inbound["segments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|segment| segment["orderedEdgeIds"].as_array().unwrap())
+        .any(|edge_id| edge_id == "e:w4853804:16:f"));
+    assert!(route_two_outbound["segments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|segment| segment["orderedEdgeIds"].as_array().unwrap())
+        .any(|edge_id| edge_id == "e:w45248411:0:f"));
+    for route_id in [
+        "route:C1:inner",
+        "route:C1:outer",
+        "route:2:inbound",
+        "route:2:outbound",
+    ] {
+        let membership = memberships
+            .iter()
+            .find(|membership| membership["membershipId"] == route_id)
+            .unwrap();
+        let source_kinds = membership["segments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|segment| segment["sourceKind"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert!(source_kinds.contains(&"relationMainline"));
+        if route_id.starts_with("route:2:") {
+            assert!(source_kinds.contains(&"boundRamp"));
+        }
+    }
 
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }

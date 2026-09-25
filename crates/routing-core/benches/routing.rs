@@ -13,7 +13,9 @@
 //! - `prepared_large/*`: 大規模グラフ、prepare() + search_prepared() 分離計測
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use shutoko_routing_core::{prepare, search, Graph, LatLng, SearchLimits, SearchRequest};
+use shutoko_routing_core::{
+    prepare, prepare_json, search, Graph, LatLng, SearchLimits, SearchRequest,
+};
 use std::hint::black_box;
 use std::time::Duration;
 
@@ -22,7 +24,12 @@ use std::time::Duration;
 static SMALL_GRAPH_JSON: &str = include_str!("../../../fixtures/generated/graph.json");
 
 fn small_graph() -> Graph {
-    serde_json::from_str(SMALL_GRAPH_JSON).expect("小グラフのデシリアライズに失敗")
+    let mut graph = prepare_json(SMALL_GRAPH_JSON, "{}")
+        .expect("小グラフの schema-aware prepare に失敗")
+        .graph()
+        .clone();
+    graph.schema_version = 2;
+    graph
 }
 
 // 8 課金ペアそれぞれのエントリーエッジ（kind=entry）の `from` ノード ID。

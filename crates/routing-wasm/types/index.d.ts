@@ -16,6 +16,11 @@ export interface SearchRequest {
   pricingAt: string;
 }
 
+export interface DeviceVerificationReleaseConfig {
+  manifestJson: string;
+  evaluatedAt: string;
+}
+
 export interface SearchLimits {
   maxExpandedStates?: number;
   beamWidth?: number;
@@ -43,6 +48,7 @@ export interface SearchLimits {
   maxGraphNodes?: number;
   /** Maximum number of edges allowed in the graph. Default: 3,000,000. */
   maxGraphEdges?: number;
+  deviceVerification?: DeviceVerificationReleaseConfig;
 }
 
 export interface SnappedOrigin {
@@ -102,7 +108,202 @@ export interface Duration {
   planSeconds: number;
 }
 
-export interface Toll {
+export type PairKind = "legacyRing" | "radialReturn";
+export type AnchorKind = "sameNode" | "directedJunction";
+export type RoutePlanSegmentRole =
+  | "entry_approach"
+  | "mandatory_lap"
+  | "return_corridor"
+  | "exit_approach";
+export type PairEligibilityStatus =
+  | "verified_one_section_ahead"
+  | "unverified"
+  | "topology_only";
+export type LoopValidationStatus =
+  | "declared_route_validated"
+  | "unresolved"
+  | "topology_only";
+export type TariffStatus = "priced" | "unpriced" | "expired" | "not_applicable";
+export type EndpointSupportState = "verified_bound" | "unsupported" | "unresolved";
+export type RoutingCapability = "routable" | "structural_no_loop" | "unsupported";
+
+export interface Price {
+  amountYen: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+
+export interface PairEligibility {
+  status: PairEligibilityStatus;
+  oneSectionAheadVerified: boolean;
+}
+
+export interface LoopValidation {
+  status: LoopValidationStatus;
+}
+
+export interface Tariff {
+  status: TariffStatus;
+  amountYen: number | null;
+  billingDistanceMeters: number | null;
+  prices: Price[];
+}
+
+export interface SameNodeAnchor {
+  anchorKind: "sameNode";
+  nodeId: string;
+  routeId: string;
+  direction: string;
+  arcPolicy: "sameNodeLoop";
+}
+
+export interface ExcludedShortConnector {
+  fromNodeId: string;
+  toNodeId: string;
+  osmWayId: number;
+  edgeCount: number;
+  distanceMeters: number;
+}
+
+export interface DirectedJunctionAnchor {
+  anchorKind: "directedJunction";
+  mergeNodeId: string;
+  branchNodeId: string;
+  mergeTerminalEdgeId: string;
+  branchInitialEdgeId: string;
+  routeId: string;
+  direction: string;
+  arcPolicy: "ordinaryLongArc";
+  excludedShortConnector: ExcludedShortConnector;
+}
+
+export type RouteAnchor = SameNodeAnchor | DirectedJunctionAnchor;
+
+export interface DirectedEndpointSegment {
+  segmentId: string;
+  osmWayIds: number[];
+  osmNodeIds: number[];
+  edgeIds: string[];
+  fromNodeId: string;
+  toNodeId: string;
+  edgeIdsSha256: string;
+}
+
+export interface BillingEndpoint {
+  rampId: string;
+  name: string;
+  supportState: EndpointSupportState;
+  directedSegments: DirectedEndpointSegment[];
+  bindingCandidates?: unknown[];
+}
+
+export interface EntryCorridor {
+  membershipId: string;
+  terminalEdgeId: string;
+  mergeNodeId: string;
+}
+
+export interface MandatoryLap {
+  membershipId: string;
+  firstEdgeId: string;
+  lastEdgeId: string;
+  lapCount: 1;
+}
+
+export interface ReturnCorridor {
+  membershipId: string;
+  startNodeId: string;
+  initialEdgeId: string;
+  firstGeneralExit: {
+    rule: "firstGeneralExit";
+    expectedRampId: string;
+    exactDirectedBinding: EndpointSupportState;
+  };
+}
+
+export interface GraphRoutePlanV1 {
+  entryCorridor: EntryCorridor;
+  anchor: DirectedJunctionAnchor;
+  mandatoryLap: MandatoryLap;
+  returnCorridor: ReturnCorridor;
+}
+
+export interface ResolvedRouteSegment {
+  resolvedSegmentId: string;
+  role: RoutePlanSegmentRole;
+  membershipId: string;
+  sourceSegmentIds: string[];
+  edgeIds: string[];
+  edgeIdsSha256: string;
+}
+
+export interface LegacyRingBillingPairV2 {
+  id: string;
+  pairKind: "legacyRing";
+  vehicleProfile: string;
+  entryId: string;
+  exitId: string;
+  entryRampId?: string | null;
+  exitRampId?: string | null;
+  anchor: SameNodeAnchor;
+  entryToAnchorEdgeIds: string[];
+  anchorToExitEdgeIds: string[];
+  pairEligibility: PairEligibility;
+  loopValidation: LoopValidation;
+  tariff: Tariff;
+}
+
+export interface RadialReturnBillingPair {
+  id: string;
+  pairKind: "radialReturn";
+  routePlanVersion: 1;
+  vehicleProfile: string;
+  entryId: string;
+  exitId: string;
+  entryEndpoint: BillingEndpoint;
+  exitEndpoint: BillingEndpoint;
+  routePlan: GraphRoutePlanV1;
+  resolvedRouteSegments: ResolvedRouteSegment[];
+  routingCapability: RoutingCapability;
+  pairEligibility: PairEligibility;
+  loopValidation: LoopValidation;
+  tariff: Tariff;
+}
+
+export type GraphBillingPairV2 = LegacyRingBillingPairV2 | RadialReturnBillingPair;
+
+export interface RouteMembershipSegment {
+  segmentId: string;
+  sourceKind: "relationMainline" | "boundRamp";
+  sourceRelationId: string | null;
+  sourceSnapshotSha256: string;
+  bindingEvidenceId: string | null;
+  orderedEdgeIds: string[];
+  orderedEdgeIdsSha256: string;
+}
+
+export interface RouteMembershipIndex {
+  membershipId: string;
+  routeId: string;
+  direction: string;
+  directionMappingVersion: "osm-relation-role/v1";
+  segments: RouteMembershipSegment[];
+}
+
+export interface GraphDocument {
+  schemaVersion: 2 | 3 | 4;
+  releaseId: string;
+  vehicleProfile: string;
+  nodes: unknown[];
+  edges: unknown[];
+  billingPairs: unknown[];
+  forbiddenTransitions?: string[][];
+  ramps?: Ramp[];
+  odTariffs?: OdTariff[];
+  routeMemberships?: RouteMembershipIndex[];
+}
+
+export interface LegacyToll {
   billingPairId: string;
   chargedSectionCount: number;
   amountYen: number | null;
@@ -112,6 +313,20 @@ export interface Toll {
   billingDistanceMeters?: number | null;
   tollSource?: string | null;
 }
+
+export interface RadialToll {
+  billingPairId: string;
+  amountYen: number | null;
+  pricingAt: string;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  billingDistanceMeters?: number | null;
+  tollSource?: string | null;
+}
+
+export type TopologyOnlyToll = RadialToll;
+
+export type Toll = LegacyToll | RadialToll | TopologyOnlyToll;
 
 export interface Loop {
   anchorNodeId: string;
@@ -129,7 +344,67 @@ export interface Handoff {
   verificationSetVersion: string | null;
 }
 
-export interface Candidate {
+export type MapsHandoffLegRole = "surface_access" | "loop_transfer" | "surface_return";
+
+export interface MapsHandoffLegWire {
+  role: MapsHandoffLegRole;
+  mapsUrl: string;
+  urlSha256: string;
+}
+
+export type RadialHandoff =
+  | {
+      enabled: true;
+      legUrls: [MapsHandoffLegWire, MapsHandoffLegWire, MapsHandoffLegWire];
+      disabledReason: null;
+    }
+  | {
+      enabled: false;
+      legUrls: [];
+      disabledReason: "device_verification_pending";
+    };
+
+export type DeviceVerificationOs = "android" | "ios";
+export type DeviceVerificationClient = "web" | "app";
+export type DeviceVerificationResult = "passed" | "failed" | "missing" | "expired";
+
+export interface DeviceVerificationLeg {
+  role: MapsHandoffLegRole;
+  urlSha256: string;
+  expectedRoad: string;
+  expectedDirection: string;
+}
+
+interface DeviceVerificationRecordBase {
+  os: DeviceVerificationOs;
+  osVersion: string;
+  client: DeviceVerificationClient;
+  clientName: string;
+  clientVersion: string;
+}
+
+export type DeviceVerificationRecord =
+  | (DeviceVerificationRecordBase & {
+      verifiedAt: string;
+      result: Exclude<DeviceVerificationResult, "missing">;
+      expiresAt: string;
+    })
+  | (DeviceVerificationRecordBase & {
+      verifiedAt: null;
+      result: Extract<DeviceVerificationResult, "missing">;
+      expiresAt: null;
+    });
+
+export interface DeviceVerificationManifest {
+  schemaVersion: 1;
+  routePlanId: string;
+  releaseId: string;
+  urlBuilderVersion: "google-maps-split/v1";
+  legs: DeviceVerificationLeg[];
+  verifications: DeviceVerificationRecord[];
+}
+
+interface CandidateBase {
   id: string;
   releaseId: string;
   origin: LatLng | null;
@@ -145,13 +420,71 @@ export interface Candidate {
   duration: Duration;
   distanceMeters: number;
   shutokoDistanceMeters: number;
-  toll: Toll;
-  loop: Loop;
   reasons: string[];
   /** Warning codes: "HANDOFF_WAYPOINTS_UNVERIFIED", "STATIC_TRAVEL_TIME" */
   warnings: string[];
+}
+
+export interface LegacyCandidate extends CandidateBase {
+  pairKind?: "legacyRing";
+  toll: LegacyToll;
+  loop: Loop;
   handoff: Handoff;
 }
+
+export interface CandidateResolvedRouteSegment {
+  resolvedSegmentId: string;
+  role: RoutePlanSegmentRole;
+  membershipId: string;
+  sourceSegmentIds: string[];
+  edgeIdsSha256: string;
+}
+
+export interface CandidateRoutePlan {
+  membershipIds: string[];
+  resolvedRouteSegments: CandidateResolvedRouteSegment[];
+}
+
+export interface EdgeRouteLeg {
+  role: RoutePlanSegmentRole;
+  resolvedSegmentId: string;
+  startEdgeIndex: number;
+  endEdgeIndexExclusive: number;
+}
+
+export interface EstimatedLeg {
+  role: "surface_access" | "surface_return";
+  estimated: true;
+  distanceMeters: number;
+  durationSeconds: number;
+}
+
+export interface TopologyOnlyCandidate extends CandidateBase {
+  pairKind: "topologyOnly";
+  estimatedLegs: EstimatedLeg[];
+  eligibilityStatus: "topology_only";
+  loopValidationStatus: "topology_only";
+  tariffStatus: TariffStatus;
+  toll: TopologyOnlyToll;
+  loop: Loop;
+  handoff: Handoff;
+}
+
+export interface RadialCandidate extends CandidateBase {
+  pairKind: "radialReturn";
+  routePlanVersion: 1;
+  anchor: DirectedJunctionAnchor;
+  routePlan: CandidateRoutePlan;
+  edgeRouteLegs: EdgeRouteLeg[];
+  estimatedLegs: EstimatedLeg[];
+  eligibilityStatus: PairEligibilityStatus;
+  loopValidationStatus: LoopValidationStatus;
+  tariffStatus: TariffStatus;
+  toll: RadialToll;
+  handoff: RadialHandoff;
+}
+
+export type Candidate = LegacyCandidate | TopologyOnlyCandidate | RadialCandidate;
 
 export interface SearchResult {
   requestId: string;

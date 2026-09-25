@@ -23,7 +23,11 @@ jobs:
       - run: cargo test --release -p shutoko-routing-core --test real_graph_contract --locked -- --ignored
       - name: Verify fixture regeneration determinism
         run: |
+          snapshot_dir="$(mktemp -d)"
+          trap 'rm -rf "${snapshot_dir}"' EXIT
+          bash scripts/generate-fixtures.sh "${snapshot_dir}"
           bash scripts/generate-fixtures.sh
+          diff --no-dereference -r "${snapshot_dir}" fixtures/generated
           git diff --exit-code
           if [ -n "$(git status --porcelain)" ]; then
             echo "Working tree is dirty after fixture regeneration:"

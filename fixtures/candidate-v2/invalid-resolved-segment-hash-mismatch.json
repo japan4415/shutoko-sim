@@ -1,0 +1,32 @@
+{
+  "resolvedRouteSegments": [
+    {
+      "resolvedSegmentId": "fixture:resolved:entry",
+      "role": "entry_approach",
+      "membershipId": "route:fixture:R1:inbound",
+      "sourceSegmentIds": ["fixture:binding:entry:0", "fixture:relation:r1:inbound:main"],
+      "edgeIdsSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "resolvedSegmentId": "fixture:resolved:lap",
+      "role": "mandatory_lap",
+      "membershipId": "route:fixture:loop:forward",
+      "sourceSegmentIds": ["fixture:relation:loop:forward:main"],
+      "edgeIdsSha256": "99ddf4b7771edc3fe3c04034d2465719932ca1c2d2104c0d05bab41d6e462a43"
+    },
+    {
+      "resolvedSegmentId": "fixture:resolved:return",
+      "role": "return_corridor",
+      "membershipId": "route:fixture:R1:outbound",
+      "sourceSegmentIds": ["fixture:relation:r1:outbound:main"],
+      "edgeIdsSha256": "ba825c8c0f6236ca476824f7553aefe8bf09a94a5343c2470cde33b1bb443e1b"
+    },
+    {
+      "resolvedSegmentId": "fixture:resolved:exit",
+      "role": "exit_approach",
+      "membershipId": "route:fixture:R1:outbound",
+      "sourceSegmentIds": ["fixture:binding:exit:0"],
+      "edgeIdsSha256": "b275420fdbd9d55bd72a6b5f8e36cbf6218042d5afdd1400be3b8713b4b7a35c"
+    }
+  ]
+}

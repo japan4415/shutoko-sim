@@ -1,14 +1,23 @@
 // パイプライン純粋関数のユニットテスト（node 環境、fetch/import はモック注入）。
 import inspector from "node:inspector";
 import { describe, expect, it } from "vitest";
+import pendingDeviceManifest from "../../data/device-verification-manifest.json?raw";
+import generatedGraph from "../../fixtures/generated/graph.json?raw";
+import generatedManifest from "../../fixtures/generated/manifest.json?raw";
+import schema4Graph from "../../fixtures/graph-v4/graph-radial-fixture.json?raw";
 import {
   buildResultResponse,
+  buildSearchLimitsJson,
   buildSearchRequest,
+  DEVICE_VERIFICATION_EVALUATED_AT,
+  DEVICE_VERIFICATION_MANIFEST_JSON,
   hexDigest,
   loadRelease,
   MAX_ACCESS_DISTANCE_METERS,
+  parseGraphDocument,
   parseWasmError,
   PipelineError,
+  routeMembershipsSha256,
   ReleaseStore,
   SEARCH_LIMITS_JSON,
   verifyArtifact,
@@ -116,6 +125,94 @@ describe("hexDigest / verifyArtifact", () => {
   });
 });
 
+describe("parseGraphDocument", () => {
+  it("schema 4 の legacyRing / radialReturn billingPairs を受け取る", () => {
+    const graph = parseGraphDocument(schema4Graph);
+    expect(graph.schemaVersion).toBe(4);
+    expect(graph.billingPairs).toHaveLength(2);
+    expect(graph.routeMemberships).toHaveLength(4);
+  });
+
+  it("生成済み graph と manifest の route membership hash が一致する", async () => {
+    const graph = JSON.parse(generatedGraph) as { routeMemberships: unknown };
+    const manifest = JSON.parse(generatedManifest) as { routeMembershipsSha256: string };
+    expect(await routeMembershipsSha256(graph.routeMemberships)).toBe(
+      manifest.routeMembershipsSha256,
+    );
+  });
+
+  it("未知 version、未知 pairKind、routeMemberships 欠落を拒否する", () => {
+    const graph = JSON.parse(schema4Graph) as Record<string, unknown>;
+    expect(() => parseGraphDocument(JSON.stringify({ ...graph, schemaVersion: 5 }))).toThrowError(
+      /schemaVersion/,
+    );
+    const billingPairs = graph.billingPairs as Record<string, unknown>[];
+    expect(() =>
+      parseGraphDocument(
+        JSON.stringify({
+          ...graph,
+          billingPairs: [{ ...billingPairs[0], pairKind: "futurePair" }],
+        }),
+      ),
+    ).toThrowError(/pairKind/);
+    const { routeMemberships: _routeMemberships, ...partial } = graph;
+    expect(() => parseGraphDocument(JSON.stringify(partial))).toThrowError(/routeMemberships/);
+  });
+
+  it("loadRelease が schema 4 graph を WASM prepare へ渡せる", async () => {
+    const releaseId = "graph-v4-fixture-v1";
+    const graphBytes = encoder.encode(schema4Graph);
+    const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
+    const glueBytes = encoder.encode("export default function(){}");
+    const graphExpected = await expectationOf(graphBytes);
+    const wasmExpected = await expectationOf(wasmBytes);
+    const glueExpected = await expectationOf(glueBytes);
+    const routeHash = await routeMembershipsSha256(
+      (JSON.parse(schema4Graph) as { routeMemberships: unknown }).routeMemberships,
+    );
+    const files = {
+      [`/releases/${releaseId}/manifest.json`]: encoder.encode(
+        JSON.stringify({
+          schemaVersion: 1,
+          releaseId,
+          graphSchemaVersion: 4,
+          routePlanVersion: 1,
+          billingPairsVersion: "v2",
+          routeMembershipsSha256: routeHash,
+          artifacts: [{ path: "graph.json", ...graphExpected }],
+        }),
+      ),
+      [`/releases/${releaseId}/engine.json`]: encoder.encode(
+        JSON.stringify({
+          schemaVersion: 1,
+          releaseId,
+          artifacts: [
+            { path: "shutoko_routing_bg.wasm", ...wasmExpected },
+            { path: "shutoko_routing.js", ...glueExpected },
+          ],
+        }),
+      ),
+      [`/releases/${releaseId}/graph.json`]: graphBytes,
+      [`/releases/${releaseId}/shutoko_routing_bg.wasm`]: wasmBytes,
+      [`/releases/${releaseId}/shutoko_routing.js`]: glueBytes,
+    };
+    const { fetch } = mockFetch(files);
+    let preparedGraphJson = "";
+    const glue: WasmGlueModule = {
+      default: async () => {},
+      prepare: (graphJson: string) => {
+        preparedGraphJson = graphJson;
+        return { free() {} };
+      },
+      searchPrepared: () => "{}",
+    };
+    const loaded = await loadRelease(fetch, releaseId, async () => glue);
+    expect(JSON.parse(preparedGraphJson).schemaVersion).toBe(4);
+    expect(JSON.parse(preparedGraphJson).billingPairs).toHaveLength(2);
+    loaded.free();
+  });
+});
+
 describe("buildSearchRequest", () => {
   it("index.d.ts の 8 フィールドのみ、type を含まない", () => {
     const msg: UiSearchMessage = {
@@ -205,7 +302,7 @@ describe("parseWasmError", () => {
 });
 
 describe("loadRelease の cacheBust（bench 計測フック）", () => {
-  const graphBytes = encoder.encode('{"nodes":[],"edges":[]}');
+  const graphBytes = encoder.encode(JSON.stringify({ schemaVersion: 2, releaseId: "c1-real-v1", vehicleProfile: "passenger-car-etc", nodes: [], edges: [], billingPairs: [] }));
   const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
   const glueText = "export default function(){};export function search(){return '{}'}";
   const glueBytes = encoder.encode(glueText);
@@ -317,7 +414,7 @@ describe("buildResultResponse", () => {
 });
 
 describe("loadRelease（モック fetch）", () => {
-  const graphBytes = encoder.encode('{"nodes":[],"edges":[]}');
+  const graphBytes = encoder.encode(JSON.stringify({ schemaVersion: 2, releaseId: "c1-real-v1", vehicleProfile: "passenger-car-etc", nodes: [], edges: [], billingPairs: [] }));
   const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
   const glueText = "export default function(){};export function search(){return '{}'}";
 
@@ -403,6 +500,10 @@ describe("loadRelease（モック fetch）", () => {
     expect(prepareCalls[0]?.limitsJson).toBe(SEARCH_LIMITS_JSON);
     expect(JSON.parse(prepareCalls[0]?.limitsJson ?? "{}")).toEqual({
       maxAccessDistanceMeters: MAX_ACCESS_DISTANCE_METERS,
+      deviceVerification: {
+        manifestJson: DEVICE_VERIFICATION_MANIFEST_JSON,
+        evaluatedAt: DEVICE_VERIFICATION_EVALUATED_AT,
+      },
     });
     // 導出（240*60/2*(30/3.6)/1.3 ≒ 46 153.8 m）を下回り、旧既定 30km を上回ること。
     // 解析上界 46 153.8 m より小さい cap は「アクセス往復だけで製品上限に届く」地点を
@@ -410,6 +511,33 @@ describe("loadRelease（モック fetch）", () => {
     expect(MAX_ACCESS_DISTANCE_METERS).toBe(46_000);
     expect(MAX_ACCESS_DISTANCE_METERS).toBeLessThan(46_154);
     expect(MAX_ACCESS_DISTANCE_METERS).toBeGreaterThan(30_000);
+  });
+
+  it("合格した synthetic manifest を loadRelease の build-time limits に渡せる", async () => {
+    const files = await buildFiles();
+    const { fetch } = mockFetch(files);
+    const manifest = JSON.parse(pendingDeviceManifest) as Record<string, unknown>;
+    for (const record of manifest.verifications as Record<string, unknown>[]) {
+      record.osVersion = "test-os";
+      record.clientVersion = "test-client";
+      record.verifiedAt = "2026-09-24T00:00:00Z";
+      record.result = "passed";
+      record.expiresAt = "2026-10-24T00:00:00Z";
+    }
+    let limitsJson = "";
+    const glue: WasmGlueModule = {
+      default: async () => {},
+      prepare(_graphJson: string, limits: string): WasmPreparedGraphLike {
+        limitsJson = limits;
+        return { free() {} };
+      },
+      searchPrepared: () => "{}",
+    };
+    await loadRelease(fetch, "c1-real-v1", async () => glue, undefined, {
+      deviceVerificationManifestJson: JSON.stringify(manifest),
+      deviceVerificationEvaluatedAt: "2026-09-25T00:00:00Z",
+    });
+    expect(JSON.parse(limitsJson).deviceVerification.manifestJson).toBe(JSON.stringify(manifest));
   });
 
   it("graph.json 改ざん時は ARTIFACT_MISMATCH で停止し、以降の fetch を呼ばない", async () => {
@@ -668,10 +796,20 @@ describe("loadRelease（モック fetch）", () => {
     for (const [key, val] of Object.entries(files1)) {
       files2[key.replace("c1-real-v1", "c1-real-v2")] = val;
     }
-    // engine.json の releaseId を更新
+    // engine.json と manifest.json の releaseId を更新
+    const graph2 = JSON.parse(new TextDecoder().decode(files2["/releases/c1-real-v2/graph.json"]));
+    graph2.releaseId = "c1-real-v2";
+    files2["/releases/c1-real-v2/graph.json"] = encoder.encode(JSON.stringify(graph2));
     const engine2 = JSON.parse(new TextDecoder().decode(files2["/releases/c1-real-v2/engine.json"]));
     engine2.releaseId = "c1-real-v2";
     files2["/releases/c1-real-v2/engine.json"] = encoder.encode(JSON.stringify(engine2));
+    const manifest2 = JSON.parse(new TextDecoder().decode(files2["/releases/c1-real-v2/manifest.json"]));
+    manifest2.releaseId = "c1-real-v2";
+    manifest2.artifacts[0] = {
+      ...manifest2.artifacts[0],
+      ...(await expectationOf(files2["/releases/c1-real-v2/graph.json"])),
+    };
+    files2["/releases/c1-real-v2/manifest.json"] = encoder.encode(JSON.stringify(manifest2));
 
     const allFiles = { ...files1, ...files2 };
     const { fetch } = mockFetch(allFiles);

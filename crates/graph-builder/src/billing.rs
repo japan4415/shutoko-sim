@@ -8,8 +8,15 @@
 //! Ensures both path segments combine into a simple path (no hidden loops or cycle crossovers)
 //! and satisfy all graph routing restrictions.
 
+use crate::inventory::OsmRampBindingsFile;
 use crate::model::{BillingPair, Edge, EdgeKind, Graph, Price, VerificationStatus};
-use crate::seed::{BillingPairSeed, BillingPairsSeedFile};
+use crate::route_membership::{
+    resolve_diagnostic_radial_route_plan, DirectedRoutePlanResolution, RouteMembershipIndex,
+};
+use crate::seed::{
+    BillingPairSeed, BillingPairSeedEntry, BillingPairsSeedFile, BindingCandidateStatus,
+    ParsedBillingPairsSeed,
+};
 use crate::validate::{
     contains_forbidden_transition, parse_iso_date, validate_billing_pair, validate_url,
     ValidationError,
@@ -85,6 +92,96 @@ pub struct RejectedSeedRecord {
 pub struct BillingGenerationReport {
     pub valid_pairs: Vec<BillingPair>,
     pub rejected_pairs: Vec<RejectedSeedRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RadialRoutePlanGeneration {
+    pub seed_id: String,
+    pub resolution: Option<DirectedRoutePlanResolution>,
+    pub error: Option<String>,
+}
+
+pub fn validate_radial_seed_binding_candidates(
+    seed_file: &ParsedBillingPairsSeed,
+    bindings: &OsmRampBindingsFile,
+) -> Result<(), String> {
+    for pair in seed_file.radial_pairs() {
+        for endpoint in [&pair.entry_endpoint, &pair.exit_endpoint] {
+            for candidate in &endpoint.binding_candidates {
+                let audited = bindings
+                    .binding_candidates
+                    .iter()
+                    .find(|binding| binding.candidate_id == candidate.candidate_id)
+                    .ok_or_else(|| {
+                        format!(
+                            "radial pair {} candidate {} is absent from OSM binding evidence",
+                            pair.id, candidate.candidate_id
+                        )
+                    })?;
+                let expected_status = match candidate.status {
+                    BindingCandidateStatus::Unresolved => "unresolved",
+                    BindingCandidateStatus::Unsupported => "unsupported",
+                };
+                if audited.ramp_id != endpoint.ramp_id || audited.status != expected_status {
+                    return Err(format!(
+                        "radial pair {} candidate {} has conflicting ramp or support status",
+                        pair.id, candidate.candidate_id
+                    ));
+                }
+                if audited.directed_segments.len() != candidate.directed_segments.len() {
+                    return Err(format!(
+                        "radial pair {} candidate {} has a different directed segment count",
+                        pair.id, candidate.candidate_id
+                    ));
+                }
+                for (seed_segment, audited_segment) in candidate
+                    .directed_segments
+                    .iter()
+                    .zip(&audited.directed_segments)
+                {
+                    if seed_segment.segment_id != audited_segment.segment_id
+                        || seed_segment.osm_way_ids != audited_segment.osm_way_ids
+                        || seed_segment.osm_node_ids != audited_segment.osm_node_ids
+                        || seed_segment.edge_ids != audited_segment.edge_ids
+                        || seed_segment.from_node_id != audited_segment.from_node_id
+                        || seed_segment.to_node_id != audited_segment.to_node_id
+                        || seed_segment.edge_ids_sha256 != audited_segment.edge_ids_sha256
+                    {
+                        return Err(format!(
+                            "radial pair {} candidate {} differs from audited OSM binding evidence",
+                            pair.id, candidate.candidate_id
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn generate_diagnostic_radial_route_plans(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    seed_file: &ParsedBillingPairsSeed,
+) -> Vec<RadialRoutePlanGeneration> {
+    seed_file
+        .radial_pairs()
+        .into_iter()
+        .map(
+            |seed| match resolve_diagnostic_radial_route_plan(graph, route_memberships, seed) {
+                Ok(resolution) => RadialRoutePlanGeneration {
+                    seed_id: seed.id.clone(),
+                    resolution: Some(resolution),
+                    error: None,
+                },
+                Err(error) => RadialRoutePlanGeneration {
+                    seed_id: seed.id.clone(),
+                    resolution: None,
+                    error: Some(error.to_string()),
+                },
+            },
+        )
+        .collect()
 }
 
 /// Dijkstra search state for deterministic simple path finding.
@@ -407,5 +504,64 @@ pub fn generate_and_validate_billing_pairs(
     BillingGenerationReport {
         valid_pairs,
         rejected_pairs,
+    }
+}
+
+pub fn generate_and_validate_parsed_billing_pairs(
+    graph: &Graph,
+    seed_file: &ParsedBillingPairsSeed,
+) -> BillingGenerationReport {
+    match seed_file {
+        ParsedBillingPairsSeed::Schema1(seed) => generate_and_validate_billing_pairs(graph, seed),
+        ParsedBillingPairsSeed::Schema2(seed) => {
+            let mut valid_pairs = Vec::new();
+            let mut rejected_pairs = Vec::new();
+
+            for entry in &seed.billing_pairs {
+                match entry {
+                    BillingPairSeedEntry::LegacyRing(seed) => {
+                        match generate_billing_pair(graph, seed) {
+                            Ok(pair) => valid_pairs.push(pair),
+                            Err(error) => rejected_pairs.push(RejectedSeedRecord {
+                                seed_id: seed.id.clone(),
+                                reason: error.to_string(),
+                            }),
+                        }
+                    }
+                    BillingPairSeedEntry::RadialReturn(seed) => {
+                        rejected_pairs.push(RejectedSeedRecord {
+                            seed_id: seed.id.clone(),
+                            reason:
+                                "radialReturn pair requires schema 4 route-plan resolution and is not emitted by the legacy billing-pair adapter"
+                                    .to_string(),
+                        });
+                    }
+                }
+            }
+
+            valid_pairs.sort_by(|a, b| a.id.cmp(&b.id));
+            rejected_pairs.sort_by(|a, b| a.seed_id.cmp(&b.seed_id));
+
+            BillingGenerationReport {
+                valid_pairs,
+                rejected_pairs,
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn real_radial_seed_candidates_match_audited_binding_evidence() {
+        let seed = crate::seed::parse_billing_pairs_seed(include_str!(
+            "../../../data/billing-pairs-seed.json"
+        ))
+        .unwrap();
+        let bindings: OsmRampBindingsFile =
+            serde_json::from_str(include_str!("../../../data/osm-ramp-bindings.json")).unwrap();
+        validate_radial_seed_binding_candidates(&seed, &bindings).unwrap();
     }
 }

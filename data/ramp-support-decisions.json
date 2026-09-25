@@ -1,7 +1,7 @@
 {
-  "version": 1,
-  "sourceDate": "2026-09-16",
-  "description": "Round 2 facility-level evidence audit decisions. This file is the deterministic source for verified bindings and explicit unsupported inventory states; proximity fallback is forbidden.",
+  "version": 2,
+  "sourceDate": "2026-09-24",
+  "description": "Facility-level evidence audit decisions. This file is the deterministic source for verified schema-2 bindings, explicit unsupported inventory states, and audited unresolved multi-way candidates; proximity fallback is forbidden.",
   "decisions": [
     {
       "rampId": "ramp:c1-inner:takaracho-entry",
@@ -4271,11 +4271,43 @@
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
       "supportState": "unsupported",
-      "supportReason": "G21: 一意な exact replacement がない。way.name=高樹町出口、301 component一致。",
+      "supportReason": "5 wayの有向候補は2号下り n:252175582 から明治通り n:1832672205 へ到達するが、最終way 172358466 の始点 n:1832672162 も明治通りへ接続する。地上端点が二候補あるため、schema 2への公開 bindingを unresolved のまま保留する。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G21",
+        "data/osm-ramp-bindings.json:bindingCandidates/tengenji:g201:172358461-422023171-931759044-172358460-172358466",
+        "fixtures/osm/shutoko-all.json:way/258834790",
+        "fixtures/osm/shutoko-all.json:way/258834779",
+        "data/official-population-snapshot.json:route/2/outbound",
         "https://www.shutoko.jp/use/network/map/route-2/tengenji/"
       ],
+      "bindingCandidateEvidence": {
+        "rampIdInverseMap": {
+          "rampId": "ramp:2-outbound:tengenji-exit",
+          "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460-172358466"
+        },
+        "status": "unresolved",
+        "publicProjection": "excluded_unresolved",
+        "mainlineNodeId": "n:252175582",
+        "declaredGroundNodeId": "n:1832672205",
+        "earlierGroundNodes": [
+          "n:1832672162"
+        ],
+        "officialFacilityOrder": {
+          "routeId": "2",
+          "direction": "outbound",
+          "relationId": 4256339,
+          "firstExitAfterBranch": true,
+          "exitNumbers": [
+            "201",
+            "203",
+            "205",
+            "207"
+          ]
+        },
+        "unresolvedReasonCodes": [
+          "EARLY_SURFACE_CONNECTION",
+          "MULTIPLE_GROUND_CONNECTION_CANDIDATES"
+        ]
+      },
       "routingCapability": "unsupported",
       "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
     },

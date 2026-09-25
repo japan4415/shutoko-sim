@@ -122,7 +122,7 @@ export type TariffTollSource = "official_distance_rule" | "table";
 
 /** 候補の toll に付く料金 v3 の証拠（tariff v3 を持つ release でのみ現れる）。 */
 export interface TariffProvenance {
-  /** 適用された期間の出所。 */
+  /** 金額を求めた tariff の出所。距離基準の公定料金かどうかを示す。 */
   tollSource?: string | null;
   /** 適用された TariffAssignment の ID。 */
   assignmentId?: string | null;

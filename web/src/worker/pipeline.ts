@@ -82,17 +82,17 @@ function graphContractMismatch(message: string): PipelineError {
   return new PipelineError("ARTIFACT_MISMATCH", message);
 }
 
+/** graph.json の検証失敗は ARTIFACT_MISMATCH で落とす（候補側のコードと混ぜない）。 */
+function graphTariffMismatch(message: string): never {
+  throw graphContractMismatch(message);
+}
+
 /**
  * graph.json の billingPairs[].tariff（料金 v3）を製品スコープと照合する。
  *
  * build 時点で確定済みの証拠だけが書かれているので、候補側と同じ規則で
  * 検査できる。参照する時刻は成果物に無いため、適用期間は from < to だけを見る。
  */
-/** graph.json の検証失敗は ARTIFACT_MISMATCH で落とす（候補側のコードと混ぜない）。 */
-function graphTariffMismatch(message: string): never {
-  throw graphContractMismatch(message);
-}
-
 function validateSchema4PairTariff(value: unknown, index: number): void {
   const tariff = isRecord(value) ? value.tariff : undefined;
   if (tariff === undefined) {
@@ -1106,9 +1106,14 @@ function validateTariffStatus(
     if (!statusOptional) {
       throw contractMismatch(`${label} tariffStatus がありません`);
     }
-    // 証拠があれば、金額の状態と突き合わせる。
+    // 証拠があれば、金額の状態と提示時刻の期間も突き合わせる。
     const derived: TariffStatusValue = amountYen === null ? "unpriced" : "priced";
-    validateTariffProvenance(toll, derived, label, null);
+    validateTariffProvenance(
+      toll,
+      derived,
+      label,
+      isTimestamp(toll.pricingAt) ? toll.pricingAt : null,
+    );
     return;
   }
   if (

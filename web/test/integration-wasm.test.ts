@@ -19,13 +19,19 @@ import {
 import representativeLocations from "../../fixtures/representative-locations.json";
 import {
   MAX_DISPLAY_CANDIDATES,
-  PRODUCT_FARE_LABEL,
   accessSecondsFromMeters,
   isProductEligible,
   recommendedLabel,
   toCardModel,
 } from "../src/ui/model";
-import { TARIFF_MODEL_VERSION } from "../src/worker/tariff-contract";
+import {
+  OFFICIAL_DISTANCE_RULE_SOURCE,
+  PRODUCT_FARE_BASIS,
+  PRODUCT_FARE_LABEL,
+  PRODUCT_PAYMENT_METHOD,
+  PRODUCT_VEHICLE_CLASS,
+  TARIFF_MODEL_VERSION,
+} from "../src/worker/tariff-contract";
 import type { Candidate, UiSearchMessage } from "../src/worker/types";
 import type { OdTariffsFileV3, TariffPriceV3 } from "../../crates/routing-wasm/types/index.d";
 
@@ -191,6 +197,28 @@ function fileURLToPathSafe(url: URL): string {
   // node:url の fileURLToPath 相当（import.meta.url は file: スキーマ）
   return decodeURIComponent(url.href.replace(/^file:\/\//, ""));
 }
+
+describe("build contract と Web の製品スコープ", () => {
+  it("wasm-contract.json の productTariff が Web の定数と一致する", async () => {
+    const contract = JSON.parse(
+      await readFile(new URL("crates/routing-wasm/wasm-contract.json", root), "utf8"),
+    ) as WasmBuildContract;
+    expect(contract.tariffModelVersion).toBe(TARIFF_MODEL_VERSION);
+    expect(contract.productTariff).toEqual({
+      vehicleClass: PRODUCT_VEHICLE_CLASS,
+      paymentMethod: PRODUCT_PAYMENT_METHOD,
+      fareBasis: PRODUCT_FARE_BASIS,
+      fareLabel: PRODUCT_FARE_LABEL,
+      tollSource: OFFICIAL_DISTANCE_RULE_SOURCE,
+      discountsExcluded: true,
+    });
+    // 候補の toll に期待するフィールドが、build contract の宣言とずれていないこと。
+    expect(contract.requiredCandidateTollFields).toContain("fareLabel");
+    expect(contract.requiredCandidateTollFields).toContain("ruleId");
+    expect(contract.requiredCandidateTollFields).toContain("evidenceId");
+    expect(contract.requiredCandidateTollFields).toContain("assignmentId");
+  });
+});
 
 describe("実 WASM 統合（fetch モック → loadRelease → search）", () => {
   it("旧graph契約のbuild metadataをstaleとして判定する", () => {

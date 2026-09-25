@@ -1363,6 +1363,70 @@ pub fn calculate_versioned_tariff_yen(distance_meters: u64, rule: &TariffRuleV3)
     rounded.clamp(rule.minimum_yen, rule.maximum_yen)
 }
 
+fn endpoint_label_matches(name: &str, label: &str, entry: bool) -> bool {
+    let name = name.trim();
+    let label = label.trim();
+    let endpoint = if entry {
+        name.strip_suffix("入口").unwrap_or(name)
+    } else {
+        name.strip_suffix("出口").unwrap_or(name)
+    };
+    endpoint == label
+}
+
+fn evidence_matches_assignment(
+    assignment: &TariffAssignmentV3,
+    evidence: &DistanceEvidenceV3,
+) -> bool {
+    evidence.entry_ramp_id == assignment.entry_ramp_id
+        && evidence.exit_ramp_id == assignment.exit_ramp_id
+        && endpoint_label_matches(&assignment.entry_name, &evidence.row_label, true)
+        && endpoint_label_matches(&assignment.exit_name, &evidence.column_label, false)
+}
+
+fn pending_evidence_matches_assignment(
+    assignment: &TariffAssignmentV3,
+    evidence: &PendingEvidenceV3,
+) -> bool {
+    endpoint_label_matches(&assignment.entry_name, &evidence.row_label, true)
+        && endpoint_label_matches(&assignment.exit_name, &evidence.column_label, false)
+}
+
+fn rule_references_evidence_document(
+    rule: &TariffRuleV3,
+    document_id: &str,
+    edition: &str,
+    page: Option<u64>,
+) -> bool {
+    rule.source_refs.iter().any(|source| {
+        source.document_id.as_deref() == Some(document_id)
+            && source.page == page
+            && edition_overlaps_rule(rule, edition)
+    })
+}
+
+fn edition_overlaps_rule(rule: &TariffRuleV3, edition: &str) -> bool {
+    let Some((year, month)) = edition
+        .split_once('-')
+        .and_then(|(year, month)| Some((year.parse::<u32>().ok()?, month.parse::<u32>().ok()?)))
+        .filter(|(_, month)| (1..=12).contains(month))
+    else {
+        return false;
+    };
+    let (next_year, next_month) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
+    let edition_start = format!("{year:04}-{month:02}-01T00:00:00Z");
+    let edition_end = format!("{next_year:04}-{next_month:02}-01T00:00:00Z");
+    let rule_end = rule
+        .effective_to
+        .as_deref()
+        .unwrap_or("9999-12-31T23:59:59Z");
+    edition_start.as_str() < rule_end && edition_end.as_str() > rule.effective_from.as_str()
+}
+
 fn validate_versioned_od_tariffs(
     tariffs: &OdTariffsFile,
     inv: &RampInventoryFile,
@@ -1728,6 +1792,7 @@ fn validate_versioned_od_tariffs(
         if base_evidence.entry_ramp_id != assignment.entry_ramp_id
             || base_evidence.exit_ramp_id != assignment.exit_ramp_id
             || base_evidence.distance_meters != assignment.billing_distance_meters
+            || !evidence_matches_assignment(assignment, base_evidence)
         {
             errors.push(format!(
                 "tariff v3 assignment '{}' does not match its base distance evidence",
@@ -1801,6 +1866,13 @@ fn validate_versioned_od_tariffs(
                 };
                 if price.evidence_id != price.distance_evidence_id
                     || evidence.evidence_id != distance_evidence.evidence_id
+                    || !evidence_matches_assignment(assignment, evidence)
+                    || !rule_references_evidence_document(
+                        rule,
+                        evidence.document_id.as_str(),
+                        evidence.edition.as_str(),
+                        Some(evidence.page),
+                    )
                     || price.tariff_status != "priced"
                     || price.amount_yen != Some(evidence.observed_base_fare_yen)
                     || price.observed_base_fare_yen != Some(evidence.observed_base_fare_yen)
@@ -1821,6 +1893,13 @@ fn validate_versioned_od_tariffs(
                 };
                 if price.evidence_id != price.distance_evidence_id
                     || evidence.evidence_id != price.distance_evidence_id
+                    || !pending_evidence_matches_assignment(assignment, evidence)
+                    || !rule_references_evidence_document(
+                        rule,
+                        evidence.document_id.as_str(),
+                        evidence.edition.as_str(),
+                        None,
+                    )
                     || price.tariff_status != "unpriced"
                     || price.amount_yen.is_some()
                     || price.observed_base_fare_yen.is_some()

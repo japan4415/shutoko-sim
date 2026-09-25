@@ -706,6 +706,13 @@ impl TariffCatalog {
                         };
                         if price.evidence_id != price.distance_evidence_id
                             || evidence.evidence_id != price.distance_evidence_id
+                            || !evidence_matches_assignment(assignment, evidence)
+                            || !rule_references_evidence_document(
+                                rule,
+                                evidence.document_id.as_str(),
+                                evidence.edition.as_str(),
+                                Some(evidence.page),
+                            )
                             || price.tariff_status != "priced"
                             || price.amount_yen != Some(evidence.observed_base_fare_yen)
                             || price.observed_base_fare_yen != Some(evidence.observed_base_fare_yen)
@@ -736,13 +743,30 @@ impl TariffCatalog {
                                 ),
                             ));
                         }
-                        if !pending_by_id.contains_key(price.evidence_id.as_str())
-                            || price.evidence_id != price.distance_evidence_id
-                        {
+                        let Some(pending_evidence) =
+                            pending_by_id.get(price.evidence_id.as_str()).copied()
+                        else {
                             return Err(error(
                                 "TARIFF_PRICE_EVIDENCE_UNKNOWN",
                                 format!(
                                     "assignment {} pending evidence is missing",
+                                    assignment.assignment_id
+                                ),
+                            ));
+                        };
+                        if price.evidence_id != price.distance_evidence_id
+                            || !pending_evidence_matches_assignment(assignment, pending_evidence)
+                            || !rule_references_evidence_document(
+                                rule,
+                                pending_evidence.document_id.as_str(),
+                                pending_evidence.edition.as_str(),
+                                None,
+                            )
+                        {
+                            return Err(error(
+                                "TARIFF_PRICE_EVIDENCE_MISMATCH",
+                                format!(
+                                    "assignment {} pending evidence does not match its OD or rule",
                                     assignment.assignment_id
                                 ),
                             ));
@@ -891,6 +915,17 @@ impl TariffResolver {
         &self.catalog
     }
 
+    pub fn validate_assignment_selectors(
+        &self,
+        assignment_id: &str,
+        entry_ramp_id: Option<&str>,
+        exit_ramp_id: Option<&str>,
+        pair_id: Option<&str>,
+    ) -> Result<(), TariffError> {
+        self.find_assignment(Some(assignment_id), entry_ramp_id, exit_ramp_id, pair_id)?;
+        Ok(())
+    }
+
     pub fn resolve_at(
         &self,
         assignment_id: Option<&str>,
@@ -1034,37 +1069,54 @@ impl TariffResolver {
         exit_ramp_id: Option<&str>,
         pair_id: Option<&str>,
     ) -> Result<Option<&'a TariffAssignmentV3>, TariffError> {
-        if let Some(assignment_id) = assignment_id {
-            return self
-                .catalog
+        let assignment = if let Some(assignment_id) = assignment_id {
+            self.catalog
                 .assignments
                 .iter()
                 .find(|assignment| assignment.assignment_id == assignment_id)
-                .map(Some)
                 .ok_or_else(|| {
                     error(
                         "TARIFF_ASSIGNMENT_UNKNOWN",
                         format!("unknown assignmentId {assignment_id}"),
                     )
-                });
-        }
-        let mut matches = self
-            .catalog
-            .assignments
-            .iter()
-            .filter(|assignment| {
-                entry_ramp_id.is_none_or(|entry| assignment.entry_ramp_id == entry)
-                    && exit_ramp_id.is_none_or(|exit| assignment.exit_ramp_id == exit)
-                    && pair_id.is_none_or(|pair| assignment.pair_ids.iter().any(|id| id == pair))
-            })
-            .collect::<Vec<_>>();
-        if matches.len() > 1 {
+                })
+                .map(Some)?
+        } else {
+            let mut matches = self
+                .catalog
+                .assignments
+                .iter()
+                .filter(|assignment| {
+                    entry_ramp_id.is_none_or(|entry| assignment.entry_ramp_id == entry)
+                        && exit_ramp_id.is_none_or(|exit| assignment.exit_ramp_id == exit)
+                        && pair_id
+                            .is_none_or(|pair| assignment.pair_ids.iter().any(|id| id == pair))
+                })
+                .collect::<Vec<_>>();
+            if matches.len() > 1 {
+                return Err(error(
+                    "TARIFF_ASSIGNMENT_AMBIGUOUS",
+                    "tariff assignment lookup is ambiguous",
+                ));
+            }
+            matches.pop()
+        };
+        let Some(assignment) = assignment else {
+            return Ok(None);
+        };
+        if entry_ramp_id.is_some_and(|entry| assignment.entry_ramp_id != entry)
+            || exit_ramp_id.is_some_and(|exit| assignment.exit_ramp_id != exit)
+            || pair_id.is_some_and(|pair| !assignment.pair_ids.iter().any(|id| id == pair))
+        {
             return Err(error(
-                "TARIFF_ASSIGNMENT_AMBIGUOUS",
-                "tariff assignment lookup is ambiguous",
+                "TARIFF_ASSIGNMENT_MISMATCH",
+                format!(
+                    "assignment {} does not match the requested entry, exit, or pair",
+                    assignment.assignment_id
+                ),
             ));
         }
-        Ok(matches.pop())
+        Ok(Some(assignment))
     }
 }
 
@@ -1205,6 +1257,70 @@ impl TariffCalculator {
     pub fn calculate_yen(distance_meters: u64, rule: &TariffRuleV3) -> Result<u64, TariffError> {
         calculate_tariff_yen(distance_meters, rule)
     }
+}
+
+fn endpoint_label_matches(name: &str, label: &str, entry: bool) -> bool {
+    let name = name.trim();
+    let label = label.trim();
+    let endpoint = if entry {
+        name.strip_suffix("入口").unwrap_or(name)
+    } else {
+        name.strip_suffix("出口").unwrap_or(name)
+    };
+    endpoint == label
+}
+
+fn evidence_matches_assignment(
+    assignment: &TariffAssignmentV3,
+    evidence: &DistanceEvidenceV3,
+) -> bool {
+    evidence.entry_ramp_id == assignment.entry_ramp_id
+        && evidence.exit_ramp_id == assignment.exit_ramp_id
+        && endpoint_label_matches(&assignment.entry_name, &evidence.row_label, true)
+        && endpoint_label_matches(&assignment.exit_name, &evidence.column_label, false)
+}
+
+fn pending_evidence_matches_assignment(
+    assignment: &TariffAssignmentV3,
+    evidence: &PendingEvidenceV3,
+) -> bool {
+    endpoint_label_matches(&assignment.entry_name, &evidence.row_label, true)
+        && endpoint_label_matches(&assignment.exit_name, &evidence.column_label, false)
+}
+
+fn rule_references_evidence_document(
+    rule: &TariffRuleV3,
+    document_id: &str,
+    edition: &str,
+    page: Option<u64>,
+) -> bool {
+    rule.source_refs.iter().any(|source| {
+        source.document_id.as_deref() == Some(document_id)
+            && source.page == page
+            && edition_overlaps_rule(rule, edition)
+    })
+}
+
+fn edition_overlaps_rule(rule: &TariffRuleV3, edition: &str) -> bool {
+    let Some((year, month)) = edition
+        .split_once('-')
+        .and_then(|(year, month)| Some((year.parse::<u32>().ok()?, month.parse::<u32>().ok()?)))
+        .filter(|(_, month)| (1..=12).contains(month))
+    else {
+        return false;
+    };
+    let (next_year, next_month) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
+    let edition_start = format!("{year:04}-{month:02}-01T00:00:00Z");
+    let edition_end = format!("{next_year:04}-{next_month:02}-01T00:00:00Z");
+    let rule_end = rule
+        .effective_to
+        .as_deref()
+        .unwrap_or("9999-12-31T23:59:59Z");
+    edition_start.as_str() < rule_end && edition_end.as_str() > rule.effective_from.as_str()
 }
 
 fn validate_rule(rule: &TariffRuleV3) -> Result<(), TariffError> {

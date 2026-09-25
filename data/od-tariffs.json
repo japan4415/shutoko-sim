@@ -98,6 +98,11 @@
           "location": "ETC ordinary OD fare and distance table"
         },
         {
+          "documentId": "shutoko-2025-04-od-fare-table",
+          "page": 4,
+          "location": "ETC ordinary Route 2 OD fare and distance table"
+        },
+        {
           "documentId": "shutoko-2026-04-fare-guide",
           "page": 4,
           "location": "0.1 km quantum, half-up rounding to 10 yen, and ordinary fare bounds"

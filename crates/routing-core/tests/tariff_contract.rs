@@ -3,6 +3,7 @@ use shutoko_routing_core::{
     calculate_tariff_micros_yen, calculate_tariff_yen, prepare_json, read_tariff_v3, search_json,
     TariffResolver, TariffRuleV3, TariffScope,
 };
+use time::OffsetDateTime;
 
 fn rule(rate: u64, maximum: u64, minimum_distance: u64) -> TariffRuleV3 {
     serde_json::from_value(json!({
@@ -172,4 +173,143 @@ fn v3_candidates_propagate_official_provenance_and_reject_scope_mismatch() {
     let mut mismatch = request;
     mismatch["paymentMethod"] = json!("cash");
     assert!(search_json(&graph.to_string(), &mismatch.to_string(), "{}").is_err());
+}
+
+#[test]
+fn assignment_id_lookup_rejects_every_mismatched_identity_selector() {
+    let resolver = TariffResolver::new(read_tariff_v3(&catalog_json()).unwrap()).unwrap();
+    let assignment_id = "assignment:c1-outer:kandabashi-takaracho";
+    let scope = TariffScope::product();
+    let pricing_at = || {
+        OffsetDateTime::parse(
+            "2026-09-30T14:59:59Z",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .unwrap()
+    };
+    let cases = [
+        (
+            "ramp:c1-outer:ginza-entry",
+            "ramp:c1-outer:takaracho-exit",
+            "bp:c1-outer:kandabashi-takaracho",
+        ),
+        (
+            "ramp:c1-outer:kandabashi-entry",
+            "ramp:c1-outer:shibakoen-exit",
+            "bp:c1-outer:kandabashi-takaracho",
+        ),
+        (
+            "ramp:c1-outer:kandabashi-entry",
+            "ramp:c1-outer:takaracho-exit",
+            "bp:c1-outer:ginza-shibakoen",
+        ),
+    ];
+    for (entry, exit, pair) in cases {
+        let error = resolver
+            .resolve_at(
+                Some(assignment_id),
+                Some(entry),
+                Some(exit),
+                Some(pair),
+                pricing_at(),
+                &scope,
+            )
+            .unwrap_err();
+        assert_eq!(error.code, "TARIFF_ASSIGNMENT_MISMATCH");
+    }
+}
+
+#[test]
+fn catalog_rejects_same_fare_evidence_from_another_od() {
+    let mut catalog: serde_json::Value = serde_json::from_str(&catalog_json()).unwrap();
+    let target = catalog["assignments"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|assignment| assignment["assignmentId"] == "assignment:c1-outer:ginza-shibakoen")
+        .unwrap();
+    target["billingDistanceMeters"] = json!(1700);
+    target["prices"][0]["evidenceId"] = json!("evidence:2025-04:p03:c1-kandabashi-takaracho");
+    target["prices"][0]["distanceEvidenceId"] =
+        json!("evidence:2025-04:p03:c1-kandabashi-takaracho");
+    target["prices"][0]["observedDistanceMeters"] = json!(1700);
+    let target_base = catalog["distanceEvidence"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|evidence| evidence["evidenceId"] == "evidence:2025-04:p03:c1-ginza-shibakoen")
+        .unwrap();
+    target_base["distanceMeters"] = json!(1700);
+    target_base["distanceLabel"] = json!("1.7km");
+
+    let error = read_tariff_v3(&catalog.to_string()).unwrap_err();
+    assert_eq!(error.code, "TARIFF_PRICE_EVIDENCE_MISMATCH");
+}
+
+#[test]
+fn catalog_rejects_pending_evidence_from_another_od() {
+    let mut catalog: serde_json::Value = serde_json::from_str(&catalog_json()).unwrap();
+    let target = catalog["assignments"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|assignment| assignment["assignmentId"] == "assignment:c1-outer:ginza-shibakoen")
+        .unwrap();
+    target["prices"][1]["evidenceId"] = json!("pending:2026-10:od:c1-outer:kandabashi-takaracho");
+    target["prices"][1]["distanceEvidenceId"] =
+        json!("pending:2026-10:od:c1-outer:kandabashi-takaracho");
+
+    let error = read_tariff_v3(&catalog.to_string()).unwrap_err();
+    assert_eq!(error.code, "TARIFF_PRICE_EVIDENCE_MISMATCH");
+}
+
+#[test]
+fn catalog_rejects_evidence_from_a_document_outside_the_price_rule() {
+    let mut catalog: serde_json::Value = serde_json::from_str(&catalog_json()).unwrap();
+    let target_evidence = catalog["distanceEvidence"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|evidence| evidence["evidenceId"] == "evidence:2025-04:p03:c1-ginza-shibakoen")
+        .unwrap();
+    target_evidence["documentId"] = json!("shutoko-2026-10-revision-material");
+    target_evidence["edition"] = json!("2026-10");
+    target_evidence["documentSha256"] =
+        json!("f80126994b3deee36e198f947f3f4f4c3219dd16473bbd9bc9dd296115345702");
+
+    let error = read_tariff_v3(&catalog.to_string()).unwrap_err();
+    assert_eq!(error.code, "TARIFF_PRICE_EVIDENCE_MISMATCH");
+}
+
+#[test]
+fn graph_prepare_rejects_a_pair_with_a_foreign_embedded_assignment() {
+    let mut graph: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../fixtures/graph-v4/graph-radial-fixture.json"
+    ))
+    .unwrap();
+    graph["odTariffs"] = serde_json::from_str(&catalog_json()).unwrap();
+    graph["billingPairs"][0]["tariff"] = json!({
+        "status": "priced",
+        "amountYen": 300,
+        "billingDistanceMeters": 1700,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "prices": [],
+        "assignmentId": "assignment:c1-outer:kandabashi-takaracho",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p03:c1-kandabashi-takaracho",
+        "distanceEvidenceId": "evidence:2025-04:p03:c1-kandabashi-takaracho",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
+    });
+
+    let error = match prepare_json(&graph.to_string(), "{}") {
+        Ok(_) => panic!("foreign embedded assignment was accepted"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("TARIFF_ASSIGNMENT_MISMATCH"));
 }

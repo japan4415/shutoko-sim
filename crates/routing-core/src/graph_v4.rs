@@ -528,6 +528,40 @@ pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> 
     for pair in &radial_billing_pairs {
         validate_radial_return_pair(&graph, &route_memberships, pair)?;
     }
+    if let Some(resolver) = &tariff_resolver {
+        for pair in &schema4_legacy_pairs {
+            if let Some(assignment_id) = pair.tariff.assignment_id.as_deref() {
+                resolver
+                    .validate_assignment_selectors(
+                        assignment_id,
+                        pair.entry_ramp_id.as_deref(),
+                        pair.exit_ramp_id.as_deref(),
+                        Some(pair.id.as_str()),
+                    )
+                    .map_err(|error| {
+                        invalid(format!(
+                            "legacyRing tariff assignment binding is invalid: {error}"
+                        ))
+                    })?;
+            }
+        }
+        for pair in &radial_billing_pairs {
+            if let Some(assignment_id) = pair.tariff.assignment_id.as_deref() {
+                resolver
+                    .validate_assignment_selectors(
+                        assignment_id,
+                        Some(pair.entry_endpoint.ramp_id.as_str()),
+                        Some(pair.exit_endpoint.ramp_id.as_str()),
+                        Some(pair.id.as_str()),
+                    )
+                    .map_err(|error| {
+                        invalid(format!(
+                            "radialReturn tariff assignment binding is invalid: {error}"
+                        ))
+                    })?;
+            }
+        }
+    }
     Ok(ParsedGraph {
         graph,
         radial_billing_pairs,

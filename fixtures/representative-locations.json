@@ -1,0 +1,149 @@
+{
+  "fixtureVersion": 1,
+  "note": "4 地点（東京駅・目黒駅・銀座・六本木）の探索結果を固定する。Web の統合テスト (web/test/integration-wasm.test.ts) が実 WASM で再計算し、候補の並び・商品区別・普通車ETC基本料金（割引適用前）の金額と証拠を行ごとに照合する。公開 release を差し替えたときは releaseId が変わるため、このファイルも合わせて更新すること。",
+  "releaseId": "all-real-v3",
+  "vehicleProfile": "passenger-car-etc",
+  "pricingAt": "2026-09-10T00:00:00Z",
+  "fareLabel": "普通車ETC基本料金（割引適用前）",
+  "tollSource": "official_distance_rule",
+  "maxDisplayedCandidates": 3,
+  "locations": [
+    {
+      "id": "tokyo-station",
+      "label": "東京駅",
+      "origin": { "lat": 35.6812, "lon": 139.7671 },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "expectedStatus": "ok",
+      "expectedRankingMode": "time_per_yen",
+      "expectedNearestAccessNodeId": "n:1105125663",
+      "expectedRecommendedPairId": "bp:c1-inner:takaracho-kandabashi",
+      "expectedCandidates": [
+        {
+          "pairId": "bp:c1-inner:takaracho-kandabashi",
+          "pairKind": "legacyRing",
+          "entryRampId": "ramp:c1-inner:takaracho-entry",
+          "exitRampId": "ramp:c1-inner:kandabashi-exit",
+          "entryName": "宝町入口",
+          "exitName": "神田橋出口",
+          "productEligible": true,
+          "tariffStatus": "priced",
+          "amountYen": 300,
+          "billingDistanceMeters": 1700,
+          "assignmentId": "assignment:c1-inner:takaracho-kandabashi",
+          "ruleId": "shutoko-etc-ordinary-2022-04",
+          "evidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi",
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "meguro-station",
+      "label": "目黒駅",
+      "origin": { "lat": 35.6339, "lon": 139.7158 },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "expectedStatus": "ok",
+      "expectedRankingMode": "time_per_yen",
+      "expectedNearestAccessNodeId": "n:2177935837",
+      "expectedRecommendedPairId": "bp:2-inbound:meguro:c1-outer:tengenji",
+      "expectedCandidates": [
+        {
+          "pairId": "bp:2-inbound:meguro:c1-outer:tengenji",
+          "pairKind": "radialReturn",
+          "entryRampId": "ramp:2-inbound:meguro-entry",
+          "exitRampId": "ramp:2-outbound:tengenji-exit",
+          "entryName": "目黒入口",
+          "exitName": "天現寺出口",
+          "productEligible": true,
+          "tariffStatus": "priced",
+          "amountYen": 790,
+          "billingDistanceMeters": 19400,
+          "assignmentId": "assignment:2:meguro-tengenji",
+          "ruleId": "shutoko-etc-ordinary-2022-04",
+          "evidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        },
+        {
+          "pairId": "bp:2-inbound:meguro:c1-inner:tengenji",
+          "pairKind": "radialReturn",
+          "entryRampId": "ramp:2-inbound:meguro-entry",
+          "exitRampId": "ramp:2-outbound:tengenji-exit",
+          "entryName": "目黒入口",
+          "exitName": "天現寺出口",
+          "productEligible": true,
+          "tariffStatus": "priced",
+          "amountYen": 790,
+          "billingDistanceMeters": 19400,
+          "assignmentId": "assignment:2:meguro-tengenji",
+          "ruleId": "shutoko-etc-ordinary-2022-04",
+          "evidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "ginza",
+      "label": "銀座",
+      "origin": { "lat": 35.6719, "lon": 139.7648 },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "expectedStatus": "ok",
+      "expectedRankingMode": "shutoko_time",
+      "expectedNearestAccessNodeId": "n:31254351",
+      "expectedRecommendedPairId": null,
+      "expectedCandidates": [
+        {
+          "pairId": "od:ramp:c1-inner:ginza-entry:ramp:c1-inner:kasumigaseki-exit",
+          "pairKind": "topologyOnly",
+          "entryRampId": "ramp:c1-inner:ginza-entry",
+          "exitRampId": "ramp:c1-inner:kasumigaseki-exit",
+          "entryName": "銀座",
+          "exitName": "霞が関",
+          "productEligible": false,
+          "tariffStatus": "unpriced",
+          "amountYen": null,
+          "billingDistanceMeters": null,
+          "assignmentId": null,
+          "ruleId": null,
+          "evidenceId": null,
+          "effectiveFrom": null,
+          "effectiveTo": null
+        }
+      ]
+    },
+    {
+      "id": "roppongi",
+      "label": "六本木",
+      "origin": { "lat": 35.6628, "lon": 139.7314 },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "expectedStatus": "ok",
+      "expectedRankingMode": "shutoko_time",
+      "expectedNearestAccessNodeId": "n:266237326",
+      "expectedRecommendedPairId": null,
+      "expectedCandidates": [
+        {
+          "pairId": "od:ramp:c1-inner:iikura-entry:ramp:c1-outer:iikura-exit",
+          "pairKind": "topologyOnly",
+          "entryRampId": "ramp:c1-inner:iikura-entry",
+          "exitRampId": "ramp:c1-outer:iikura-exit",
+          "entryName": "飯倉",
+          "exitName": "飯倉",
+          "productEligible": false,
+          "tariffStatus": "unpriced",
+          "amountYen": null,
+          "billingDistanceMeters": null,
+          "assignmentId": null,
+          "ruleId": null,
+          "evidenceId": null,
+          "effectiveFrom": null,
+          "effectiveTo": null
+        }
+      ]
+    }
+  ]
+}

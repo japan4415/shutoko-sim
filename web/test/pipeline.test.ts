@@ -141,6 +141,35 @@ describe("parseGraphDocument", () => {
     );
   });
 
+  it("graph の tariff が製品スコープと違えば ARTIFACT_MISMATCH で止める", () => {
+    const graph = JSON.parse(generatedGraph) as Record<string, unknown>;
+    // 生成済みの graph は全 billingPairs が料金 v3 の製品スコープを満たす。
+    expect(() => parseGraphDocument(generatedGraph)).not.toThrow();
+    const billingPairs = graph.billingPairs as Record<string, unknown>[];
+    const priced = billingPairs.find(
+      (pair) => (pair.tariff as Record<string, unknown> | undefined)?.status === "priced",
+    );
+    expect(priced).toBeDefined();
+    if (priced === undefined) return;
+    for (const overrides of [
+      { fareLabel: "普通車ETC基本料金" },
+      { vehicleClass: "truck" },
+      { discountsExcluded: false },
+    ]) {
+      expect(() =>
+        parseGraphDocument(
+          JSON.stringify({
+            ...graph,
+            billingPairs: [
+              ...billingPairs,
+              { ...priced, tariff: { ...(priced.tariff as Record<string, unknown>), ...overrides } },
+            ],
+          }),
+        ),
+      ).toThrowError(/製品スコープ/);
+    }
+  });
+
   it("未知 version、未知 pairKind、routeMemberships 欠落を拒否する", () => {
     const graph = JSON.parse(schema4Graph) as Record<string, unknown>;
     expect(() => parseGraphDocument(JSON.stringify({ ...graph, schemaVersion: 5 }))).toThrowError(

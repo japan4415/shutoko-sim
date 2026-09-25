@@ -16,8 +16,18 @@ import {
   type FetchLike,
   type FetchResponseLike,
 } from "../src/worker/pipeline";
-import { accessSecondsFromMeters } from "../src/ui/model";
-import type { UiSearchMessage } from "../src/worker/types";
+import representativeLocations from "../../fixtures/representative-locations.json";
+import {
+  MAX_DISPLAY_CANDIDATES,
+  PRODUCT_FARE_LABEL,
+  accessSecondsFromMeters,
+  isProductEligible,
+  recommendedLabel,
+  toCardModel,
+} from "../src/ui/model";
+import { TARIFF_MODEL_VERSION } from "../src/worker/tariff-contract";
+import type { Candidate, UiSearchMessage } from "../src/worker/types";
+import type { OdTariffsFileV3, TariffPriceV3 } from "../../crates/routing-wasm/types/index.d";
 
 const root = new URL("../../", import.meta.url);
 const wasmDir = new URL("dist/wasm/", root);
@@ -28,8 +38,18 @@ interface WasmBuildContract {
   engineVersion: string;
   graphSchemaVersion: number;
   supportedGraphSchemaVersions: number[];
+  tariffModelVersion: number;
   requiredGraphFields: string[];
   requiredGraphSchema4Fields: string[];
+  requiredCandidateTollFields: string[];
+  productTariff: {
+    vehicleClass: string;
+    paymentMethod: string;
+    fareBasis: string;
+    fareLabel: string;
+    tollSource: string;
+    discountsExcluded: boolean;
+  };
 }
 
 function toBytes(text: string): Uint8Array {
@@ -38,6 +58,27 @@ function toBytes(text: string): Uint8Array {
 
 function toBinary(bytes: Uint8Array): Uint8Array {
   return bytes;
+}
+
+/**
+ * graph.json の billingPairs[].tariff が build contract の製品スコープと一致するか。
+ * tariff を持たない pair（旧 release）は後方互換のためそのまま受け入れる。
+ */
+function matchesProductTariff(
+  value: unknown,
+  product: WasmBuildContract["productTariff"],
+): boolean {
+  if (value === undefined || value === null) return true;
+  if (typeof value !== "object" || Array.isArray(value)) return false;
+  const tariff = value as Record<string, unknown>;
+  return (
+    tariff.vehicleClass === product.vehicleClass &&
+    tariff.paymentMethod === product.paymentMethod &&
+    tariff.fareBasis === product.fareBasis &&
+    tariff.fareLabel === product.fareLabel &&
+    tariff.discountsExcluded === product.discountsExcluded &&
+    (tariff.status !== "priced" || tariff.tollSource === product.tollSource)
+  );
 }
 
 export function isWasmContractCompatible(
@@ -70,12 +111,16 @@ export function isWasmContractCompatible(
   ) {
     return false;
   }
+  if (manifest.tariffModelVersion !== undefined && manifest.tariffModelVersion !== current.tariffModelVersion) {
+    return false;
+  }
   if (
     graph.schemaVersion === 4 &&
     !(graph.billingPairs as unknown[]).every((value) => {
       if (typeof value !== "object" || value === null) return false;
       const pair = value as Record<string, unknown>;
       if (typeof pair.pairKind !== "string") return false;
+      if (!matchesProductTariff(pair.tariff, current.productTariff)) return false;
       if (pair.pairKind === "legacyRing") {
         return (
           typeof pair.anchor === "object" &&
@@ -150,10 +195,11 @@ function fileURLToPathSafe(url: URL): string {
 describe("実 WASM 統合（fetch モック → loadRelease → search）", () => {
   it("旧graph契約のbuild metadataをstaleとして判定する", () => {
     const current: WasmBuildContract = {
-      contractVersion: 4,
+      contractVersion: 5,
       engineVersion: "0.1.0",
       graphSchemaVersion: 4,
       supportedGraphSchemaVersions: [2, 3, 4],
+      tariffModelVersion: 1,
       requiredGraphFields: ["odTariffs", "ramps[].id", "ramps[].mainlineNodeId"],
       requiredGraphSchema4Fields: [
         "routeMemberships",
@@ -161,6 +207,31 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         "billingPairs[].anchor.anchorKind",
         "billingPairs[].routePlan.anchor.anchorKind",
       ],
+      requiredCandidateTollFields: [
+        "amountYen",
+        "pricingAt",
+        "effectiveFrom",
+        "effectiveTo",
+        "billingDistanceMeters",
+        "tollSource",
+        "assignmentId",
+        "ruleId",
+        "evidenceId",
+        "distanceEvidenceId",
+        "fareLabel",
+        "vehicleClass",
+        "paymentMethod",
+        "fareBasis",
+        "discountsExcluded",
+      ],
+      productTariff: {
+        vehicleClass: "ordinary",
+        paymentMethod: "etc",
+        fareBasis: "base_toll_excluding_discounts",
+        fareLabel: "普通車ETC基本料金（割引適用前）",
+        tollSource: "official_distance_rule",
+        discountsExcluded: true,
+      },
     };
     const stale = { ...current, graphSchemaVersion: 1 };
     const graph = {
@@ -537,6 +608,254 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
           expect(result.rankingMode).toBe("shutoko_time");
         }
       }
+    } finally {
+      pg.free();
+    }
+  }, 60_000);
+});
+
+/**
+ * 4 地点（東京駅・目黒駅・銀座・六本木）の fixture 検証。
+ *
+ * 地点の座標・時間枠・期待する候補は fixtures/representative-locations.json に
+ * 置いてある。実 WASM の探索結果を行ごとに照合し、さらに次を必ず確かめる。
+ *
+ * - 公開 release と fixture の releaseId が一致する（release を差し替えたら
+ *   fixture も更新する。さもないと期待値が現状の検証を黙って通してしまう）
+ * - 表示する候補は最大 3 件（カタログの検証済み OD 数とは別の制限）
+ * - 推薦バッジは先頭 1 件だけに付く
+ * - 金額が確定した候補は data/od-tariffs.json（公式 PDF 由来の料金表）の
+ *   pricingAt 時点の記録と金額・規則 ID・証拠 ID・適用期間が一致する
+ * - 画面には基本料金（割引適用前）のラベルと、円あたり効率が基本料金での
+ *   比較であることを示す
+ */
+interface LocationFixture {
+  id: string;
+  label: string;
+  origin: { lat: number; lon: number };
+  minMinutes: number;
+  maxMinutes: number;
+  expectedStatus: string;
+  expectedRankingMode: string;
+  expectedNearestAccessNodeId: string;
+  expectedRecommendedPairId: string | null;
+  expectedCandidates: {
+    pairId: string;
+    pairKind: string;
+    entryRampId: string | null;
+    exitRampId: string | null;
+    entryName: string | null;
+    exitName: string | null;
+    productEligible: boolean;
+    tariffStatus: string;
+    amountYen: number | null;
+    billingDistanceMeters: number | null;
+    assignmentId: string | null;
+    ruleId: string | null;
+    evidenceId: string | null;
+    effectiveFrom: string | null;
+    effectiveTo: string | null;
+  }[];
+}
+
+interface RepresentativeLocationsFixture {
+  releaseId: string;
+  vehicleProfile: string;
+  pricingAt: string;
+  fareLabel: string;
+  tollSource: string;
+  maxDisplayedCandidates: number;
+  locations: LocationFixture[];
+}
+
+const locationsFixture = representativeLocations as RepresentativeLocationsFixture;
+
+/** pricingAt の時点で適用されている od-tariffs.json の価格レコードを探す。 */
+function activePrice(
+  catalog: OdTariffsFileV3,
+  assignmentId: string,
+  pricingAt: string,
+): TariffPriceV3 | null {
+  const assignment = catalog.assignments.find((item) => item.assignmentId === assignmentId);
+  if (assignment === undefined) return null;
+  const at = Date.parse(pricingAt);
+  return (
+    assignment.prices.find((price) => {
+      const from = Date.parse(price.effectiveFrom);
+      const to = price.effectiveTo === null ? Number.POSITIVE_INFINITY : Date.parse(price.effectiveTo);
+      return from <= at && at < to;
+    }) ?? null
+  );
+}
+
+describe("代表 4 地点の fixture（実 WASM）", () => {
+  it("公開 release が fixture と一致し、evidence は料金表 v3 の記録と一致する", async () => {
+    const catalog = JSON.parse(
+      await readFile(new URL("data/od-tariffs.json", root), "utf8"),
+    ) as OdTariffsFileV3;
+    // 料金表そのものは tariff v3 で、評価する engine の tariffModelVersion と揃える。
+    expect(catalog.version).toBe(3);
+    expect(catalog.fareLabel).toBe(locationsFixture.fareLabel);
+    expect(catalog.vehicleProfile).toBe(locationsFixture.vehicleProfile);
+
+    const glue = await import(gluePath.href);
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
+    const releaseId = (JSON.parse(graphJson) as { releaseId: string }).releaseId;
+    expect(releaseId).toBe(locationsFixture.releaseId);
+    expect(locationsFixture.fareLabel).toBe(PRODUCT_FARE_LABEL);
+    expect(locationsFixture.maxDisplayedCandidates).toBe(MAX_DISPLAY_CANDIDATES);
+
+    const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+    try {
+      for (const location of locationsFixture.locations) {
+        const msg: UiSearchMessage = {
+          type: "search",
+          requestId: `representative-${location.id}`,
+          releaseId,
+          pricingAt: locationsFixture.pricingAt,
+          origin: location.origin,
+          minMinutes: location.minMinutes,
+          maxMinutes: location.maxMinutes,
+          vehicleProfile: locationsFixture.vehicleProfile,
+        };
+        const result = await parseSearchResult(
+          glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
+        );
+        const where = `${location.label}（${location.id}）`;
+
+        expect(result.status, where).toBe(location.expectedStatus);
+        expect(result.rankingMode, where).toBe(location.expectedRankingMode);
+        expect(result.nearestAccess?.nodeId ?? null, where).toBe(location.expectedNearestAccessNodeId);
+
+        // 画面に出すのは先頭 3 件まで。engine がさらに返しても表示は 3 件に留める。
+        const displayed = result.candidates.slice(0, MAX_DISPLAY_CANDIDATES);
+        expect(displayed.length, where).toBeLessThanOrEqual(MAX_DISPLAY_CANDIDATES);
+        expect(displayed.length, where).toBe(location.expectedCandidates.length);
+        expect(
+          displayed.map((candidate) => candidate.toll.billingPairId),
+          where,
+        ).toEqual(location.expectedCandidates.map((expected) => expected.pairId));
+
+        // 推薦は先頭 1 件だけ。商品対象外の候補は推薦しない。
+        const recommended = displayed
+          .map((candidate, index) => ({ candidate, index }))
+          .filter(({ candidate }) => recommendedLabel(candidate) !== null);
+        expect(recommended.length, where).toBeLessThanOrEqual(1);
+        expect(recommended[0]?.candidate.toll.billingPairId ?? null, where).toBe(
+          location.expectedRecommendedPairId,
+        );
+
+        displayed.forEach((candidate, index) => {
+          const expected = location.expectedCandidates[index];
+          if (expected === undefined) return;
+          const toll = candidate.toll;
+          expect(candidate.pairKind ?? "legacyRing", where).toBe(expected.pairKind);
+          expect(candidate.entry.rampId ?? null, where).toBe(expected.entryRampId);
+          expect(candidate.exit.rampId ?? null, where).toBe(expected.exitRampId);
+          expect(candidate.entry.name ?? null, where).toBe(expected.entryName);
+          expect(candidate.exit.name ?? null, where).toBe(expected.exitName);
+          expect(isProductEligible(candidate), where).toBe(expected.productEligible);
+          const status = "tariffStatus" in candidate ? candidate.tariffStatus : undefined;
+          expect(status ?? null, where).toBe(expected.tariffStatus);
+          expect(toll.amountYen, where).toBe(expected.amountYen);
+          expect(toll.billingDistanceMeters ?? null, where).toBe(expected.billingDistanceMeters);
+          expect(toll.effectiveFrom, where).toBe(expected.effectiveFrom);
+          expect(toll.effectiveTo, where).toBe(expected.effectiveTo);
+          // 金額は必ず「普通車ETC基本料金（割引適用前）」で、割引を適用しない。
+          expect(toll.fareLabel ?? null, where).toBe(locationsFixture.fareLabel);
+          expect(toll.vehicleClass ?? null, where).toBe("ordinary");
+          expect(toll.paymentMethod ?? null, where).toBe("etc");
+          expect(toll.fareBasis ?? null, where).toBe("base_toll_excluding_discounts");
+          expect(toll.discountsExcluded ?? false, where).toBe(true);
+
+          if (expected.tariffStatus !== "priced") {
+            // 確定しない候補は金額も証拠も持たない（parseSearchResult も検査している）。
+            expect(toll.amountYen, where).toBeNull();
+            expect(toll.assignmentId ?? null, where).toBeNull();
+            expect(toll.ruleId ?? null, where).toBeNull();
+            expect(toll.evidenceId ?? null, where).toBeNull();
+            expect(toll.tollSource ?? null, where).toBeNull();
+            return;
+          }
+
+          // 確定した金額は公式 PDF 由来の料金表（data/od-tariffs.json）の
+          // 当該時点の記録と、金額・規則 ID・証拠 ID・適用期間まで一致する。
+          expect(toll.tollSource ?? null, where).toBe(locationsFixture.tollSource);
+          expect(toll.assignmentId ?? null, where).toBe(expected.assignmentId);
+          expect(toll.ruleId ?? null, where).toBe(expected.ruleId);
+          expect(toll.evidenceId ?? null, where).toBe(expected.evidenceId);
+          expect(toll.distanceEvidenceId ?? null, where).toBe(expected.evidenceId);
+          const price = activePrice(catalog, expected.assignmentId ?? "", locationsFixture.pricingAt);
+          expect(price, `${where} ${expected.assignmentId ?? ""}`).not.toBeNull();
+          if (price === null) return;
+          expect(price.tariffStatus, where).toBe("priced");
+          expect(price.amountYen, where).toBe(toll.amountYen);
+          expect(price.ruleId, where).toBe(toll.ruleId);
+          expect(price.evidenceId, where).toBe(toll.evidenceId);
+          expect(price.effectiveFrom, where).toBe(toll.effectiveFrom);
+          expect(price.effectiveTo, where).toBe(toll.effectiveTo);
+          expect(price.observedDistanceMeters, where).toBe(toll.billingDistanceMeters);
+          const assignment = catalog.assignments.find(
+            (item) => item.assignmentId === expected.assignmentId,
+          );
+          expect(assignment?.vehicleProfile ?? null, where).toBe(locationsFixture.vehicleProfile);
+          expect(assignment?.fareBasis ?? null, where).toBe("base_toll_excluding_discounts");
+        });
+      }
+    } finally {
+      pg.free();
+    }
+  }, 60_000);
+
+  it("4 地点の候補カードが基本料金のラベルと効率の注記を出す", async () => {
+    const glue = await import(gluePath.href);
+    const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
+    await glue.default({ module_or_path: toBinary(wasmBytes) });
+    const graphJson = await readFile(new URL("fixtures/generated/graph.json", root), "utf8");
+    const releaseId = (JSON.parse(graphJson) as { releaseId: string }).releaseId;
+    const pg = glue.prepare(graphJson, SEARCH_LIMITS_JSON);
+    try {
+      let pricedCards = 0;
+      for (const location of locationsFixture.locations) {
+        const msg: UiSearchMessage = {
+          type: "search",
+          requestId: `representative-card-${location.id}`,
+          releaseId,
+          pricingAt: locationsFixture.pricingAt,
+          origin: location.origin,
+          minMinutes: location.minMinutes,
+          maxMinutes: location.maxMinutes,
+          vehicleProfile: locationsFixture.vehicleProfile,
+        };
+        const result = await parseSearchResult(
+          glue.searchPrepared(pg, JSON.stringify(buildSearchRequest(msg))),
+        );
+        const displayed = result.candidates
+          .slice(0, MAX_DISPLAY_CANDIDATES)
+          .map((candidate: Candidate, index) => toCardModel(candidate, index + 1));
+        expect(displayed.length, location.label).toBe(location.expectedCandidates.length);
+        for (const [index, model] of displayed.entries()) {
+          const expected = location.expectedCandidates[index];
+          if (expected === undefined) return;
+          if (expected.tariffStatus !== "priced") {
+            // 金額が未算出なら、料金のラベルも効率の注記も出さない。
+            expect(model.fareLabelNote, location.label).toBeNull();
+            expect(model.timePerYen, location.label).toBeNull();
+            expect(model.timePerYenNote, location.label).toBeNull();
+            continue;
+          }
+          pricedCards += 1;
+          expect(model.toll, location.label).toContain(expected.amountYen?.toLocaleString("ja-JP") ?? "");
+          expect(model.fareLabelNote, location.label).toBe(`上記は${PRODUCT_FARE_LABEL}です`);
+          // 効率の比較は基本料金だと注記で明示する。
+          expect(model.timePerYen, location.label).toContain("円あたり");
+          expect(model.timePerYenNote, location.label).toBe(`（${PRODUCT_FARE_LABEL}で比較）`);
+        }
+      }
+      // 4 地点のうち少なくとも 1 地点は金額を提示し、表示の検査が成立している。
+      expect(pricedCards).toBeGreaterThan(0);
     } finally {
       pg.free();
     }

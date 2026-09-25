@@ -13,6 +13,7 @@ import {
   RESULT_CONTRACT_MISMATCH,
 } from "../src/worker/pipeline";
 import { errorMessage } from "../src/ui/model";
+import type { SearchResult } from "../src/worker/types";
 
 /** 契約を満たす最小の探索結果（候補なし・診断 null）。 */
 function validResult(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -418,5 +419,195 @@ describe("parseSearchResult の実行時検証", () => {
         JSON.stringify(validResult({ status: "ok", reason: null, candidates: [candidate] })),
       ),
     ).rejects.toThrowError(/pairKind/);
+  });
+});
+
+/** 料金 v3 の証拠がそろった、RadialCandidate ベースの toll。 */
+function pricedToll(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    billingPairId: "fixture:radial",
+    amountYen: 790,
+    pricingAt: "2026-09-10T00:00:00Z",
+    effectiveFrom: "2022-03-31T15:00:00Z",
+    effectiveTo: "2026-09-30T15:00:00Z",
+    billingDistanceMeters: 19400,
+    tollSource: "official_distance_rule",
+    assignmentId: "assignment:2:meguro-tengenji",
+    ruleId: "shutoko-etc-ordinary-2022-04",
+    evidenceId: "evidence:2025-04:p04:2-meguro-tengenji",
+    distanceEvidenceId: "evidence:2025-04:p04:2-meguro-tengenji",
+    fareLabel: "普通車ETC基本料金（割引適用前）",
+    vehicleClass: "ordinary",
+    paymentMethod: "etc",
+    fareBasis: "base_toll_excluding_discounts",
+    discountsExcluded: true,
+    ...overrides,
+  };
+}
+
+/** radial-valid.json を、Fare 検証したい toll と tariffStatus に差し替えた候補。 */
+function radialWithToll(toll: Record<string, unknown>, tariffStatus = "priced"): Record<string, unknown> {
+  const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
+  candidate.toll = toll;
+  candidate.tariffStatus = tariffStatus;
+  return candidate;
+}
+
+async function parseWithCandidate(candidate: Record<string, unknown>): Promise<unknown> {
+  return parseSearchResult(
+    JSON.stringify(validResult({ status: "ok", reason: null, candidates: [candidate] })),
+  );
+}
+
+describe("料金 v3 の実行時検証", () => {
+  it("製品スコープと証拠がそろった priced 候補を受け入れる", async () => {
+    const result = (await parseWithCandidate(radialWithToll(pricedToll()))) as SearchResult;
+    expect(result.candidates[0]?.toll.amountYen).toBe(790);
+    expect(result.candidates[0]?.toll.fareLabel).toBe("普通車ETC基本料金（割引適用前）");
+  });
+
+  it("未確定（unpriced）は製品スコープだけを持ち、金額も証拠も持たない", async () => {
+    const unpriced = {
+      billingPairId: "fixture:radial",
+      amountYen: null,
+      pricingAt: "2026-09-10T00:00:00Z",
+      effectiveFrom: null,
+      effectiveTo: null,
+      billingDistanceMeters: null,
+      fareLabel: "普通車ETC基本料金（割引適用前）",
+      vehicleClass: "ordinary",
+      paymentMethod: "etc",
+      fareBasis: "base_toll_excluding_discounts",
+      discountsExcluded: true,
+    };
+    const result = (await parseWithCandidate(radialWithToll(unpriced, "unpriced"))) as SearchResult;
+    expect(result.candidates[0]?.toll.amountYen).toBeNull();
+  });
+
+  it("製品スコープが違えば RESULT_CONTRACT_MISMATCH で捨てる", async () => {
+    for (const overrides of [
+      { fareLabel: "普通車ETC基本料金" },
+      { vehicleClass: "truck" },
+      { paymentMethod: "cash" },
+      { fareBasis: "base_toll" },
+      { discountsExcluded: false },
+    ]) {
+      await expect(parseWithCandidate(radialWithToll(pricedToll(overrides)))).rejects.toThrowError(
+        /製品スコープ/,
+      );
+    }
+  });
+
+  it("priced でも証拠が欠けた候補を捨てる", async () => {
+    for (const field of [
+      "assignmentId",
+      "ruleId",
+      "evidenceId",
+      "distanceEvidenceId",
+      "billingDistanceMeters",
+      "effectiveFrom",
+    ]) {
+      const toll = pricedToll();
+      delete toll[field];
+      await expect(parseWithCandidate(radialWithToll(toll))).rejects.toThrowError(/証拠/);
+    }
+    await expect(
+      parseWithCandidate(radialWithToll(pricedToll({ tollSource: "table" }))),
+    ).rejects.toThrowError(/証拠/);
+  });
+
+  it("提示した金額が適用期間の外にあれば捨てる", async () => {
+    // 2026-10 期の金額を 2026-09 の時点で提示している状態。
+    await expect(
+      parseWithCandidate(
+        radialWithToll(
+          pricedToll({
+            effectiveFrom: "2026-09-30T15:00:00Z",
+            effectiveTo: null,
+            ruleId: "shutoko-etc-ordinary-2026-10",
+            evidenceId: "evidence:2026-10:p04:2-meguro-tengenji",
+            distanceEvidenceId: "evidence:2026-10:p04:2-meguro-tengenji",
+            amountYen: 860,
+          }),
+        ),
+      ),
+    ).rejects.toThrowError(/適用期間/);
+    // 終了時刻ちょうどの提示も半開区間の外。期間の外にあることを理由に落とす。
+    await expect(
+      parseWithCandidate(
+        radialWithToll(
+          pricedToll({
+            pricingAt: "2026-09-30T15:00:00Z",
+            effectiveTo: "2026-09-30T15:00:00Z",
+          }),
+        ),
+      ),
+    ).rejects.toThrowError(/適用期間/);
+  });
+
+  it("未確定の候補に金額や証拠が残っていれば捨てる", async () => {
+    const unpricedBase = {
+        billingPairId: "fixture:radial",
+        amountYen: null,
+        pricingAt: "2026-09-10T00:00:00Z",
+        effectiveFrom: null,
+        effectiveTo: null,
+        billingDistanceMeters: null,
+        fareLabel: "普通車ETC基本料金（割引適用前）",
+        vehicleClass: "ordinary",
+        paymentMethod: "etc",
+        fareBasis: "base_toll_excluding_discounts",
+      discountsExcluded: true,
+    };
+    // 状態が未確定なのに金額が入っていれば、状態との不一致として先に落とす。
+    await expect(
+      parseWithCandidate(radialWithToll({ ...unpricedBase, amountYen: 790 }, "unpriced")),
+    ).rejects.toThrowError(/tariffStatus/);
+    // 期間・規則 ID・出所など、状態と関係なく残っていれば落とす。
+    for (const overrides of [
+      { effectiveFrom: "2022-03-31T15:00:00Z" },
+      { ruleId: "shutoko-etc-ordinary-2022-04" },
+      { tollSource: "official_distance_rule" },
+    ]) {
+      await expect(
+        parseWithCandidate(radialWithToll({ ...unpricedBase, ...overrides }, "unpriced")),
+      ).rejects.toThrowError(/確定/);
+    }
+  });
+
+  it("料金 v3 の証拠が無い旧 release の候補は後方互換で受け入れる", async () => {
+    const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
+    const result = (await parseWithCandidate(candidate)) as SearchResult;
+    expect(result.candidates[0]?.toll.amountYen).toBeNull();
+  });
+
+  it("legacyRing 候補の料金も検査する", async () => {
+    const mapsUrl =
+      "https://www.google.com/maps/dir/?api=1&origin=35.000000,139.000000&destination=35.100000,139.100000&travelmode=driving";
+    const legacy = legacyCandidateWithUrl(mapsUrl);
+    legacy.toll = pricedToll({ chargedSectionCount: 1 });
+    legacy.tariffStatus = "priced";
+    const result = (await parseWithCandidate(legacy)) as SearchResult;
+    expect(result.candidates[0]?.toll.fareLabel).toBe("普通車ETC基本料金（割引適用前）");
+
+    // 製品スコープを外した legacyRing は evidence 検査で落ちる。
+    const invalid = legacyCandidateWithUrl(mapsUrl);
+    invalid.toll = pricedToll({ chargedSectionCount: 1, fareLabel: "割引適用後の料金" });
+    invalid.tariffStatus = "priced";
+    await expect(parseWithCandidate(invalid)).rejects.toThrowError(/製品スコープ/);
+  });
+
+  it("legacyRing 候補は tariffStatus を持たなくても通す（旧 engine 互換）", async () => {
+    const legacy = legacyCandidateWithUrl(
+      "https://www.google.com/maps/dir/?api=1&origin=35.000000,139.000000&destination=35.100000,139.100000&travelmode=driving",
+    );
+    delete legacy.tariffStatus;
+    await expect(parseWithCandidate(legacy)).resolves.toMatchObject({ candidates: [{}] });
+  });
+
+  it("radialReturn / topologyOnly は tariffStatus が無ければ捨てる", async () => {
+    const candidate = JSON.parse(radialCandidate) as Record<string, unknown>;
+    delete candidate.tariffStatus;
+    await expect(parseWithCandidate(candidate)).rejects.toThrowError(/tariffStatus/);
   });
 });

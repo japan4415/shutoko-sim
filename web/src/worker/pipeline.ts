@@ -991,8 +991,9 @@ function hasAnyTariffProvenance(toll: Record<string, unknown>): boolean {
   );
 }
 
-function optionalString(value: unknown): boolean {
-  return value === undefined || (typeof value === "string" && value.length > 0);
+/** 証拠 ID は非空文字列でなければならない（engine も同じことを要求する）。 */
+function requiredId(value: unknown): boolean {
+  return typeof value === "string" && value.length > 0;
 }
 
 /** RFC3339 のタイムスタンプとして読めること（Date.parse が NaN になる形は弾く）。 */
@@ -1056,10 +1057,10 @@ function validateTariffProvenance(
       interval === null ||
       !isNonNegativeSafeInteger(tariff.amountYen) ||
       !isNonNegativeSafeInteger(tariff.billingDistanceMeters) ||
-      !optionalString(tariff.assignmentId) ||
-      !optionalString(tariff.ruleId) ||
-      !optionalString(tariff.evidenceId) ||
-      !optionalString(tariff.distanceEvidenceId) ||
+      !requiredId(tariff.assignmentId) ||
+      !requiredId(tariff.ruleId) ||
+      !requiredId(tariff.evidenceId) ||
+      !requiredId(tariff.distanceEvidenceId) ||
       tariff.tollSource !== OFFICIAL_DISTANCE_RULE_SOURCE
     ) {
       fail(`${label} 確定料金の証拠がそろっていません`);

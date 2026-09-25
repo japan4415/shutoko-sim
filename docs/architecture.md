@@ -21,7 +21,7 @@ flowchart LR
 | Rust 探索ライブラリ（`crates/routing-core`, `crates/routing-wasm`） | グラフ検証、周回経路探索、課金対象1区間との対応検証、時間集計、候補評価。ネットワークや DOM に依存しない |
 | Cloudflare Workers | 静的配信、許可済み成果物の配信、住所検索の代理、入力制限 |
 | R2 | 不変のバージョン付き WASM、グラフ、マニフェスト |
-| オフラインの Rust ビルダー（`crates/graph-builder`） | OSM 実データからのトポロジ抽出、立体交差・一方通行・通行規制の反映、1区間先入出口ペア検証、スナップインデックス生成、決定論的マニフェスト出力 |
+| オフラインの Rust ビルダー（`crates/graph-builder`） | OSM 実データからのトポロジ抽出、立体交差・一方通行・通行規制の反映、`firstPublicRoadConnection/v1` による端点確定、relation 制約つきの 1区間先出口検証、billing pair の自動導出レポート、料金カタログ v3 の evidence 照合、スナップインデックス生成、決定論的マニフェスト出力 |
 
 フロントエンドのフレームワークは素の TypeScript + DOM（既存 #12 と同一）とする。地図ライブラリは **Leaflet** を採用する（軽量・成熟・モバイル負荷低・WebGL/Worker 不要で 8 秒の初回ロード予算に有利）。地図タイルは **国土地理院（GSI）標準地図タイル**（`https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png`）を既定とする。GSI は無償・公共で利用規約が明確であり、OSMF Tile Usage Policy の大量アクセス制約を受けない。提供元は設定で差し替え可能にし、OSM 標準タイルは本番の無制限基盤とみなさない。経路データの帰属として「© OpenStreetMap contributors」を地図上に常時表示する。地図描画とルート探索は別の責務とし、地図タイルを探索グラフの代わりに使わない。
 
@@ -31,29 +31,42 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  OSM["OSM 実データ<br/>(shutoko-c1.json)"] --> GB["オフラインビルダー<br/>(shutoko-graph-builder)"]
+  OSM["OSM 実データ<br/>(shutoko-all.json)"] --> GB["オフラインビルダー<br/>(shutoko-graph-builder)"]
   SEED["宣言的課金シード<br/>(billing-pairs-seed.json)"] --> GB
+  TARIFF["料金カタログ v3<br/>(od-tariffs.json)"] --> GB
+  ADJ["隣接関係証跡<br/>(billing-pair-adjacency.json)"] --> GB
+  SUPPORT["ランプ support 判定<br/>(ramp-support-decisions.json)"] --> GB
   GB --> G["graph.json<br/>(道路網・課金ペア・禁止規則)"]
   GB --> S["snap-index.json<br/>(入口アクセス地点インデックス)"]
+  GB --> T["od-tariffs.json<br/>(期間別 evidence と規則)"]
+  GB --> C["pair-candidates.json<br/>(導出レポート)"]
   GB --> M["manifest.json<br/>(SHA-256・メタデータ・ODbL帰属)"]
   GB --> W["dist/wasm/<br/>(WASM・JS glue)"]
   G --> R2["R2: releases/releaseId/"]
   S --> R2
+  T --> R2
+  C --> R2
   M --> R2
-  W -->|"実ファイルから sha256 を計算"| SEED["seed-local-r2.mjs"]
-  SEED --> E["engine.json<br/>(wasm/glue の期待値)"]
+  W -->|"実ファイルから sha256 を計算"| SEEDSCRIPT["seed-local-r2.mjs"]
+  SEEDSCRIPT --> E["engine.json<br/>(wasm/glue の期待値)"]
   E --> R2
 ```
 
 1. **トポロジ抽出と立体交差**:
    OSM の `motorway`（首都高本線）と `motorway_link`（ランプ）のみをノード・エッジに分解する。**一般道（`trunk`, `primary`, `secondary` 等）はルーティンググラフのエッジには含めない**。ルーティングモデルが「直線距離が近い入口から乗る」前提に切り替わり、一般道経路探索が不要になったためである。ただし、入口/出口ランプの分類コンテキストとして `motorway_link` の端点ノードに接する一般道 way を取得・参照している（詳細は `docs/data-pipeline.md` の「入口/出口ランプの分類方式」参照）。OSM では道路ウェイが明示的に共有ノード ID を持たない限り幾何学的に交差していてもトポロジ上は接続されない。立体交差する道路（高架・地下）は共有ノードを持たないため、ビルダーはノード ID の厳格な共有判定によって立体交差の分離を担保する。`routing-core` のスキーマをコンパクトかつ厳格に保つため、`layer` や `bridge`/`tunnel` 等の属性はグラフ成果物には保持しない。
 2. **通行規制の反映**:
-   OSM リレーションの `type=restriction`（右左折禁止・Uターン禁止等）を解析し、連続して通過できないエッジ列（`forbiddenTransitions`）としてグラフに埋め込む。
-3. **課金ペアと経路の厳格検証**:
-   人手検証済みのシード定義（`data/billing-pairs-seed.json`）を読み込み、入口ランプから本線基準点、本線基準点から出口ランプへの連結性、本線の一周経路の存在、および接続路内部に隠れた周回（hidden loop）が存在しないことをビルド時に自動検証する。
-4. **スナップインデックス**:
-   ユーザーが指定した出発座標から最寄りの入口アクセス地点（Entry エッジの from ノード）を効率的に検索するため、空間インデックス（`snap-index.json`、`schemaVersion: 2`）を構築する。現行データは 15 ノード・約 1.5 KB。
-5. **完全決定論的成果物ビルド**:
+   OSM リレーションの `type=restriction`（右左折禁止・Uターン禁止等）を解析し、連続して通過できないエッジ列（`forbiddenTransitions`）としてグラフに埋め込む。`*:conditional` / `oneway:conditional` / `reversible` / `alternating` は静的な時間モデルでは一意に評価できないためスキップし、標準エラー出力とマニフェストへ記録する。ランプ端点の一般道接続判定では同系統の条件付きタグを **fail-closed（unresolved）** として扱い、時間帯モデルが導入されるまで条件付きアクセスを常時の公道接続として採用しない。
+3. **端点の確定（`firstPublicRoadConnection/v1`）**:
+   ランプ鎖を進行方向へたどり、最初に合法な一般車用 public surface way へ一意に接続した node を端点とする。アクセスタグ階層（`motorcar` → `motor_vehicle` → `vehicle` → `access`）、`highway` 種別の許可リスト、`service=alley` 以外の service sub-tag 拒否、`oneway` と進行方向の適合、接続の一意性を順に評価し、0 本または複数なら fail-closed とする。`hgv:conditional` は passenger-car の通行条件ではないため製品向けの例外として無視する。
+4. **課金ペアと経路の厳格検証**:
+   人手検証済みのシード定義（`data/billing-pairs-seed.json`）を読み込み、入口ランプから本線基準点、本線基準点から出口ランプへの連結性、本線の一周経路の存在、接続路内部に隠れた周回（hidden loop）が存在しないことをビルド時に自動検証する。First Exit は relation の所属と方向を尊重した **corridor 制約つき**で判定し、全体グラフでの最短出口を「1区間先」にしない。
+5. **課金ペアの自動導出レポート**:
+   同じビルダーが `data/billing-pair-adjacency.json`（reviewed 済みの公式路線順の隣接関係と directed route-plan 証跡）を入力に、gate 8 個（official adjacency / route / direction / first exit / mandatory lap / entry binding / exit binding / tariff assignment）をすべて通過した候補を列挙し、`pair-candidates.json` に出力する。seed ファイルは自動変更せず（`automaticSeedWrite: false`）、レビューを経て人手で更新する。OSM 幾何が公式意味を修復・昇格させることはない。
+6. **料金カタログ v3 の期間別 evidence**:
+   `data/od-tariffs.json` は `tariffRules`（2 期間）、期間ごとの `distanceEvidence`（版・ページ・行・列・セル・観測基本料金・SHA-256）、10 件の一意 OD `assignments`、および deprecate した 2 件を分離して保持する。金額は OSM 実走距離から作らず、規則検算と PDF セルが一致した記録だけを `priced` とする。
+7. **スナップインデックス**:
+   ユーザーが指定した出発座標から最寄りの入口アクセス地点（Entry エッジの from ノード）を効率的に検索するため、空間インデックス（`snap-index.json`、`schemaVersion: 2`）を構築する。現行データは 168 ノード。
+8. **完全決定論的成果物ビルド**:
    エッジ・ノード・ペアのソート順序を固定し、同一入力から SHA-256 チェックサムがバイト完全一致する成果物を生成する。各成果物のサイズとハッシュは `manifest.json` に記録され、クライアント側 Web Worker による改ざん・破損検出を可能にする。WASM 本体と JS glue は Rust ツールチェーンでビルドされ環境をまたいでバイト一致しないため、`manifest.json` には載せず、投入時に実ファイルから計算した `engine.json` を配信して同じ照合を行う（`workers/scripts/seed-local-r2.mjs`）。
 
 ## WASM の実行場所を明確にする理由
@@ -74,7 +87,7 @@ Cloudflare Workers の通常の WASM 利用は事前コンパイル済みモジ�
 
 ## 公開と更新（R2 成果物配信）
 
-静的成果物（WASM, graph.json, snap-index.json, manifest.json, engine.json 等）は Cloudflare R2 バケット（バインディング名: `ARTIFACTS_BUCKET`、バケット名: `shutoko-artifacts`）を介して配信する。成果物は `releases/<releaseId>/<artifact>` に配置し、Workers は環境変数 `ALLOWED_RELEASES` で許可された版かつ `releases/<releaseId>/manifest.json` が R2 上に実在する版のみを公開する。公開済みファイルを上書きしない。新旧バージョンを混ぜないよう、キャッシュキーは完全なバージョン付きパスとする。マニフェストに載らないパスや成果物 allowlist 外の要求、任意 URL の代理取得は 404 で拒否する。
+静的成果物（WASM, graph.json, od-tariffs.json, pair-candidates.json, ramps.json, snap-index.json, manifest.json, engine.json）は Cloudflare R2 バケット（バインディング名: `ARTIFACTS_BUCKET`、バケット名: `shutoko-artifacts`）を介して配信する。成果物は `releases/<releaseId>/<artifact>` に配置し、Workers は環境変数 `ALLOWED_RELEASES` で許可された版かつ `releases/<releaseId>/manifest.json` が R2 上に実在する版のみを公開する。公開済みファイルを上書きしない。新旧バージョンを混ぜないよう、キャッシュキーは完全なバージョン付きパスとする。マニフェストに載らないパスや成果物 allowlist 外の要求、任意 URL の代理取得は 404 で拒否する。`engine.json` は allowlist に含まれるが、未投入の版ではバケットにオブジェクトが無いので 404 のままである（manifest を上げるまで読ませないための意図的な挙動）。
 
 ### Cloudflare Workers Builds
 
@@ -82,7 +95,7 @@ Git 連携ビルドは Root directory `/`、Build command `bash scripts/cloudfla
 
 Workers Builds は Rust/WASM を生成せず、本番 R2 へ seed しない。R2 の更新は CI/CD と分離し、新しい versioned release ID の配下へ WASM・graph・manifest・engine の全成果物を先に投入・検証してから、Worker と Web が参照する release を切り替える。CI/CD は既存 release を上書きしない。
 
-release ID はリリースごとに新しく発行し、公開済み ID を再利用しない。同じ ID に seed するとオブジェクトを1件ずつ上書きする非原子的な更新となり、投入中に `manifest.json`、`engine.json`、graph、WASM の新旧が一時的に混在しうる。このため、同じ ID への remote seed を自動デプロイへ組み込まず、remote seed は単一の Manager プロセスだけで実行する。`all-real-v1` / `all-real-v2` と C1 旧版は旧クライアント向けに保持し、次の versioned release は `all-real-v3` とする。
+release ID はリリースごとに新しく発行し、公開済み ID を再利用しない。同じ ID に seed するとオブジェクトを1件ずつ上書きする非原子的な更新となり、投入中に `manifest.json`、`engine.json`、graph、WASM の新旧が一時的に混在しうる。このため、同じ ID への remote seed を自動デプロイへ組み込まず、remote seed は単一の Manager プロセスだけで実行する。`all-real-v1` / `all-real-v2` と C1 旧版は旧クライアント向けに保持し、現在の versioned release は `all-real-v4`、その直前の `all-real-v3` を rollback 先として許可リストに残す。seed は wrangler を `WRANGLER_BIN` → PATH の順で解決し（`npx` フォールバックは無い）、`wrangler --version` を `workers/package-lock.json` の固定版と照合してから実行する。
 
 R2 は非公開バケットとし、Workers が配信用の許可パスだけ公開する。データはクライアントが取得できる公開情報として扱い、秘密を格納しない。WASM は `application/wasm`、JSON は `application/json; charset=utf-8`、JS は `text/javascript; charset=utf-8`、型定義は `text/plain; charset=utf-8` で返す。Cache-Control は `manifest.json` と `engine.json` に `public, max-age=300, stale-while-revalidate=60`、その他成果物に `public, max-age=31536000, immutable` を設定し、`ETag` および `If-None-Match`（304 Not Modified）に対応する。失敗時はアプリの参照 release を直前の正常版に戻す。キャッシュ済み旧クライアント向けに旧成果物を最低30日保持する。
 
@@ -134,3 +147,9 @@ Cloudflare Workers 公式の Rate Limiting binding（`[[ratelimits]]`）を採�
 ## 実走行経路と課金対象の分離
 
 原案の「一周して1区間先で降りれば1区間分の料金」という前提を中核に置く。OSM グラフは実際に走る経路の生成に使い、別の検証済み入出口ペアデータで課金対象1区間を定義する。実走行距離からそのまま通行料金を計算しない。ペアの進行方向、対応車両・支払い条件、根拠と確認日を保持する。首都高を単に長く走る経路は、このペアと一周条件が成立しない限り候補にしない。
+
+## 提示する料金の前提
+
+提示する料金は**普通車 ETC 基本料金（割引適用前）**に固定する。車種 `ordinary`、支払方法 `etc`、料金種別 `base_toll_excluding_discounts`、除外割引は `midnight_discount` / `central_tokyo_inflow_discount` / `environmental_road_pricing_discount` / `etc2_discount` / `frequent_user_discount` の 5 種類。候補の toll はこの組合せを `fareLabel` / `vehicleClass` / `paymentMethod` / `fareBasis` / `discountsExcluded` として持ち、WASM / Web の reader が release の build contract と実行時に照合し、ずれた候補は部分データとして表示せず `RESULT_CONTRACT_MISMATCH` で止める。他車種の料金と各種割引の適用は別の設計とする。
+
+金額は `data/od-tariffs.json`（料金表 v3、`tariffModelVersion=1`）が正本である。距離は 100m 単位の量子に丸め、税・端数処理はマイクロ円単位の整数演算で計算する。2026-09-30T15:00:00Z（JST 2026-10-01 00:00）を境に 2 つの `TariffRuleV1` を切り替え、期間ごとに別の `evidenceId`（版・ページ・行・列・セル・観測基本料金額）を保持する。金額、料金距離、端点 support、商品適格性を 1 つの `status` に混在させない。

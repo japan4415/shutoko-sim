@@ -2,7 +2,7 @@
 
 ## 現在地
 
-Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v4` は graph schema 4 で、22,824 nodes / 22,987 edges、53 route memberships（双方向 46 件に全 route relation cover の forward 7 件）、legacy 8 件と radial 2 件からなる 10 billing pairs（`billingPairsVersion=v3`、`tariffModelVersion=1`）、証拠がある232件だけを exact directed segment に bind する。残るactive一般139件は理由・証拠付き `unsupported`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み232件は `routable` 197件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。この10件の `pairEligibility` は `verified_one_section_ahead` 9 件と `unverified` 1 件（`bp:c1-outer:shibakoen-iikura`、public way が access:conditional）である。manifest は graph.json / ramps.json / snap-index.json に加え od-tariffs.json（料金表 v3 のカタログと同一）と pair-candidates.json（導出レポート）を結ぶ。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
+Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v4` は graph schema 4 で、22,824 nodes / 22,987 edges、53 route memberships（双方向 46 件に全 route relation cover の forward 7 件）、legacy 8 件と radial 2 件からなる 10 billing pairs（`billingPairsVersion=v3`、`tariffModelVersion=1`）、証拠がある236件（単一 way binding 235件 + 天現寺の multi-way candidate 1件）だけを exact directed segment に bind する。残るactive一般135件は理由・証拠付き `unsupported`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み236件は `routable` 201件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。この10件の `pairEligibility` は `verified_one_section_ahead` 9 件と `unverified` 1 件（`bp:c1-outer:shibakoen-iikura`、public way が access:conditional）である。内回り銀座入口→新富町出口（#34）は exact evidence が未確定なので商品ペアとして登録せず、導出レポートでは `hold` として残す。manifest は graph.json / od-tariffs.json / pair-candidates.json / ramps.json / snap-index.json の 5 成果物と、料金表 v3 の正本（`tariffModelVersion=1`、10 件の OD assignment と期間別 evidence）、導出ルールの `pairDerivation`（5 入力の SHA-256、候補 11 件 = eligible 9 / hold 2、relation 26 件のうち 11 件展開）を結ぶ。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
 
 このverified pairの縮退と最近接入口優先（Issue #57）は正確性優先の設計である。座標検索は最近接の構造的に利用可能な入口 tier を優先し、東京駅の現行実測は最近接の宝町入口 tier（`ramp:c1-inner:takaracho-entry` → `ramp:c1-outer:takaracho-exit`）が選択され、`minPlanSeconds=1,610`秒（約26.83分）となる。15〜26分窓では最近接 tier の周回が上限を超えるため `no_candidates/TIME_WINDOW` 診断となり、15〜27分窓で成立する。また、30〜60分窓でも同一の宝町 tier から計画時間 2,795 秒・周回 20,205 m の候補が成立する（料金は未算出、`shutoko_time`）。release real-graph test はこの26/27分境界および30〜60分窓の成立、さらに目黒代表座標での最近接目黒ランプ選択を明示的に固定する。
 
@@ -14,6 +14,7 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
 
 1. **2026-10 版 PDF の OD セルと金額の人手レビューを先に終える**:
    2026-10 版の料金表 PDF を `phase1-research-cache/ryoukin-kaitei_toll_rates.pdf` に配置し、`data/od-tariffs.json` が持つ 10 OD（page 3 の C1 9 セル、page 4 の 2 号目黒→天現寺 1 セル）それぞれのセル名・距離・金額と、PDF の行・列・値を突き合わせる。一致が 1 件でも外れれば立ち止まる。このレビューが揃うまで以降の工程に進まない。
+   併せて `fixtures/generated/pair-candidates.json` を開き、候補 11 件の内訳が想定どおりかを確認する。内訳は `eligible_for_review` 9 件、`hold` 2 件（`bp:c1-inner:ginza-shintomicho` と `bp:c1-outer:shibakoen-iikura`）で、`relationCoverage[]` に 26 relation のうち 11 件が展開済み・15 件が reason code 付きで失敗していることが分かる。`hold` 2 件を人手レビューで強制的に昇格させず、理由付きの未検証として残す。導出レポートは seed を変更しないので、`data/billing-pairs-seed.json` と `data/billing-pair-adjacency.json` の更新はレビュー済みの PR で行う。
 2. **同一入力で成果物を再生成し、決定性を確認する**:
    ```bash
    bash scripts/generate-fixtures.sh
@@ -181,6 +182,33 @@ Issue #8（Google マップ引き継ぎの実機成立性検証）に関する�
 5. C1 legacyについて既存のURL生成、handoff、`HANDOFF_WAYPOINTS_UNVERIFIED`が変わらないことを既存contract testで確認する。
 
 Issue #72のコード実装、release設定、物理端末の4系列検証、公開handoffの有効化は分離して扱う。現時点では明示設定で検証済みmanifestを接続できるが、物理検証と公開handoffの有効化はユーザー作業待ちである。
+
+## 引き継ぎ（このリポジトリの作業範囲外の事項）
+
+コードと fixture の実装は完了しているが、公開を伴う外部操作は別の Manager / ユーザーが行う必要がある。状態を混同しないよう、実装済み・未実施・保留の 3 種を分けて記す。
+
+### 実装済み（このリポジトリで検証している）
+
+- 料金表 v3（`data/od-tariffs.json`、`tariffModelVersion=1`）: 規則 2 期間、evidence 20 件、assignment 10 件、deprecated 2 件。2025-04 / 2026-10 の両版を人手レビュー済みで `pendingEvidence` は空。
+- 端点解決 `firstPublicRoadConnection/v1`: 天現寺を 4 way / 16 Edge・hash `bb9114f49d...` で `verified_bound` にし、芝公園入口の `access:conditional` を fail-closed にした。
+- 課金ペアの自動導出 `billingPairDerivation/v2`: `pair-candidates.json`（候補 11 / eligible 9 / hold 2、relation 11 展開・15 失敗）、seed の自動変更なし。
+- `all-real-v4` の 5 成果物と manifest: 決定論的再生成、3 世代のバイト一致、route relation coverage、C1 legacy 回帰（神田橋・霞が関）、代表 4 地点の実測（`fixtures/representative-locations.json`）、web 統合テスト 261 件、E2E 55 件。
+- Web / Workers の release 許可リスト: `DEFAULT_RELEASE_ID` と `ALLOWED_RELEASES` は `all-real-v4` を含み、`all-real-v3` を残したまま運用する。rollback は Web の既定 1 行だけで成立する。
+- 固定版 wrangler 照合（4.131.0、`WRANGLER_BIN` 上書き可、`npx` フォールバックなし、`SHUTOKO_REQUIRE_PINNED_WRANGLER=1` で完全一致要求）。
+
+### 未実施（外部実施が必要）
+
+- `releases/all-real-v4/` への R2 投入と read-back、`all-real-v4` manifest の本番配置。
+- Cloudflare Workers と Web の production deploy。
+- 2026-10 版 PDF の再取得（gitignore 済み cache への配置を含む。`data/od-tariffs.json` のレビュー済み値はすでに固定済みなので、これは監査トレースの再現用）。
+- 放射線 3 leg split URL の実機 4 環境検証（Android / iOS × Web / app）。完了まで `data/device-verification-manifest.json` の 4 レコードは `missing` のままで、radial の公開 handoff は `enabled=false` を保つ。
+
+### 保留（根拠 evidence が揃うまで昇格しない）
+
+- `bp:c1-outer:shibakoen-iikura`: 接続一般道 way `40969792` の `access:conditional=no @ (08:00-20:00)`。時間帯モデルが導入されるまで `unverified` のまま商品推薦から外す。
+- `bp:c1-inner:ginza-shintomicho`（#34）: 料金セルは `assignment:c1-inner:ginza-shintomicho`（0.4km / 300円）として残るが、relation 制約つきの First Exit 検証が通らないため商品ペアとして登録しない。隣接関係証跡は `blocked`、導出レポートは `hold`。
+- 銀座・六本木での料金付き商品候補: 最寄りの入口が内回りランプで 1 区間先に検証済みペアが無いため、現状は未価格の `topology_only` になる。有料候補を gate として求めるなら Issue #57 の最近接 tier 制限か検証済みペアの登録を変更する必要がある（本フェーズの範囲外）。
+- 未展開の 15 route relation: reason code 付きで記録され、無言でスキップはしない。relation ごとに proof と manifest を要求してから公開を広げる。
 
 ## 未決事項と判断時点
 

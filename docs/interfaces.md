@@ -4,7 +4,7 @@
 
 ## 公開成果物
 
-マニフェスト（`manifest.json`）は `schemaVersion`、`releaseId`、`engineVersion`、`graphVersion`、`graphSchemaVersion`、`routePlanVersion`、`routeMembershipsSha256`、`builtAt`、`sourceDate`、`coverage`、`vehicleProfile`、`timeModelVersion`、`billingPairsVersion`、`attribution`（`© OpenStreetMap contributors`）、`odblLicenseUrl`、`unverifiedSections`、`provenance`、`artifacts` を持つ。schema 4 の `all-real-v3` では `graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v2` とし、`routeMembershipsSha256` は graph の `routeMemberships[]` を決定論的に直列化した SHA-256 とする。`artifacts` は生成成果物（`graph.json`、`snap-index.json` 等）それぞれの相対パス、SHA-256、バイト数を持つ。`builtAt` は再現性を担保するため外部から与えられた固定値を用いる。`coverage` は対応領域（`area`）、検証済み課金端点（`verifiedEntries`、`verifiedExits`）、および全verified-boundランプの `endpointCapabilities` を持つ。後者は `routable` と `structuralNoLoop` の入口・出口ID一覧と件数を機械可読に公開する。
+マニフェスト（`manifest.json`）は `schemaVersion`、`releaseId`、`engineVersion`、`graphVersion`、`graphSchemaVersion`、`routePlanVersion`、`routeMembershipsSha256`、`builtAt`、`sourceDate`、`coverage`、`vehicleProfile`、`timeModelVersion`、`billingPairsVersion`、`tariffModelVersion`、`pairDerivation`、`attribution`（`© OpenStreetMap contributors`）、`odblLicenseUrl`、`unverifiedSections`、`provenance`、`artifacts` を持つ。schema 4 の `all-real-v4` では `graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v3`、`tariffModelVersion=1`、`pairDerivation`（導出ルール `billingPairDerivation/v2` と 5 入力の SHA-256、候補集計）を記録し、`routeMembershipsSha256` は graph の `routeMemberships[]` を決定論的に直列化した SHA-256 とする。`artifacts` は生成成果物（`graph.json`、`snap-index.json` 等）それぞれの相対パス、SHA-256、バイト数を持つ。`builtAt` は再現性を担保するため外部から与えられた固定値を用いる。`coverage` は対応領域（`area`）、検証済み課金端点（`verifiedEntries`、`verifiedExits`）、および全verified-boundランプの `endpointCapabilities` を持つ。後者は `routable` と `structuralNoLoop` の入口・出口ID一覧と件数を機械可読に公開する。
 
 グラフにはノード座標、エッジ ID、始終点、距離、時間、道路種別、路線名、形状、車両制限、遷移制限、入口/出口区分、引き継ぎ検証済み経由地点を格納する。生成元 OSM スナップショット、追加の人手検証情報とその出典・日付を追跡できるようにする。
 
@@ -28,7 +28,7 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 
 `anchorNodeId` は入口の合流後から直接区間へ進む本線上の基準状態（ノード）。ここへ一周後に戻り、出口へ進む道路列を定義できるペアを登録する。料金規則の前提は原案に従い、個別ペアの登録ではその適用条件とデータ根拠を確認する。
 
-本節は legacy seed schema 1 と、明示指定時の generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の schema 4 に `RouteMembershipIndex` を追加し、Issue #64 で `routePlanLapV1` と return-corridor First Exit の builder 側解決を追加した。Issue #65 で schema 2 / 3 / 4 reader、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の検証と、WASM/Web consumer 型を実装した。Issue #66 で builder の既定 output、manifest、Web pipeline、Workers allowlist、versioned release ID を `all-real-v3` に接続した。Issue #68 で実 seed に2件の diagnostic radial pair を追加し、graph-builder が route plan を検証する diagnostic-only 経路を接続した。天現寺 binding が unresolved の間、既存 C1 8要素の raw seed と公開 graph の legacy pair は変更しない。
+本節は legacy seed schema 1 と、明示指定時の generated graph schema 2 の legacy ring pair について記載する。Issue #62 で seed schema 2 の混在 parser と diagnostic radial 型を実装し、Issue #63 で graph-builder の schema 4 に `RouteMembershipIndex` を追加し、Issue #64 で `routePlanLapV1` と return-corridor First Exit の builder 側解決を追加した。Issue #65 で schema 2 / 3 / 4 reader、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の検証と、WASM/Web consumer 型を実装した。Issue #66 で builder の既定 output、manifest、Web pipeline、Workers allowlist、versioned release ID を接続した（当初 `all-real-v3`、現在は `all-real-v4`）。Issue #68 で実 seed に2件の radial pair を追加し、graph-builder が route plan を検証する経路を接続した。天現寺 binding が `verified_bound` に確定した後も、既存 C1 8要素の raw seed と公開 graph の legacy pair の意味・値は変更していない。
 
 ## Workers の HTTP 境界
 
@@ -47,6 +47,7 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 - `snap-index.json`
 - `ramps.json`
 - `od-tariffs.json`
+- `pair-candidates.json`
 - `shutoko_routing_bg.wasm`
 - `shutoko_routing.js`
 - `shutoko_routing.d.ts`
@@ -93,7 +94,7 @@ UI → Web Worker のリクエスト例（値は形式を示す架空例）:
 }
 ```
 
-Web Worker は `ready`、`result`、`error` を返し、各探索応答に request ID を付ける。`ready` の payload は `{ "type": "ready", "releaseId": "all-real-v3" }` で、初期化（取得・照合・WASM init）完了時に 1 度だけ送る。`error` の `code` 一覧は次のとおり。
+Web Worker は `ready`、`result`、`error` を返し、各探索応答に request ID を付ける。`ready` の payload は `{ "type": "ready", "releaseId": "all-real-v4" }` で、初期化（取得・照合・WASM init）完了時に 1 度だけ送る。`error` の `code` 一覧は次のとおり。
 
 | `error.code` | 発生箇所 | 意味 |
 | --- | --- | --- |
@@ -165,7 +166,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 | `geometry` | `GeoJsonLineString` | 全経路の GeoJSON LineString（`{ type: "LineString", coordinates: [[lon, lat], ...] }`）。重複端点なし |
 | `duration` | `Duration` | `accessSeconds`, `shutokoSeconds`, `returnSeconds`, `baseSeconds`, `bufferSeconds`, `planSeconds` |
 | `distanceMeters`, `shutokoDistanceMeters` | `number` | C1 legacyではどちらも首都高Edge距離（m）として同じ値を返す。`RadialCandidate`と`TopologyOnlyCandidate`では別定義を使う |
-| `toll` | `LegacyToll` | `billingPairId`, `chargedSectionCount: 1`, `amountYen`（未確認なら`null`）, `pricingAt`, `effectiveFrom`, `effectiveTo`, `billingDistanceMeters?`, `tollSource?`（`"table" \| "od_tariff" \| "calculated"`） |
+| `toll` | `LegacyToll` | `billingPairId`, `chargedSectionCount: 1`, `amountYen`（未確認なら`null`）, `pricingAt`, `effectiveFrom`, `effectiveTo`, `billingDistanceMeters?`, `tollSource?`（`"table" \| "od_tariff" \| "calculated"`）。料金表 v3（`tariffModelVersion=1`）を契約する release では、さらに `assignmentId` / `ruleId` / `evidenceId` / `distanceEvidenceId` / `fareLabel` / `vehicleClass` / `paymentMethod` / `fareBasis` / `discountsExcluded` が**必須**になる |
 | `loop` | `Loop` | 現行 C1 の `anchorNodeId`, `edgeIds`, `durationSeconds`, `distanceMeters`, `validated: true` |
 | `reasons` | `string[]` | 機械可読推薦理由コード。`LegacyCandidate`は`BEST_TIME_PER_YEN`または`BEST_SHUTOKO_TIME`と`ONE_SECTION_TOLL`を持つ。これはlegacy adapterの互換fieldであり、商品eligibilityの証拠ではない |
 | `warnings` | `string[]` | 警告コード（常時付与: `HANDOFF_WAYPOINTS_UNVERIFIED`（#8 実機検証未了）、`STATIC_TRAVEL_TIME`） |
@@ -191,11 +192,11 @@ WASM / Webの`Candidate` unionは`LegacyCandidate | TopologyOnlyCandidate | Radi
 - `routePlan.membershipIds[]`と`routePlan.resolvedRouteSegments[]`で、mainline relationとbound rampの由来を保つ。
 - `eligibilityStatus`は`verified_one_section_ahead`、`unverified`、`topology_only`のいずれか。endpoint support、loop validation、routing capabilityと独立させる。
 - `loopValidationStatus`は`declared_route_validated`、`unresolved`、`topology_only`のいずれか。route planの解決状態だけを表し、商品eligibilityへ代用しない。
-- `tariffStatus`は`priced`、`unpriced`、`expired`、`not_applicable`のいずれか。#41前の2号radialは`amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`とする。
+- `tariffStatus`は`priced`、`unpriced`、`expired`、`not_applicable`のいずれか。料金表 v3 導入前は2号radialを`amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`としていたが、`all-real-v4` では `assignment:2:meguro-tengenji` が解決するため2件とも `priced`（改定前 790円 / 改定後 860円）で返る。
 - `toll.chargedSectionCount`と`ONE_SECTION_TOLL`を出さない。`legacyRing` adapterだけが両者を維持する。
 - `time_per_yen`は商品比較対象のtariffが全件`priced`のときだけ使う。unpricedが混在する集合は`shutoko_time`、`topology_only`は商品推薦から外す。
 - `distanceMeters`はhighway + surface access + surface returnの推定距離、`shutokoDistanceMeters`はhighway Edge距離とする。
-- radialの`handoff`は`{ enabled: false, legUrls: [], disabledReason: "device_verification_pending" }`で返し、device verification gate通過後だけ`enabled=true`と検証済み`legUrls`を持たせる。
+- radialの`handoff`は`{ enabled: false, legUrls: [], disabledReason: "device_verification_pending" }`で返し、device verification gate通過後だけ`enabled=true`と検証済み`legUrls`を持たせる。**現行 `all-real-v4` では4環境とも `result=missing` のため、radial 候補の handoff は常に `enabled=false` である**（`enabled=true` を返す経路はコード上存在するが、実機検証が完了するまで公開されない）。
 
 `edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。`edgeRouteLegs`と`routePlan`は`RadialCandidate`専用で、`TopologyOnlyCandidate`は宣言済みmandatory lapを意味付けないため持たない。graph-builder は `routePlanLapV1` の順序付き Edge 列と hash、return corridor の declared Exit candidate を検証する。declared candidateの`fromNodeId`へ到達できない場合はunresolved成功を返さず、verified bindingと4 resolved segmentがすべて揃った場合だけgraph schema 4の`radialReturn`として昇格する。unresolved / unsupported binding は公開候補に昇格させない。
 
@@ -373,7 +374,7 @@ Issue #70でWeb consumerの表示を実装した。radialは4 roleを契約順�
 
 `edgeIdsSha256`は順序を保ったEdge IDの空白なしJSON arrayをSHA-256化した値で、generated graphの`resolvedRouteSegments`とCandidateの`routePlan`で同じ値を使う。core reader / Candidate validator は hash を再計算し、membership / binding 参照、role、index 範囲、各 status、不正または欠落した `chargedSectionCount` を検証する。Web Worker は受信した Candidate の判別、hash 形式、4 leg の完全分割、reference、status を再検証してから UI へ返す。
 
-core、WASM型、Web Workerはgraph schema 2 / 3 / 4を読む。schema 2 / 3の`pairKind`なしは`legacyRing`、schema 4のbuilder出力は`pairKind`を必須とし、未知のkind / versionは部分データを返さず停止する。readerとconsumer契約はIssue #65で実装し、builderの既定schema 4への切替と `all-real-v3` の release wiring はIssue #66で完了した。
+core、WASM型、Web Workerはgraph schema 2 / 3 / 4を読む。schema 2 / 3の`pairKind`なしは`legacyRing`、schema 4のbuilder出力は`pairKind`を必須とし、未知のkind / versionは部分データを返さず停止する。readerとconsumer契約はIssue #65で実装し、builderの既定schema 4への切替と versioned release への wiring はIssue #66で完了した。Web reader は `billingPairsVersion` の v2（`all-real-v3`）と v3（`all-real-v4`）のどちらでも受理し、`tariffModelVersion` を記録している release だけを料金契約つきで照合する（記録が無い旧 release は後方互換で受け入れる）。
 
 ## Google マップへの引き継ぎ
 
@@ -399,8 +400,21 @@ OSM のデータライセンスとタイルサーバーの利用条件は別に�
 
 公開 Nominatim は絶対上限1リクエスト/秒で、クライアント側オートコンプリートは禁止されている。本番はプロバイダー契約または自前運用を選定し、この制約を前提としない構成を確定するまで公開しない。[Nominatim Usage Policy](https://operations.osmfoundation.org/policies/nominatim/)
 
-## 料金データの有効期間
+## 料金データの有効期間（料金表 v3、`tariffModelVersion=1`）
 
 `billingPairs` の料金レコードは `effectiveFrom` / `effectiveTo` と車種・支払い方法を持つ。リクエストの `pricingAt` に有効な版で比較し、金額不明や期限外は未確認として扱う。期間は `[effectiveFrom, effectiveTo)`（終了 null は期限なし）とし、重複期間は成果物検証で拒否する。将来出発日時の入力は初期版に含めない。料金期間をまたいだ状態で出発する場合は UI で再検索を案内する。2026-10-01 の料金改定が告知されているため、固定額をコードへ埋め込まず有効期間を切り替える。[首都高の料金改定発表](https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)
+
+券種は `vehicleClass=ordinary` / `paymentMethod=etc` / `fareBasis=base_toll_excluding_discounts` に固定し、`fareLabel` は「普通車ETC基本料金（割引適用前）」、除外割引は 5 種類を明示する。この組合せが一致しない候補は `RESULT_CONTRACT_MISMATCH` で落とす。
+
+2 つの `TariffRuleV1` は半開区間で接続し、UTC `2026-09-30T15:00:00Z`（JST 2026-10-01 00:00）が切り替え境界になる。gap / overlap はビルドエラーである。
+
+| ruleId | 期間 | 単価 | 端数処理 | 下限 | 上限 | 下限になる距離 |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| `shutoko-etc-ordinary-2022-04` | `[2022-03-31T15:00:00Z, 2026-09-30T15:00:00Z)` | 2,952,000 マイクロ円 / 100m | 150 円、税 1.10、10 円単位四捨五入 | 300 円 | 1,950 円 | 4,300 m |
+| `shutoko-etc-ordinary-2026-10` | `[2026-09-30T15:00:00Z, null)` | 3,247,200 マイクロ円 / 100m | 150 円、税 1.10、10 円単位四捨五入 | 300 円 | 2,130 円 | 3,900 m |
+
+1 つの OD は `data/od-tariffs.json` の `assignments` として一意に決まり、各 price period は `ruleId` と、その期間の版（2025-04 / 2026-10）を指す `evidenceId` / `distanceEvidenceId` と観測基本料金額を持つ。したがって改定をまたぐ OD でも「改定前いくら・改定後いくら」が別々の evidence として追跡でき、片方の版だけを根拠に期間を編集することはできない。候補の `toll` は `assignmentId` / `ruleId` / `evidenceId` / `distanceEvidenceId` / `tollSource` / 適用期間をそのまま返し、Web reader は同じ組合せを実行時に検証する。
+
+OSM の実走距離・周回距離・入口/出口間の幾何距離を料金距離へ代入する経路は存在しない。根拠のない OD は `amountYen=null` / `billingDistanceMeters=null` / `tariffStatus=unpriced` として返し、`time_per_yen` の比較対象から外す。
 
 ETC を料金前提とする場合は入口から出口まで同じカードを利用する条件を明示する。[首都高 ETC 利用案内](https://www.shutoko.jp/fee/fee-info/pay_etc/attention/)

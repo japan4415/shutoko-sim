@@ -315513,18 +315513,13 @@
       },
       "tariff": {
         "status": "priced",
-        "amountYen": 300,
-        "billingDistanceMeters": 2300,
+        "amountYen": 570,
+        "billingDistanceMeters": 12400,
         "prices": [
           {
-            "amountYen": 300,
+            "amountYen": 570,
             "effectiveFrom": "2022-03-31T15:00:00Z",
             "effectiveTo": "2026-09-30T15:00:00Z"
-          },
-          {
-            "amountYen": 300,
-            "effectiveFrom": "2026-09-30T15:00:00Z",
-            "effectiveTo": null
           }
         ]
       }
@@ -318263,9 +318258,17 @@
     {
       "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
       "exitRampId": "ramp:c1-outer:daikancho-exit",
-      "billingDistanceMeters": 2300,
-      "amountYen": 300,
-      "effectiveFrom": "2022-03-31T15:00:00Z"
+      "billingDistanceMeters": 12400,
+      "amountYen": 570,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
+      "exitRampId": "ramp:c1-outer:daikancho-exit",
+      "billingDistanceMeters": 12400,
+      "amountYen": null,
+      "effectiveFrom": "2026-09-30T15:00:00Z"
     },
     {
       "entryRampId": "ramp:c1-outer:ginza-entry",

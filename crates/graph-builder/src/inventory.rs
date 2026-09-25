@@ -7,7 +7,7 @@
 
 use crate::model::{EdgeKind, Graph, OdTariff, Ramp, RampKind};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// An item in the canonical ramp inventory.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -165,6 +165,124 @@ pub struct TariffRules {
     pub rounding_yen: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TariffDocumentV3 {
+    pub document_id: String,
+    pub edition: String,
+    pub url: String,
+    pub cache_path: String,
+    pub document_sha256: Option<String>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TariffRoundingV3 {
+    pub mode: String,
+    pub multiple_yen: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TariffSourceRefV3 {
+    pub document_id: Option<String>,
+    pub source: Option<String>,
+    pub page: Option<u64>,
+    pub status: Option<String>,
+    pub location: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TariffRuleV3 {
+    pub rule_id: String,
+    pub vehicle_class: String,
+    pub payment_method: String,
+    pub fare_basis: String,
+    pub distance_unit_meters: u64,
+    pub effective_from: String,
+    pub effective_to: Option<String>,
+    pub rate_micros_yen_per_unit: u64,
+    pub terminal_charge_yen: u64,
+    pub tax_basis_points: u64,
+    pub minimum_yen: u64,
+    pub maximum_yen: u64,
+    pub minimum_distance_meters: Option<u64>,
+    pub rounding: TariffRoundingV3,
+    pub source_refs: Vec<TariffSourceRefV3>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DistanceEvidenceV3 {
+    pub evidence_id: String,
+    pub document_id: String,
+    pub edition: String,
+    pub document_sha256: String,
+    pub page: u64,
+    pub row_label: String,
+    pub column_label: String,
+    pub cell: String,
+    pub distance_meters: u64,
+    pub distance_label: String,
+    pub observed_base_fare_yen: u64,
+    pub calculated_base_fare_yen: u64,
+    pub entry_ramp_id: String,
+    pub exit_ramp_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingEvidenceV3 {
+    pub evidence_id: String,
+    pub document_id: String,
+    pub edition: String,
+    pub page: Option<u64>,
+    pub row_label: String,
+    pub column_label: String,
+    pub cell: Option<String>,
+    pub status: String,
+    pub observed_base_fare_yen: Option<u64>,
+    pub observed_distance_meters: Option<u64>,
+    pub reviewed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TariffPriceV3 {
+    pub status: String,
+    pub tariff_status: String,
+    pub amount_yen: Option<u64>,
+    pub observed_base_fare_yen: Option<u64>,
+    pub observed_distance_meters: Option<u64>,
+    pub effective_from: String,
+    pub effective_to: Option<String>,
+    pub rule_id: String,
+    pub evidence_id: String,
+    pub distance_evidence_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TariffAssignmentV3 {
+    pub assignment_id: String,
+    pub od_key: String,
+    pub pair_ids: Vec<String>,
+    pub entry_name: String,
+    pub exit_name: String,
+    pub entry_ramp_id: String,
+    pub exit_ramp_id: String,
+    pub vehicle_profile: String,
+    pub vehicle_class: String,
+    pub payment_method: String,
+    pub fare_basis: String,
+    pub billing_distance_meters: u64,
+    pub distance_evidence_id: String,
+    pub verification_status: String,
+    pub prices: Vec<TariffPriceV3>,
+}
+
 /// The root structure of `data/od-tariffs.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -174,6 +292,24 @@ pub struct OdTariffsFile {
     pub source_date: String,
     pub rules: TariffRules,
     pub verified_od_pairs: Vec<OdTariff>,
+    #[serde(default)]
+    pub vehicle_profile: Option<String>,
+    #[serde(default)]
+    pub vehicle_class: Option<String>,
+    #[serde(default)]
+    pub payment_method: Option<String>,
+    #[serde(default)]
+    pub fare_basis: Option<String>,
+    #[serde(default)]
+    pub documents: Vec<TariffDocumentV3>,
+    #[serde(default)]
+    pub tariff_rules: Vec<TariffRuleV3>,
+    #[serde(default)]
+    pub distance_evidence: Vec<DistanceEvidenceV3>,
+    #[serde(default)]
+    pub pending_evidence: Vec<PendingEvidenceV3>,
+    #[serde(default)]
+    pub assignments: Vec<TariffAssignmentV3>,
 }
 
 /// An entry in the `ramps.json` release artifact.
@@ -1210,12 +1346,553 @@ pub fn audit_osm_ramp_binding_candidate_against_osm(
     }
 }
 
+pub fn calculate_versioned_tariff_yen(distance_meters: u64, rule: &TariffRuleV3) -> u64 {
+    if rule
+        .minimum_distance_meters
+        .is_some_and(|minimum| distance_meters <= minimum)
+    {
+        return rule.minimum_yen;
+    }
+    let units = distance_meters.div_ceil(rule.distance_unit_meters);
+    let subtotal_micros = rule
+        .terminal_charge_yen
+        .saturating_mul(1_000_000)
+        .saturating_add(units.saturating_mul(rule.rate_micros_yen_per_unit));
+    let taxed_micros = subtotal_micros.saturating_mul(rule.tax_basis_points) / 10_000;
+    let rounded = ((taxed_micros + 5_000_000) / 10_000_000) * 10;
+    rounded.clamp(rule.minimum_yen, rule.maximum_yen)
+}
+
+fn validate_versioned_od_tariffs(
+    tariffs: &OdTariffsFile,
+    inv: &RampInventoryFile,
+    errors: &mut Vec<String>,
+) {
+    if tariffs.vehicle_profile.is_none() {
+        errors.push("tariff v3 vehicleProfile is required".to_string());
+    }
+    if tariffs.vehicle_class.is_none() {
+        errors.push("tariff v3 vehicleClass is required".to_string());
+    }
+    if tariffs.payment_method.is_none() {
+        errors.push("tariff v3 paymentMethod is required".to_string());
+    }
+    if tariffs.fare_basis.is_none() {
+        errors.push("tariff v3 fareBasis is required".to_string());
+    }
+    if tariffs.tariff_rules.is_empty() {
+        errors.push("tariff v3 tariffRules cannot be empty".to_string());
+    }
+    if tariffs.assignments.is_empty() {
+        errors.push("tariff v3 assignments cannot be empty".to_string());
+    }
+
+    let mut document_by_id = HashMap::new();
+    for document in &tariffs.documents {
+        if document_by_id
+            .insert(document.document_id.as_str(), document)
+            .is_some()
+        {
+            errors.push(format!(
+                "tariff v3 documentId '{}' is duplicated",
+                document.document_id
+            ));
+        }
+        if document.document_id.is_empty()
+            || document.edition.is_empty()
+            || document.url.is_empty()
+            || document.cache_path.is_empty()
+        {
+            errors.push(format!(
+                "tariff v3 document '{}' has an empty required field",
+                document.document_id
+            ));
+        }
+        if document.status.starts_with("verified")
+            && document
+                .document_sha256
+                .as_deref()
+                .is_none_or(str::is_empty)
+        {
+            errors.push(format!(
+                "tariff v3 verified document '{}' requires documentSha256",
+                document.document_id
+            ));
+        }
+    }
+
+    let mut rule_by_id = HashMap::new();
+    let mut rule_bounds = HashMap::new();
+    let mut rule_groups: BTreeMap<(&str, &str, &str), Vec<&TariffRuleV3>> = BTreeMap::new();
+    for rule in &tariffs.tariff_rules {
+        if rule_by_id.insert(rule.rule_id.as_str(), rule).is_some() {
+            errors.push(format!("tariff v3 ruleId '{}' is duplicated", rule.rule_id));
+        }
+        if rule.vehicle_class.is_empty()
+            || rule.payment_method.is_empty()
+            || rule.fare_basis.is_empty()
+        {
+            errors.push(format!(
+                "tariff v3 rule '{}' has an empty scope",
+                rule.rule_id
+            ));
+        }
+        if rule.distance_unit_meters == 0 {
+            errors.push(format!(
+                "tariff v3 rule '{}' has zero distanceUnitMeters",
+                rule.rule_id
+            ));
+        }
+        if rule.rate_micros_yen_per_unit == 0 {
+            errors.push(format!(
+                "tariff v3 rule '{}' has zero rateMicrosYenPerUnit",
+                rule.rule_id
+            ));
+        }
+        if rule.tax_basis_points == 0 {
+            errors.push(format!(
+                "tariff v3 rule '{}' has zero taxBasisPoints",
+                rule.rule_id
+            ));
+        }
+        if rule.minimum_yen > rule.maximum_yen {
+            errors.push(format!(
+                "tariff v3 rule '{}' has minimumYen above maximumYen",
+                rule.rule_id
+            ));
+        }
+        if rule.minimum_distance_meters.is_none() {
+            errors.push(format!(
+                "tariff v3 rule '{}' requires minimumDistanceMeters",
+                rule.rule_id
+            ));
+        }
+        if rule.rounding.mode != "half_up" || rule.rounding.multiple_yen == 0 {
+            errors.push(format!(
+                "tariff v3 rule '{}' has unsupported rounding",
+                rule.rule_id
+            ));
+        }
+        if rule.source_refs.is_empty() {
+            errors.push(format!(
+                "tariff v3 rule '{}' requires sourceRefs",
+                rule.rule_id
+            ));
+        }
+        for source_ref in &rule.source_refs {
+            if source_ref.location.is_empty() {
+                errors.push(format!(
+                    "tariff v3 rule '{}' has an empty sourceRef location",
+                    rule.rule_id
+                ));
+            }
+            if let Some(document_id) = &source_ref.document_id {
+                if !document_by_id.contains_key(document_id.as_str()) {
+                    errors.push(format!(
+                        "tariff v3 rule '{}' references unknown document '{}'",
+                        rule.rule_id, document_id
+                    ));
+                }
+            } else if source_ref.source.as_deref().is_none_or(str::is_empty) {
+                errors.push(format!(
+                    "tariff v3 rule '{}' has a sourceRef without documentId or source",
+                    rule.rule_id
+                ));
+            }
+        }
+        let effective_from = match crate::validate::parse_utc_timestamp(&rule.effective_from) {
+            Ok(value) => value,
+            Err(message) => {
+                errors.push(format!(
+                    "tariff v3 rule '{}' has invalid effectiveFrom: {}",
+                    rule.rule_id, message
+                ));
+                continue;
+            }
+        };
+        let effective_to = match &rule.effective_to {
+            Some(value) => match crate::validate::parse_utc_timestamp(value) {
+                Ok(parsed) => Some(parsed),
+                Err(message) => {
+                    errors.push(format!(
+                        "tariff v3 rule '{}' has invalid effectiveTo: {}",
+                        rule.rule_id, message
+                    ));
+                    continue;
+                }
+            },
+            None => None,
+        };
+        if effective_to.is_some_and(|end| end <= effective_from) {
+            errors.push(format!(
+                "tariff v3 rule '{}' effectiveTo must be after effectiveFrom",
+                rule.rule_id
+            ));
+        }
+        rule_bounds.insert(rule.rule_id.as_str(), (effective_from, effective_to));
+        rule_groups
+            .entry((
+                rule.vehicle_class.as_str(),
+                rule.payment_method.as_str(),
+                rule.fare_basis.as_str(),
+            ))
+            .or_default()
+            .push(rule);
+    }
+    for rules in rule_groups.values_mut() {
+        rules.sort_by(|left, right| left.effective_from.cmp(&right.effective_from));
+        for pair in rules.windows(2) {
+            let previous = rule_bounds.get(pair[0].rule_id.as_str());
+            let current = rule_bounds.get(pair[1].rule_id.as_str());
+            if let (Some((_, previous_end)), Some((current_start, _))) = (previous, current) {
+                if previous_end.is_none() || previous_end.is_some_and(|end| end > *current_start) {
+                    errors.push(format!(
+                        "tariff v3 rules '{}' and '{}' have overlapping effective intervals",
+                        pair[0].rule_id, pair[1].rule_id
+                    ));
+                }
+            }
+        }
+    }
+
+    let mut distance_by_id = HashMap::new();
+    let mut evidence_ids = HashSet::new();
+    for evidence in &tariffs.distance_evidence {
+        if !evidence_ids.insert(evidence.evidence_id.as_str()) {
+            errors.push(format!(
+                "tariff v3 evidenceId '{}' is duplicated",
+                evidence.evidence_id
+            ));
+        }
+        if distance_by_id
+            .insert(evidence.evidence_id.as_str(), evidence)
+            .is_some()
+        {
+            errors.push(format!(
+                "tariff v3 distance evidenceId '{}' is duplicated",
+                evidence.evidence_id
+            ));
+        }
+        let Some(document) = document_by_id.get(evidence.document_id.as_str()) else {
+            errors.push(format!(
+                "tariff v3 distance evidence '{}' references unknown document '{}'",
+                evidence.evidence_id, evidence.document_id
+            ));
+            continue;
+        };
+        if document.edition != evidence.edition
+            || document.document_sha256.as_deref() != Some(evidence.document_sha256.as_str())
+        {
+            errors.push(format!(
+                "tariff v3 distance evidence '{}' does not match its document",
+                evidence.evidence_id
+            ));
+        }
+        if evidence.page == 0
+            || evidence.row_label.is_empty()
+            || evidence.column_label.is_empty()
+            || evidence.cell.is_empty()
+            || evidence.entry_ramp_id.is_empty()
+            || evidence.exit_ramp_id.is_empty()
+        {
+            errors.push(format!(
+                "tariff v3 distance evidence '{}' has an empty PDF or endpoint field",
+                evidence.evidence_id
+            ));
+        }
+        if evidence.distance_meters == 0
+            || evidence.observed_base_fare_yen == 0
+            || evidence.observed_base_fare_yen != evidence.calculated_base_fare_yen
+        {
+            errors.push(format!(
+                "tariff v3 distance evidence '{}' has inconsistent observed values",
+                evidence.evidence_id
+            ));
+        }
+    }
+
+    let mut pending_by_id = HashMap::new();
+    for evidence in &tariffs.pending_evidence {
+        if !evidence_ids.insert(evidence.evidence_id.as_str()) {
+            errors.push(format!(
+                "tariff v3 evidenceId '{}' is reused across evidence sets",
+                evidence.evidence_id
+            ));
+        }
+        if pending_by_id
+            .insert(evidence.evidence_id.as_str(), evidence)
+            .is_some()
+        {
+            errors.push(format!(
+                "tariff v3 pending evidenceId '{}' is duplicated",
+                evidence.evidence_id
+            ));
+        }
+        let Some(document) = document_by_id.get(evidence.document_id.as_str()) else {
+            errors.push(format!(
+                "tariff v3 pending evidence '{}' references unknown document '{}'",
+                evidence.evidence_id, evidence.document_id
+            ));
+            continue;
+        };
+        if document.edition != evidence.edition {
+            errors.push(format!(
+                "tariff v3 pending evidence '{}' does not match its document edition",
+                evidence.evidence_id
+            ));
+        }
+        if evidence.status != "pending_manual_pdf_review"
+            || evidence.page.is_some()
+            || evidence.cell.is_some()
+            || evidence.observed_base_fare_yen.is_some()
+            || evidence.observed_distance_meters.is_some()
+            || evidence.reviewed_at.is_some()
+        {
+            errors.push(format!(
+                "tariff v3 pending evidence '{}' is not fully unpriced",
+                evidence.evidence_id
+            ));
+        }
+    }
+
+    let inventory_by_id: HashMap<&str, &CanonicalRampInventoryItem> = inv
+        .ramps
+        .iter()
+        .map(|ramp| (ramp.ramp_id.as_str(), ramp))
+        .collect();
+    let mut assignment_ids = HashSet::new();
+    let mut od_keys = HashSet::new();
+    let mut assignments_by_ramps: HashMap<(&str, &str), Vec<&TariffAssignmentV3>> = HashMap::new();
+    for assignment in &tariffs.assignments {
+        if !assignment_ids.insert(assignment.assignment_id.as_str()) {
+            errors.push(format!(
+                "tariff v3 assignmentId '{}' is duplicated",
+                assignment.assignment_id
+            ));
+        }
+        if !od_keys.insert(assignment.od_key.as_str()) {
+            errors.push(format!(
+                "tariff v3 odKey '{}' is duplicated",
+                assignment.od_key
+            ));
+        }
+        if assignment.pair_ids.is_empty()
+            || assignment.pair_ids.iter().any(String::is_empty)
+            || assignment.pair_ids.iter().collect::<HashSet<_>>().len() != assignment.pair_ids.len()
+        {
+            errors.push(format!(
+                "tariff v3 assignment '{}' has empty or duplicate pairIds",
+                assignment.assignment_id
+            ));
+        }
+        if assignment.vehicle_profile.as_str() != tariffs.vehicle_profile.as_deref().unwrap_or("")
+            || assignment.vehicle_class.as_str() != tariffs.vehicle_class.as_deref().unwrap_or("")
+            || assignment.payment_method.as_str() != tariffs.payment_method.as_deref().unwrap_or("")
+            || assignment.fare_basis.as_str() != tariffs.fare_basis.as_deref().unwrap_or("")
+        {
+            errors.push(format!(
+                "tariff v3 assignment '{}' does not match the root scope",
+                assignment.assignment_id
+            ));
+        }
+        match inventory_by_id.get(assignment.entry_ramp_id.as_str()) {
+            Some(ramp) if ramp.status == "active" && ramp.kind == RampKind::GeneralEntry => {}
+            _ => errors.push(format!(
+                "tariff v3 assignment '{}' has invalid entryRampId '{}'",
+                assignment.assignment_id, assignment.entry_ramp_id
+            )),
+        }
+        match inventory_by_id.get(assignment.exit_ramp_id.as_str()) {
+            Some(ramp) if ramp.status == "active" && ramp.kind == RampKind::GeneralExit => {}
+            _ => errors.push(format!(
+                "tariff v3 assignment '{}' has invalid exitRampId '{}'",
+                assignment.assignment_id, assignment.exit_ramp_id
+            )),
+        }
+        assignments_by_ramps
+            .entry((
+                assignment.entry_ramp_id.as_str(),
+                assignment.exit_ramp_id.as_str(),
+            ))
+            .or_default()
+            .push(assignment);
+
+        let Some(base_evidence) = distance_by_id.get(assignment.distance_evidence_id.as_str())
+        else {
+            errors.push(format!(
+                "tariff v3 assignment '{}' references unknown distanceEvidenceId '{}'",
+                assignment.assignment_id, assignment.distance_evidence_id
+            ));
+            continue;
+        };
+        if base_evidence.entry_ramp_id != assignment.entry_ramp_id
+            || base_evidence.exit_ramp_id != assignment.exit_ramp_id
+            || base_evidence.distance_meters != assignment.billing_distance_meters
+        {
+            errors.push(format!(
+                "tariff v3 assignment '{}' does not match its base distance evidence",
+                assignment.assignment_id
+            ));
+        }
+
+        let expected_rule_ids = tariffs
+            .tariff_rules
+            .iter()
+            .filter(|rule| {
+                rule.vehicle_class == assignment.vehicle_class
+                    && rule.payment_method == assignment.payment_method
+                    && rule.fare_basis == assignment.fare_basis
+            })
+            .map(|rule| rule.rule_id.as_str())
+            .collect::<HashSet<_>>();
+        if assignment.prices.len() != expected_rule_ids.len() {
+            errors.push(format!(
+                "tariff v3 assignment '{}' has {} prices for {} applicable rules",
+                assignment.assignment_id,
+                assignment.prices.len(),
+                expected_rule_ids.len()
+            ));
+        }
+        let mut used_rule_ids = HashSet::new();
+        for price in &assignment.prices {
+            if !used_rule_ids.insert(price.rule_id.as_str()) {
+                errors.push(format!(
+                    "tariff v3 assignment '{}' repeats price ruleId '{}'",
+                    assignment.assignment_id, price.rule_id
+                ));
+            }
+            if !expected_rule_ids.contains(price.rule_id.as_str()) {
+                errors.push(format!(
+                    "tariff v3 assignment '{}' uses out-of-scope rule '{}'",
+                    assignment.assignment_id, price.rule_id
+                ));
+            }
+            let Some(rule) = rule_by_id.get(price.rule_id.as_str()) else {
+                errors.push(format!(
+                    "tariff v3 assignment '{}' references unknown ruleId '{}'",
+                    assignment.assignment_id, price.rule_id
+                ));
+                continue;
+            };
+            if price.effective_from != rule.effective_from
+                || price.effective_to != rule.effective_to
+            {
+                errors.push(format!(
+                    "tariff v3 assignment '{}' price interval does not match rule '{}'",
+                    assignment.assignment_id, price.rule_id
+                ));
+            }
+            if price.status == "priced" {
+                let Some(evidence) = distance_by_id.get(price.evidence_id.as_str()) else {
+                    errors.push(format!(
+                        "tariff v3 assignment '{}' priced record references unknown evidence '{}'",
+                        assignment.assignment_id, price.evidence_id
+                    ));
+                    continue;
+                };
+                let Some(distance_evidence) =
+                    distance_by_id.get(price.distance_evidence_id.as_str())
+                else {
+                    errors.push(format!(
+                        "tariff v3 assignment '{}' priced record references unknown distance evidence '{}'",
+                        assignment.assignment_id, price.distance_evidence_id
+                    ));
+                    continue;
+                };
+                if price.evidence_id != price.distance_evidence_id
+                    || evidence.evidence_id != distance_evidence.evidence_id
+                    || price.tariff_status != "priced"
+                    || price.amount_yen != Some(evidence.observed_base_fare_yen)
+                    || price.observed_base_fare_yen != Some(evidence.observed_base_fare_yen)
+                    || price.observed_distance_meters != Some(evidence.distance_meters)
+                {
+                    errors.push(format!(
+                        "tariff v3 assignment '{}' priced record does not match its evidence",
+                        assignment.assignment_id
+                    ));
+                }
+            } else if price.status == "pending_pdf_review" {
+                let Some(evidence) = pending_by_id.get(price.evidence_id.as_str()) else {
+                    errors.push(format!(
+                        "tariff v3 assignment '{}' pending record references unknown evidence '{}'",
+                        assignment.assignment_id, price.evidence_id
+                    ));
+                    continue;
+                };
+                if price.evidence_id != price.distance_evidence_id
+                    || evidence.evidence_id != price.distance_evidence_id
+                    || price.tariff_status != "unpriced"
+                    || price.amount_yen.is_some()
+                    || price.observed_base_fare_yen.is_some()
+                    || price.observed_distance_meters.is_some()
+                {
+                    errors.push(format!(
+                        "tariff v3 assignment '{}' pending record is not fully unpriced",
+                        assignment.assignment_id
+                    ));
+                }
+            } else {
+                errors.push(format!(
+                    "tariff v3 assignment '{}' has unknown price status '{}'",
+                    assignment.assignment_id, price.status
+                ));
+            }
+        }
+        for rule_id in expected_rule_ids.difference(&used_rule_ids) {
+            errors.push(format!(
+                "tariff v3 assignment '{}' is missing ruleId '{}'",
+                assignment.assignment_id, rule_id
+            ));
+        }
+    }
+
+    for pair in &tariffs.verified_od_pairs {
+        let Some(assignments) =
+            assignments_by_ramps.get(&(pair.entry_ramp_id.as_str(), pair.exit_ramp_id.as_str()))
+        else {
+            continue;
+        };
+        for assignment in assignments {
+            if pair.billing_distance_meters != assignment.billing_distance_meters {
+                errors.push(format!(
+                    "legacy tariff projection for '{} -> {}' does not match assignment '{}'",
+                    pair.entry_ramp_id, pair.exit_ramp_id, assignment.assignment_id
+                ));
+            }
+            let matching_price = assignment.prices.iter().find(|price| {
+                price.effective_from == pair.effective_from.clone().unwrap_or_default()
+                    && price.effective_to == pair.effective_to
+            });
+            let exact_match = match (pair.amount_yen, matching_price) {
+                (Some(amount), Some(price)) => price.amount_yen == Some(amount),
+                (None, Some(price)) => price.amount_yen.is_none(),
+                _ => false,
+            };
+            let compatible_open_projection = pair.effective_to.is_none()
+                && assignment.prices.iter().any(|price| {
+                    price.status == "priced"
+                        && Some(price.effective_from.as_str()) == pair.effective_from.as_deref()
+                        && price.amount_yen == pair.amount_yen
+                });
+            if !exact_match && !compatible_open_projection {
+                errors.push(format!(
+                    "legacy tariff projection for '{} -> {}' does not match assignment '{}'",
+                    pair.entry_ramp_id, pair.exit_ramp_id, assignment.assignment_id
+                ));
+            }
+        }
+    }
+}
+
 /// Validates OD tariffs against the canonical inventory.
 pub fn validate_od_tariffs(
     tariffs: &OdTariffsFile,
     inv: &RampInventoryFile,
 ) -> Result<(), Vec<String>> {
     let mut errors = Vec::new();
+    if tariffs.version >= 3 {
+        validate_versioned_od_tariffs(tariffs, inv, &mut errors);
+    }
     let entry_ramp_ids: HashSet<&str> = inv
         .ramps
         .iter()
@@ -2442,6 +3119,186 @@ mod tests {
         let res = validate_od_tariffs(&tariffs, &inv);
         assert!(res.is_ok(), "tariffs validation failed: {:?}", res);
         assert!(!tariffs.verified_od_pairs.is_empty());
+    }
+
+    #[test]
+    fn test_tariff_v3_golden_table_and_revision_boundary() {
+        let inv: RampInventoryFile = serde_json::from_str(
+            &fs::read_to_string(find_data_file("data/ramp-inventory.json")).unwrap(),
+        )
+        .unwrap();
+        let tariffs: OdTariffsFile = serde_json::from_str(
+            &fs::read_to_string(find_data_file("data/od-tariffs.json")).unwrap(),
+        )
+        .unwrap();
+        validate_od_tariffs(&tariffs, &inv).unwrap();
+
+        let expected = [
+            (
+                "c1-outer:kandabashi-takaracho",
+                3,
+                "神田橋",
+                "宝町",
+                1_700,
+                300,
+                "p03:row-c1-kandabashi:column-c1-takaracho:base-etc:300yen:1.7km",
+            ),
+            (
+                "c1-outer:kasumigaseki-daikancho",
+                3,
+                "霞が関",
+                "代官町",
+                12_400,
+                570,
+                "p03:row-c1-kasumigaseki:column-c1-daikancho:base-etc:570yen:12.4km",
+            ),
+            (
+                "c1-outer:ginza-shibakoen",
+                3,
+                "銀座",
+                "芝公園",
+                3_400,
+                300,
+                "p03:row-c1-ginza:column-c1-shibakoen:base-etc:300yen:3.4km",
+            ),
+            (
+                "c1-outer:shibakoen-iikura",
+                3,
+                "芝公園",
+                "飯倉",
+                1_600,
+                300,
+                "p03:row-c1-shibakoen:column-c1-iikura:base-etc:300yen:1.6km",
+            ),
+            (
+                "c1-inner:kasumigaseki-shibakoen",
+                3,
+                "霞が関",
+                "芝公園",
+                3_700,
+                300,
+                "p03:row-c1-kasumigaseki:column-c1-shibakoen:base-etc:300yen:3.7km",
+            ),
+            (
+                "c1-inner:daikancho-kasumigaseki",
+                3,
+                "代官町",
+                "霞が関",
+                2_300,
+                300,
+                "p03:row-c1-daikancho:column-c1-kasumigaseki:base-etc:300yen:2.3km",
+            ),
+            (
+                "c1-inner:shibakoen-shiodome",
+                3,
+                "芝公園",
+                "汐留",
+                2_400,
+                300,
+                "p03:row-c1-shibakoen:column-c1-shiodome:base-etc:300yen:2.4km",
+            ),
+            (
+                "c1-inner:takaracho-kandabashi",
+                3,
+                "宝町",
+                "神田橋",
+                1_700,
+                300,
+                "p03:row-c1-takaracho:column-c1-kandabashi:base-etc:300yen:1.7km",
+            ),
+            (
+                "c1-inner:ginza-shintomicho",
+                3,
+                "銀座",
+                "新富町",
+                400,
+                300,
+                "p03:row-c1-ginza:column-c1-shintomicho:base-etc:300yen:0.4km",
+            ),
+            (
+                "2:meguro-tengenji",
+                4,
+                "目黒",
+                "天現寺",
+                19_400,
+                790,
+                "p04:row-2-meguro:column-2-tengenji:base-etc:790yen:19.4km",
+            ),
+        ];
+        assert_eq!(tariffs.assignments.len(), expected.len());
+        for (od_key, page, row, column, distance_meters, amount_yen, cell) in expected {
+            let assignment = tariffs
+                .assignments
+                .iter()
+                .find(|assignment| assignment.od_key == od_key)
+                .unwrap();
+            let evidence = tariffs
+                .distance_evidence
+                .iter()
+                .find(|evidence| evidence.evidence_id == assignment.distance_evidence_id)
+                .unwrap();
+            let price = assignment
+                .prices
+                .iter()
+                .find(|price| price.status == "priced")
+                .unwrap();
+            assert_eq!(evidence.page, page);
+            assert_eq!(evidence.row_label, row);
+            assert_eq!(evidence.column_label, column);
+            assert_eq!(evidence.cell, cell);
+            assert_eq!(evidence.distance_meters, distance_meters);
+            assert_eq!(evidence.observed_base_fare_yen, amount_yen);
+            assert_eq!(assignment.billing_distance_meters, distance_meters);
+            assert_eq!(price.amount_yen, Some(amount_yen));
+            assert_eq!(price.observed_distance_meters, Some(distance_meters));
+        }
+
+        let revision = tariffs
+            .documents
+            .iter()
+            .find(|document| document.document_id == "shutoko-2026-10-revision-material")
+            .unwrap();
+        assert_eq!(
+            revision.document_sha256.as_deref(),
+            Some("f80126994b3deee36e198f947f3f4f4c3219dd16473bbd9bc9dd296115345702")
+        );
+        let revised_rule = tariffs
+            .tariff_rules
+            .iter()
+            .find(|rule| rule.rule_id == "shutoko-etc-ordinary-2026-10")
+            .unwrap();
+        assert_eq!(revised_rule.minimum_distance_meters, Some(3_900));
+        assert!(revised_rule.source_refs.iter().any(|source| {
+            source.document_id.as_deref() == Some("shutoko-2026-10-revision-material")
+        }));
+        assert_eq!(calculate_versioned_tariff_yen(3_900, revised_rule), 300);
+        assert_eq!(calculate_versioned_tariff_yen(4_000, revised_rule), 310);
+    }
+
+    #[test]
+    fn test_tariff_v3_rejects_bad_references_and_overlapping_rules() {
+        let inv: RampInventoryFile = serde_json::from_str(
+            &fs::read_to_string(find_data_file("data/ramp-inventory.json")).unwrap(),
+        )
+        .unwrap();
+        let tariffs: OdTariffsFile = serde_json::from_str(
+            &fs::read_to_string(find_data_file("data/od-tariffs.json")).unwrap(),
+        )
+        .unwrap();
+
+        let mut bad_reference = tariffs.clone();
+        bad_reference.assignments[0].prices[0].evidence_id = "evidence:missing".to_string();
+        let errors = validate_od_tariffs(&bad_reference, &inv).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("unknown evidence")));
+
+        let mut overlapping = tariffs.clone();
+        overlapping.tariff_rules[0].effective_to = None;
+        let errors = validate_od_tariffs(&overlapping, &inv).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("overlapping effective intervals")));
     }
 
     #[test]

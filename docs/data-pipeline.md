@@ -125,11 +125,11 @@
 
 #### 新規登録 7 ペア（2026-09-10）
 
-いずれも普通車 ETC で料金距離に応じた下限料金 300 円が適用される。料金は神田橋〜宝町と同一の考え方により、改定前後 2 レコード（`2022-03-31T15:00:00Z`〜`2026-09-30T15:00:00Z` / `2026-09-30T15:00:00Z`〜無期限、いずれも 300 円）を登録している。出典は共通で、料金距離・料金は首都高料金表 2025 年 4 月改訂版 P.3、1 区間先の隣接関係は公式路線図に基づく（参照日 `2026-09-10`）。
+7 ペアの 2025 年 4 月公式表の該当セルに記載された料金距離と普通車 ETC 基本料金を登録する。6 ペアは下限料金 300 円で、改定前後を各 1 レコード保持する。霞が関入口→代官町出口は P.3 の行「霞が関」、列「代官町」が 12.4km・570 円であり、逆方向の 2.3km・300 円を転用しない。2026-10-01 以降は OD 表 PDF の未確認状態を維持し、この 1 ペアには改定前レコードだけを登録する。1 区間先の隣接関係は公式路線図に基づく（参照日 `2026-09-10`）。
 
 | # | 方向 | 入口 → 出口 | 料金距離 | 普通車 ETC | ペア ID | 入口 way | 出口 way | 基準点（anchor）node |
 |---|------|------------|---------|-----------|---------|---------|---------|---------------------|
-| 1 | 外回り | 霞が関入口 → 代官町出口 | 2.3km | 300 円 | `bp:c1-outer:kasumigaseki-daikancho` | `916571610` | `276920911` | `577255571` |
+| 1 | 外回り | 霞が関入口 → 代官町出口 | 12.4km | 570 円 | `bp:c1-outer:kasumigaseki-daikancho` | `916571610` | `276920911` | `577255571` |
 | 2 | 外回り | 銀座入口 → 芝公園出口 | 3.4km | 300 円 | `bp:c1-outer:ginza-shibakoen` | `4848922` | `944671542` | `31254160` |
 | 3 | 外回り | 芝公園入口 → 飯倉出口 | 1.6km | 300 円 | `bp:c1-outer:shibakoen-iikura` | `4853801` | `203832842` | `31296971` |
 | 4 | 内回り | 霞が関入口 → 芝公園出口 | 3.7km | 300 円 | `bp:c1-inner:kasumigaseki-shibakoen` | `916571615` | `203873821` | `264877748` |
@@ -138,10 +138,10 @@
 | 7 | 内回り | 宝町入口 → 神田橋出口 | 1.7km | 300 円 | `bp:c1-inner:takaracho-kandabashi` | `378284514` | `390441534` | `1891818143` |
 
 - 出典（共通）:
-  - 料金距離・料金: `https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf`（旧 URL `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf` は 2026-09-10 時点で 404。首都高料金表 2025 年 4 月改訂版 P.3「料金・距離表（ETC 普通車）」）
+  - 料金距離・料金: `https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf`（旧 URL `https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf` は 2026-09-10 時点で 404。首都高料金表 2025年4月改訂版 P.3「料金・距離表（ETC 普通車）」）
   - 路線図（1 区間先の隣接関係）: `https://www.shutoko.jp/use/network/map/`
   - 料金体系・下限料金: `https://www.shutoko.jp/tolls/about/price/`（旧 URL `https://www.shutoko.jp/fee/fee-info/about/` は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト）
-  - 2026-10-01 改定発表（下限料金 300 円維持）: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
+  - 2026-10-01 改定発表（OD 表は未確認）: `https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/`
   - 参照日: `2026-09-10`
 
 > **注記（内回り銀座入口の 1 区間先について）**:
@@ -355,7 +355,7 @@ mandatory lap 自身の境界は `routePlan.mandatoryLap.firstEdgeId` / `lastEdg
 | `entryOsmWayId` / `entryName` | `entryId` と `entryEndpoint` | graph Edge ID は build で解決し、way 変更として seed へ書き戻さない。 |
 | `exitOsmWayId` / `exitName` | `exitId` と `exitEndpoint` | 同上。 |
 | `status`, `oneSectionAheadVerified` | `pairEligibility.status`, `pairEligibility.oneSectionAheadVerified` | raw status は変更しない。`verified` は v2 の `verified_one_section_ahead` へ正規化する。 |
-| `prices[]` | `tariff.prices[]`, `tariff.status` | 300円→300円と有効期間を保持する。radial は #41 まで空。 |
+| `prices[]` | `tariff.prices[]`, `tariff.status` | 6 ペアは 300 円→300 円、霞が関→代官町は改定前 570 円のみを保持する。radial は #41 まで空。 |
 | なし | `routePlanVersion`, `entryCorridor`, `anchor`, `mandatoryLap`, `returnCorridor` | radial variant だけを必須にする。 |
 | なし | `pairEligibility`, `loopValidation`, `tariff` の独立 status | endpoint support、routing capability、loop validation、料金状態を混在させない。 |
 
@@ -649,7 +649,7 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 - 逆方向、同名JCT、relation非所属mainline way、別armへの近道を拒否する。
 - segment内のEdge反復を拒否し、route planが宣言したsegment間反復を許す。
 - 探索予算超過を「Exitなし」と読み替えない。
-- 既存C1 8件のanchor、edge resolution、First Exit、300円→300円、verified 2件・unverified 6件を回帰testで固定する。
+- 既存 C1 8 件の anchor、edge resolution、First Exit、6 件の 300 円→300 円と霞が関→代官町の改定前 570 円、verified 2 件・unverified 6 件を回帰テストで固定する。
 
 
 ### 3.4 2号計画の診断用データと公開 BillingPair を分ける
@@ -795,28 +795,26 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
 
 - **料金定義ファイル**: `data/od-tariffs.json`
 - **公式普通車 ETC 料金体系**:
-  - 下限料金: 300 円（料金距離 ≤ 4.3 km）
-  - 距離制料金（> 4.3 km）: `(料金距離 km × キロ単価 + ターミナルチャージ) × 1.10`（10 円単位四捨五入）
-    - キロ単価: 29.52 円/km（2026 年時点改定後 34.50 円/km）
-    - ターミナルチャージ: 150 円
-  - 上限料金: 1,950 円（普通車 ETC 上限）
+  - 2026-09-30 まで: 料金距離 4.3 km 以下は下限料金 300 円。4.3 km を超える場合は `(料金距離 km × 29.52 円 + 150 円) × 1.10` を 10 円単位四捨五入し、1,950 円で上限を設ける。
+  - 2026-09-30 以降: 料金距離 3.9 km 以下は下限料金 300 円。3.9 km を超える場合は `(料金距離 km × 32.472 円 + 150 円) × 1.10` を 10 円単位四捨五入し、2,130 円かつ 55 km の額を下限とする上限を設ける。
+  - 3.9 km は 0.1 km 単位の距離量子、改定後単価、1.10 の税率、10 円単位四捨五入から規則的に 300 円から 310 円へ切り替わる境界である。
 - **料金距離と実走行距離のスキーマ分離**:
   - `shutoko_distance_meters`: 首都高速上の実際の走行距離（エッジ長の積算値）。周回ループを含むため数十〜百キロ超になり得る。
   - `toll.billing_distance_meters`: 入口〜出口間の公称料金距離（OD テーブルまたはベースライン最短経路長）。
   - **OSM 幾何距離を公称料金距離として扱わない規律**: グラフ幾何から計算される実走距離（`shutoko_distance_meters`）を公称料金距離として勝手に流用しない。料金計算は `data/od-tariffs.json` の検証済み OD ペアまたは公式料金距離テーブルに明示された値のみを根拠とし、未定義区間では安易な幾何距離代用を行わず未計算（None）として誠実にモデル化する。
-  - 周回走行を行っても、料金距離は入口と出口の組み合わせで決める。現行 C1 8件の legacy price record は300円→300円だが、2号 radial pair の金額を「1区間先だから300円」という理由だけで決めない。
+  - 周回走行を行っても、料金距離は入口と出口の組み合わせで決める。現行 C1 8 件のうち 6 件は legacy price record が 300 円→300 円だが、霞が関→代官町は改定前 570 円、改定後は未確認である。2 号 radial pair の金額を「1 区間先だから 300 円」という理由だけで決めない。
 - **検証済み OD ペア**:
   - 頻出・代表的な OD ペア（C1 各ランプ、八重洲線接続、主要放射線連絡等）について公式料金距離および料金額を検証済みデータとして保持。
 
-### 9.1 Tariff v3 data and pending 2026-10 review
+### 9.1 料金 v3 データと 2026-10 OD 表の未確認状態
 
-`data/od-tariffs.json` version 3 separates `tariffRules`, period-specific `distanceEvidence`, and ten unique OD `assignments`. The 2025-04 evidence is based on the locally cached `2504_pamphlet_fee_table.pdf`; each record identifies the PDF page, row, column, cell, base-fare variant, distance, and SHA-256. The 2025-04 ordinary rule covers `[2022-03-31T15:00:00Z, 2026-09-30T15:00:00Z)`. The 2026-10 rule starts at `2026-09-30T15:00:00Z` and records 32.472 yen/km, 300 yen minimum, 2,130 yen maximum, 150 yen terminal charge, 1.10 tax, 100 m distance units, and half-up rounding to 10 yen. The 2026-10 rule source is the cached 2026-04 guide for the formula structure; it is not an OD fare-cell review.
+`data/od-tariffs.json` version 3 は `tariffRules`、期間ごとの `distanceEvidence`、10 件の一意な OD `assignments` を分離する。2025-04 の証拠はローカル保存した `2504_pamphlet_fee_table.pdf` に基づき、各レコードに PDF ページ、行、列、セル、基本料金区分、距離、SHA-256 を保持する。2025-04 の普通車規則は `[2022-03-31T15:00:00Z, 2026-09-30T15:00:00Z)` とする。2026-10 の規則は `2026-09-30T15:00:00Z` から開始し、1 km あたり 32.472 円、下限 300 円、上限 2,130 円、ターミナルチャージ 150 円、税率 1.10、距離量子 100 m、10 円単位の四捨五入、および下限費用が 300 円となる距離境界 3.9 km。改定後パラメータの根拠は SHA-256 `f80126994b3deee36e198f947f3f4f4c3219dd16473bbd9bc9dd296115345702` のローカル保存済み `31-toll-shiryo.pdf` P.5-6 であり、この資料は OD セル確認の証拠ではない。
 
-The two Route 2 plans share one unique tariff assignment for Meguro entry to Tengenji exit. The verified 2025-04 cell is page 4, row `目黒`, column `天現寺`, 19.4 km, and 790 yen. The earlier 14.2 km / 630 yen design value referred to a different column and is not used.
+2 号線の inner・outer 計画は目黒入口→天現寺出口の 1 件の一意な割当を共有する。2025-04 の確認済みセルは P.4、行 `目黒`、列 `天現寺`、19.4 km、790 円である。旧設計値の 14.2 km・630 円は別の列の値であるため採用しない。
 
-Every assignment has one 2025-04 `priced` record and one 2026-10 `pending_pdf_review` record. Pending records have a stable pending evidence ID but null fare, distance, page, and cell values. Runtime must resolve a pending record as `unpriced`; it must not calculate a substitute amount from the rule or from OSM distance. The legacy `verifiedOdPairs` projection remains temporarily so the existing all-real-v3 reader and regression tests remain compatible; it is not v3 authority.
+各割当には 2025-04 の `priced` レコードと 2026-10 の `pending_pdf_review` レコードを 1 件ずつ保持する。未確認レコードには安定した evidence ID を保持するが、料金、距離、ページ、セルは null とする。実行時は未確認レコードを `unpriced` として扱い、規則または OSM 距離から代替金額を計算してはならない。legacy `verifiedOdPairs` は現行 reader との暫定互換投影であり、料金 v3 の正本ではない。
 
-When the user places `.cache/official-fare/ryoukin-kaitei_toll_rates.pdf`, the next integration step must calculate its SHA-256, review all ten page/row/column cells twice, fill the matching `pendingEvidence` records, and then update each post-2026-10 assignment price with the reviewed amount, distance, `evidenceId`, and `distanceEvidenceId`. Only a priced record whose rule calculation equals the reviewed PDF cell may change the runtime status from `unpriced` to `priced`.
+利用者が `.cache/official-fare/ryoukin-kaitei_toll_rates.pdf` を配置した後、次の統合手順では SHA-256 を算出し、10 件すべてのページ・行・列のセルを 2 回確認する。該当する `pendingEvidence` を入力した後、2026-10 以降の各割当について確認済み金額、距離、`evidenceId`、`distanceEvidenceId` を更新する。規則計算値が確認済み PDF セルと一致する `priced` レコードだけを、実行時状態を `unpriced` から `priced` へ変更できる。
 
 ## 10. 成果物公開アーティファクト（`ramps.json`）
 

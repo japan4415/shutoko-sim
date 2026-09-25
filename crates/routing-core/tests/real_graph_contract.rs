@@ -121,21 +121,29 @@ fn real_graph_deserialization_and_schema_validation() {
     );
 
     for pair in &g.billing_pairs {
+        let expected_prices = if pair.id == "bp:c1-outer:kasumigaseki-daikancho" {
+            vec![570]
+        } else {
+            vec![300, 300]
+        };
         assert_eq!(
-            pair.prices.len(),
-            2,
-            "billing pair {} prices must have 2 records",
+            pair.prices
+                .iter()
+                .map(|price| price.amount_yen)
+                .collect::<Vec<_>>(),
+            expected_prices,
+            "billing pair {} prices must match the reviewed tariff records",
             pair.id
         );
-        assert_eq!(pair.prices[0].amount_yen, 300);
         assert_eq!(pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
         assert_eq!(
             pair.prices[0].effective_to.as_deref(),
             Some("2026-09-30T15:00:00Z")
         );
-        assert_eq!(pair.prices[1].amount_yen, 300);
-        assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-        assert_eq!(pair.prices[1].effective_to, None);
+        if pair.prices.len() == 2 {
+            assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+            assert_eq!(pair.prices[1].effective_to, None);
+        }
         if pair.status == shutoko_routing_core::VerificationStatus::Verified {
             assert!(
                 pair.entry_ramp_id.is_some() && pair.exit_ramp_id.is_some(),
@@ -629,6 +637,7 @@ fn explicit_ramps_reject_non_public_kinds_and_report_unreachable_od() {
 struct ConnectedPairContract {
     pair_id: &'static str,
     max_minutes: u64,
+    amount_yen: u64,
     rationale: &'static str,
 }
 
@@ -636,11 +645,13 @@ const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 2] = [
     ConnectedPairContract {
         pair_id: "bp:c1-outer:kandabashi-takaracho",
         max_minutes: 60,
+        amount_yen: 300,
         rationale: "神田橋〜宝町（外回り）。C1 一周の実走行計画時間は約30分（base=1503s, plan=1803s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
     },
     ConnectedPairContract {
         pair_id: "bp:c1-outer:kasumigaseki-daikancho",
         max_minutes: 60,
+        amount_yen: 570,
         rationale: "霞が関〜大官町（外回り）。一般道排除後、Entry from-node を起点とするためアクセス時間 0。C1 一周の標準窓 max_minutes=60 で自ペア候補が採択される。",
     },
 ];
@@ -719,9 +730,10 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
 
         assert_eq!(
             candidate.toll.amount_yen,
-            Some(300),
-            "toll amount for pair {} must be 300 yen",
-            pair.id
+            Some(contract.amount_yen),
+            "toll amount for pair {} must be {} yen",
+            pair.id,
+            contract.amount_yen
         );
         assert!(
             candidate.r#loop.distance_meters > 10000,
@@ -751,15 +763,18 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         .iter()
         .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
     {
+        let expected_prices = if pair.id == "bp:c1-outer:kasumigaseki-daikancho" {
+            vec![570]
+        } else {
+            vec![300, 300]
+        };
         assert_eq!(
-            pair.prices.len(),
-            2,
-            "pair {} must have 2 price records",
-            pair.id
-        );
-        assert!(
-            pair.prices.iter().all(|p| p.amount_yen == 300),
-            "pair {} prices must be 300 yen",
+            pair.prices
+                .iter()
+                .map(|price| price.amount_yen)
+                .collect::<Vec<_>>(),
+            expected_prices,
+            "pair {} prices must match the reviewed tariff records",
             pair.id
         );
         assert!(!pair.entry_to_anchor_edge_ids.is_empty());

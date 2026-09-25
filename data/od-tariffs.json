@@ -42,6 +42,19 @@
       ]
     },
     {
+      "documentId": "shutoko-2026-10-revision-material",
+      "edition": "2026-10",
+      "url": "https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/",
+      "cachePath": ".cache/31-toll-shiryo.pdf",
+      "documentSha256": "f80126994b3deee36e198f947f3f4f4c3219dd16473bbd9bc9dd296115345702",
+      "status": "verified",
+      "reviewedAt": "2026-09-25T00:00:00Z",
+      "reviewMethods": [
+        "page_image",
+        "pdf_text_layer"
+      ]
+    },
+    {
       "documentId": "shutoko-2026-10-od-fare-table",
       "edition": "2026-10",
       "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin-kaitei_toll_rates.pdf",
@@ -111,6 +124,7 @@
       "taxBasisPoints": 11000,
       "minimumYen": 300,
       "maximumYen": 2130,
+      "minimumDistanceMeters": 3900,
       "rounding": {
         "mode": "half_up",
         "multipleYen": 10
@@ -119,11 +133,17 @@
         {
           "documentId": "shutoko-2026-04-fare-guide",
           "page": 4,
-          "location": "distance quantum, rounding, and formula structure"
+          "location": "0.1 km quantum, half-up rounding to 10 yen, and distance-based formula structure"
         },
         {
-          "source": "design-fix.tariffModel.requiredPeriods[1]",
-          "location": "ordinary 32.472 yen/km, 300 yen minimum, and 2130 yen maximum selected for the 2026-10 rule"
+          "documentId": "shutoko-2026-10-revision-material",
+          "page": 5,
+          "location": "ordinary 32.472 yen/km, 300 yen minimum, 2130 yen maximum, and 150 yen terminal charge"
+        },
+        {
+          "documentId": "shutoko-2026-10-revision-material",
+          "page": 6,
+          "location": "ordinary 300 yen minimum and 2130 yen maximum after the 2026-10 revision"
         },
         {
           "documentId": "shutoko-2026-10-od-fare-table",
@@ -168,13 +188,13 @@
       "routeLabel": "C1",
       "rowLabel": "霞が関",
       "columnLabel": "代官町",
-      "cell": "p03:row-c1-kasumigaseki:column-c1-daikancho:base-etc:300yen:2.3km",
+      "cell": "p03:row-c1-kasumigaseki:column-c1-daikancho:base-etc:570yen:12.4km",
       "fareVariant": "base_etc",
       "ink": "black",
-      "distanceMeters": 2300,
-      "distanceLabel": "2.3km",
-      "observedBaseFareYen": 300,
-      "calculatedBaseFareYen": 300,
+      "distanceMeters": 12400,
+      "distanceLabel": "12.4km",
+      "observedBaseFareYen": 570,
+      "calculatedBaseFareYen": 570,
       "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
       "exitRampId": "ramp:c1-outer:daikancho-exit",
       "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf",
@@ -586,16 +606,16 @@
       "vehicleClass": "ordinary",
       "paymentMethod": "etc",
       "fareBasis": "base_toll_excluding_discounts",
-      "billingDistanceMeters": 2300,
+      "billingDistanceMeters": 12400,
       "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
       "verificationStatus": "partial_pending_2026_10_pdf",
       "prices": [
         {
           "status": "priced",
           "tariffStatus": "priced",
-          "amountYen": 300,
-          "observedBaseFareYen": 300,
-          "observedDistanceMeters": 2300,
+          "amountYen": 570,
+          "observedBaseFareYen": 570,
+          "observedDistanceMeters": 12400,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z",
           "ruleId": "shutoko-etc-ordinary-2022-04",
@@ -1055,9 +1075,17 @@
     {
       "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
       "exitRampId": "ramp:c1-outer:daikancho-exit",
-      "billingDistanceMeters": 2300,
-      "amountYen": 300,
+      "billingDistanceMeters": 12400,
+      "amountYen": 570,
       "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c1-outer:kasumigaseki-entry",
+      "exitRampId": "ramp:c1-outer:daikancho-exit",
+      "billingDistanceMeters": 12400,
+      "amountYen": null,
+      "effectiveFrom": "2026-09-30T15:00:00Z",
       "effectiveTo": null
     },
     {

@@ -966,9 +966,21 @@ mod tests {
                 .count(),
             6
         );
-        assert!(legacy_pairs.iter().all(|pair| {
-            pair.prices.len() == 2 && pair.prices.iter().all(|price| price.amount_yen == 300)
-        }));
+        assert!(legacy_pairs
+            .iter()
+            .filter(|pair| pair.id != "bp:c1-outer:kasumigaseki-daikancho")
+            .all(|pair| pair.prices.len() == 2
+                && pair.prices.iter().all(|price| price.amount_yen == 300)));
+        let corrected_pair = legacy_pairs
+            .iter()
+            .find(|pair| pair.id == "bp:c1-outer:kasumigaseki-daikancho")
+            .unwrap();
+        assert_eq!(corrected_pair.prices.len(), 1);
+        assert_eq!(corrected_pair.prices[0].amount_yen, 570);
+        assert_eq!(
+            corrected_pair.prices[0].effective_to.as_deref(),
+            Some("2026-09-30T15:00:00Z")
+        );
 
         let radial_pairs: Vec<_> = seed
             .billing_pairs

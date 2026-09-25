@@ -3513,21 +3513,21 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
 
         assert_eq!(seed_pair.status, VerificationStatus::Verified);
         assert!(seed_pair.one_section_ahead_verified);
-        assert_eq!(
-            seed_pair.prices.len(),
-            2,
-            "seed pair {} must have exactly 2 price records",
-            expected_id
-        );
-        assert_eq!(seed_pair.prices[0].amount_yen, 300);
+        if *expected_id == "bp:c1-outer:kasumigaseki-daikancho" {
+            assert_eq!(seed_pair.prices.len(), 1);
+            assert_eq!(seed_pair.prices[0].amount_yen, 570);
+        } else {
+            assert_eq!(seed_pair.prices.len(), 2);
+            assert_eq!(seed_pair.prices[0].amount_yen, 300);
+            assert_eq!(seed_pair.prices[1].amount_yen, 300);
+            assert_eq!(seed_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+            assert_eq!(seed_pair.prices[1].effective_to, None);
+        }
         assert_eq!(seed_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
         assert_eq!(
             seed_pair.prices[0].effective_to.as_deref(),
             Some("2026-09-30T15:00:00Z")
         );
-        assert_eq!(seed_pair.prices[1].amount_yen, 300);
-        assert_eq!(seed_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-        assert_eq!(seed_pair.prices[1].effective_to, None);
     }
     for unverified_id in &unverified_pair_ids {
         let seed_pair = legacy_pairs
@@ -3556,21 +3556,21 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
             .unwrap_or_else(|| panic!("graph pair {} not found in graph.json", expected_id));
 
         assert_eq!(graph_pair.status, VerificationStatus::Verified);
-        assert_eq!(
-            graph_pair.prices.len(),
-            2,
-            "graph.json billing pair {} prices must contain 2 records",
-            expected_id
-        );
-        assert_eq!(graph_pair.prices[0].amount_yen, 300);
+        if *expected_id == "bp:c1-outer:kasumigaseki-daikancho" {
+            assert_eq!(graph_pair.prices.len(), 1);
+            assert_eq!(graph_pair.prices[0].amount_yen, 570);
+        } else {
+            assert_eq!(graph_pair.prices.len(), 2);
+            assert_eq!(graph_pair.prices[0].amount_yen, 300);
+            assert_eq!(graph_pair.prices[1].amount_yen, 300);
+            assert_eq!(graph_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+            assert_eq!(graph_pair.prices[1].effective_to, None);
+        }
         assert_eq!(graph_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
         assert_eq!(
             graph_pair.prices[0].effective_to.as_deref(),
             Some("2026-09-30T15:00:00Z")
         );
-        assert_eq!(graph_pair.prices[1].amount_yen, 300);
-        assert_eq!(graph_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-        assert_eq!(graph_pair.prices[1].effective_to, None);
     }
     for unverified_id in &unverified_pair_ids {
         let graph_pair = graph

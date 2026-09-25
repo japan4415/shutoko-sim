@@ -482,7 +482,7 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
     }
   }, 30_000);
 
-  it("目黒座標は最近接の目黒入口を動的 OD として選び shutoko_time を返す", async () => {
+  it("目黒座標は最近接の目黒入口を動的 OD として選び time_per_yen のradial候補を返す", async () => {
     const wasmBytes = new Uint8Array(await readFile(new URL("shutoko_routing_bg.wasm", wasmDir)));
     const glue = await import(gluePath.href);
     await glue.default({ module_or_path: toBinary(wasmBytes) });
@@ -517,16 +517,24 @@ describe("実 WASM 統合（fetch モック → loadRelease → search）", () =
         // 同一入力の再実行はバイト完全一致（決定論）。
         expect(second).toBe(first);
         const result = await parseSearchResult(first);
-        expect(result.status).toBe("ok");
-        expect(result.candidates.length).toBeGreaterThan(0);
         expect(result.expandedStates).toBeLessThanOrEqual(100_000);
-        expect(result.rankingMode).toBe("shutoko_time");
-        for (const candidate of result.candidates) {
-          // 最近接入口優先: 返る入口はすべて目黒入口、出口は同施設の目黒出口。
-          expect(candidate.entry.rampId).toBe("ramp:2-inbound:meguro-entry");
-          expect(candidate.exit.rampId).toBe("ramp:2-outbound:meguro-exit");
-          // 動的 OD は料金未算出（amountYen=null）。
-          expect(candidate.toll.amountYen).toBeNull();
+        if (minMinutes === 15) {
+          expect(result.status).toBe("ok");
+          expect(result.candidates.length).toBeGreaterThan(0);
+          expect(result.rankingMode).toBe("time_per_yen");
+          for (const candidate of result.candidates) {
+            // 最近接入口優先: 返る入口はすべて目黒入口、radial出口は天現寺。
+            expect(candidate.entry.rampId).toBe("ramp:2-inbound:meguro-entry");
+            expect(candidate.exit.rampId).toBe("ramp:2-outbound:tengenji-exit");
+            // 2026-09-10のradial ODは790円、19400mの公式セルで価格付け済み。
+            expect(candidate.toll.amountYen).toBe(790);
+            expect(candidate.toll.billingDistanceMeters).toBe(19400);
+          }
+        } else {
+          expect(result.status).toBe("no_candidates");
+          expect(result.reason).toBe("TIME_WINDOW");
+          expect(result.candidates).toHaveLength(0);
+          expect(result.rankingMode).toBe("shutoko_time");
         }
       }
     } finally {

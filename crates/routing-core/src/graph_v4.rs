@@ -1333,7 +1333,12 @@ fn validate_resolved_segment_sources(
                 .ok_or_else(|| invalid("resolved route source segment is missing"))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    if !source_sequences_match(&sources, 0, &resolved.edge_ids, 0) {
+    let ordered_sources_match = if resolved.role == RoutePlanSegmentRole::EntryApproach {
+        entry_approach_source_sequences_match(&sources, &resolved.edge_ids)
+    } else {
+        source_sequences_match(&sources, 0, &resolved.edge_ids, 0)
+    };
+    if !ordered_sources_match {
         return Err(invalid(
             "resolved route source segments do not contain ordered edgeIds",
         ));
@@ -1390,6 +1395,47 @@ fn source_sequences_match(
                 && source_sequences_match(sources, source_index + 1, edge_ids, end)
         })
     })
+}
+
+fn entry_approach_source_sequences_match(
+    sources: &[&RouteMembershipSegment],
+    edge_ids: &[String],
+) -> bool {
+    let relation_segments = sources
+        .iter()
+        .copied()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+        .collect::<Vec<_>>();
+    let relation_edge_ids = relation_segments
+        .iter()
+        .flat_map(|segment| segment.ordered_edge_ids.iter())
+        .collect::<HashSet<_>>();
+    let Some(relation_start) = edge_ids
+        .iter()
+        .position(|edge_id| relation_edge_ids.contains(edge_id))
+    else {
+        return source_sequences_match(sources, 0, edge_ids, 0);
+    };
+    if relation_start == 0 {
+        return source_sequences_match(sources, 0, edge_ids, 0);
+    }
+    let bound_segments = sources
+        .iter()
+        .copied()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::BoundRamp)
+        .collect::<Vec<_>>();
+    let [bound_segment] = bound_segments.as_slice() else {
+        return source_sequences_match(sources, 0, edge_ids, 0);
+    };
+    if edge_ids.get(..bound_segment.ordered_edge_ids.len())
+        != Some(bound_segment.ordered_edge_ids.as_slice())
+        || edge_ids[relation_start..]
+            .iter()
+            .any(|edge_id| !relation_edge_ids.contains(edge_id))
+    {
+        return false;
+    }
+    source_sequences_match(&relation_segments, 0, &edge_ids[relation_start..], 0)
 }
 
 fn validate_endpoint_membership_binding(
@@ -1468,14 +1514,6 @@ fn validate_endpoint<'a>(
     if pair_edge.kind != expected_edge_kind || ramp_edge.kind != expected_edge_kind {
         return Err(invalid("endpoint ramp and graph edge kind mismatch"));
     }
-    let bound = match expected_edge_kind {
-        EdgeKind::Entry => ramp.node_id == ramp_edge.from && ramp.mainline_node_id == ramp_edge.to,
-        EdgeKind::Exit => ramp.mainline_node_id == ramp_edge.from && ramp.node_id == ramp_edge.to,
-        _ => false,
-    };
-    if !bound {
-        return Err(invalid("endpoint direction binding mismatch"));
-    }
     let mut segment_ids = HashSet::new();
     for segment in &endpoint.directed_segments {
         valid_id(&segment.segment_id, "endpoint segmentId")?;
@@ -1533,6 +1571,22 @@ fn validate_endpoint<'a>(
         .flat_map(|segment| segment.edge_ids.iter().cloned())
         .collect::<Vec<_>>();
     let all_edges_ref = validate_ordered_graph_edges(&edge_map, &all_edges, "endpoint", true)?;
+    let bound = match expected_edge_kind {
+        EdgeKind::Entry => {
+            all_edges_ref.first().map(|edge| edge.from.as_str()) == Some(ramp.node_id.as_str())
+                && all_edges_ref.last().map(|edge| edge.to.as_str())
+                    == Some(ramp.mainline_node_id.as_str())
+        }
+        EdgeKind::Exit => {
+            all_edges_ref.first().map(|edge| edge.from.as_str())
+                == Some(ramp.mainline_node_id.as_str())
+                && all_edges_ref.last().map(|edge| edge.to.as_str()) == Some(ramp.node_id.as_str())
+        }
+        _ => false,
+    };
+    if !bound {
+        return Err(invalid("endpoint direction binding mismatch"));
+    }
     let expected_first_or_last = if expected_edge_kind == EdgeKind::Entry {
         all_edges_ref.first().map(|edge| edge.id.as_str())
     } else {

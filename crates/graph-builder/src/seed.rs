@@ -811,6 +811,7 @@ mod tests {
             let mut value: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
             value["billingPairs"][1]["exitEndpoint"]["supportState"] =
                 json!(support_state_wire_value(state));
+            value["billingPairs"][1]["exitEndpoint"]["directedSegments"] = json!([]);
             let raw = serde_json::to_string(&value).unwrap();
             assert!(parse_billing_pairs_seed(&raw).is_ok());
         }
@@ -819,16 +820,15 @@ mod tests {
     #[test]
     fn rejects_missing_or_mismatched_osm_node_evidence() {
         let mut missing: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
-        missing["billingPairs"][1]["exitEndpoint"]["bindingCandidates"][0]["directedSegments"][0]
-            ["osmNodeIds"]
+        missing["billingPairs"][1]["exitEndpoint"]["directedSegments"][0]["osmNodeIds"]
             .as_array_mut()
             .unwrap()
             .pop();
         assert!(parse_billing_pairs_seed(&missing.to_string()).is_err());
 
         let mut mismatched: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
-        mismatched["billingPairs"][1]["exitEndpoint"]["bindingCandidates"][0]["directedSegments"]
-            [0]["fromNodeId"] = json!("n:0");
+        mismatched["billingPairs"][1]["exitEndpoint"]["directedSegments"][0]["fromNodeId"] =
+            json!("n:0");
         assert!(parse_billing_pairs_seed(&mismatched.to_string()).is_err());
     }
 
@@ -861,13 +861,7 @@ mod tests {
                 "directedSegments",
                 "0",
             ],
-            &[
-                "billingPairs",
-                "1",
-                "exitEndpoint",
-                "bindingCandidates",
-                "0",
-            ],
+            &["billingPairs", "1", "exitEndpoint", "directedSegments", "0"],
             &["billingPairs", "1", "routePlan"],
             &["billingPairs", "1", "routePlan", "entryCorridor"],
             &["billingPairs", "1", "routePlan", "anchor"],
@@ -957,19 +951,19 @@ mod tests {
                 .iter()
                 .filter(|pair| pair.status == VerificationStatus::Verified)
                 .count(),
-            2
+            7
         );
         assert_eq!(
             legacy_pairs
                 .iter()
                 .filter(|pair| pair.status == VerificationStatus::Unverified)
                 .count(),
-            6
+            1
         );
         assert!(legacy_pairs
             .iter()
             .filter(|pair| pair.id != "bp:c1-outer:kasumigaseki-daikancho")
-            .all(|pair| pair.prices.len() == 2
+            .all(|pair| pair.prices.len() == 1
                 && pair.prices.iter().all(|price| price.amount_yen == 300)));
         let corrected_pair = legacy_pairs
             .iter()
@@ -1007,29 +1001,25 @@ mod tests {
             );
             assert_eq!(
                 pair.exit_endpoint.support_state,
-                EndpointSupportState::Unresolved
+                EndpointSupportState::VerifiedBound
             );
             assert_eq!(
                 pair.pair_eligibility.status,
-                PairEligibilityStatus::Unverified
+                PairEligibilityStatus::VerifiedOneSectionAhead
             );
-            assert!(!pair.pair_eligibility.one_section_ahead_verified);
-            assert_eq!(pair.tariff.status, TariffStatus::Unpriced);
-            assert_eq!(pair.tariff.amount_yen, None);
-            assert_eq!(pair.tariff.billing_distance_meters, None);
-            assert!(pair.tariff.prices.is_empty());
-            assert_eq!(pair.exit_endpoint.binding_candidates.len(), 1);
-            assert_eq!(
-                pair.exit_endpoint.binding_candidates[0].status,
-                BindingCandidateStatus::Unresolved
-            );
-            let exit_segment = &pair.exit_endpoint.binding_candidates[0].directed_segments[0];
-            assert_eq!(exit_segment.osm_way_ids.len(), 5);
-            assert_eq!(exit_segment.osm_node_ids.len(), 18);
-            assert_eq!(exit_segment.edge_ids.len(), 17);
+            assert!(pair.pair_eligibility.one_section_ahead_verified);
+            assert_eq!(pair.tariff.status, TariffStatus::Priced);
+            assert_eq!(pair.tariff.amount_yen, Some(790));
+            assert_eq!(pair.tariff.billing_distance_meters, Some(19400));
+            assert_eq!(pair.tariff.prices.len(), 1);
+            assert_eq!(pair.exit_endpoint.binding_candidates.len(), 0);
+            let exit_segment = &pair.exit_endpoint.directed_segments[0];
+            assert_eq!(exit_segment.osm_way_ids.len(), 4);
+            assert_eq!(exit_segment.osm_node_ids.len(), 17);
+            assert_eq!(exit_segment.edge_ids.len(), 16);
             assert_eq!(
                 exit_segment.edge_ids_sha256,
-                "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+                "bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd"
             );
         }
         assert_eq!(

@@ -3195,14 +3195,21 @@ mod tests {
         assert!(res.is_ok(), "bindings validation failed: {:?}", res);
         assert_eq!(
             bindings.bindings.len(),
-            232,
-            "only verified active general ramps should have OSM bindings"
+            235,
+            "schema bindings must cover all verified active general ramps except reviewed candidates"
         );
+        assert_eq!(bindings.binding_candidates.len(), 1);
 
         let binding_by_id: HashMap<_, _> = bindings
             .bindings
             .iter()
             .map(|b| (b.ramp_id.as_str(), b))
+            .collect();
+        let candidate_by_id: HashMap<_, _> = bindings
+            .binding_candidates
+            .iter()
+            .filter(|candidate| candidate.status == "verified_bound")
+            .map(|candidate| (candidate.ramp_id.as_str(), candidate))
             .collect();
         let active_general: Vec<_> = inv
             .ramps
@@ -3218,17 +3225,18 @@ mod tests {
                 .iter()
                 .filter(|r| r.support_state.as_deref() == Some("verified_bound"))
                 .count(),
-            232
+            236
         );
         assert_eq!(
             active_general
                 .iter()
                 .filter(|r| r.support_state.as_deref() == Some("unsupported"))
                 .count(),
-            139
+            135
         );
         for ramp in &active_general {
-            let bound = binding_by_id.contains_key(ramp.ramp_id.as_str());
+            let bound = binding_by_id.contains_key(ramp.ramp_id.as_str())
+                || candidate_by_id.contains_key(ramp.ramp_id.as_str());
             assert_eq!(
                 ramp.support_state.as_deref() == Some("verified_bound"),
                 bound,
@@ -3392,7 +3400,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tengenji_multi_way_candidate_is_audited_unresolved() {
+    fn test_tengenji_multi_way_candidate_is_audited_verified() {
         let (inv, bindings, osm, candidate) = load_binding_candidate_fixture();
         assert_eq!(bindings.version, 4);
         assert_eq!(bindings.binding_candidates.len(), 1);
@@ -3408,7 +3416,7 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .all(|ramp| ramp["id"] != "ramp:2-outbound:tengenji-exit"));
+            .any(|ramp| ramp["id"] == "ramp:2-outbound:tengenji-exit"));
         let generated_ramps: serde_json::Value =
             serde_json::from_str(include_str!("../../../fixtures/generated/ramps.json")).unwrap();
         let published_tengenji = generated_ramps["ramps"]
@@ -3417,31 +3425,29 @@ mod tests {
             .iter()
             .find(|ramp| ramp["id"] == "ramp:2-outbound:tengenji-exit")
             .unwrap();
-        assert_eq!(published_tengenji["supportState"], "unsupported");
-        assert_eq!(published_tengenji["bound"], false);
-        assert!(published_tengenji["edgeId"].is_null());
-        assert_eq!(candidate.status, "unresolved");
-        assert_eq!(candidate.public_projection, "excluded_unresolved");
+        assert_eq!(published_tengenji["supportState"], "verified_bound");
+        assert_eq!(published_tengenji["bound"], true);
+        assert_eq!(published_tengenji["edgeId"], "e:w172358461:0:f");
+        assert_eq!(candidate.status, "verified_bound");
+        assert_eq!(candidate.public_projection, "included_verified");
         assert_eq!(candidate.directed_segments.len(), 1);
         let segment = &candidate.directed_segments[0];
         assert_eq!(
             segment.osm_way_ids,
-            vec![172358461, 422023171, 931759044, 172358460, 172358466]
+            vec![172358461, 422023171, 931759044, 172358460]
         );
-        assert_eq!(segment.osm_node_ids.len(), 18);
-        assert_eq!(segment.edge_ids.len(), 17);
+        assert_eq!(segment.osm_node_ids.len(), 17);
+        assert_eq!(segment.edge_ids.len(), 16);
         assert_eq!(segment.from_node_id, "n:252175582");
-        assert_eq!(segment.to_node_id, "n:1832672205");
+        assert_eq!(segment.to_node_id, "n:1832672162");
         assert_eq!(
             segment.edge_ids_sha256,
-            "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+            "bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd"
         );
-        assert_eq!(
-            audit_osm_ramp_binding_candidate_against_osm(&candidate, &inv, &osm).unwrap(),
-            vec![
-                "EARLY_SURFACE_CONNECTION".to_string(),
-                "MULTIPLE_GROUND_CONNECTION_CANDIDATES".to_string()
-            ]
+        assert!(
+            audit_osm_ramp_binding_candidate_against_osm(&candidate, &inv, &osm)
+                .unwrap()
+                .is_empty()
         );
 
         let official: serde_json::Value = serde_json::from_str(
@@ -3485,7 +3491,7 @@ mod tests {
             .iter()
             .find(|decision| decision["rampId"] == candidate.ramp_id)
             .unwrap();
-        assert_eq!(decision["supportState"], "unsupported");
+        assert_eq!(decision["supportState"], "verified_bound");
         assert_eq!(
             decision["bindingCandidateEvidence"]["rampIdInverseMap"]["rampId"],
             candidate.ramp_id
@@ -3500,42 +3506,13 @@ mod tests {
         );
         assert_eq!(
             decision["bindingCandidateEvidence"]["unresolvedReasonCodes"],
-            json!(candidate.unresolved_reason_codes)
+            json!([])
         );
     }
 
     #[test]
     fn test_verified_multi_way_candidate_validates_and_projects() {
-        let (mut inventory, mut bindings, osm, mut candidate) = load_binding_candidate_fixture();
-        let segment = &mut candidate.directed_segments[0];
-        segment.osm_way_ids.pop();
-        segment.osm_node_ids.pop();
-        segment.edge_ids.pop();
-        segment.to_node_id = "n:1832672162".into();
-        segment.edge_ids_sha256 = crate::manifest::compute_sha256(
-            serde_json::to_string(&segment.edge_ids)
-                .unwrap_or_default()
-                .as_bytes(),
-        );
-        candidate.status = "verified_bound".into();
-        candidate.public_projection = "included_verified".into();
-        candidate.unresolved_reason.clear();
-        candidate.unresolved_reason_codes.clear();
-        candidate.route_evidence.ground_way_id = 258834790;
-        bindings.binding_candidates = vec![candidate.clone()];
-
-        let ramp = inventory
-            .ramps
-            .iter_mut()
-            .find(|ramp| ramp.ramp_id == candidate.ramp_id)
-            .unwrap();
-        ramp.support_state = Some("verified_bound".into());
-        ramp.support_reason =
-            Some("firstPublicRoadConnection/v1が4-way exact bindingを証明した。".into());
-        ramp.support_evidence
-            .push("fixtures/osm/shutoko-all.json:firstPublicRoadConnection/v1".into());
-        ramp.routing_capability = Some("routable".into());
-        ramp.routing_capability_reason = Some("有向Shutoko実グラフ上の周回接続を監査済み。".into());
+        let (inventory, bindings, osm, candidate) = load_binding_candidate_fixture();
 
         validate_osm_ramp_bindings(&bindings, &inventory).unwrap();
         validate_osm_ramp_bindings_against_osm(&bindings, &inventory, &osm).unwrap();
@@ -3556,7 +3533,7 @@ mod tests {
         .clone();
         let original_billing_pairs = serde_json::to_value(&graph.billing_pairs).unwrap();
         let (ramps, artifacts, notes) = bind_ramps_to_graph(&mut graph, &inventory, &bindings);
-        assert_eq!(ramps.len(), 233);
+        assert_eq!(ramps.len(), 236);
         assert!(notes.iter().all(|note| !note.contains(&candidate.ramp_id)));
         graph.ramps = ramps;
         let projected = graph
@@ -3566,7 +3543,11 @@ mod tests {
             .unwrap();
         assert_eq!(
             projected.edge_id,
-            candidate.directed_segments[0].edge_ids[0]
+            candidate.directed_segments[0]
+                .edge_ids
+                .first()
+                .unwrap()
+                .as_str()
         );
         assert_eq!(projected.node_id, "n:1832672162");
         assert_eq!(projected.mainline_node_id, "n:252175582");

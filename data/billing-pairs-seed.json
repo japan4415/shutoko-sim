@@ -22,10 +22,6 @@
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -60,22 +56,18 @@
       "exitName": "芝公園出口",
       "anchorOsmNodeId": 31254160,
       "vehicleProfile": "passenger-car-etc",
-      "status": "unverified",
-      "oneSectionAheadVerified": false,
+      "status": "verified",
+      "oneSectionAheadVerified": true,
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
-        "sourceDate": "2026-09-10",
-        "notes": "Unverified by Round 2 endpoint audit: at least one exact entry/exit edge does not uniquely reverse-map to a verified-bound ramp with matching official facility/name/route. Verified 1-section-ahead adjacency on C1 outer loop from Ginza entry to Shibakoen exit. Exit way 944671542 is Shibakoen exit ramp (同一分岐点から 2 本の出口 way（944671542 / 944138315）が分かれ、anchor からの距離は同値。First Exit 探索が返した前者を exitId とした). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/tolls/about/price/ (旧 URL https://www.shutoko.jp/fee/fee-info/about/ は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト)); Ginza to Shibakoen toll distance 3.4km with minimum toll 300 yen applied (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf (旧 URL https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf は 2026-09-10 時点で 404)); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+        "sourceDate": "2026-09-25",
+        "notes": "C1 outer relation の exit split 順と way 944671542 の exact binding により、銀座入口から relation mainline 上の最初の一般出口が芝公園出口であることを確認した。"
       },
       "prices": [
         {
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -91,18 +83,14 @@
       "oneSectionAheadVerified": false,
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
-        "sourceDate": "2026-09-10",
-        "notes": "Unverified by Round 2 endpoint audit: at least one exact entry/exit edge does not uniquely reverse-map to a verified-bound ramp with matching official facility/name/route. Verified 1-section-ahead adjacency on C1 outer loop from Shibakoen entry to Iikura exit. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/tolls/about/price/ (旧 URL https://www.shutoko.jp/fee/fee-info/about/ は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト)); Shibakoen to Iikura toll distance 1.6km with minimum toll 300 yen applied (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf (旧 URL https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf は 2026-09-10 時点で 404)); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+        "sourceDate": "2026-09-25",
+        "notes": "way 4853801 の地表接続 way 40969792 に access:conditional=no @ (08:00-20:00) があるため、firstPublicRoadConnection/v1 は unresolved。時間モデル導入まで昇格しない。"
       },
       "prices": [
         {
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -114,22 +102,18 @@
       "exitName": "芝公園出口",
       "anchorOsmNodeId": 264877748,
       "vehicleProfile": "passenger-car-etc",
-      "status": "unverified",
-      "oneSectionAheadVerified": false,
+      "status": "verified",
+      "oneSectionAheadVerified": true,
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
-        "sourceDate": "2026-09-10",
-        "notes": "Unverified on the full-network fixture: FIRST_EXIT_MISMATCH reaches OSM way 203832854 (高樹町出口) before the seeded 芝公園出口. Keep excluded until routing/topology review resolves the discrepancy. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/tolls/about/price/); Kasumigaseki to Shibakoen toll distance 3.7km (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf)."
+        "sourceDate": "2026-09-25",
+        "notes": "C1 inner relation の arm role により way 203832854 の高樹町出口は C1 corridor の一般出口ではなく、way 203873821 が最初の一般出口芝公園出口であると確認した。"
       },
       "prices": [
         {
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -141,22 +125,18 @@
       "exitName": "霞が関出口",
       "anchorOsmNodeId": 297945194,
       "vehicleProfile": "passenger-car-etc",
-      "status": "unverified",
-      "oneSectionAheadVerified": false,
+      "status": "verified",
+      "oneSectionAheadVerified": true,
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
-        "sourceDate": "2026-09-10",
-        "notes": "Unverified by Round 2 endpoint audit: at least one exact entry/exit edge does not uniquely reverse-map to a verified-bound ramp with matching official facility/name/route. Verified 1-section-ahead adjacency on C1 inner loop from Daikancho entry to Kasumigaseki exit. Entry way 1091280541 is Daikancho entry ramp connecting from Daikancho-dori (Way 144967546); exit way 1232166619 is Kasumigaseki exit ramp connecting to Roppongi-dori (Way 23581608) and Kokkai-dori (Way 233086397). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/tolls/about/price/ (旧 URL https://www.shutoko.jp/fee/fee-info/about/ は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト)); Daikancho to Kasumigaseki toll distance 2.3km with minimum toll 300 yen applied (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf (旧 URL https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf は 2026-09-10 時点で 404)); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+        "sourceDate": "2026-09-25",
+        "notes": "firstPublicRoadConnection/v1 のWay 1232166619 監査と C1 inner relation の exit 順により、代官町入口から霞が関出口が最初の一般出口であると確認した。"
       },
       "prices": [
         {
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -168,22 +148,18 @@
       "exitName": "汐留出口",
       "anchorOsmNodeId": 31295430,
       "vehicleProfile": "passenger-car-etc",
-      "status": "unverified",
-      "oneSectionAheadVerified": false,
+      "status": "verified",
+      "oneSectionAheadVerified": true,
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
-        "sourceDate": "2026-09-10",
-        "notes": "Unverified by Round 2 endpoint audit: at least one exact entry/exit edge does not uniquely reverse-map to a verified-bound ramp with matching official facility/name/route. Verified 1-section-ahead adjacency on C1 inner loop from Shibakoen entry to Shiodome exit. Entry way 4853797 is Shibakoen inner loop entry ramp connecting from Hibiya-dori (Way 1352273264); exit way 45068171 is Shiodome exit. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/tolls/about/price/ (旧 URL https://www.shutoko.jp/fee/fee-info/about/ は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト)); Shibakoen to Shiodome toll distance 2.4km with minimum toll 300 yen applied (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf (旧 URL https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf は 2026-09-10 時点で 404)); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+        "sourceDate": "2026-09-25",
+        "notes": "C1 inner relation の arm role と branch node から way 4853797 を芝公園入口へ一意に割り当て、汐留出口までの relation 順を確認した。"
       },
       "prices": [
         {
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -195,22 +171,18 @@
       "exitName": "神田橋出口",
       "anchorOsmNodeId": 1891818143,
       "vehicleProfile": "passenger-car-etc",
-      "status": "unverified",
-      "oneSectionAheadVerified": false,
+      "status": "verified",
+      "oneSectionAheadVerified": true,
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
-        "sourceDate": "2026-09-10",
-        "notes": "Unverified on the full-network fixture: FIRST_EXIT_MISMATCH reaches unnamed OSM way 199311811 near the former 江戸橋・呉服橋 complex before the seeded 神田橋出口. Keep excluded until routing/topology review resolves the discrepancy. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/tolls/about/price/); Takaracho to Kandabashi toll distance 1.7km (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf)."
+        "sourceDate": "2026-09-25",
+        "notes": "C1 inner relation の exit role を監査し、way 199311811 は一般出口ではない connector、way 390441534 が最初の一般出口神田橋出口であることを確認した。"
       },
       "prices": [
         {
           "amountYen": 300,
           "effectiveFrom": "2022-03-31T15:00:00Z",
           "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
         }
       ]
     },
@@ -245,66 +217,56 @@
       "exitEndpoint": {
         "rampId": "ramp:2-outbound:tengenji-exit",
         "name": "天現寺出口",
-        "supportState": "unresolved",
-        "directedSegments": [],
-        "bindingCandidates": [
+        "supportState": "verified_bound",
+        "directedSegments": [
           {
-            "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460-172358466",
-            "status": "unresolved",
-            "directedSegments": [
-              {
-                "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
-                "osmWayIds": [
-                  172358461,
-                  422023171,
-                  931759044,
-                  172358460,
-                  172358466
-                ],
-                "osmNodeIds": [
-                  252175582,
-                  1832672250,
-                  1832672244,
-                  1832672214,
-                  1832672165,
-                  1832672133,
-                  1832672121,
-                  1832672108,
-                  1832672093,
-                  1832672090,
-                  1832672098,
-                  8638072333,
-                  1832672096,
-                  1832672105,
-                  1832672128,
-                  1832672146,
-                  1832672162,
-                  1832672205
-                ],
-                "edgeIds": [
-                  "e:w172358461:0:f",
-                  "e:w172358461:1:f",
-                  "e:w172358461:2:f",
-                  "e:w172358461:3:f",
-                  "e:w172358461:4:f",
-                  "e:w172358461:5:f",
-                  "e:w422023171:0:f",
-                  "e:w422023171:1:f",
-                  "e:w422023171:2:f",
-                  "e:w931759044:0:f",
-                  "e:w172358460:0:f",
-                  "e:w172358460:1:f",
-                  "e:w172358460:2:f",
-                  "e:w172358460:3:f",
-                  "e:w172358460:4:f",
-                  "e:w172358460:5:f",
-                  "e:w172358466:0:f"
-                ],
-                "fromNodeId": "n:252175582",
-                "toNodeId": "n:1832672205",
-                "edgeIdsSha256": "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
-              }
-            ]
+            "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
+            "osmWayIds": [
+              172358461,
+              422023171,
+              931759044,
+              172358460
+            ],
+            "osmNodeIds": [
+              252175582,
+              1832672250,
+              1832672244,
+              1832672214,
+              1832672165,
+              1832672133,
+              1832672121,
+              1832672108,
+              1832672093,
+              1832672090,
+              1832672098,
+              8638072333,
+              1832672096,
+              1832672105,
+              1832672128,
+              1832672146,
+              1832672162
+            ],
+            "edgeIds": [
+              "e:w172358461:0:f",
+              "e:w172358461:1:f",
+              "e:w172358461:2:f",
+              "e:w172358461:3:f",
+              "e:w172358461:4:f",
+              "e:w172358461:5:f",
+              "e:w422023171:0:f",
+              "e:w422023171:1:f",
+              "e:w422023171:2:f",
+              "e:w931759044:0:f",
+              "e:w172358460:0:f",
+              "e:w172358460:1:f",
+              "e:w172358460:2:f",
+              "e:w172358460:3:f",
+              "e:w172358460:4:f",
+              "e:w172358460:5:f"
+            ],
+            "fromNodeId": "n:252175582",
+            "toNodeId": "n:1832672162",
+            "edgeIdsSha256": "bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd"
           }
         ]
       },
@@ -344,28 +306,34 @@
           "firstGeneralExit": {
             "rule": "firstGeneralExit",
             "expectedRampId": "ramp:2-outbound:tengenji-exit",
-            "exactDirectedBinding": "unresolved"
+            "exactDirectedBinding": "verified_bound"
           }
         }
       },
       "routingCapability": "routable",
       "pairEligibility": {
-        "status": "unverified",
-        "oneSectionAheadVerified": false
+        "status": "verified_one_section_ahead",
+        "oneSectionAheadVerified": true
       },
       "loopValidation": {
         "status": "declared_route_validated"
       },
       "tariff": {
-        "status": "unpriced",
-        "amountYen": null,
-        "billingDistanceMeters": null,
-        "prices": []
+        "status": "priced",
+        "amountYen": 790,
+        "billingDistanceMeters": 19400,
+        "prices": [
+          {
+            "amountYen": 790,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z"
+          }
+        ]
       },
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
-        "sourceDate": "2026-09-24",
-        "notes": "The route uses the verified Meguro entry, the ordinary C1 inner arc, and the Route 2 outbound return corridor. The five-way Tengenji exit candidate remains unresolved because both n:1832672162 and n:1832672205 connect to surface roads, so this pair remains diagnostic-only."
+        "sourceDate": "2026-09-25",
+        "notes": "目黒入口、C1 inner の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円。2026-10以降は未確認PDFのためunpricedとする。"
       }
     },
     {
@@ -399,66 +367,56 @@
       "exitEndpoint": {
         "rampId": "ramp:2-outbound:tengenji-exit",
         "name": "天現寺出口",
-        "supportState": "unresolved",
-        "directedSegments": [],
-        "bindingCandidates": [
+        "supportState": "verified_bound",
+        "directedSegments": [
           {
-            "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460-172358466",
-            "status": "unresolved",
-            "directedSegments": [
-              {
-                "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
-                "osmWayIds": [
-                  172358461,
-                  422023171,
-                  931759044,
-                  172358460,
-                  172358466
-                ],
-                "osmNodeIds": [
-                  252175582,
-                  1832672250,
-                  1832672244,
-                  1832672214,
-                  1832672165,
-                  1832672133,
-                  1832672121,
-                  1832672108,
-                  1832672093,
-                  1832672090,
-                  1832672098,
-                  8638072333,
-                  1832672096,
-                  1832672105,
-                  1832672128,
-                  1832672146,
-                  1832672162,
-                  1832672205
-                ],
-                "edgeIds": [
-                  "e:w172358461:0:f",
-                  "e:w172358461:1:f",
-                  "e:w172358461:2:f",
-                  "e:w172358461:3:f",
-                  "e:w172358461:4:f",
-                  "e:w172358461:5:f",
-                  "e:w422023171:0:f",
-                  "e:w422023171:1:f",
-                  "e:w422023171:2:f",
-                  "e:w931759044:0:f",
-                  "e:w172358460:0:f",
-                  "e:w172358460:1:f",
-                  "e:w172358460:2:f",
-                  "e:w172358460:3:f",
-                  "e:w172358460:4:f",
-                  "e:w172358460:5:f",
-                  "e:w172358466:0:f"
-                ],
-                "fromNodeId": "n:252175582",
-                "toNodeId": "n:1832672205",
-                "edgeIdsSha256": "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
-              }
-            ]
+            "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
+            "osmWayIds": [
+              172358461,
+              422023171,
+              931759044,
+              172358460
+            ],
+            "osmNodeIds": [
+              252175582,
+              1832672250,
+              1832672244,
+              1832672214,
+              1832672165,
+              1832672133,
+              1832672121,
+              1832672108,
+              1832672093,
+              1832672090,
+              1832672098,
+              8638072333,
+              1832672096,
+              1832672105,
+              1832672128,
+              1832672146,
+              1832672162
+            ],
+            "edgeIds": [
+              "e:w172358461:0:f",
+              "e:w172358461:1:f",
+              "e:w172358461:2:f",
+              "e:w172358461:3:f",
+              "e:w172358461:4:f",
+              "e:w172358461:5:f",
+              "e:w422023171:0:f",
+              "e:w422023171:1:f",
+              "e:w422023171:2:f",
+              "e:w931759044:0:f",
+              "e:w172358460:0:f",
+              "e:w172358460:1:f",
+              "e:w172358460:2:f",
+              "e:w172358460:3:f",
+              "e:w172358460:4:f",
+              "e:w172358460:5:f"
+            ],
+            "fromNodeId": "n:252175582",
+            "toNodeId": "n:1832672162",
+            "edgeIdsSha256": "bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd"
           }
         ]
       },
@@ -498,28 +456,34 @@
           "firstGeneralExit": {
             "rule": "firstGeneralExit",
             "expectedRampId": "ramp:2-outbound:tengenji-exit",
-            "exactDirectedBinding": "unresolved"
+            "exactDirectedBinding": "verified_bound"
           }
         }
       },
       "routingCapability": "routable",
       "pairEligibility": {
-        "status": "unverified",
-        "oneSectionAheadVerified": false
+        "status": "verified_one_section_ahead",
+        "oneSectionAheadVerified": true
       },
       "loopValidation": {
         "status": "declared_route_validated"
       },
       "tariff": {
-        "status": "unpriced",
-        "amountYen": null,
-        "billingDistanceMeters": null,
-        "prices": []
+        "status": "priced",
+        "amountYen": 790,
+        "billingDistanceMeters": 19400,
+        "prices": [
+          {
+            "amountYen": 790,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z"
+          }
+        ]
       },
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
-        "sourceDate": "2026-09-24",
-        "notes": "The route uses the verified Meguro entry, the ordinary C1 outer arc, and the Route 2 outbound return corridor. The five-way Tengenji exit candidate remains unresolved because both n:1832672162 and n:1832672205 connect to surface roads, so this pair remains diagnostic-only."
+        "sourceDate": "2026-09-25",
+        "notes": "目黒入口、C1 outer の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円。2026-10以降は未確認PDFのためunpricedとする。"
       }
     }
   ]

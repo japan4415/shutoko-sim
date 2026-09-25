@@ -154,16 +154,8 @@ test("(d) graph.json が 11 秒遅延すると TIMEOUT の文言が表示され�
   const abort = new AbortController();
   delayAbort = abort;
 
-  await page.route(GRAPH_URL, async (route) => {
-    const res = await route.fetch();
-    const body = await res.text();
+  await page.route(GRAPH_URL, async () => {
     await delayUnlessAborted(11_000, abort.signal);
-    if (abort.signal.aborted) {
-      // テストは TIMEOUT 文言を確認して終了済み。ページ破棄後に fulfill すると
-      // 例外になるため、保留のまま route を破棄する（unrouteAll が ignoreErrors で処理）。
-      return;
-    }
-    await route.fulfill({ response: res, body });
   });
   await openApp(page);
   await page.click("#search-btn");

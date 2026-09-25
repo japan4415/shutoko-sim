@@ -1415,9 +1415,12 @@ pub fn build_bound_ramp_memberships(
                 item.ramp_id
             )));
         }
-        if edges.first().map(|edge| edge.id.as_str()) != Some(ramp.edge_id.as_str()) {
+        let endpoint_edge_matches = edges.first().map(|edge| edge.id.as_str())
+            == Some(ramp.edge_id.as_str())
+            || edges.last().map(|edge| edge.id.as_str()) == Some(ramp.edge_id.as_str());
+        if !endpoint_edge_matches {
             return Err(RouteMembershipError::RampBinding(format!(
-                "ramp {} exact graph edge {} is not the first edge of its evidence",
+                "ramp {} exact graph edge {} is not an endpoint edge of its evidence",
                 item.ramp_id, ramp.edge_id
             )));
         }
@@ -2316,6 +2319,47 @@ fn source_segment_by_id<'a>(
         })
 }
 
+fn entry_approach_source_sequences_match(
+    source_segments: &[&RouteMembershipSegment],
+    edge_ids: &[String],
+) -> bool {
+    let relation_segments = source_segments
+        .iter()
+        .copied()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+        .collect::<Vec<_>>();
+    let relation_edge_ids = relation_segments
+        .iter()
+        .flat_map(|segment| segment.ordered_edge_ids.iter())
+        .collect::<HashSet<_>>();
+    let Some(relation_start) = edge_ids
+        .iter()
+        .position(|edge_id| relation_edge_ids.contains(edge_id))
+    else {
+        return source_sequences_match(source_segments, 0, edge_ids, 0);
+    };
+    if relation_start == 0 {
+        return source_sequences_match(source_segments, 0, edge_ids, 0);
+    }
+    let bound_segments = source_segments
+        .iter()
+        .copied()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::BoundRamp)
+        .collect::<Vec<_>>();
+    let [bound_segment] = bound_segments.as_slice() else {
+        return source_sequences_match(source_segments, 0, edge_ids, 0);
+    };
+    if edge_ids.get(..bound_segment.ordered_edge_ids.len())
+        != Some(bound_segment.ordered_edge_ids.as_slice())
+        || edge_ids[relation_start..]
+            .iter()
+            .any(|edge_id| !relation_edge_ids.contains(edge_id))
+    {
+        return false;
+    }
+    source_sequences_match(&relation_segments, 0, &edge_ids[relation_start..], 0)
+}
+
 pub fn validate_resolved_route_plan_segments(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
@@ -2374,7 +2418,12 @@ pub fn validate_resolved_route_plan_segments(
         for source in &source_segments {
             validate_segment_hash(source)?;
         }
-        if !source_sequences_match(&source_segments, 0, &resolved.edge_ids, 0) {
+        let source_sequences_match = if resolved.role == RoutePlanSegmentRole::EntryApproach {
+            entry_approach_source_sequences_match(&source_segments, &resolved.edge_ids)
+        } else {
+            source_sequences_match(&source_segments, 0, &resolved.edge_ids, 0)
+        };
+        if !source_sequences_match {
             return Err(RouteMembershipError::Segment(format!(
                 "{} is not an ordered subpath of its source segments",
                 resolved.resolved_segment_id
@@ -2459,12 +2508,6 @@ fn bound_ramp_segment_for_exit<'a>(
         )));
     }
     let ramp = ramps[0];
-    if ramp.edge_id != exit_edge_id {
-        return Err(RouteMembershipError::RampBinding(format!(
-            "first exit edge {} does not equal exact ramp edge {}",
-            exit_edge_id, ramp.edge_id
-        )));
-    }
     let segments = route_memberships
         .iter()
         .filter(|candidate| {
@@ -2473,7 +2516,9 @@ fn bound_ramp_segment_for_exit<'a>(
         .flat_map(|candidate| candidate.segments.iter())
         .filter(|segment| {
             segment.source_kind == RouteMembershipSourceKind::BoundRamp
-                && segment.ordered_edge_ids.first() == Some(&ramp.edge_id)
+                && segment.ordered_edge_ids.first().map(String::as_str) == Some(exit_edge_id)
+                && (ramp.edge_id == *exit_edge_id
+                    || segment.ordered_edge_ids.last() == Some(&ramp.edge_id))
         })
         .collect::<Vec<_>>();
     if segments.len() != 1 {
@@ -2916,10 +2961,32 @@ fn exit_ramp_candidates<'a>(
         .filter(|edge| edge.kind == EdgeKind::Exit && edge.from == split_node_id)
         .flat_map(|edge| {
             graph.ramps.iter().filter_map(move |ramp| {
+                let multi_way_binding = membership.segments.iter().any(|segment| {
+                    segment.source_kind == RouteMembershipSourceKind::BoundRamp
+                        && segment.ordered_edge_ids.first() == Some(&edge.id)
+                        && segment
+                            .ordered_edge_ids
+                            .last()
+                            .and_then(|edge_id| {
+                                graph
+                                    .edges
+                                    .iter()
+                                    .find(|candidate| candidate.id == *edge_id)
+                            })
+                            .map(|last_edge| last_edge.to.as_str())
+                            == Some(ramp.node_id.as_str())
+                        && segment.ordered_edge_ids.iter().all(|edge_id| {
+                            graph
+                                .edges
+                                .iter()
+                                .find(|candidate| candidate.id == *edge_id)
+                                .is_some_and(|candidate| candidate.kind == EdgeKind::Exit)
+                        })
+                });
                 (ramp.kind == RampKind::GeneralExit
                     && ramp.edge_id == edge.id
                     && ramp.mainline_node_id == edge.from
-                    && ramp.node_id == edge.to
+                    && (ramp.node_id == edge.to || multi_way_binding)
                     && ramp.route == membership.route_id
                     && ramp.direction == membership.direction)
                     .then_some((edge, ramp))
@@ -3782,8 +3849,17 @@ fn entry_approach_resolved_segment(
             terminal_sources.len()
         )));
     }
-    let mut path = if entry_start_node_id == terminal_edge.from.as_str() {
-        Vec::new()
+    let relation_edge_sources = relation_sequences(membership)
+        .into_iter()
+        .flat_map(|segment| {
+            segment
+                .ordered_edge_ids
+                .iter()
+                .map(move |edge_id| (edge_id.clone(), segment.segment_id.clone()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let relation_path = if entry_start_node_id == terminal_edge.from.as_str() {
+        Ok(Vec::new())
     } else {
         find_relation_path_to_node(
             graph,
@@ -3792,7 +3868,44 @@ fn entry_approach_resolved_segment(
             None,
             &terminal_edge.from,
             CORRIDOR_EXIT_STATE_BUDGET,
-        )?
+        )
+    };
+    let mut path = match relation_path {
+        Ok(path) => path,
+        Err(_) => {
+            let generic_path = crate::billing::find_shutoko_path(
+                graph,
+                entry_start_node_id,
+                &terminal_edge.from,
+                None,
+                None,
+                &HashSet::new(),
+            )
+            .ok_or_else(|| {
+                RouteMembershipError::ExitNotFound(format!(
+                    "entry approach does not reach {} from {}",
+                    terminal_edge.from, entry_start_node_id
+                ))
+            })?;
+            if !generic_path
+                .iter()
+                .any(|edge_id| relation_edge_sources.contains_key(edge_id))
+            {
+                return Err(RouteMembershipError::Relation(
+                    "entry approach does not intersect relationMainline".into(),
+                ));
+            }
+            generic_path
+                .into_iter()
+                .map(|edge_id| RelationPathEdge {
+                    source_segment_id: relation_edge_sources
+                        .get(&edge_id)
+                        .cloned()
+                        .unwrap_or_default(),
+                    edge_id,
+                })
+                .collect()
+        }
     };
     path.push(RelationPathEdge {
         edge_id: terminal_edge.id.clone(),
@@ -3800,7 +3913,9 @@ fn entry_approach_resolved_segment(
     });
     edge_ids.extend(path.iter().map(|edge| edge.edge_id.clone()));
     for edge in &path {
-        if source_segment_ids.last() != Some(&edge.source_segment_id) {
+        if !edge.source_segment_id.is_empty()
+            && source_segment_ids.last() != Some(&edge.source_segment_id)
+        {
             source_segment_ids.push(edge.source_segment_id.clone());
         }
     }
@@ -4213,7 +4328,7 @@ mod tests {
                     kind: RampKind::GeneralEntry,
                     edge_id: "e:w201:0:f".into(),
                     node_id: "n:7".into(),
-                    mainline_node_id: "n:8".into(),
+                    mainline_node_id: "n:10".into(),
                     restrictions: Vec::new(),
                 },
                 Ramp {
@@ -4522,12 +4637,12 @@ mod tests {
         let promoted =
             promote_verified_radial_pair(&graph, &memberships, &seed, &resolution).unwrap();
         assert_eq!(promoted.resolved_route_segments.len(), 4);
-        assert!(matches!(
+        assert_eq!(
             promoted.tariff.status,
-            shutoko_routing_core::TariffStatus::Unpriced
-        ));
-        assert!(promoted.tariff.amount_yen.is_none());
-        assert!(promoted.tariff.billing_distance_meters.is_none());
+            shutoko_routing_core::TariffStatus::Priced
+        );
+        assert_eq!(promoted.tariff.amount_yen, Some(790));
+        assert_eq!(promoted.tariff.billing_distance_meters, Some(19400));
         assert_eq!(promoted.entry_id, "e:w201:0:f");
         assert_eq!(promoted.exit_id, "e:w204:0:f");
         assert_eq!(

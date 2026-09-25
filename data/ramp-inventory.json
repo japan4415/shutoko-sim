@@ -99,15 +99,15 @@
       "sourceDate": "2026-09-16",
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "unsupported",
-      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
+      "supportState": "verified_bound",
+      "supportReason": "C1 inner relation の arm role と分岐 node から、way 4853797 の有向 entry segment を芝公園入口へ一意に割り当てた。",
       "supportEvidence": [
-        "directed-segment:4853801:940044988:6389606756",
-        "duplicate-members:ramp:c1-inner:shibakoen-entry, ramp:c1-outer:shibakoen-entry",
-        "verify-core-r2-opus.json:F1"
+        "https://www.shutoko.jp/use/network/map/route-c1/shibakouen/",
+        "https://www.openstreetmap.org/way/4853797",
+        "data/billing-pair-adjacency.json:bp:c1-inner:shibakoen-shiodome"
       ],
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
+      "routingCapability": "routable",
+      "routingCapabilityReason": "C1 inner の有向周回構成へ接続する。"
     },
     {
       "rampId": "ramp:c1-outer:shibakoen-entry",
@@ -126,14 +126,14 @@
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
       "supportState": "unsupported",
-      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
+      "supportReason": "way 4853801 の地表接続 way 40969792 に access:conditional=no @ (08:00-20:00) があり、終日利用可能な公道接続を証明できない。",
       "supportEvidence": [
-        "directed-segment:4853801:940044988:6389606756",
-        "duplicate-members:ramp:c1-inner:shibakoen-entry, ramp:c1-outer:shibakoen-entry",
-        "verify-core-r2-opus.json:F1"
+        "https://www.openstreetmap.org/way/4853801",
+        "https://www.openstreetmap.org/way/40969792",
+        "firstPublicRoadConnection/v1:CONDITIONAL_ACCESS_RESTRICTION"
       ],
       "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
+      "routingCapabilityReason": "条件付きアクセスを時間モデルで解決するまで探索端点として拒否する。"
     },
     {
       "rampId": "ramp:c1-inner:iikura-entry",
@@ -4796,14 +4796,14 @@
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
       "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportReason": "C1 outer relation の exit split 順で、way 944671542 を芝公園出口へ一意に割り当てた。way 944138315 は fallback に用いない。",
       "supportEvidence": [
         "https://www.shutoko.jp/use/network/map/route-c1/shibakouen/",
-        "https://www.openstreetmap.org/way/203873821",
-        "analyze-duplicate-bindings-001.json"
+        "https://www.openstreetmap.org/way/944671542",
+        "data/billing-pair-adjacency.json:bp:c1-outer:ginza-shibakoen"
       ],
       "routingCapability": "routable",
-      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
+      "routingCapabilityReason": "C1 outer の有向周回構成へ接続する。"
     },
     {
       "rampId": "ramp:c1-inner:shibakoen-exit",
@@ -4822,14 +4822,14 @@
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
       "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportReason": "C1 inner relation の exit split 順で、way 203873821 を芝公園出口へ一意に割り当てた。",
       "supportEvidence": [
         "https://www.shutoko.jp/use/network/map/route-c1/shibakouen/",
-        "https://www.openstreetmap.org/way/944138315",
-        "analyze-duplicate-bindings-001.json"
+        "https://www.openstreetmap.org/way/203873821",
+        "data/billing-pair-adjacency.json:bp:c1-inner:kasumigaseki-shibakoen"
       ],
       "routingCapability": "routable",
-      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
+      "routingCapabilityReason": "C1 inner の有向周回構成へ接続する。"
     },
     {
       "rampId": "ramp:c1-outer:iikura-exit",
@@ -4899,14 +4899,15 @@
       "sourceDate": "2026-09-16",
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "unsupported",
-      "supportReason": "G20: 一意な exact replacement がない。way.name=神田橋出口。23は別一意component、24と神田橋方向は複数候補。",
+      "supportState": "verified_bound",
+      "supportReason": "firstPublicRoadConnection/v1 により way 1232166619 の有向 exit segment が霞が関出口へ一意に接続することを監査済み。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G20",
-        "https://www.shutoko.jp/use/network/map/route-c1/kasumigaseki/"
+        "https://www.shutoko.jp/use/network/map/route-c1/kasumigaseki/",
+        "https://www.openstreetmap.org/way/1232166619",
+        "data/billing-pair-adjacency.json:bp:c1-inner:daikancho-kasumigaseki"
       ],
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
+      "routingCapability": "routable",
+      "routingCapabilityReason": "C1 inner の有向周回構成へ接続する。"
     },
     {
       "rampId": "ramp:c1-outer:daikancho-exit",
@@ -4975,14 +4976,15 @@
       "sourceDate": "2026-09-16",
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "unsupported",
-      "supportReason": "G20: way.name=神田橋出口。23は別一意component、24と神田橋方向は複数候補。",
+      "supportState": "verified_bound",
+      "supportReason": "C1 inner relation の exit role と branch node を監査し、way 390441534 を神田橋出口へ一意に割り当てた。way 199311811 は一般出口ではない。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G20",
-        "https://www.shutoko.jp/use/network/map/route-c1/kandabashi/"
+        "https://www.shutoko.jp/use/network/map/route-c1/kandabashi/",
+        "https://www.openstreetmap.org/way/390441534",
+        "data/billing-pair-adjacency.json:bp:c1-inner:takaracho-kandabashi"
       ],
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
+      "routingCapability": "routable",
+      "routingCapabilityReason": "C1 inner の有向周回構成へ接続する。"
     },
     {
       "rampId": "ramp:c1-inner:kyobashi-exit",
@@ -5360,14 +5362,16 @@
       "sourceDate": "2026-09-16",
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "unsupported",
-      "supportReason": "G21: 一意な exact replacement がない。way.name=高樹町出口、301 component一致。",
+      "supportState": "verified_bound",
+      "supportReason": "firstPublicRoadConnection/v1 は 4-way の有向鎖を最初の一般道接続 n:1832672162 で打ち切り、way 172358466 の tail を除外した。ground way は明治通り 258834790。",
       "supportEvidence": [
-        "analyze-duplicate-bindings-001.json:G21",
-        "https://www.shutoko.jp/use/network/map/route-2/tengenji/"
+        "https://www.shutoko.jp/use/network/map/route-2/tengenji/",
+        "fixtures/osm/shutoko-all.json:way/258834790",
+        "data/official-population-snapshot.json:route/2/outbound",
+        "firstPublicRoadConnection/v1:verified_bound"
       ],
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
+      "routingCapability": "routable",
+      "routingCapabilityReason": "2号下りの有向 return corridor から到達でき、C1 周回を含む radial OD を構成できる。"
     },
     {
       "rampId": "ramp:2-outbound:meguro-exit",

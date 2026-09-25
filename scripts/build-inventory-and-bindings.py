@@ -19,6 +19,7 @@ Requirements:
   - Preserves closed ramps (Gofukubashi, Edobashi) with status="closed".
 """
 
+import hashlib
 import json
 import re
 
@@ -83,6 +84,143 @@ def get_facility_slug(name: str) -> str:
     clean = re.sub(r'[^a-zA-Z0-9]+', '-', name).strip('-').lower()
     return clean or "ramp"
 
+
+def compact_json_sha256(value) -> str:
+    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def edge_way_id(edge_id: str) -> int:
+    parts = edge_id.split(":")
+    if len(parts) < 3 or parts[0] != "e" or not parts[1].startswith("w"):
+        raise SystemExit(f"invalid graph edge ID in binding candidate: {edge_id}")
+    return int(parts[1][1:])
+
+
+def validate_binding_candidates(support_file, decisions, osm_ways, graph):
+    candidates = support_file.get("bindingCandidates", [])
+    if not isinstance(candidates, list):
+        raise SystemExit("bindingCandidates in ramp-support-decisions.json must be an array")
+
+    references = {}
+    for decision in decisions:
+        evidence = decision.get("bindingCandidateEvidence")
+        if evidence is None:
+            continue
+        inverse = evidence.get("rampIdInverseMap", {})
+        candidate_id = inverse.get("candidateId")
+        ramp_id = inverse.get("rampId")
+        if not candidate_id or ramp_id != decision["rampId"]:
+            raise SystemExit(f"invalid bindingCandidateEvidence inverse map for {ramp_id}")
+        if candidate_id in references:
+            raise SystemExit(f"duplicate binding candidate reference: {candidate_id}")
+        references[candidate_id] = (decision, evidence)
+
+    edge_by_id = {edge["id"]: edge for edge in graph["edges"]}
+    seen_candidate_ids = set()
+    seen_ramp_ids = set()
+    seen_segment_ids = set()
+    for candidate in candidates:
+        candidate_id = candidate.get("candidateId")
+        ramp_id = candidate.get("rampId")
+        status = candidate.get("status")
+        if not candidate_id or candidate_id in seen_candidate_ids:
+            raise SystemExit(f"invalid or duplicate binding candidate ID: {candidate_id}")
+        if not ramp_id or ramp_id in seen_ramp_ids:
+            raise SystemExit(f"invalid or duplicate binding candidate rampId: {ramp_id}")
+        if status not in ("verified_bound", "unresolved", "unsupported"):
+            raise SystemExit(f"invalid binding candidate status for {candidate_id}: {status}")
+        if candidate_id not in references:
+            raise SystemExit(f"binding candidate {candidate_id} has no support-decision reference")
+        decision, evidence = references[candidate_id]
+        if evidence.get("rampIdInverseMap", {}).get("rampId") != ramp_id:
+            raise SystemExit(f"binding candidate {candidate_id} has a conflicting rampId")
+        if candidate.get("publicProjection") != evidence.get("publicProjection"):
+            raise SystemExit(f"binding candidate {candidate_id} has conflicting publicProjection")
+        if status != evidence.get("status"):
+            raise SystemExit(f"binding candidate {candidate_id} has conflicting status")
+        expected_support_state = "verified_bound" if status == "verified_bound" else "unsupported"
+        if decision.get("supportState") != expected_support_state:
+            raise SystemExit(f"binding candidate {candidate_id} has conflicting supportState")
+        if decision.get("binding") is not None:
+            raise SystemExit(f"binding candidate {candidate_id} must not also have a schema binding")
+        expected_projection = "included_verified" if status == "verified_bound" else "excluded_unresolved"
+        if candidate.get("publicProjection") != expected_projection:
+            raise SystemExit(f"binding candidate {candidate_id} has invalid publicProjection")
+        if status == "verified_bound":
+            if candidate.get("unresolvedReason") or candidate.get("unresolvedReasonCodes"):
+                raise SystemExit(f"verified binding candidate {candidate_id} retains unresolved evidence")
+        elif not candidate.get("unresolvedReason") or not candidate.get("unresolvedReasonCodes"):
+            raise SystemExit(f"unresolved binding candidate {candidate_id} lacks reason codes")
+        if not candidate.get("supportEvidence"):
+            raise SystemExit(f"binding candidate {candidate_id} lacks supportEvidence")
+
+        segments = candidate.get("directedSegments", [])
+        if len(segments) != 1:
+            raise SystemExit(f"binding candidate {candidate_id} must have exactly one directed segment")
+        segment = segments[0]
+        segment_id = segment.get("segmentId")
+        if not segment_id or segment_id in seen_segment_ids:
+            raise SystemExit(f"invalid or duplicate binding candidate segmentId: {segment_id}")
+        edge_ids = segment.get("edgeIds", [])
+        osm_node_ids = segment.get("osmNodeIds", [])
+        osm_way_ids = segment.get("osmWayIds", [])
+        if not edge_ids or len(osm_node_ids) != len(edge_ids) + 1 or len(osm_way_ids) < 2:
+            raise SystemExit(f"binding candidate {candidate_id} has an invalid directed segment shape")
+        graph_edges = []
+        for edge_id in edge_ids:
+            edge = edge_by_id.get(edge_id)
+            if edge is None:
+                raise SystemExit(f"binding candidate {candidate_id} references missing edge {edge_id}")
+            graph_edges.append(edge)
+        if graph_edges[0]["from"] != segment.get("fromNodeId") or graph_edges[-1]["to"] != segment.get("toNodeId"):
+            raise SystemExit(f"binding candidate {candidate_id} has non-contiguous endpoint evidence")
+        if any(left["to"] != right["from"] for left, right in zip(graph_edges, graph_edges[1:])):
+            raise SystemExit(f"binding candidate {candidate_id} has a discontinuous edge path")
+        graph_nodes = [graph_edges[0]["from"]] + [edge["to"] for edge in graph_edges]
+        if graph_nodes != [f"n:{node_id}" for node_id in osm_node_ids]:
+            raise SystemExit(f"binding candidate {candidate_id} OSM node order does not match graph edges")
+        actual_way_ids = []
+        for edge_id in edge_ids:
+            way_id = edge_way_id(edge_id)
+            if not actual_way_ids or actual_way_ids[-1] != way_id:
+                actual_way_ids.append(way_id)
+        if actual_way_ids != osm_way_ids:
+            raise SystemExit(f"binding candidate {candidate_id} OSM way order does not match edge IDs")
+        if any(way_id not in osm_ways for way_id in osm_way_ids):
+            raise SystemExit(f"binding candidate {candidate_id} references an unknown OSM way")
+        if segment.get("edgeIdsSha256") != compact_json_sha256(edge_ids):
+            raise SystemExit(f"binding candidate {candidate_id} has invalid edgeIdsSha256")
+        kind = evidence.get("kind")
+        if kind == "general_entry":
+            expected_mainline = segment.get("toNodeId")
+            expected_ground = segment.get("fromNodeId")
+        elif kind == "general_exit":
+            expected_mainline = segment.get("fromNodeId")
+            expected_ground = segment.get("toNodeId")
+        else:
+            raise SystemExit(f"binding candidate {candidate_id} has unsupported evidence kind {kind}")
+        if evidence.get("mainlineNodeId") != expected_mainline or evidence.get("declaredGroundNodeId") != expected_ground:
+            raise SystemExit(f"binding candidate {candidate_id} has conflicting endpoint evidence")
+
+        route_evidence = candidate.get("routeEvidence", {})
+        if not route_evidence.get("routeId") or route_evidence.get("direction") != candidate.get("direction"):
+            raise SystemExit(f"binding candidate {candidate_id} has invalid route evidence")
+        if not route_evidence.get("relationId") or not route_evidence.get("groundWayId"):
+            raise SystemExit(f"binding candidate {candidate_id} has incomplete route evidence")
+        if not route_evidence.get("firstExitAfterBranch"):
+            raise SystemExit(f"binding candidate {candidate_id} lacks first-exit relation evidence")
+
+        seen_candidate_ids.add(candidate_id)
+        seen_ramp_ids.add(ramp_id)
+        seen_segment_ids.add(segment_id)
+
+    extra_references = set(references) - seen_candidate_ids
+    if extra_references:
+        raise SystemExit(f"support decisions reference missing binding candidates: {sorted(extra_references)}")
+    return candidates
+
+
 def main():
     with open("data/official-population-snapshot.json", "r", encoding="utf-8") as f:
         snap = json.load(f)
@@ -107,6 +245,14 @@ def main():
     decisions = {d["rampId"]: d for d in support_file["decisions"]}
     if len(decisions) != len(support_file["decisions"]):
         raise SystemExit("duplicate rampId in ramp-support-decisions.json")
+
+    binding_candidates = validate_binding_candidates(
+        support_file,
+        support_file["decisions"],
+        osm_ways,
+        g,
+    )
+    candidate_ramp_ids = {candidate["rampId"] for candidate in binding_candidates}
 
     all_official = snap["generalEntries"] + snap["generalExits"]
     print(f"Classifying {len(all_official)} official ramps from reviewed decisions...")
@@ -168,8 +314,12 @@ def main():
             if binding is not None:
                 raise SystemExit(f"unsupported ramp unexpectedly has binding: {ramp_id}")
             continue
+        if binding is None and ramp_id in candidate_ramp_ids:
+            continue
         if binding is None:
             raise SystemExit(f"verified ramp lacks binding: {ramp_id}")
+        if ramp_id in candidate_ramp_ids:
+            raise SystemExit(f"candidate-backed ramp unexpectedly has schema binding: {ramp_id}")
         if binding["direction"] != direction:
             raise SystemExit(f"binding direction mismatch for {ramp_id}")
         way = osm_ways.get(binding["osmWayId"])
@@ -294,9 +444,10 @@ def main():
 
     # Output bindings file
     bindings_file = {
-        "version": 3,
-        "sourceDate": "2026-09-16",
+        "version": 4,
+        "sourceDate": support_file["sourceDate"],
         "bindings": bindings,
+        "bindingCandidates": binding_candidates,
         "sharedPhysicalOverrides": support_file["sharedPhysicalOverrides"]
     }
     with open("data/osm-ramp-bindings.json", "w", encoding="utf-8") as f:
@@ -312,6 +463,7 @@ def main():
     print(f"  Boundary ramps: {len(BOUNDARY_DEFS)}")
     print(f"  Closed ramps: {len(CLOSED_RAMPS)}")
     print(f"Generated data/osm-ramp-bindings.json: {len(bindings)} bindings")
+    print(f"  Binding candidates: {len(binding_candidates)}")
 
 if __name__ == "__main__":
     main()

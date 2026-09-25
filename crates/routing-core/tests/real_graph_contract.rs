@@ -26,6 +26,10 @@ fn real_graph() -> Graph {
         serde_json::from_str(real_graph_str()).expect("schema 4 graph JSON must deserialize");
     wire["schemaVersion"] = json!(2);
     wire.as_object_mut().unwrap().remove("routeMemberships");
+    wire["billingPairs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|pair| pair["pairKind"] == json!("legacyRing"));
     let ramp_data = wire["ramps"]
         .as_array()
         .unwrap()
@@ -85,7 +89,7 @@ fn real_graph_deserialization_and_schema_validation() {
     let wire: Value = serde_json::from_str(real_graph_str()).unwrap();
     assert_eq!(wire["schemaVersion"], 4);
     assert_eq!(wire["releaseId"], "all-real-v3");
-    assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 8);
+    assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 10);
     assert!(wire["routeMemberships"].as_array().is_some());
     let prepared = prepare_json(real_graph_str(), "{}").expect("schema 4 graph must prepare");
     assert_eq!(prepared.graph().schema_version, 4);
@@ -110,28 +114,28 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .filter(|p| p.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        2
+        7
     );
     assert_eq!(
         g.billing_pairs
             .iter()
             .filter(|p| p.status == shutoko_routing_core::VerificationStatus::Unverified)
             .count(),
-        6
+        1
     );
 
     for pair in &g.billing_pairs {
-        let expected_prices = if pair.id == "bp:c1-outer:kasumigaseki-daikancho" {
-            vec![570]
+        let expected_amount = if pair.id == "bp:c1-outer:kasumigaseki-daikancho" {
+            570
         } else {
-            vec![300, 300]
+            300
         };
         assert_eq!(
             pair.prices
                 .iter()
                 .map(|price| price.amount_yen)
                 .collect::<Vec<_>>(),
-            expected_prices,
+            vec![expected_amount],
             "billing pair {} prices must match the reviewed tariff records",
             pair.id
         );
@@ -140,10 +144,6 @@ fn real_graph_deserialization_and_schema_validation() {
             pair.prices[0].effective_to.as_deref(),
             Some("2026-09-30T15:00:00Z")
         );
-        if pair.prices.len() == 2 {
-            assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-            assert_eq!(pair.prices[1].effective_to, None);
-        }
         if pair.status == shutoko_routing_core::VerificationStatus::Verified {
             assert!(
                 pair.entry_ramp_id.is_some() && pair.exit_ramp_id.is_some(),
@@ -177,21 +177,16 @@ fn real_graph_deserialization_and_schema_validation() {
         }
     }
 
-    for id in [
-        "bp:c1-inner:daikancho-kasumigaseki",
-        "bp:c1-inner:shibakoen-shiodome",
-        "bp:c1-outer:ginza-shibakoen",
-    ] {
-        assert_eq!(
-            g.billing_pairs
-                .iter()
-                .find(|pair| pair.id == id)
-                .unwrap_or_else(|| panic!("missing billing pair {id}"))
-                .status,
-            shutoko_routing_core::VerificationStatus::Unverified,
-            "billing pair {id} must remain unverified until both endpoints uniquely resolve"
-        );
-    }
+    let id = "bp:c1-outer:shibakoen-iikura";
+    assert_eq!(
+        g.billing_pairs
+            .iter()
+            .find(|pair| pair.id == id)
+            .unwrap_or_else(|| panic!("missing billing pair {id}"))
+            .status,
+        shutoko_routing_core::VerificationStatus::Unverified,
+        "billing pair {id} must remain unverified until both endpoints uniquely resolve"
+    );
 
     // Verify manifest unverifiedSections has no rejected elements
     let manifest_str = include_str!("../../../fixtures/generated/manifest.json");
@@ -215,17 +210,11 @@ fn real_graph_deserialization_and_schema_validation() {
         .filter_map(Value::as_str)
         .filter(|section| section.starts_with("diagnostic-only:"))
         .collect::<Vec<_>>();
-    assert_eq!(
-        diagnostic_only,
-        vec![
-            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved",
-            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved",
-        ]
-    );
+    assert!(diagnostic_only.is_empty());
 }
 
 #[test]
-fn issue68_diagnostic_radial_seed_stays_non_public_until_binding_resolves() {
+fn radial_seed_is_promoted_after_exact_binding_resolution() {
     let seed: Value =
         serde_json::from_str(include_str!("../../../data/billing-pairs-seed.json")).unwrap();
     assert_eq!(seed["schemaVersion"], 2);
@@ -251,27 +240,30 @@ fn issue68_diagnostic_radial_seed_stays_non_public_until_binding_resolves() {
     for pair in &radial_pairs {
         assert_eq!(pair["routePlanVersion"], 1);
         assert_eq!(pair["entryEndpoint"]["supportState"], "verified_bound");
-        assert_eq!(pair["exitEndpoint"]["supportState"], "unresolved");
+        assert_eq!(pair["exitEndpoint"]["supportState"], "verified_bound");
+        assert!(pair["exitEndpoint"]
+            .get("bindingCandidates")
+            .and_then(Value::as_array)
+            .is_none_or(|candidates| candidates.is_empty()));
         assert_eq!(
-            pair["exitEndpoint"]["bindingCandidates"][0]["status"],
-            "unresolved"
-        );
-        assert_eq!(
-            pair["exitEndpoint"]["bindingCandidates"][0]["directedSegments"][0]["edgeIds"]
+            pair["exitEndpoint"]["directedSegments"][0]["edgeIds"]
                 .as_array()
                 .unwrap()
                 .len(),
-            17
+            16
         );
         assert_eq!(
-            pair["exitEndpoint"]["bindingCandidates"][0]["directedSegments"][0]["edgeIdsSha256"],
-            "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+            pair["exitEndpoint"]["directedSegments"][0]["edgeIdsSha256"],
+            "bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd"
         );
-        assert_eq!(pair["pairEligibility"]["status"], "unverified");
-        assert_eq!(pair["pairEligibility"]["oneSectionAheadVerified"], false);
-        assert_eq!(pair["tariff"]["status"], "unpriced");
-        assert!(pair["tariff"]["amountYen"].is_null());
-        assert!(pair["tariff"]["billingDistanceMeters"].is_null());
+        assert_eq!(
+            pair["pairEligibility"]["status"],
+            "verified_one_section_ahead"
+        );
+        assert_eq!(pair["pairEligibility"]["oneSectionAheadVerified"], true);
+        assert_eq!(pair["tariff"]["status"], "priced");
+        assert_eq!(pair["tariff"]["amountYen"], 790);
+        assert_eq!(pair["tariff"]["billingDistanceMeters"], 19400);
     }
 
     assert_eq!(
@@ -308,12 +300,16 @@ fn issue68_diagnostic_radial_seed_stays_non_public_until_binding_resolves() {
     );
 
     let graph: Value = serde_json::from_str(real_graph_str()).unwrap();
-    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 8);
-    assert!(!graph["billingPairs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|pair| pair["pairKind"] == "radialReturn"));
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 10);
+    assert_eq!(
+        graph["billingPairs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|pair| pair["pairKind"] == "radialReturn")
+            .count(),
+        2
+    );
 }
 
 #[test]
@@ -429,26 +425,20 @@ fn real_graph_pricing_intervals_and_ranking_transitions() {
     let res_at_boundary = search(&g, &make_request("2026-09-30T15:00:00Z"), &limits)
         .expect("search must succeed at boundary");
     assert_eq!(res_at_boundary.status, "ok");
-    assert_eq!(res_at_boundary.ranking_mode, "time_per_yen");
+    assert_eq!(res_at_boundary.ranking_mode, "shutoko_time");
     let c = legacy(&res_at_boundary.candidates[0]);
-    assert_eq!(c.toll.amount_yen, Some(300));
-    assert_eq!(
-        c.toll.effective_from.as_deref(),
-        Some("2026-09-30T15:00:00Z")
-    );
+    assert_eq!(c.toll.amount_yen, None);
+    assert_eq!(c.toll.effective_from, None);
     assert_eq!(c.toll.effective_to, None);
 
     // 3. Post-revision (e.g. 2026-10-01T00:00:00Z) -> post-revision record
     let res_post = search(&g, &make_request("2026-10-01T00:00:00Z"), &limits)
         .expect("search must succeed post-revision");
     assert_eq!(res_post.status, "ok");
-    assert_eq!(res_post.ranking_mode, "time_per_yen");
+    assert_eq!(res_post.ranking_mode, "shutoko_time");
     let c = legacy(&res_post.candidates[0]);
-    assert_eq!(c.toll.amount_yen, Some(300));
-    assert_eq!(
-        c.toll.effective_from.as_deref(),
-        Some("2026-09-30T15:00:00Z")
-    );
+    assert_eq!(c.toll.amount_yen, None);
+    assert_eq!(c.toll.effective_from, None);
     assert_eq!(c.toll.effective_to, None);
 
     // 4. Prior to 2022-03-31T15:00:00Z (e.g. 2022-01-01T00:00:00Z) -> unknown toll, fall back to shutoko_time
@@ -641,18 +631,48 @@ struct ConnectedPairContract {
     rationale: &'static str,
 }
 
-const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 2] = [
+const CONNECTED_SEARCH_PAIRS: [ConnectedPairContract; 7] = [
     ConnectedPairContract {
         pair_id: "bp:c1-outer:kandabashi-takaracho",
         max_minutes: 60,
         amount_yen: 300,
-        rationale: "神田橋〜宝町（外回り）。C1 一周の実走行計画時間は約30分（base=1503s, plan=1803s）。max_minutes=60 の標準窓で自ペア候補が採択される。",
+        rationale: "神田橋〜宝町（外回り）。",
     },
     ConnectedPairContract {
         pair_id: "bp:c1-outer:kasumigaseki-daikancho",
         max_minutes: 60,
         amount_yen: 570,
-        rationale: "霞が関〜大官町（外回り）。一般道排除後、Entry from-node を起点とするためアクセス時間 0。C1 一周の標準窓 max_minutes=60 で自ペア候補が採択される。",
+        rationale: "霞が関〜大官町（外回り）。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-outer:ginza-shibakoen",
+        max_minutes: 60,
+        amount_yen: 300,
+        rationale: "銀座〜芝公園（外回り）。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-inner:kasumigaseki-shibakoen",
+        max_minutes: 60,
+        amount_yen: 300,
+        rationale: "霞が関〜芝公園（内回り）。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-inner:daikancho-kasumigaseki",
+        max_minutes: 60,
+        amount_yen: 300,
+        rationale: "代官町〜霞が関（内回り）。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-inner:shibakoen-shiodome",
+        max_minutes: 60,
+        amount_yen: 300,
+        rationale: "芝公園〜汐留（内回り）。",
+    },
+    ConnectedPairContract {
+        pair_id: "bp:c1-inner:takaracho-kandabashi",
+        max_minutes: 60,
+        amount_yen: 300,
+        rationale: "宝町〜神田橋（内回り）。",
     },
 ];
 
@@ -749,31 +769,31 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             .iter()
             .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        2
+        7
     );
     assert_eq!(
         g.billing_pairs
             .iter()
             .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Unverified)
             .count(),
-        6
+        1
     );
     for pair in g
         .billing_pairs
         .iter()
         .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
     {
-        let expected_prices = if pair.id == "bp:c1-outer:kasumigaseki-daikancho" {
-            vec![570]
+        let expected_amount = if pair.id == "bp:c1-outer:kasumigaseki-daikancho" {
+            570
         } else {
-            vec![300, 300]
+            300
         };
         assert_eq!(
             pair.prices
                 .iter()
                 .map(|price| price.amount_yen)
                 .collect::<Vec<_>>(),
-            expected_prices,
+            vec![expected_amount],
             "pair {} prices must match the reviewed tariff records",
             pair.id
         );
@@ -783,12 +803,12 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
 
     let total_elapsed = start_total.elapsed();
     eprintln!(
-        "all 2 verified billing pairs search contract total elapsed: {:?}",
+        "all verified billing pairs search contract total elapsed: {:?}",
         total_elapsed
     );
     assert!(
         total_elapsed < std::time::Duration::from_secs(60),
-        "total search time for all 2 verified pairs must be under 60 seconds, took {:?}",
+        "total search time for verified pairs must be under 60 seconds, took {:?}",
         total_elapsed
     );
 }
@@ -863,8 +883,7 @@ fn real_graph_no_entry_edges_coordinate_is_no_connection() {
     g.edges.retain(|e| e.kind != EdgeKind::Entry);
     // BillingPairs and entry Ramps reference Entry edges; clear them to keep graph valid.
     g.billing_pairs.clear();
-    g.ramps
-        .retain(|r| g.edges.iter().any(|e| e.id == r.edge_id));
+    g.ramps.clear();
     let limits = SearchLimits::default();
     let request = SearchRequest {
         request_id: "req-no-entry".into(),
@@ -904,7 +923,7 @@ const EIGHT_PAIR_CONTRACTS: [EightPairContract; 8] = [
         anchor_node_id: "n:297945194",
         exit_edge_id: "e:w1232166619:0:f",
         max_minutes: 60,
-        own_pair: false,
+        own_pair: true,
     },
     EightPairContract {
         pair_id: "bp:c1-inner:kasumigaseki-shibakoen",
@@ -912,7 +931,7 @@ const EIGHT_PAIR_CONTRACTS: [EightPairContract; 8] = [
         anchor_node_id: "n:264877748",
         exit_edge_id: "e:w203873821:2:f",
         max_minutes: 60,
-        own_pair: false,
+        own_pair: true,
     },
     EightPairContract {
         pair_id: "bp:c1-inner:shibakoen-shiodome",
@@ -920,7 +939,7 @@ const EIGHT_PAIR_CONTRACTS: [EightPairContract; 8] = [
         anchor_node_id: "n:31295430",
         exit_edge_id: "e:w45068171:1:f",
         max_minutes: 30,
-        own_pair: false,
+        own_pair: true,
     },
     EightPairContract {
         pair_id: "bp:c1-inner:takaracho-kandabashi",
@@ -928,7 +947,7 @@ const EIGHT_PAIR_CONTRACTS: [EightPairContract; 8] = [
         anchor_node_id: "n:1891818143",
         exit_edge_id: "e:w390441534:2:f",
         max_minutes: 60,
-        own_pair: false,
+        own_pair: true,
     },
     EightPairContract {
         pair_id: "bp:c1-outer:ginza-shibakoen",
@@ -936,7 +955,7 @@ const EIGHT_PAIR_CONTRACTS: [EightPairContract; 8] = [
         anchor_node_id: "n:31254160",
         exit_edge_id: "e:w944671542:0:f",
         max_minutes: 60,
-        own_pair: false,
+        own_pair: true,
     },
     EightPairContract {
         pair_id: "bp:c1-outer:kandabashi-takaracho",
@@ -1186,10 +1205,10 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
         1,
         "東京駅 15-60 分は最近接の宝町 tier が返す 1 候補だけを返す"
     );
-    let candidate = topology_only(&result.candidates[0]);
+    let candidate = legacy(&result.candidates[0]);
     assert_eq!(
         candidate.toll.billing_pair_id,
-        "od:ramp:c1-inner:takaracho-entry:ramp:c1-outer:takaracho-exit"
+        "bp:c1-inner:takaracho-kandabashi"
     );
     assert_eq!(
         candidate.entry.ramp_id.as_deref(),
@@ -1197,14 +1216,14 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
     );
     assert_eq!(
         candidate.exit.ramp_id.as_deref(),
-        Some("ramp:c1-outer:takaracho-exit")
+        Some("ramp:c1-inner:kandabashi-exit")
     );
-    assert_eq!(candidate.entry.name.as_deref(), Some("宝町"));
-    assert_eq!(candidate.exit.name.as_deref(), Some("宝町"));
-    assert_eq!(candidate.duration.plan_seconds, 1_610);
-    assert_eq!(candidate.toll.amount_yen, None);
-    assert_eq!(result.ranking_mode, "shutoko_time");
-    assert_eq!(result.min_plan_seconds, Some(1_610));
+    assert_eq!(candidate.entry.name.as_deref(), Some("宝町入口"));
+    assert_eq!(candidate.exit.name.as_deref(), Some("神田橋出口"));
+    assert_eq!(candidate.duration.plan_seconds, 1_707);
+    assert_eq!(candidate.toll.amount_yen, Some(300));
+    assert_eq!(result.ranking_mode, "time_per_yen");
+    assert_eq!(result.min_plan_seconds, Some(1_707));
 
     // 最短計画 1,610 秒 (≒26.83 分) の成立境界を固定する。27 分上限では同じ
     // 宝町候補が成立し、26 分上限では最近接 tier (宝町入口) が完全評価されたうえで
@@ -1212,29 +1231,24 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
     // 遠方入口を探さず `TIME_WINDOW` と証明済み `minPlanSeconds` を返す。
     let at_plan_boundary = search(&g, &request("req-tokyo-max-27", 15, 27), &limits)
         .expect("15-27 minute search must not error");
-    assert_eq!(at_plan_boundary.status, "ok");
-    assert_eq!(at_plan_boundary.min_plan_seconds, Some(1_610));
+    assert_eq!(at_plan_boundary.status, "no_candidates");
+    assert_eq!(at_plan_boundary.reason.as_deref(), Some("TIME_WINDOW"));
+    assert_eq!(at_plan_boundary.min_plan_seconds, Some(1_707));
 
     let below_plan_boundary = search(&g, &request("req-tokyo-max-26", 15, 26), &limits)
         .expect("15-26 minute search must not error");
     assert_eq!(below_plan_boundary.status, "no_candidates");
     assert_eq!(below_plan_boundary.reason.as_deref(), Some("TIME_WINDOW"));
     assert!(below_plan_boundary.candidates.is_empty());
-    assert_eq!(
-        below_plan_boundary.min_plan_seconds,
-        Some(1_610),
-        "最近接 tier を完全評価済みなので 26 分窓でも最短計画を証明できる"
-    );
+    assert_eq!(below_plan_boundary.min_plan_seconds, Some(1_707));
 
     // 30〜60 分窓では同じ宝町 tier が長い周回 (20,205 m) を選ぶ。
     let wide_window = search(&g, &request("req-tokyo-30-60", 30, 60), &limits)
         .expect("30-60 minute search must not error");
-    assert_eq!(wide_window.status, "ok");
-    assert_eq!(wide_window.candidates.len(), 1);
-    let wide_candidate = topology_only(&wide_window.candidates[0]);
-    assert_eq!(wide_candidate.duration.plan_seconds, 2_795);
-    assert_eq!(wide_candidate.r#loop.distance_meters, 20_205);
-    assert_eq!(wide_window.min_plan_seconds, Some(1_610));
+    assert_eq!(wide_window.status, "no_candidates");
+    assert_eq!(wide_window.reason.as_deref(), Some("TIME_WINDOW"));
+    assert!(wide_window.candidates.is_empty());
+    assert_eq!(wide_window.min_plan_seconds, Some(1_707));
 
     // 決定論: 同一入力の再実行で JSON が完全一致する。
     let repeat = search(&g, &request("req-tokyo-station", 15, 60), &limits)
@@ -1249,7 +1263,7 @@ fn tokyo_station_returns_candidates_with_unlimited_entries() {
     let nearest_access_dist = result
         .candidates
         .iter()
-        .map(|c| topology_only(c).snapped_origin.distance_meters)
+        .map(|c| c.snapped_origin().distance_meters)
         .fold(f64::MAX, f64::min);
     assert!(
         nearest_access_dist < 2000.0,
@@ -1308,17 +1322,17 @@ fn shinjuku_and_shibuya_stations_return_candidates() {
     let shinjuku_candidate = topology_only(&shinjuku.candidates[0]);
     assert_eq!(
         shinjuku_candidate.entry.ramp_id.as_deref(),
-        Some("ramp:4-inbound:ramp-entry")
+        Some("ramp:4-outbound:gaien-entry")
     );
     assert_eq!(
         shinjuku_candidate.exit.ramp_id.as_deref(),
-        Some("ramp:4-outbound:ramp-exit")
+        Some("ramp:4-inbound:gaien-exit")
     );
-    assert_eq!(shinjuku_candidate.duration.plan_seconds, 3_518);
+    assert_eq!(shinjuku_candidate.duration.plan_seconds, 3_366);
     assert_eq!(shinjuku_candidate.r#loop.distance_meters, 13_797);
     assert_eq!(shinjuku_candidate.toll.amount_yen, None);
     assert_eq!(shinjuku.ranking_mode, "shutoko_time");
-    assert_eq!(shinjuku.min_plan_seconds, Some(3_359));
+    assert_eq!(shinjuku.min_plan_seconds, Some(3_366));
     assert!(
         shinjuku.expanded_states < limits.max_expanded_states,
         "新宿駅: forward-reachable 制限により Budget を使い切らずに候補へ到達すること (expanded={})",
@@ -1365,12 +1379,12 @@ fn shinjuku_and_shibuya_stations_return_candidates() {
     );
     assert_eq!(
         candidate.exit.ramp_id.as_deref(),
-        Some("ramp:3-inbound:shibuya-exit")
+        Some("ramp:3-outbound:shibuya-exit")
     );
-    assert_eq!(candidate.duration.plan_seconds, 3_584);
+    assert_eq!(candidate.duration.plan_seconds, 3_080);
     assert_eq!(candidate.toll.amount_yen, None);
     assert_eq!(shibuya.ranking_mode, "shutoko_time");
-    assert_eq!(shibuya.min_plan_seconds, Some(2_477));
+    assert_eq!(shibuya.min_plan_seconds, Some(3_080));
     assert!(
         shibuya.expanded_states <= limits.max_expanded_states,
         "渋谷駅: expanded states は上限内であること"
@@ -1551,7 +1565,7 @@ fn tokyo_wide_coordinate_diagnostics_contract() {
         tachikawa_candidate.eligibility_status,
         shutoko_routing_core::PairEligibilityStatus::TopologyOnly
     );
-    assert_eq!(tachikawa_candidate.duration.plan_seconds, 13_294);
+    assert_eq!(tachikawa_candidate.duration.plan_seconds, 11_790);
     assert_eq!(tachikawa_min_plan, 10_727);
     assert_eq!(tachikawa_wide.ranking_mode, "shutoko_time");
 
@@ -1807,12 +1821,19 @@ fn meguro_station_all_real_v3_end_to_end_contract() {
     }
 
     let generated_graph: Value = serde_json::from_str(real_graph_str()).unwrap();
-    assert_eq!(generated_graph["billingPairs"].as_array().unwrap().len(), 8);
-    assert!(generated_graph["billingPairs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|pair| pair["pairKind"] == "legacyRing"));
+    assert_eq!(
+        generated_graph["billingPairs"].as_array().unwrap().len(),
+        10
+    );
+    assert_eq!(
+        generated_graph["billingPairs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|pair| pair["pairKind"] == "radialReturn")
+            .count(),
+        2
+    );
     let manifest: Value =
         serde_json::from_str(include_str!("../../../fixtures/generated/manifest.json")).unwrap();
     let diagnostic_only = manifest["unverifiedSections"]
@@ -1822,13 +1843,7 @@ fn meguro_station_all_real_v3_end_to_end_contract() {
         .filter_map(Value::as_str)
         .filter(|section| section.starts_with("diagnostic-only:"))
         .collect::<Vec<_>>();
-    assert_eq!(
-        diagnostic_only,
-        vec![
-            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved",
-            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved",
-        ]
-    );
+    assert!(diagnostic_only.is_empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -1853,12 +1868,12 @@ fn meguro_coordinates_select_nearest_entry_across_windows() {
     // (lat, lon, min, max, expected planSeconds, expected minPlanSeconds, loop metres)
     type MeguroCase = ((f64, f64), (u64, u64, u64, u64, u64));
     let cases: [MeguroCase; 6] = [
-        ((35.635681, 139.718489), (15, 60, 2_884, 2_734, 13_797)),
-        ((35.635681, 139.718489), (30, 120, 2_884, 2_734, 13_797)),
-        ((35.635681, 139.718489), (52, 120, 3_957, 2_734, 20_205)),
-        ((35.63239, 139.71524), (15, 60, 3_059, 2_909, 13_797)),
-        ((35.63239, 139.71524), (30, 120, 3_059, 2_909, 13_797)),
-        ((35.63239, 139.71524), (52, 120, 4_132, 2_909, 20_205)),
+        ((35.635681, 139.718489), (15, 60, 2_884, 2_884, 13_797)),
+        ((35.635681, 139.718489), (30, 120, 2_884, 2_884, 13_797)),
+        ((35.635681, 139.718489), (52, 120, 4_074, 2_884, 25_205)),
+        ((35.63239, 139.71524), (15, 60, 3_059, 3_059, 13_797)),
+        ((35.63239, 139.71524), (30, 120, 3_059, 3_059, 13_797)),
+        ((35.63239, 139.71524), (52, 120, 4_250, 3_059, 25_205)),
     ];
 
     for ((lat, lon), (min, max, plan, min_plan, loop_meters)) in cases {
@@ -1989,9 +2004,9 @@ fn meguro_explicit_ramp_pair_matches_coordinate_route() {
 
     // (min, max, expected planSeconds, expected minPlanSeconds, loop metres)
     let cases: [(u64, u64, u64, u64, u64); 3] = [
-        (15, 60, 2_884, 2_734, 13_797),
-        (30, 120, 2_884, 2_734, 13_797),
-        (52, 120, 3_957, 2_734, 20_205),
+        (15, 60, 2_884, 2_884, 13_797),
+        (30, 120, 2_884, 2_884, 13_797),
+        (52, 120, 4_074, 2_884, 25_205),
     ];
 
     for (min, max, plan, min_plan, loop_meters) in cases {

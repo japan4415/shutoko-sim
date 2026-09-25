@@ -226,7 +226,7 @@ impl<'a> PartialOrd for SearchState<'a> {
 
 /// Find shortest simple path of `Shutoko` edges between two nodes using Dijkstra,
 /// respecting forbidden transitions and excluding a set of forbidden visited nodes.
-fn find_shutoko_path(
+pub(crate) fn find_shutoko_path(
     graph: &Graph,
     start_node: &str,
     target_node: &str,
@@ -494,6 +494,22 @@ pub fn generate_billing_pair(
     Ok(pair)
 }
 
+pub(crate) fn generate_billing_pair_for_relation_review(
+    graph: &Graph,
+    seed: &BillingPairSeed,
+) -> Result<BillingPair, BillingError> {
+    if seed.status == VerificationStatus::Verified && !seed.one_section_ahead_verified {
+        return Err(BillingError::UnverifiedSectionMarkedAsVerified(
+            seed.id.clone(),
+        ));
+    }
+    let mut review_seed = seed.clone();
+    review_seed.status = VerificationStatus::Unverified;
+    let mut pair = generate_billing_pair(graph, &review_seed)?;
+    pair.status = seed.status;
+    Ok(pair)
+}
+
 /// Process a collection of billing pair seeds against a graph, recording valid pairs
 /// and explicitly capturing rejection reasons for invalid entries.
 pub fn generate_and_validate_billing_pairs(
@@ -563,6 +579,134 @@ pub fn generate_and_validate_parsed_billing_pairs(
             }
         }
     }
+}
+
+pub fn generate_and_validate_parsed_billing_pairs_for_relation_review(
+    graph: &Graph,
+    seed_file: &ParsedBillingPairsSeed,
+) -> BillingGenerationReport {
+    match seed_file {
+        ParsedBillingPairsSeed::Schema1(seed) => {
+            let mut valid_pairs = Vec::new();
+            let mut rejected_pairs = Vec::new();
+            for entry in &seed.billing_pairs {
+                match generate_billing_pair_for_relation_review(graph, entry) {
+                    Ok(pair) => valid_pairs.push(pair),
+                    Err(error) => rejected_pairs.push(RejectedSeedRecord {
+                        seed_id: entry.id.clone(),
+                        reason: error.to_string(),
+                    }),
+                }
+            }
+            valid_pairs.sort_by(|a, b| a.id.cmp(&b.id));
+            rejected_pairs.sort_by(|a, b| a.seed_id.cmp(&b.seed_id));
+            BillingGenerationReport {
+                valid_pairs,
+                rejected_pairs,
+            }
+        }
+        ParsedBillingPairsSeed::Schema2(seed) => {
+            let mut valid_pairs = Vec::new();
+            let mut rejected_pairs = Vec::new();
+            for entry in &seed.billing_pairs {
+                match entry {
+                    BillingPairSeedEntry::LegacyRing(seed) => {
+                        match generate_billing_pair_for_relation_review(graph, seed) {
+                            Ok(pair) => valid_pairs.push(pair),
+                            Err(error) => rejected_pairs.push(RejectedSeedRecord {
+                                seed_id: seed.id.clone(),
+                                reason: error.to_string(),
+                            }),
+                        }
+                    }
+                    BillingPairSeedEntry::RadialReturn(seed) => {
+                        rejected_pairs.push(RejectedSeedRecord {
+                            seed_id: seed.id.clone(),
+                            reason:
+                                "radialReturn pair requires schema 4 route-plan resolution and is not emitted by the legacy billing-pair adapter"
+                                    .to_string(),
+                        });
+                    }
+                }
+            }
+            valid_pairs.sort_by(|a, b| a.id.cmp(&b.id));
+            rejected_pairs.sort_by(|a, b| a.seed_id.cmp(&b.seed_id));
+            BillingGenerationReport {
+                valid_pairs,
+                rejected_pairs,
+            }
+        }
+    }
+}
+
+pub fn validate_promoted_legacy_pairs_from_source(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    inventory: &RampInventoryFile,
+    bindings: &OsmRampBindingsFile,
+    support_decisions_json: &[u8],
+    adjacency_json: &[u8],
+) -> Result<(), String> {
+    let support_decisions: RampSupportDecisionsFile =
+        serde_json::from_slice(support_decisions_json).map_err(|error| error.to_string())?;
+    let adjacency: BillingPairAdjacencyFile =
+        serde_json::from_slice(adjacency_json).map_err(|error| error.to_string())?;
+    for pair in graph
+        .billing_pairs
+        .iter()
+        .filter(|pair| pair.status == VerificationStatus::Verified)
+    {
+        let record = adjacency
+            .pairs
+            .iter()
+            .find(|record| record.pair_id == pair.id)
+            .ok_or_else(|| format!("verified pair {} has no adjacency record", pair.id))?;
+        let BillingPairAdjacencyRoutePlan::SameNode {
+            membership_id,
+            anchor_node_id,
+            first_exit_initial_edge_id,
+            exit_approach_edge_ids,
+        } = record
+            .route_plan
+            .as_ref()
+            .ok_or_else(|| format!("verified pair {} has no sameNode route plan", pair.id))?
+        else {
+            return Err(format!(
+                "verified pair {} is not a legacyRing plan",
+                pair.id
+            ));
+        };
+        if !route_memberships
+            .iter()
+            .any(|membership| membership.membership_id == *membership_id)
+        {
+            return Err(format!(
+                "verified pair {} references unknown membership {}",
+                pair.id, membership_id
+            ));
+        }
+        let result = validate_relation_constrained_legacy_first_exit(
+            graph,
+            route_memberships,
+            inventory,
+            bindings,
+            &support_decisions,
+            &adjacency,
+            membership_id,
+            anchor_node_id,
+            first_exit_initial_edge_id,
+            &record.exit_ramp_id,
+            exit_approach_edge_ids,
+        )
+        .map_err(|errors| format!("{}: {}", pair.id, errors.join("; ")))?;
+        if result.status != RelationConstrainedFirstExitStatus::Verified {
+            return Err(format!(
+                "verified pair {} did not pass relation-constrained First Exit: {:?}",
+                pair.id, result.status
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub const BILLING_PAIR_ADJACENCY_SCHEMA_VERSION: u32 = 1;
@@ -1712,7 +1856,7 @@ fn derive_legacy_route(
         Err(_) => return unresolved_report(),
     };
     seed.vehicle_profile = graph.vehicle_profile.clone();
-    let pair = match generate_billing_pair(graph, &seed) {
+    let pair = match generate_billing_pair_for_relation_review(graph, &seed) {
         Ok(pair) => pair,
         Err(_) => return unresolved_report(),
     };

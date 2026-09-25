@@ -969,8 +969,8 @@
       "billingDistanceMeters": 19400,
       "distanceEvidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
       "verificationStatus": "partial_pending_2026_10_pdf",
-      "endpointBindingStatus": "unresolved",
-      "endpointBindingReason": "The tariff cell is verified, but the Tengenji exit binding and public pair eligibility remain independent D1/B1 gates.",
+      "endpointBindingStatus": "verified_bound",
+      "endpointBindingReason": "The tariff cell and the reviewed 4-way/16-edge Tengenji endpoint binding are independent verified facts; the post-2026-10 price remains pending PDF review.",
       "prices": [
         {
           "status": "priced",

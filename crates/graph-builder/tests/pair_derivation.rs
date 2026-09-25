@@ -132,8 +132,8 @@ fn derives_all_official_candidates_with_independent_gates() {
     assert!(!report.automatic_seed_write);
     assert_eq!(report.candidates.len(), 11);
     assert_eq!(report.summary.candidate_total, 11);
-    assert_eq!(report.summary.eligible_for_review, 2, "{report:#?}");
-    assert_eq!(report.summary.hold, 9);
+    assert_eq!(report.summary.eligible_for_review, 9, "{report:#?}");
+    assert_eq!(report.summary.hold, 2);
     assert_eq!(
         report
             .candidates
@@ -196,6 +196,11 @@ fn derives_all_official_candidates_with_independent_gates() {
     for pair_id in [
         "bp:c1-outer:kandabashi-takaracho",
         "bp:c1-outer:kasumigaseki-daikancho",
+        "bp:c1-outer:ginza-shibakoen",
+        "bp:c1-inner:kasumigaseki-shibakoen",
+        "bp:c1-inner:daikancho-kasumigaseki",
+        "bp:c1-inner:shibakoen-shiodome",
+        "bp:c1-inner:takaracho-kandabashi",
     ] {
         let candidate = pair(pair_id);
         assert_eq!(
@@ -208,9 +213,14 @@ fn derives_all_official_candidates_with_independent_gates() {
             candidate.gates.first_exit.status,
             PairDerivationGateStatus::Passed
         );
+        assert!(candidate.rejection_reasons.is_empty(), "{pair_id}");
     }
 
     let blocked_inner = pair("bp:c1-outer:shibakoen-iikura");
+    assert_eq!(
+        blocked_inner.promotion_decision,
+        PairDerivationPromotionDecision::Hold
+    );
     assert_eq!(
         blocked_inner.gates.entry_binding.status,
         PairDerivationGateStatus::Failed
@@ -218,46 +228,7 @@ fn derives_all_official_candidates_with_independent_gates() {
     assert!(blocked_inner
         .rejection_reasons
         .contains(&"ENTRY_BINDING_UNSUPPORTED".to_string()));
-    let blocked_inner_shibakoen = pair("bp:c1-inner:shibakoen-shiodome");
-    assert_eq!(
-        blocked_inner_shibakoen.gates.entry_binding.status,
-        PairDerivationGateStatus::Failed
-    );
-    assert!(blocked_inner_shibakoen
-        .rejection_reasons
-        .contains(&"ENTRY_BINDING_UNSUPPORTED".to_string()));
-    for pair_id in [
-        "bp:c1-outer:ginza-shibakoen",
-        "bp:c1-inner:kasumigaseki-shibakoen",
-    ] {
-        let candidate = pair(pair_id);
-        assert_eq!(
-            candidate.promotion_decision,
-            PairDerivationPromotionDecision::Hold
-        );
-        assert!(candidate
-            .rejection_reasons
-            .contains(&"LEGACY_ENDPOINT_EDGE_MISMATCH".to_string()));
-        assert!(candidate
-            .rejection_reasons
-            .contains(&"RELATION_EXIT_APPROACH_BOUNDARY_MISMATCH".to_string()));
-    }
-    for pair_id in [
-        "bp:c1-inner:daikancho-kasumigaseki",
-        "bp:c1-inner:takaracho-kandabashi",
-    ] {
-        let candidate = pair(pair_id);
-        assert_eq!(
-            candidate.promotion_decision,
-            PairDerivationPromotionDecision::Hold
-        );
-        assert!(candidate
-            .rejection_reasons
-            .contains(&"EXIT_BINDING_UNSUPPORTED".to_string()));
-        assert!(candidate
-            .rejection_reasons
-            .contains(&"RELATION_EXIT_RAMP_NOT_FOUND".to_string()));
-    }
+
     let blocked_shintomicho = pair("bp:c1-inner:ginza-shintomicho");
     assert_eq!(
         blocked_shintomicho.promotion_decision,
@@ -277,18 +248,15 @@ fn derives_all_official_candidates_with_independent_gates() {
         let radial = pair(pair_id);
         assert_eq!(
             radial.promotion_decision,
-            PairDerivationPromotionDecision::Hold
+            PairDerivationPromotionDecision::EligibleForReview,
+            "{pair_id}: {:?}",
+            radial.rejection_reasons
         );
         assert_eq!(
             radial.gates.first_exit.status,
-            PairDerivationGateStatus::Unresolved
+            PairDerivationGateStatus::Passed
         );
-        assert!(radial
-            .rejection_reasons
-            .contains(&"EXIT_BINDING_UNRESOLVED".to_string()));
-        assert!(!radial
-            .rejection_reasons
-            .contains(&"ROUTE_MEMBERSHIP_EXIT_NOT_FOUND".to_string()));
+        assert!(radial.rejection_reasons.is_empty(), "{pair_id}");
     }
 
     let c1_outer = report
@@ -296,8 +264,8 @@ fn derives_all_official_candidates_with_independent_gates() {
         .iter()
         .find(|manifest| manifest.membership_id == "route:C1:outer")
         .unwrap();
-    assert_eq!(c1_outer.status, "fail");
-    assert!(c1_outer.route_plan_unresolved > 0);
+    assert_eq!(c1_outer.status, "pass");
+    assert_eq!(c1_outer.route_plan_unresolved, 0);
     assert_eq!(c1_outer.relation_ids, vec![4256008]);
     let c1_inner = report
         .relation_manifest
@@ -305,6 +273,7 @@ fn derives_all_official_candidates_with_independent_gates() {
         .find(|manifest| manifest.membership_id == "route:C1:inner")
         .unwrap();
     assert_eq!(c1_inner.status, "fail");
+    assert_eq!(c1_inner.route_plan_unresolved, 1);
     assert!(c1_inner
         .candidate_pair_ids
         .contains(&"bp:c1-inner:ginza-shintomicho".to_string()));

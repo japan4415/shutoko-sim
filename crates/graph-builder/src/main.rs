@@ -6,16 +6,16 @@
 use shutoko_graph_builder::{
     apply_od_tariffs_to_graph, audit_first_public_road_connections, bind_ramps_to_graph,
     bound_ramp_evidence_from_inventory, build_manifest, build_route_membership_indices,
-    build_topology_with_report, generate_and_validate_parsed_billing_pairs,
-    generate_diagnostic_radial_route_plans, graph_schema_v4_to_deterministic_json_with_radial,
-    manifest_to_deterministic_json, parse_billing_pairs_seed, promote_verified_radial_pair,
-    ramps_artifact_to_deterministic_json, route_memberships_sha256,
-    snap_index_to_deterministic_json, to_deterministic_json, validate_od_tariffs,
-    validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
-    validate_radial_seed_binding_candidates, validate_ramp_inventory, BillingPairProvenance,
-    EdgeKind, EndpointSupportState, ManifestConfig, OdTariffsFile, OsmRampBindingsFile,
-    OverpassResponse, ParsedBillingPairsSeed, RampInventoryFile, RampKind, RampsArtifact,
-    RouteMembershipBuildOptions, TopologyConfig, VerificationStatus,
+    build_topology_with_report, generate_diagnostic_radial_route_plans,
+    graph_schema_v4_to_deterministic_json_with_radial, manifest_to_deterministic_json,
+    parse_billing_pairs_seed, promote_verified_radial_pair, ramps_artifact_to_deterministic_json,
+    route_memberships_sha256, snap_index_to_deterministic_json, to_deterministic_json,
+    validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
+    validate_promoted_legacy_pairs_from_source, validate_radial_seed_binding_candidates,
+    validate_ramp_inventory, BillingPairProvenance, EdgeKind, EndpointSupportState, ManifestConfig,
+    OdTariffsFile, OsmRampBindingsFile, OverpassResponse, ParsedBillingPairsSeed,
+    RampInventoryFile, RampKind, RampsArtifact, RouteMembershipBuildOptions, TopologyConfig,
+    VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -55,6 +55,16 @@ OPTIONS:
 }
 
 const ROUTE_MEMBERSHIP_RELATION_IDS: &[i64] = &[4256008, 4256339];
+
+fn repository_data_path(name: &str) -> PathBuf {
+    let direct = PathBuf::from("data").join(name);
+    if direct.exists() {
+        return direct;
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data")
+        .join(name)
+}
 
 fn default_route_membership_relation_ids(response: &OverpassResponse) -> Option<Vec<i64>> {
     if ROUTE_MEMBERSHIP_RELATION_IDS
@@ -321,7 +331,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         })?;
         parsed_seed_file = Some(seed_file.clone());
 
-        let report = generate_and_validate_parsed_billing_pairs(&graph, &seed_file);
+        let report =
+            shutoko_graph_builder::generate_and_validate_parsed_billing_pairs_for_relation_review(
+                &graph, &seed_file,
+            );
 
         if !report.rejected_pairs.is_empty() {
             eprintln!(
@@ -565,6 +578,62 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Vec::new()
     };
+    if args.graph_schema == 4 && (args.inventory_path.is_some() || args.bindings_path.is_some()) {
+        let inv_path = args.inventory_path.as_ref().ok_or_else(|| {
+            "--inventory is required when --bindings is provided for schema 4".to_string()
+        })?;
+        let bindings_path = args.bindings_path.as_ref().ok_or_else(|| {
+            "--bindings is required when --inventory is provided for schema 4".to_string()
+        })?;
+        let inv_raw = fs::read(inv_path).map_err(|error| {
+            format!(
+                "failed to reread inventory {} for relation review: {}",
+                inv_path.display(),
+                error
+            )
+        })?;
+        let bindings_raw = fs::read(bindings_path).map_err(|error| {
+            format!(
+                "failed to reread bindings {} for relation review: {}",
+                bindings_path.display(),
+                error
+            )
+        })?;
+        let support_path = repository_data_path("ramp-support-decisions.json");
+        let adjacency_path = repository_data_path("billing-pair-adjacency.json");
+        let support_raw = fs::read(&support_path).map_err(|error| {
+            format!(
+                "failed to read support decisions {} for relation review: {}",
+                support_path.display(),
+                error
+            )
+        })?;
+        let adjacency_raw = fs::read(&adjacency_path).map_err(|error| {
+            format!(
+                "failed to read billing pair adjacency {} for relation review: {}",
+                adjacency_path.display(),
+                error
+            )
+        })?;
+        let inv: RampInventoryFile = serde_json::from_slice(&inv_raw)
+            .map_err(|error| format!("failed to parse inventory for relation review: {}", error))?;
+        let bindings: OsmRampBindingsFile = serde_json::from_slice(&bindings_raw)
+            .map_err(|error| format!("failed to parse bindings for relation review: {}", error))?;
+        validate_promoted_legacy_pairs_from_source(
+            &graph,
+            &route_memberships,
+            &inv,
+            &bindings,
+            &support_raw,
+            &adjacency_raw,
+        )
+        .map_err(|error| {
+            format!(
+                "relation-constrained legacy pair validation failed: {}",
+                error
+            )
+        })?;
+    }
     let mut radial_billing_pairs = Vec::new();
     if args.graph_schema == 4 {
         if let Some(seed_file) = &parsed_seed_file {

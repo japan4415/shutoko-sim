@@ -30,8 +30,9 @@ pub use inventory::{
 pub use billing::{
     compute_pair_derivation_input_hashes, derive_pair_candidates_from_source_bytes,
     generate_and_validate_billing_pairs, generate_and_validate_parsed_billing_pairs,
-    generate_billing_pair, generate_diagnostic_radial_route_plans,
-    pair_derivation_report_to_deterministic_json, validate_radial_seed_binding_candidates,
+    generate_and_validate_parsed_billing_pairs_for_relation_review, generate_billing_pair,
+    generate_diagnostic_radial_route_plans, pair_derivation_report_to_deterministic_json,
+    validate_promoted_legacy_pairs_from_source, validate_radial_seed_binding_candidates,
     BillingError, BillingGenerationReport, BillingPairAdjacency,
     BillingPairAdjacencyDirectedAnchor, BillingPairAdjacencyEntryCorridor,
     BillingPairAdjacencyExcludedShortConnector, BillingPairAdjacencyFile, BillingPairAdjacencyKind,

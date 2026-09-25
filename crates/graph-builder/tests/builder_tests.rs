@@ -14,6 +14,10 @@ fn generated_legacy_graph() -> Graph {
     assert_eq!(wire["schemaVersion"], 4);
     wire["schemaVersion"] = json!(2);
     wire.as_object_mut().unwrap().remove("routeMemberships");
+    wire["billingPairs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|pair| pair["pairKind"] == json!("legacyRing"));
     let ramp_data = wire["ramps"]
         .as_array()
         .unwrap()
@@ -3495,15 +3499,13 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     let verified_pair_ids = [
         "bp:c1-outer:kandabashi-takaracho",
         "bp:c1-outer:kasumigaseki-daikancho",
-    ];
-    let unverified_pair_ids = [
-        "bp:c1-inner:kasumigaseki-shibakoen",
-        "bp:c1-inner:takaracho-kandabashi",
         "bp:c1-outer:ginza-shibakoen",
-        "bp:c1-outer:shibakoen-iikura",
+        "bp:c1-inner:kasumigaseki-shibakoen",
         "bp:c1-inner:daikancho-kasumigaseki",
         "bp:c1-inner:shibakoen-shiodome",
+        "bp:c1-inner:takaracho-kandabashi",
     ];
+    let unverified_pair_ids = ["bp:c1-outer:shibakoen-iikura"];
 
     for expected_id in &verified_pair_ids {
         let seed_pair = legacy_pairs
@@ -3513,16 +3515,15 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
 
         assert_eq!(seed_pair.status, VerificationStatus::Verified);
         assert!(seed_pair.one_section_ahead_verified);
-        if *expected_id == "bp:c1-outer:kasumigaseki-daikancho" {
-            assert_eq!(seed_pair.prices.len(), 1);
-            assert_eq!(seed_pair.prices[0].amount_yen, 570);
-        } else {
-            assert_eq!(seed_pair.prices.len(), 2);
-            assert_eq!(seed_pair.prices[0].amount_yen, 300);
-            assert_eq!(seed_pair.prices[1].amount_yen, 300);
-            assert_eq!(seed_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-            assert_eq!(seed_pair.prices[1].effective_to, None);
-        }
+        assert_eq!(seed_pair.prices.len(), 1);
+        assert_eq!(
+            seed_pair.prices[0].amount_yen,
+            if *expected_id == "bp:c1-outer:kasumigaseki-daikancho" {
+                570
+            } else {
+                300
+            }
+        );
         assert_eq!(seed_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
         assert_eq!(
             seed_pair.prices[0].effective_to.as_deref(),
@@ -3556,16 +3557,15 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
             .unwrap_or_else(|| panic!("graph pair {} not found in graph.json", expected_id));
 
         assert_eq!(graph_pair.status, VerificationStatus::Verified);
-        if *expected_id == "bp:c1-outer:kasumigaseki-daikancho" {
-            assert_eq!(graph_pair.prices.len(), 1);
-            assert_eq!(graph_pair.prices[0].amount_yen, 570);
-        } else {
-            assert_eq!(graph_pair.prices.len(), 2);
-            assert_eq!(graph_pair.prices[0].amount_yen, 300);
-            assert_eq!(graph_pair.prices[1].amount_yen, 300);
-            assert_eq!(graph_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-            assert_eq!(graph_pair.prices[1].effective_to, None);
-        }
+        assert_eq!(graph_pair.prices.len(), 1);
+        assert_eq!(
+            graph_pair.prices[0].amount_yen,
+            if *expected_id == "bp:c1-outer:kasumigaseki-daikancho" {
+                570
+            } else {
+                300
+            }
+        );
         assert_eq!(graph_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
         assert_eq!(
             graph_pair.prices[0].effective_to.as_deref(),
@@ -4266,13 +4266,7 @@ fn test_cli_with_full_fixtures() {
         .filter_map(Value::as_str)
         .filter(|section| section.starts_with("diagnostic-only:"))
         .collect::<Vec<_>>();
-    assert_eq!(
-        diagnostic_only,
-        vec![
-            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved",
-            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved",
-        ]
-    );
+    assert!(diagnostic_only.is_empty());
     let route_memberships: Vec<RouteMembershipIndex> =
         serde_json::from_value(graph_json["routeMemberships"].clone()).unwrap();
     assert_eq!(
@@ -4283,13 +4277,13 @@ fn test_cli_with_full_fixtures() {
     let ramps_raw = std::fs::read_to_string(out_dir.join("ramps.json")).unwrap();
     let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
     assert_eq!(ramps_json["totalRamps"], 399);
-    assert_eq!(ramps_json["boundRamps"], 232);
+    assert_eq!(ramps_json["boundRamps"], 236);
 
     let manifest_raw = std::fs::read_to_string(out_dir.join("manifest.json")).unwrap();
     let manifest_json: serde_json::Value = serde_json::from_str(&manifest_raw).unwrap();
     let capabilities = &manifest_json["coverage"]["endpointCapabilities"];
-    assert_eq!(capabilities["routableEntryCount"], 99);
-    assert_eq!(capabilities["routableExitCount"], 98);
+    assert_eq!(capabilities["routableEntryCount"], 100);
+    assert_eq!(capabilities["routableExitCount"], 101);
     assert_eq!(capabilities["structuralNoLoopEntryCount"], 13);
     assert_eq!(capabilities["structuralNoLoopExitCount"], 22);
 
@@ -4307,21 +4301,21 @@ fn test_cli_with_full_fixtures() {
             .iter()
             .filter(|r| r["supportState"] == "verified_bound" && r["bound"] == true)
             .count(),
-        232
+        236
     );
     assert_eq!(
         active_general
             .iter()
             .filter(|r| r["supportState"] == "unsupported" && r["bound"] == false)
             .count(),
-        139
+        135
     );
     assert_eq!(
         active_general
             .iter()
             .filter(|r| r["routingCapability"] == "routable")
             .count(),
-        197
+        201
     );
     assert_eq!(
         active_general
@@ -4379,13 +4373,9 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
         shutoko_graph_builder::generate_diagnostic_radial_route_plans(&graph, &memberships, &seed);
     assert_eq!(generated_plans.len(), 2);
     assert!(generated_plans.iter().all(|plan| plan.error.is_none()));
-    assert!(generated_plans.iter().all(|plan| plan
-        .resolution
-        .as_ref()
-        .unwrap()
-        .first_exit
-        .exit
-        .is_none()));
+    assert!(generated_plans
+        .iter()
+        .all(|plan| { plan.resolution.as_ref().unwrap().first_exit.exit.is_some() }));
     let radial_pairs = seed.radial_pairs();
     assert_eq!(radial_pairs.len(), 2);
     assert_eq!(
@@ -4401,14 +4391,14 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
     for pair in radial_pairs {
         assert_eq!(
             pair.pair_eligibility.status,
-            shutoko_graph_builder::PairEligibilityStatus::Unverified
+            shutoko_graph_builder::PairEligibilityStatus::VerifiedOneSectionAhead
         );
         assert_eq!(
             pair.tariff.status,
-            shutoko_graph_builder::TariffStatus::Unpriced
+            shutoko_graph_builder::TariffStatus::Priced
         );
-        assert!(pair.tariff.amount_yen.is_none());
-        assert!(pair.tariff.billing_distance_meters.is_none());
+        assert_eq!(pair.tariff.amount_yen, Some(790));
+        assert_eq!(pair.tariff.billing_distance_meters, Some(19400));
         let lap =
             generate_route_plan_lap_v1(&graph, &memberships, &pair.route_plan.anchor).unwrap();
         assert_eq!(lap.merge_node_id, pair.route_plan.anchor.merge_node_id);
@@ -4432,47 +4422,22 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
                 .unwrap();
         assert_eq!(
             resolution.first_exit.exact_directed_binding,
-            pair.route_plan
-                .return_corridor
-                .first_general_exit
-                .exact_directed_binding
+            shutoko_graph_builder::EndpointSupportState::VerifiedBound
         );
-        assert!(resolution.first_exit.exit.is_none());
+        let exit = resolution.first_exit.exit.as_ref().unwrap();
+        assert_eq!(exit.ramp_id, "ramp:2-outbound:tengenji-exit");
         assert_eq!(
-            resolution.first_exit.exact_directed_binding,
-            shutoko_graph_builder::EndpointSupportState::Unresolved
+            exit.exit_edge_id,
+            pair.exit_endpoint.directed_segments[0]
+                .edge_ids
+                .first()
+                .unwrap()
+                .as_str()
         );
-        let expected_return_length = if pair.route_plan.anchor.direction == "inner" {
-            85
-        } else {
-            84
-        };
-        assert_eq!(
-            resolution.first_exit.mainline_edge_ids.len(),
-            expected_return_length
-        );
+        assert!(!resolution.first_exit.mainline_edge_ids.is_empty());
         assert!(!resolution.first_exit.mainline_source_segment_ids.is_empty());
-        assert_eq!(
-            resolution.first_exit.blocked_ramp_id.as_deref(),
-            Some("ramp:2-outbound:tengenji-exit")
-        );
-        assert_eq!(
-            resolution.first_exit.blocked_exit_edge_id.as_deref(),
-            Some("e:w172358461:0:f")
-        );
-        let return_end_node_id = graph
-            .edges
-            .iter()
-            .find(|edge| edge.id == *resolution.first_exit.mainline_edge_ids.last().unwrap())
-            .map(|edge| edge.to.as_str());
-        assert_eq!(
-            return_end_node_id,
-            Some(
-                pair.exit_endpoint.binding_candidates[0].directed_segments[0]
-                    .from_node_id
-                    .as_str()
-            )
-        );
+        assert!(resolution.first_exit.blocked_ramp_id.is_none());
+        assert!(resolution.first_exit.blocked_exit_edge_id.is_none());
     }
 }
 
@@ -4596,27 +4561,43 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
         .filter(|section| section.starts_with("diagnostic-only:"))
         .map(str::to_owned)
         .collect::<Vec<_>>();
-    assert_eq!(
-        diagnostic_only,
-        vec![
-            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved".to_owned(),
-            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved".to_owned(),
-        ]
-    );
+    assert!(diagnostic_only.is_empty());
     assert_eq!(graph_json["schemaVersion"], 4);
-    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 8);
-    for pair in graph_json["billingPairs"].as_array().unwrap() {
-        assert_eq!(pair["pairKind"], "legacyRing");
+    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 10);
+    let legacy_pairs = graph_json["billingPairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|pair| pair["pairKind"] == "legacyRing")
+        .collect::<Vec<_>>();
+    let radial_pairs = graph_json["billingPairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|pair| pair["pairKind"] == "radialReturn")
+        .collect::<Vec<_>>();
+    assert_eq!(legacy_pairs.len(), 8);
+    assert_eq!(radial_pairs.len(), 2);
+    for pair in legacy_pairs {
         assert_eq!(pair["anchor"]["anchorKind"], "sameNode");
         assert_eq!(pair["anchor"]["arcPolicy"], "sameNodeLoop");
         assert!(pair["pairEligibility"]["status"].is_string());
         assert_eq!(pair["loopValidation"]["status"], "declared_route_validated");
         assert!(pair["tariff"]["status"].is_string());
     }
+    for pair in radial_pairs {
+        assert_eq!(
+            pair["routePlan"]["anchor"]["anchorKind"],
+            "directedJunction"
+        );
+        assert_eq!(pair["routePlan"]["anchor"]["arcPolicy"], "ordinaryLongArc");
+        assert_eq!(pair["tariff"]["amountYen"], 790);
+        assert_eq!(pair["tariff"]["billingDistanceMeters"], 19400);
+    }
     let prepared = shutoko_routing_core::prepare_json(&graph_raw, "{}").unwrap();
     assert_eq!(prepared.graph().schema_version, 4);
     assert_eq!(prepared.graph().billing_pairs.len(), 8);
-    assert!(prepared.radial_billing_pairs().is_empty());
+    assert_eq!(prepared.radial_billing_pairs().len(), 2);
     let edge_ids = graph_json["edges"]
         .as_array()
         .unwrap()

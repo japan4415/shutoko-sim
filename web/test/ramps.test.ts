@@ -36,9 +36,9 @@ describe("ramps.ts: ランプ台帳の検証・正規化・契約チェック", 
     expect(ramps).toHaveLength(399);
 
     // 契約件数の一致
-    // routable 197件（entry 99 / exit 98）
+    // routable 201件（entry 100 / exit 101）
     // structural_no_loop 35件（entry 13 / exit 22）
-    // unsupported 139件（entry 70 / exit 69）
+    // unsupported 135件（entry 69 / exit 66）
     // closed 4件（entry 2 / exit 2）
     // boundary 24件（boundary_in 12 / boundary_out 12）
     let routableEntries = 0;
@@ -70,12 +70,12 @@ describe("ramps.ts: ランプ台帳の検証・正規化・契約チェック", 
       }
     }
 
-    expect(routableEntries).toBe(99);
-    expect(routableExits).toBe(98);
+    expect(routableEntries).toBe(100);
+    expect(routableExits).toBe(101);
     expect(structNoLoopEntries).toBe(13);
     expect(structNoLoopExits).toBe(22);
-    expect(unsupportedEntries).toBe(70);
-    expect(unsupportedExits).toBe(69);
+    expect(unsupportedEntries).toBe(69);
+    expect(unsupportedExits).toBe(66);
     expect(closedEntries).toBe(2);
     expect(closedExits).toBe(2);
     expect(boundaryIn).toBe(12);
@@ -232,8 +232,8 @@ describe("ramps.ts: loadRampsDataset の整合性と改ざん検知", () => {
     const dataset = await loadRampsDataset(fetchImpl, releaseId);
     expect(dataset.ramps).toHaveLength(399);
     expect(dataset.rampMap.size).toBe(399);
-    expect(dataset.capabilities.routableEntryCount).toBe(99);
-    expect(dataset.capabilities.routableExitCount).toBe(98);
+    expect(dataset.capabilities.routableEntryCount).toBe(100);
+    expect(dataset.capabilities.routableExitCount).toBe(101);
   });
 
   it("ramps.json のハッシュ改ざん時は ARTIFACT_MISMATCH で停止する", async () => {
@@ -266,7 +266,7 @@ describe("ramps.ts: loadRampsDataset の整合性と改ざん検知", () => {
 });
 
 describe("ramps.ts: 入口・出口の役割分離と非対応理由（getRampEligibility）", () => {
-  it("入口選択において、routable な entry のみが選択可能（99件）", async () => {
+  it("入口選択において、routable な entry のみが選択可能（100件）", async () => {
     const { rawRamps, manifest } = await loadFixtureRampsAndManifest();
     const ramps = validateRampsArtifact(rawRamps, manifest.coverage.endpointCapabilities);
 
@@ -310,15 +310,15 @@ describe("ramps.ts: 入口・出口の役割分離と非対応理由（getRampEl
       }
     }
 
-    expect(selectableCount).toBe(99);
+    expect(selectableCount).toBe(100);
     expect(wrongKindCount).toBe(191);
     expect(structNoLoopCount).toBe(13);
-    expect(unsupportedCount).toBe(70);
+    expect(unsupportedCount).toBe(69);
     expect(closedCount).toBe(2);
     expect(boundaryCount).toBe(24);
   });
 
-  it("出口選択において、routable な exit のみが選択可能（98件）", async () => {
+  it("出口選択において、routable な exit のみが選択可能（101件）", async () => {
     const { rawRamps, manifest } = await loadFixtureRampsAndManifest();
     const ramps = validateRampsArtifact(rawRamps, manifest.coverage.endpointCapabilities);
 
@@ -362,10 +362,10 @@ describe("ramps.ts: 入口・出口の役割分離と非対応理由（getRampEl
       }
     }
 
-    expect(selectableCount).toBe(98);
+    expect(selectableCount).toBe(101);
     expect(wrongKindCount).toBe(184);
     expect(structNoLoopCount).toBe(22);
-    expect(unsupportedCount).toBe(69);
+    expect(unsupportedCount).toBe(66);
     expect(closedCount).toBe(2);
     expect(boundaryCount).toBe(24);
   });
@@ -378,22 +378,22 @@ describe("ramps.ts: 検索絞り込みと件数インフォメーション（fil
 
     const entryFilter = filterRamps(ramps, "", "entry");
     expect(entryFilter.totalCount).toBe(399);
-    expect(entryFilter.selectableCount).toBe(99);
+    expect(entryFilter.selectableCount).toBe(100);
     expect(entryFilter.matchedCount).toBe(399);
-    expect(entryFilter.matchedSelectableCount).toBe(99);
+    expect(entryFilter.matchedSelectableCount).toBe(100);
     expect(entryFilter.items).toHaveLength(399);
-    // ソート順で先頭 99 件は選択可能
-    expect(entryFilter.items.slice(0, 99).every((item) => item.eligibility.selectable)).toBe(true);
-    expect(formatCountInfo(entryFilter, false)).toBe("全 399 件（選択可能 99 件）");
+    // ソート順で先頭 100 件は選択可能
+    expect(entryFilter.items.slice(0, 100).every((item) => item.eligibility.selectable)).toBe(true);
+    expect(formatCountInfo(entryFilter, false)).toBe("全 399 件（選択可能 100 件）");
 
     const exitFilter = filterRamps(ramps, "", "exit");
     expect(exitFilter.totalCount).toBe(399);
-    expect(exitFilter.selectableCount).toBe(98);
+    expect(exitFilter.selectableCount).toBe(101);
     expect(exitFilter.matchedCount).toBe(399);
-    expect(exitFilter.matchedSelectableCount).toBe(98);
+    expect(exitFilter.matchedSelectableCount).toBe(101);
     expect(exitFilter.items).toHaveLength(399);
-    expect(exitFilter.items.slice(0, 98).every((item) => item.eligibility.selectable)).toBe(true);
-    expect(formatCountInfo(exitFilter, false)).toBe("全 399 件（選択可能 98 件）");
+    expect(exitFilter.items.slice(0, 101).every((item) => item.eligibility.selectable)).toBe(true);
+    expect(formatCountInfo(exitFilter, false)).toBe("全 399 件（選択可能 101 件）");
   });
 
   it("施設名、路線コード・名前、方向名、ID での絞り込みが機能する", async () => {
@@ -404,7 +404,7 @@ describe("ramps.ts: 検索絞り込みと件数インフォメーション（fil
     const takaracho = filterRamps(ramps, "宝町", "entry");
     expect(takaracho.matchedCount).toBe(2);
     expect(takaracho.matchedSelectableCount).toBe(1);
-    expect(formatCountInfo(takaracho, true)).toBe("該当 2 件（うち選択可能 1 件）/ 全体 399 件（選択可能 99 件）");
+    expect(formatCountInfo(takaracho, true)).toBe("該当 2 件（うち選択可能 1 件）/ 全体 399 件（選択可能 100 件）");
 
     // 路線 "都心環状線" または "C1"
     const c1 = filterRamps(ramps, "都心環状線", "entry");

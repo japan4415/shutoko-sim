@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::cell::RefCell;
-use std::collections::{BTreeSet, BinaryHeap, HashMap};
+use std::collections::{BTreeSet, BinaryHeap, HashMap, HashSet};
 use std::fmt;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
@@ -823,6 +823,49 @@ fn shutoko_components(
     (component_by_node, component_has_cycle)
 }
 
+fn multi_way_binding_without_membership(g: &Graph, edge: &Edge, ramp: &Ramp) -> bool {
+    let (start, target, kind) = match ramp.kind {
+        RampKind::GeneralEntry | RampKind::BoundaryIn => (
+            ramp.node_id.as_str(),
+            ramp.mainline_node_id.as_str(),
+            EdgeKind::Entry,
+        ),
+        RampKind::GeneralExit | RampKind::BoundaryOut => (
+            ramp.mainline_node_id.as_str(),
+            ramp.node_id.as_str(),
+            EdgeKind::Exit,
+        ),
+    };
+    if edge.kind != kind || edge.from != start {
+        return false;
+    }
+    let mut queue = vec![(edge.to.clone(), vec![edge.id.clone()])];
+    let mut visited = HashSet::from([edge.to.clone()]);
+    let mut cursor = 0;
+    while cursor < queue.len() {
+        let (node, path) = queue[cursor].clone();
+        cursor += 1;
+        if node == target {
+            return path.len() > 1;
+        }
+        if path.len() >= 20_000 {
+            return false;
+        }
+        for next in g
+            .edges
+            .iter()
+            .filter(|candidate| candidate.kind == kind && candidate.from == node)
+        {
+            if visited.insert(next.to.clone()) {
+                let mut next_path = path.clone();
+                next_path.push(next.id.clone());
+                queue.push((next.to.clone(), next_path));
+            }
+        }
+    }
+    false
+}
+
 /// Validate the graph structure and limits, then build the [`OwnedIndex`].
 /// This is the expensive O(n log n + m log m) step; it happens once in [`prepare`].
 fn build_owned_index(
@@ -1053,7 +1096,35 @@ fn build_owned_index(
         {
             return Err(invalid("ramp references unknown node id"));
         }
-        let valid_binding = match r.kind {
+        let bound_ramp_segment = route_memberships
+            .iter()
+            .flat_map(|membership| membership.segments.iter())
+            .find(|segment| {
+                segment.source_kind == RouteMembershipSourceKind::BoundRamp
+                    && segment.ordered_edge_ids.contains(&r.edge_id)
+            });
+        let membership_multi_way_binding = bound_ramp_segment.is_some_and(|segment| {
+            let Some(first_id) = segment.ordered_edge_ids.first() else {
+                return false;
+            };
+            let Some(last_id) = segment.ordered_edge_ids.last() else {
+                return false;
+            };
+            let (Some(first), Some(last)) = (edge_pos.get(first_id), edge_pos.get(last_id)) else {
+                return false;
+            };
+            let first = &g.edges[*first];
+            let last = &g.edges[*last];
+            match r.kind {
+                RampKind::GeneralEntry | RampKind::BoundaryIn => {
+                    r.node_id == first.from && r.mainline_node_id == last.to
+                }
+                RampKind::GeneralExit | RampKind::BoundaryOut => {
+                    r.mainline_node_id == first.from && r.node_id == last.to
+                }
+            }
+        });
+        let direct_binding = match r.kind {
             RampKind::GeneralEntry | RampKind::BoundaryIn => {
                 edge.kind == EdgeKind::Entry
                     && r.node_id == edge.from
@@ -1065,6 +1136,13 @@ fn build_owned_index(
                     && r.node_id == edge.to
             }
         };
+        let multi_way_binding = membership_multi_way_binding
+            || (!direct_binding && multi_way_binding_without_membership(g, edge, r));
+        let edge_kind_matches = match r.kind {
+            RampKind::GeneralEntry | RampKind::BoundaryIn => edge.kind == EdgeKind::Entry,
+            RampKind::GeneralExit | RampKind::BoundaryOut => edge.kind == EdgeKind::Exit,
+        };
+        let valid_binding = direct_binding || (edge_kind_matches && multi_way_binding);
         if !valid_binding {
             return Err(invalid("ramp kind or directed graph binding mismatch"));
         }

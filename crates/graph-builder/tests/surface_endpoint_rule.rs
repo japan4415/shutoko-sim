@@ -887,16 +887,16 @@ fn test_existing_binding_diagnostics_are_deterministic_and_non_blocking() {
         serde_json::to_string(&second).unwrap()
     );
     assert_eq!(first.rule, FIRST_PUBLIC_ROAD_CONNECTION_RULE);
-    assert_eq!(first.schema_binding_total, 232);
-    assert_eq!(first.schema_binding_matched, 184);
-    assert_eq!(first.schema_binding_mismatched, 48);
+    assert_eq!(first.schema_binding_total, 235);
+    assert_eq!(first.schema_binding_matched, 186);
+    assert_eq!(first.schema_binding_mismatched, 49);
     assert_eq!(
         first
             .schema_binding_mismatches
             .iter()
             .filter(|mismatch| mismatch.ramp_id.starts_with("ramp:c1-"))
             .count(),
-        9
+        10
     );
     assert!(first
         .schema_binding_mismatches
@@ -910,7 +910,7 @@ fn test_existing_binding_diagnostics_are_deterministic_and_non_blocking() {
     assert!(mismatch_ids.contains("ramp:c1-outer:takaracho-exit"));
     assert!(mismatch_ids.contains("ramp:c1-outer:daikancho-exit"));
     assert_eq!(first.binding_candidate_total, 1);
-    assert_eq!(first.binding_candidate_mismatched, 1);
+    assert_eq!(first.binding_candidate_mismatched, 0);
 }
 
 // ---------------------------------------------------------------------------

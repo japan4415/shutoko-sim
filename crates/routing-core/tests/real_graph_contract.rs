@@ -274,9 +274,13 @@ fn radial_seed_is_promoted_after_exact_binding_resolution() {
             "verified_one_section_ahead"
         );
         assert_eq!(pair["pairEligibility"]["oneSectionAheadVerified"], true);
+        // seed は assignmentId 参照だけを持つ。金額と距離は data/od-tariffs.json の
+        // assignment が正本であり、seed には書き写さない。
         assert_eq!(pair["tariff"]["status"], "priced");
-        assert_eq!(pair["tariff"]["amountYen"], 790);
-        assert_eq!(pair["tariff"]["billingDistanceMeters"], 19400);
+        assert_eq!(pair["assignmentId"], "assignment:2:meguro-tengenji");
+        assert!(pair["tariff"].get("amountYen").is_none());
+        assert!(pair["tariff"].get("billingDistanceMeters").is_none());
+        assert!(pair["tariff"].get("prices").is_none());
     }
 
     assert_eq!(

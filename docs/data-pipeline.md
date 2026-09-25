@@ -162,6 +162,7 @@ schema 2では `pairKind: "radialReturn"` と `routePlanVersion: 1` を必須と
 - `pairKind` または `routePlanVersion` が未知なら fail-closed で拒否する。
 - radial が `pairKind` / `routePlanVersion` のどちらかを欠く場合、または legacy が variant 必須フィールドを欠く場合も拒否する。
 - seed 内に legacy と radial を何件ずつ含めてよい。ただし ID は重複させない。同じ array 内で endpoint support、pair eligibility、loop validation、tariff status を混ぜない。
+- **金額の正本は `data/od-tariffs.json` の `assignments` だけである。** schema 2 の seed は `assignmentId` 参照だけを持ち、legacy の `prices[]` も radial の `tariff.amountYen` / `tariff.billingDistanceMeters` / `tariff.prices[]` も持たない。parser はいずれかが値として残る seed を build 時に拒否し、`graph-builder` の `OdTariffsFile` と `routing-core` の `OdTariffsFileV3` はともに `deny_unknown_fields` なので、同じ理由で legacy の top-level `rules` ブロックも戻せない。
 - Issue #62 で、未知 version、各 variant の未知 field、variant 必須 field の欠落をそれぞれ fixture 化して検証した。
 
 検証状態は次の軸で独立させ、1つの `status` に押し込まない。
@@ -360,7 +361,7 @@ mandatory lap 自身の境界は `routePlan.mandatoryLap.firstEdgeId` / `lastEdg
 | `entryOsmWayId` / `entryName` | `entryId` と `entryEndpoint` | graph Edge ID は build で解決し、way 変更として seed へ書き戻さない。 |
 | `exitOsmWayId` / `exitName` | `exitId` と `exitEndpoint` | 同上。 |
 | `status`, `oneSectionAheadVerified` | `pairEligibility.status`, `pairEligibility.oneSectionAheadVerified` | raw status は変更しない。`verified` は v2 の `verified_one_section_ahead` へ正規化する。 |
-| `prices[]` | `tariff.prices[]`, `tariff.status` | 8 legacy pairと2 radial pairは2025-04 / 2026-10の期間別priceを保持する。霞が関→代官町は両版とも2.3km / 300円、2号目黒→天現寺は19.4km / 790円と19.4km / 860円。v3 assignmentが正本。 |
+| `prices[]` | `tariff.prices[]`, `tariff.status` | **raw seed からは削除済み。** schema 2 の seed は `assignmentId` 参照だけを持ち、手書きの金額・距離・`prices[]` を持たない。parser は値が残る seed を fail-closed で拒否する。graph schema 4 の `tariff.prices[]` は v3 assignment から導出する。霞が関→代官町は両版とも2.3km / 300円、2号目黒→天現寺は19.4km / 790円と19.4km / 860円。v3 assignmentが唯一の正本。 |
 | なし | `routePlanVersion`, `entryCorridor`, `anchor`, `mandatoryLap`, `returnCorridor` | radial variant だけを必須にする。 |
 | なし | `pairEligibility`, `loopValidation`, `tariff` の独立 status | endpoint support、routing capability、loop validation、料金状態を混在させない。 |
 
@@ -835,7 +836,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 2025-04 の普通車規則は `[2022-03-31T15:00:00Z, 2026-09-30T15:00:00Z)`、2026-10 の規則は `2026-09-30T15:00:00Z` から開始する。2026-10 のパラメータは1kmあたり32.472円、下限300円、上限2,130円、ターミナルチャージ150円、税率1.10、距離量子100m、10円単位の四捨五入、3.9kmの下限境界である。改定後パラメータの根拠資料は SHA-256 `f80126994b3deee36e198f947f3f4f4c3219dd16473bbd9bc9dd296115345702` の `31-toll-shiryo.pdf` P.5-6 であり、ODセルの確認には別の2026-10 PDFを使う。
 
-2号線の inner・outer 計画は目黒入口→天現寺出口の 1 件の一意な assignment（`assignment:2:meguro-tengenji`）を共有する。2025-04 は P.4 の 19.4km / 790円、2026-10 は同じ距離で 860円である。旧設計値の 14.2km・630円は別の列の値であるため採用しない。C1 P.3 の 9 OD セルと 2号 P.4 の 1 セル（合計 10 OD）も含めて、PDF のセルと規則計算値が一致することを確認済みで、`pendingEvidence` は空、各 assignment の 2 期間とも `priced` である。`pendingResolution.status` は `completed_2026_10_pdf_review` で、PDF 自体とページ画像は gitignore 済み cache（`.cache/official-fare/`）に置き commit しない。legacy `verifiedOdPairs` は現行 reader との暫定互換投影であり、料金表 v3 の正本ではない。
+2号線の inner・outer 計画は目黒入口→天現寺出口の 1 件の一意な assignment（`assignment:2:meguro-tengenji`）を共有する。2025-04 は P.4 の 19.4km / 790円、2026-10 は同じ距離で 860円である。旧設計値の 14.2km・630円は別の列の値であるため採用しない。C1 P.3 の 9 OD セルと 2号 P.4 の 1 セル（合計 10 OD）も含めて、PDF のセルと規則計算値が一致することを確認済みで、`pendingEvidence` は空、各 assignment の 2 期間とも `priced` である。`pendingResolution.status` は `completed_2026_10_pdf_review` で、PDF 自体とページ画像は gitignore 済み cache（`.cache/official-fare/`）に置き commit しない。legacy `verifiedOdPairs` は現行 reader との暫定互換投影であり、料金表 v3 の正本ではない。top-level の legacy `rules` ブロック（2026-10 の固定費・税率・上下限・距離下限・単価を `tariffRules` と重複して保持していたもの）は読み込む箇所が存在しないため削除済みで、`tariffRules` だけがパラメータの正本である。ブロックを戻すと `deny_unknown_fields` により catalog 読み込みが失敗する。
 
 2026-09-26 にページ画像から 10 OD セルと 2025-04 P.4 の目黒→天現寺セルを読み直した独立照合を実施し、2026-10 の 10 セルと 2025-04 の 19.4km / 790円がすべて一致することを確認した。同じ照合で 2025-04 P.3 の霞が関→代官町が 12.4km / 570円ではなく 2.3km / 300円であることを発見し、evidence・assignment・`verifiedOdPairs`・seed・テスト・本節の記述を訂正した。12.4km / 570円は霞が関→霞が関の対角セルの値である。
 

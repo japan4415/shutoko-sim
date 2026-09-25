@@ -208,7 +208,125 @@ fn v3_candidates_propagate_official_provenance_and_reject_scope_mismatch() {
 
     let mut mismatch = request;
     mismatch["paymentMethod"] = json!("cash");
-    assert!(search_json(&graph.to_string(), &mismatch.to_string(), "{}").is_err());
+    let payment_error = search_json(&graph.to_string(), &mismatch.to_string(), "{}").unwrap_err();
+    assert_eq!(
+        payment_error.code, "INVALID_INPUT",
+        "{}",
+        payment_error.message
+    );
+    assert!(
+        payment_error.message.contains("TARIFF_SCOPE_MISMATCH"),
+        "paymentMethod mismatch must fail closed with TARIFF_SCOPE_MISMATCH, got {}",
+        payment_error.message
+    );
+
+    let mut vehicle = json!({
+        "requestId": "v3-search-vehicle",
+        "releaseId": "tariff-v3-test",
+        "originNodeId": "i",
+        "minMinutes": 1,
+        "maxMinutes": 60,
+        "vehicleProfile": "passenger-car-etc",
+        "vehicleClass": "regular",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "pricingAt": "2026-09-30T14:59:59Z"
+    });
+    let class_error = search_json(&graph.to_string(), &vehicle.to_string(), "{}").unwrap_err();
+    assert_eq!(class_error.code, "INVALID_INPUT", "{}", class_error.message);
+    assert!(
+        class_error.message.contains("TARIFF_SCOPE_MISMATCH"),
+        "vehicleClass mismatch must fail closed with TARIFF_SCOPE_MISMATCH, got {}",
+        class_error.message
+    );
+
+    // vehicleProfile を別の値にすると、graph の release 適合性 gate が先に拒否する。
+    // resolver レベルの scope 不一致は
+    // `resolver_rejects_a_non_product_vehicle_profile_at_the_scope_gate` が持つ。
+    vehicle["vehicleProfile"] = json!("heavy-truck-etc");
+    vehicle["vehicleClass"] = json!("ordinary");
+    let profile_error = search_json(&graph.to_string(), &vehicle.to_string(), "{}").unwrap_err();
+    assert_eq!(
+        profile_error.code, "INVALID_INPUT",
+        "{}",
+        profile_error.message
+    );
+    assert!(
+        profile_error.message.contains("vehicle profile"),
+        "a foreign vehicle profile must be rejected before the scope gate, got {}",
+        profile_error.message
+    );
+}
+
+#[test]
+fn resolver_rejects_a_non_product_vehicle_profile_at_the_scope_gate() {
+    let mut scope = TariffScope::product();
+    scope.vehicle_profile = "heavy-truck-etc".to_string();
+    let error = TariffResolver::new(read_tariff_v3(&catalog_json()).unwrap())
+        .unwrap()
+        .resolve_od(
+            "ramp:c1-outer:kasumigaseki-entry",
+            "ramp:c1-outer:daikancho-exit",
+            "2026-09-30T14:59:59Z",
+            &scope,
+        )
+        .unwrap_err();
+    assert_eq!(error.code, "TARIFF_SCOPE_MISMATCH", "{}", error.message);
+    assert_eq!(
+        error.message,
+        "vehicle, payment, fare basis, or discount scope is unsupported"
+    );
+}
+
+/// 料金の正本は `tariffRules` と `assignments` だけで、2026-10 のパラメータを
+/// 二重に持つ legacy `rules` ブロックは持たない。`read_tariff_v3` は
+/// `deny_unknown_fields` なので、ブロックを戻すと catalog 読み込み自体が失敗する。
+#[test]
+fn the_tariff_catalog_has_a_single_authority_for_the_revision_parameters() {
+    let raw: serde_json::Value = serde_json::from_str(&catalog_json()).unwrap();
+    assert!(
+        raw.get("rules").is_none(),
+        "data/od-tariffs.json must not carry the legacy rules block again"
+    );
+
+    let revision = raw["tariffRules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["ruleId"] == "shutoko-etc-ordinary-2026-10")
+        .expect("the 2026-10 rule must exist");
+    assert_eq!(revision["rateMicrosYenPerUnit"], 3_247_200);
+    assert_eq!(revision["terminalChargeYen"], 150);
+    assert_eq!(revision["taxBasisPoints"], 11_000);
+    assert_eq!(revision["minimumYen"], 300);
+    assert_eq!(revision["maximumYen"], 2130);
+    assert_eq!(revision["minimumDistanceMeters"], 3900);
+    assert_eq!(revision["rounding"]["multipleYen"], 10);
+
+    let with_legacy_rules = serde_json::json!({
+        "rules": {
+            "vehicleProfile": "passenger-car-etc",
+            "fixedFeeYen": 150,
+            "taxRate": 1.1,
+            "minTollYen": 300,
+            "maxTollYen": 2130,
+            "minDistanceMeters": 3900,
+            "baseRatePerKmYen": 32.472,
+            "roundingYen": 10
+        }
+    });
+    let mut reintroduced = raw.clone();
+    if let Some(object) = reintroduced.as_object_mut() {
+        object.insert("rules".to_string(), with_legacy_rules["rules"].clone());
+    }
+    let error = read_tariff_v3(&reintroduced.to_string()).unwrap_err();
+    assert_eq!(error.code, "TARIFF_JSON_INVALID", "{}", error.message);
+    assert!(
+        error.message.contains("rules"),
+        "the legacy rules block must stay rejected, got {}",
+        error.message
+    );
 }
 
 #[test]

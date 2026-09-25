@@ -167,32 +167,6 @@ pub struct FirstPublicRoadConnectionDiagnosticReport {
     pub binding_candidate_mismatches: Vec<FirstPublicRoadConnectionDiagnosticMismatch>,
 }
 
-fn default_fixed_fee() -> u64 {
-    150
-}
-
-fn default_tax_rate() -> f64 {
-    1.10
-}
-
-/// Distance-based toll calculation rules.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TariffRules {
-    pub vehicle_profile: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub effective_date: Option<String>,
-    #[serde(default = "default_fixed_fee")]
-    pub fixed_fee_yen: u64,
-    #[serde(default = "default_tax_rate")]
-    pub tax_rate: f64,
-    pub min_toll_yen: u64,
-    pub max_toll_yen: u64,
-    pub min_distance_meters: u64,
-    pub base_rate_per_km_yen: f64,
-    pub rounding_yen: u64,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TariffDocumentV3 {
@@ -312,13 +286,16 @@ pub struct TariffAssignmentV3 {
 }
 
 /// The root structure of `data/od-tariffs.json`.
+///
+/// The tariff authority lives entirely in `tariff_rules` plus `assignments`; the
+/// legacy top-level `rules` block that duplicated the 2026-10 parameters was
+/// removed, so `TariffCatalog::validate` sees every parameter exactly once.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OdTariffsFile {
     pub version: u32,
     pub source: String,
     pub source_date: String,
-    pub rules: TariffRules,
     pub verified_od_pairs: Vec<OdTariff>,
     #[serde(default)]
     pub vehicle_profile: Option<String>,
@@ -328,6 +305,10 @@ pub struct OdTariffsFile {
     pub payment_method: Option<String>,
     #[serde(default)]
     pub fare_basis: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fare_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub discounts_excluded: Vec<String>,
     #[serde(default)]
     pub documents: Vec<TariffDocumentV3>,
     #[serde(default)]
@@ -338,6 +319,12 @@ pub struct OdTariffsFile {
     pub pending_evidence: Vec<PendingEvidenceV3>,
     #[serde(default)]
     pub assignments: Vec<TariffAssignmentV3>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deprecated_assignments: Vec<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub migration: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_resolution: Option<serde_json::Value>,
 }
 
 /// An entry in the `ramps.json` release artifact.

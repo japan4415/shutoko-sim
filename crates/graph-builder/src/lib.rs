@@ -24,7 +24,7 @@ pub use inventory::{
     OdTariffsFile, OsmRampBinding, OsmRampBindingCandidate, OsmRampBindingsFile,
     OsmRampDirectedSegment, OsmRampRouteEvidence, PendingEvidenceV3, RampArtifactEntry,
     RampInventoryFile, RampsArtifact, SharedPhysicalOverride, TariffAssignmentV3, TariffDocumentV3,
-    TariffPriceV3, TariffRoundingV3, TariffRuleV3, TariffRules, TariffSourceRefV3,
+    TariffPriceV3, TariffRoundingV3, TariffRuleV3, TariffSourceRefV3,
 };
 
 pub use billing::{

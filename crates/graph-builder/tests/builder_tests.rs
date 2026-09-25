@@ -3538,15 +3538,12 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
 
         assert_eq!(seed_pair.status, VerificationStatus::Verified);
         assert!(seed_pair.one_section_ahead_verified);
-        assert_eq!(seed_pair.prices.len(), 2);
-        assert_eq!(seed_pair.prices[0].amount_yen, 300);
-        assert_eq!(seed_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
-        assert_eq!(
-            seed_pair.prices[0].effective_to.as_deref(),
-            Some("2026-09-30T15:00:00Z")
-        );
-        assert_eq!(seed_pair.prices[1].amount_yen, 300);
-        assert_eq!(seed_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+        // seed は assignmentId 参照だけを持ち、金額と距離は持たない。
+        assert!(seed_pair.prices.is_empty());
+        assert!(seed_pair
+            .assignment_id
+            .as_deref()
+            .is_some_and(|id| id.starts_with("assignment:")));
     }
     for unverified_id in &unverified_pair_ids {
         let seed_pair = legacy_pairs
@@ -4081,16 +4078,6 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
         "version": 1,
         "source": "https://www.shutoko.jp/fee/fee-info/basic-fee/",
         "sourceDate": "2026-09-16",
-        "rules": {
-            "vehicleProfile": "passenger_car",
-            "fixedFeeYen": 150,
-            "taxRate": 1.10,
-            "minTollYen": 300,
-            "maxTollYen": 1950,
-            "minDistanceMeters": 4300,
-            "baseRatePerKmYen": 29.52,
-            "roundingYen": 10
-        },
         "verifiedOdPairs": [
             {
                 "entryRampId": "ramp:c1-inner:kandabashi-entry",
@@ -4410,8 +4397,11 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
             pair.tariff.status,
             shutoko_graph_builder::TariffStatus::Priced
         );
-        assert_eq!(pair.tariff.amount_yen, Some(790));
-        assert_eq!(pair.tariff.billing_distance_meters, Some(19400));
+        // 金額は seed ではなく data/od-tariffs.json の assignment が正本。
+        assert_eq!(pair.tariff.amount_yen, None);
+        assert_eq!(pair.tariff.billing_distance_meters, None);
+        assert!(pair.tariff.prices.is_empty());
+        assert_eq!(pair.assignment_id, "assignment:2:meguro-tengenji");
         let lap =
             generate_route_plan_lap_v1(&graph, &memberships, &pair.route_plan.anchor).unwrap();
         assert_eq!(lap.merge_node_id, pair.route_plan.anchor.merge_node_id);

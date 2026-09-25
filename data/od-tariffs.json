@@ -1175,17 +1175,6 @@
       "The same re-read corrected one 2025-04 cell: 霞が関 to 代官町 on page 3 is 2.3km / 300 yen, not 12.4km / 570 yen. The 12.4km / 570 yen figures belong to the 霞が関 diagonal cell (霞が関 to 霞が関)."
     ]
   },
-  "rules": {
-    "vehicleProfile": "passenger-car-etc",
-    "effectiveDate": "2026-10-01",
-    "fixedFeeYen": 150,
-    "taxRate": 1.1,
-    "minTollYen": 300,
-    "maxTollYen": 2130,
-    "minDistanceMeters": 3900,
-    "baseRatePerKmYen": 32.472,
-    "roundingYen": 10
-  },
   "verifiedOdPairs": [
     {
       "entryRampId": "ramp:c1-outer:kandabashi-entry",

@@ -17,18 +17,7 @@
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-10",
         "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kandabashi entry to Takaracho exit (Gofukubashi and Edobashi exits decommissioned in 2021). Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/tolls/about/price/ (旧 URL https://www.shutoko.jp/fee/fee-info/about/ は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト)); Kandabashi to Takaracho toll distance 1.7km with minimum toll 300 yen applied (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf (旧 URL https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf は 2026-09-10 時点で 404)); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
-      },
-      "prices": [
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2022-03-31T15:00:00Z",
-          "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
-        }
-      ]
+      }
     },
     {
       "id": "bp:c1-outer:kasumigaseki-daikancho",
@@ -45,18 +34,7 @@
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-10",
         "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff source (re-verified 2026-09-26 against the rendered page image): Kasumigaseki to Daikancho toll distance 2.3km and base ETC fare 300 yen in both editions (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf, page 3, row 霞が関, column 代官町; and the official revision tariff table, page 3, same row and column). The 570 yen / 12.4km figure belongs to the 霞が関 diagonal cell (霞が関 to 霞が関), not to the 代官町 exit."
-      },
-      "prices": [
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2022-03-31T15:00:00Z",
-          "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
-        }
-      ]
+      }
     },
     {
       "id": "bp:c1-outer:ginza-shibakoen",
@@ -73,18 +51,7 @@
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-25",
         "notes": "C1 outer relation の exit split 順と way 944671542 の exact binding により、銀座入口から relation mainline 上の最初の一般出口が芝公園出口であることを確認した。"
-      },
-      "prices": [
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2022-03-31T15:00:00Z",
-          "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
-        }
-      ]
+      }
     },
     {
       "id": "bp:c1-outer:shibakoen-iikura",
@@ -101,18 +68,7 @@
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-25",
         "notes": "way 4853801 の地表接続 way 40969792 に access:conditional=no @ (08:00-20:00) があるため、firstPublicRoadConnection/v1 は unresolved。時間モデル導入まで昇格しない。"
-      },
-      "prices": [
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2022-03-31T15:00:00Z",
-          "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
-        }
-      ]
+      }
     },
     {
       "id": "bp:c1-inner:kasumigaseki-shibakoen",
@@ -129,18 +85,7 @@
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-25",
         "notes": "C1 inner relation の arm role により way 203832854 の高樹町出口は C1 corridor の一般出口ではなく、way 203873821 が最初の一般出口芝公園出口であると確認した。"
-      },
-      "prices": [
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2022-03-31T15:00:00Z",
-          "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
-        }
-      ]
+      }
     },
     {
       "id": "bp:c1-inner:daikancho-kasumigaseki",
@@ -157,18 +102,7 @@
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-25",
         "notes": "firstPublicRoadConnection/v1 のWay 1232166619 監査と C1 inner relation の exit 順により、代官町入口から霞が関出口が最初の一般出口であると確認した。"
-      },
-      "prices": [
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2022-03-31T15:00:00Z",
-          "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
-        }
-      ]
+      }
     },
     {
       "id": "bp:c1-inner:shibakoen-shiodome",
@@ -185,18 +119,7 @@
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-25",
         "notes": "C1 inner relation の arm role と branch node から way 4853797 を芝公園入口へ一意に割り当て、汐留出口までの relation 順を確認した。"
-      },
-      "prices": [
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2022-03-31T15:00:00Z",
-          "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
-        }
-      ]
+      }
     },
     {
       "id": "bp:c1-inner:takaracho-kandabashi",
@@ -213,18 +136,7 @@
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-25",
         "notes": "C1 inner relation の exit role を監査し、way 199311811 は一般出口ではない connector、way 390441534 が最初の一般出口神田橋出口であることを確認した。"
-      },
-      "prices": [
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2022-03-31T15:00:00Z",
-          "effectiveTo": "2026-09-30T15:00:00Z"
-        },
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
-        }
-      ]
+      }
     },
     {
       "id": "bp:2-inbound:meguro:c1-inner:tengenji",
@@ -360,20 +272,7 @@
         "status": "declared_route_validated"
       },
       "tariff": {
-        "status": "priced",
-        "amountYen": 790,
-        "billingDistanceMeters": 19400,
-        "prices": [
-          {
-            "amountYen": 790,
-            "effectiveFrom": "2022-03-31T15:00:00Z",
-            "effectiveTo": "2026-09-30T15:00:00Z"
-          },
-          {
-            "amountYen": 860,
-            "effectiveFrom": "2026-09-30T15:00:00Z"
-          }
-        ]
+        "status": "priced"
       },
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
@@ -515,20 +414,7 @@
         "status": "declared_route_validated"
       },
       "tariff": {
-        "status": "priced",
-        "amountYen": 790,
-        "billingDistanceMeters": 19400,
-        "prices": [
-          {
-            "amountYen": 790,
-            "effectiveFrom": "2022-03-31T15:00:00Z",
-            "effectiveTo": "2026-09-30T15:00:00Z"
-          },
-          {
-            "amountYen": 860,
-            "effectiveFrom": "2026-09-30T15:00:00Z"
-          }
-        ]
+        "status": "priced"
       },
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",

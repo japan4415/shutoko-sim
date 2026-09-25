@@ -321558,17 +321558,6 @@
         "The same re-read corrected one 2025-04 cell: 霞が関 to 代官町 on page 3 is 2.3km / 300 yen, not 12.4km / 570 yen. The 12.4km / 570 yen figures belong to the 霞が関 diagonal cell (霞が関 to 霞が関)."
       ]
     },
-    "rules": {
-      "baseRatePerKmYen": 32.472,
-      "effectiveDate": "2026-10-01",
-      "fixedFeeYen": 150,
-      "maxTollYen": 2130,
-      "minDistanceMeters": 3900,
-      "minTollYen": 300,
-      "roundingYen": 10,
-      "taxRate": 1.1,
-      "vehicleProfile": "passenger-car-etc"
-    },
     "source": "https://www.shutoko.jp/fee/fee-info/pay_etc/",
     "sourceDate": "2026-09-16",
     "tariffRules": [

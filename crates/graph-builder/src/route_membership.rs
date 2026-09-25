@@ -5065,8 +5065,15 @@ mod tests {
             promoted.tariff.status,
             shutoko_routing_core::TariffStatus::Priced
         );
-        assert_eq!(promoted.tariff.amount_yen, Some(790));
-        assert_eq!(promoted.tariff.billing_distance_meters, Some(19400));
+        // seed は assignmentId 参照だけを持つので、昇格段階では金額が未確定のまま。
+        // 金額は data/od-tariffs.json の assignment から tariff_overrides で上書きされる。
+        assert_eq!(promoted.tariff.amount_yen, None);
+        assert_eq!(promoted.tariff.billing_distance_meters, None);
+        assert!(promoted.tariff.prices.is_empty());
+        assert_eq!(
+            promoted.tariff.assignment_id.as_deref(),
+            Some("fixture:assignment:meguro-tengenji")
+        );
         assert_eq!(promoted.entry_id, "e:w201:0:f");
         assert_eq!(promoted.exit_id, "e:w204:0:f");
         assert_eq!(
@@ -5075,12 +5082,32 @@ mod tests {
                 .len(),
             3
         );
-        let json =
-            graph_schema_v4_to_deterministic_json_with_radial(&graph, &memberships, vec![promoted])
-                .unwrap();
+        let mut overrides: HashMap<String, shutoko_routing_core::Tariff> = HashMap::new();
+        let mut override_tariff = promoted.tariff.clone();
+        override_tariff.amount_yen = Some(790);
+        override_tariff.billing_distance_meters = Some(19400);
+        override_tariff.prices = vec![shutoko_routing_core::Price {
+            amount_yen: 790,
+            effective_from: "2022-03-31T15:00:00Z".into(),
+            effective_to: Some("2026-09-30T15:00:00Z".into()),
+        }];
+        overrides.insert(promoted.id.clone(), override_tariff);
+        let json = graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
+            &graph,
+            &memberships,
+            vec![promoted],
+            None,
+            overrides,
+        )
+        .unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(value["billingPairs"].as_array().unwrap().len(), 1);
         assert_eq!(value["billingPairs"][0]["pairKind"], "radialReturn");
+        assert_eq!(value["billingPairs"][0]["tariff"]["amountYen"], 790);
+        assert_eq!(
+            value["billingPairs"][0]["tariff"]["billingDistanceMeters"],
+            19400
+        );
         let prepared = shutoko_routing_core::prepare_json(&json, "{}").unwrap();
         assert_eq!(prepared.radial_billing_pairs().len(), 1);
     }

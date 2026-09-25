@@ -15,13 +15,7 @@
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
         "sourceDate": "2026-09-16"
-      },
-      "prices": [
-        {
-          "amountYen": 300,
-          "effectiveFrom": "2026-09-30T15:00:00Z"
-        }
-      ]
+      }
     },
     {
       "id": "bp:2-inbound:meguro:c1-inner:tengenji",
@@ -157,16 +151,7 @@
         "status": "declared_route_validated"
       },
       "tariff": {
-        "status": "priced",
-        "amountYen": 790,
-        "billingDistanceMeters": 19400,
-        "prices": [
-          {
-            "amountYen": 790,
-            "effectiveFrom": "2022-03-31T15:00:00Z",
-            "effectiveTo": "2026-09-30T15:00:00Z"
-          }
-        ]
+        "status": "priced"
       },
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",
@@ -308,16 +293,7 @@
         "status": "declared_route_validated"
       },
       "tariff": {
-        "status": "priced",
-        "amountYen": 790,
-        "billingDistanceMeters": 19400,
-        "prices": [
-          {
-            "amountYen": 790,
-            "effectiveFrom": "2022-03-31T15:00:00Z",
-            "effectiveTo": "2026-09-30T15:00:00Z"
-          }
-        ]
+        "status": "priced"
       },
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/",

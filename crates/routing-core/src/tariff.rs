@@ -215,20 +215,6 @@ pub struct TariffAssignmentV3 {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LegacyTariffRulesV3 {
-    pub vehicle_profile: String,
-    pub effective_date: Option<String>,
-    pub fixed_fee_yen: u64,
-    pub tax_rate: f64,
-    pub min_toll_yen: u64,
-    pub max_toll_yen: u64,
-    pub min_distance_meters: u64,
-    pub base_rate_per_km_yen: f64,
-    pub rounding_yen: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OdTariffsFileV3 {
     pub version: u32,
     pub source: String,
@@ -244,8 +230,6 @@ pub struct OdTariffsFileV3 {
     pub distance_evidence: Vec<DistanceEvidenceV3>,
     pub pending_evidence: Vec<PendingEvidenceV3>,
     pub assignments: Vec<TariffAssignmentV3>,
-    #[serde(default)]
-    pub rules: Option<LegacyTariffRulesV3>,
     #[serde(default)]
     pub verified_od_pairs: Vec<crate::OdTariff>,
     #[serde(default)]

@@ -1,11 +1,12 @@
 use shutoko_graph_builder::{
-    bind_ramps_to_graph, bound_ramp_evidence_from_inventory, build_route_membership_indices,
-    build_topology, compute_pair_derivation_input_hashes, compute_sha256,
-    derive_pair_candidates_from_source_bytes, ordered_edge_ids_sha256,
-    pair_derivation_report_to_deterministic_json, validate_billing_pair_adjacency,
-    BillingPairAdjacencyFile, OsmRampBindingsFile, OverpassResponse, PairDerivationGateStatus,
-    PairDerivationInputHashes, PairDerivationPromotionDecision, RampInventoryFile,
-    RouteMembershipBuildOptions, RouteMembershipIndex, TopologyConfig,
+    bind_ramps_to_graph, bound_ramp_evidence_from_inventory,
+    build_route_membership_indices_with_coverage, build_topology,
+    compute_pair_derivation_input_hashes, compute_sha256, derive_pair_candidates_from_source_bytes,
+    ordered_edge_ids_sha256, pair_derivation_report_to_deterministic_json,
+    validate_billing_pair_adjacency, BillingPairAdjacencyFile, OsmRampBindingsFile,
+    OverpassResponse, PairDerivationGateStatus, PairDerivationInputHashes,
+    PairDerivationPromotionDecision, RampInventoryFile, RouteMembershipBuildOptions,
+    RouteMembershipIndex, RouteRelationCoverage, TopologyConfig,
     BILLING_PAIR_ADJACENCY_SCHEMA_VERSION, PAIR_DERIVATION_REPORT_SCHEMA_VERSION,
     PAIR_DERIVATION_RULE,
 };
@@ -21,6 +22,7 @@ const SEED_BYTES: &[u8] = include_bytes!("../../../data/billing-pairs-seed.json"
 struct RealDerivationFixture {
     graph: shutoko_graph_builder::Graph,
     route_memberships: Vec<RouteMembershipIndex>,
+    route_relation_coverage: Vec<RouteRelationCoverage>,
     adjacency: BillingPairAdjacencyFile,
     inventory: RampInventoryFile,
     bindings: OsmRampBindingsFile,
@@ -43,7 +45,7 @@ fn real_fixture() -> RealDerivationFixture {
     graph.ramps = ramps;
     let source_snapshot_sha256 = compute_sha256(OSM_BYTES);
     let evidence = bound_ramp_evidence_from_inventory(&graph, &inventory, &bindings).unwrap();
-    let route_memberships = build_route_membership_indices(
+    let built = build_route_membership_indices_with_coverage(
         &osm,
         &graph,
         &RouteMembershipBuildOptions {
@@ -53,6 +55,8 @@ fn real_fixture() -> RealDerivationFixture {
         },
     )
     .unwrap();
+    let route_memberships = built.route_memberships;
+    let route_relation_coverage = built.route_relations.relations;
     let adjacency = serde_json::from_slice(ADJACENCY_BYTES).unwrap();
     let input_hashes = compute_pair_derivation_input_hashes(
         OSM_BYTES,
@@ -67,6 +71,7 @@ fn real_fixture() -> RealDerivationFixture {
     RealDerivationFixture {
         graph,
         route_memberships,
+        route_relation_coverage,
         adjacency,
         inventory,
         bindings,
@@ -85,6 +90,7 @@ fn derive_from_source_with_support(
     derive_pair_candidates_from_source_bytes(
         &fixture.graph,
         &fixture.route_memberships,
+        &fixture.route_relation_coverage,
         OSM_BYTES,
         ramp_inventory,
         ramp_support_decisions,
@@ -285,6 +291,61 @@ fn derives_all_official_candidates_with_independent_gates() {
             .unwrap();
         assert_eq!(radial.status, "pass");
         assert_eq!(radial.relation_ids, vec![4256339]);
+    }
+    // The relation manifest covers every route membership, including the ones no
+    // candidate pair references, and reports one coverage record per relation.
+    let mut manifest_ids = report
+        .relation_manifest
+        .iter()
+        .map(|manifest| manifest.membership_id.as_str())
+        .collect::<Vec<_>>();
+    let mut membership_ids = fixture
+        .route_memberships
+        .iter()
+        .map(|membership| membership.membership_id.as_str())
+        .collect::<Vec<_>>();
+    manifest_ids.sort_unstable();
+    membership_ids.sort_unstable();
+    assert_eq!(manifest_ids, membership_ids, "{report:#?}");
+    for manifest in &report.relation_manifest {
+        let membership = fixture
+            .route_memberships
+            .iter()
+            .find(|membership| membership.membership_id == manifest.membership_id)
+            .unwrap();
+        let mut expected_relation_ids = membership
+            .segments
+            .iter()
+            .filter_map(|segment| segment.source_relation_id.as_deref())
+            .filter_map(|value| value.parse::<i64>().ok())
+            .collect::<Vec<_>>();
+        expected_relation_ids.sort_unstable();
+        expected_relation_ids.dedup();
+        assert_eq!(manifest.relation_ids, expected_relation_ids);
+        assert_eq!(
+            manifest.route_plan_resolved + manifest.route_plan_unresolved,
+            manifest.candidate_pair_ids.len()
+        );
+        assert_eq!(
+            manifest.status,
+            if manifest.route_plan_unresolved == 0 {
+                "pass"
+            } else {
+                "fail"
+            }
+        );
+    }
+    assert_eq!(report.relation_coverage.len(), 2, "{report:#?}");
+    assert_eq!(report.summary.relation_coverage.relation_total, 2);
+    assert_eq!(report.summary.relation_coverage.relation_expanded, 2);
+    assert_eq!(report.summary.relation_coverage.relation_failed, 0);
+    for relation in &report.relation_coverage {
+        assert_eq!(
+            relation.status,
+            shutoko_graph_builder::RouteRelationCoverageStatus::Pass
+        );
+        assert!(!relation.membership_ids.is_empty());
+        assert!(relation.reason.is_none(), "{relation:?}");
     }
 }
 

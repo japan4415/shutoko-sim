@@ -17,7 +17,8 @@ use crate::route_membership::{
     bound_ramp_evidence_from_inventory, ordered_edge_ids_sha256, promote_verified_radial_pair,
     resolve_diagnostic_radial_route_plan, route_memberships_sha256,
     validate_route_membership_structure, BoundRampEvidence, DirectedRoutePlanResolution,
-    RouteMembershipIndex, RouteMembershipSourceKind,
+    RouteMembershipIndex, RouteMembershipSourceKind, RouteRelationCoverage,
+    RouteRelationCoverageStatus,
 };
 use crate::seed::{
     AnchorKind, ArcPolicy, BillingPairSeed, BillingPairSeedEntry, BillingPairsSeedFile,
@@ -711,8 +712,8 @@ pub fn validate_promoted_legacy_pairs_from_source(
 }
 
 pub const BILLING_PAIR_ADJACENCY_SCHEMA_VERSION: u32 = 1;
-pub const PAIR_DERIVATION_REPORT_SCHEMA_VERSION: u32 = 1;
-pub const PAIR_DERIVATION_RULE: &str = "billingPairDerivation/v1";
+pub const PAIR_DERIVATION_REPORT_SCHEMA_VERSION: u32 = 2;
+pub const PAIR_DERIVATION_RULE: &str = "billingPairDerivation/v2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -987,10 +988,19 @@ pub struct PairDerivationRelationManifest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairDerivationRelationCoverageSummary {
+    pub relation_total: usize,
+    pub relation_expanded: usize,
+    pub relation_failed: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PairDerivationSummary {
     pub candidate_total: usize,
     pub eligible_for_review: usize,
     pub hold: usize,
+    pub relation_coverage: PairDerivationRelationCoverageSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1000,6 +1010,7 @@ pub struct PairDerivationReport {
     pub rule: String,
     pub automatic_seed_write: bool,
     pub input_hashes: PairDerivationInputHashes,
+    pub relation_coverage: Vec<RouteRelationCoverage>,
     pub relation_manifest: Vec<PairDerivationRelationManifest>,
     pub candidates: Vec<PairCandidateReport>,
     pub summary: PairDerivationSummary,
@@ -1066,6 +1077,7 @@ pub fn compute_pair_derivation_input_hashes(
 pub fn derive_pair_candidates_from_source_bytes(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
+    relation_coverage: &[RouteRelationCoverage],
     osm_snapshot: &[u8],
     ramp_inventory: &[u8],
     ramp_support_decisions: &[u8],
@@ -1112,6 +1124,7 @@ pub fn derive_pair_candidates_from_source_bytes(
     derive_pair_candidates(
         graph,
         route_memberships,
+        relation_coverage,
         &adjacency,
         &tariffs,
         &inventory,
@@ -2581,6 +2594,7 @@ fn derive_candidate(
 pub(crate) fn derive_pair_candidates(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
+    relation_coverage: &[RouteRelationCoverage],
     adjacency: &BillingPairAdjacencyFile,
     tariffs: &OdTariffsFile,
     inventory: &RampInventoryFile,
@@ -2668,20 +2682,26 @@ pub(crate) fn derive_pair_candidates(
             ));
         }
     }
-    let mut relation_manifest = membership_candidates
-        .into_iter()
-        .map(|(membership_id, mut candidate_pairs)| {
+    for membership_id in membership_candidates.keys() {
+        if !route_memberships
+            .iter()
+            .any(|membership| &membership.membership_id == membership_id)
+        {
+            return Err(PairDerivationError::new(
+                "PAIR_DERIVATION_MEMBERSHIP_INVALID",
+                format!("candidate references unknown membership {membership_id}"),
+            ));
+        }
+    }
+    let mut relation_manifest = route_memberships
+        .iter()
+        .map(|membership| {
+            let mut candidate_pairs = membership_candidates
+                .get(&membership.membership_id)
+                .cloned()
+                .unwrap_or_default();
             candidate_pairs.sort();
             candidate_pairs.dedup();
-            let membership = route_memberships
-                .iter()
-                .find(|membership| membership.membership_id == membership_id)
-                .ok_or_else(|| {
-                    PairDerivationError::new(
-                        "PAIR_DERIVATION_MEMBERSHIP_INVALID",
-                        format!("candidate references unknown membership {membership_id}"),
-                    )
-                })?;
             let mut relation_ids = membership
                 .segments
                 .iter()
@@ -2706,6 +2726,8 @@ pub(crate) fn derive_pair_candidates(
                     .collect(),
                 route_plan_resolved: candidate_total - route_plan_unresolved,
                 route_plan_unresolved,
+                // A membership without any candidate pair has no unresolved route
+                // plan, so it passes; the empty candidate list keeps that visible.
                 status: if route_plan_unresolved == 0 {
                     "pass".to_string()
                 } else {
@@ -2721,16 +2743,26 @@ pub(crate) fn derive_pair_candidates(
             candidate.promotion_decision == PairDerivationPromotionDecision::EligibleForReview
         })
         .count();
+    let relation_failed = relation_coverage
+        .iter()
+        .filter(|relation| relation.status == RouteRelationCoverageStatus::Fail)
+        .count();
     let summary = PairDerivationSummary {
         candidate_total: candidates.len(),
         eligible_for_review,
         hold: candidates.len() - eligible_for_review,
+        relation_coverage: PairDerivationRelationCoverageSummary {
+            relation_total: relation_coverage.len(),
+            relation_expanded: relation_coverage.len() - relation_failed,
+            relation_failed,
+        },
     };
     Ok(PairDerivationReport {
         schema_version: PAIR_DERIVATION_REPORT_SCHEMA_VERSION,
         rule: PAIR_DERIVATION_RULE.to_string(),
         automatic_seed_write: false,
         input_hashes,
+        relation_coverage: relation_coverage.to_vec(),
         relation_manifest,
         candidates,
         summary,

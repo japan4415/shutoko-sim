@@ -1149,15 +1149,11 @@ fn merge_membership(indices: &mut Vec<RouteMembershipIndex>, incoming: RouteMemb
     }
 }
 
-pub fn build_relation_memberships(
-    response: &OverpassResponse,
-    graph: &Graph,
-    source_snapshot_sha256: &str,
+fn selected_route_relations<'a>(
+    response: &'a OverpassResponse,
     relation_ids: Option<&[i64]>,
-) -> Result<Vec<RouteMembershipIndex>, RouteMembershipError> {
-    validate_sha256(source_snapshot_sha256, "source_snapshot_sha256")?;
+) -> Vec<&'a OsmElement> {
     let selected_ids = relation_ids.map(|ids| ids.iter().copied().collect::<HashSet<_>>());
-    let mut result = Vec::new();
     let mut relations = response
         .elements
         .iter()
@@ -1169,33 +1165,288 @@ pub fn build_relation_memberships(
         })
         .collect::<Vec<_>>();
     relations.sort_by_key(|relation| relation.id);
+    relations
+}
 
-    for relation in relations {
-        let route_id = relation_route_id(relation)?;
-        for direction in relation_directions(relation)? {
-            let segments = build_relation_segments(
-                relation,
-                response,
-                graph,
-                &direction,
-                source_snapshot_sha256,
-            )?;
-            if segments.is_empty() {
-                continue;
-            }
-            merge_membership(
-                &mut result,
-                RouteMembershipIndex {
-                    membership_id: format!("route:{}:{}", route_id, direction),
-                    route_id: route_id.clone(),
-                    direction,
-                    direction_mapping_version: ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION.into(),
-                    segments,
-                },
-            );
+fn build_relation_memberships_for_relation(
+    relation: &OsmElement,
+    response: &OverpassResponse,
+    graph: &Graph,
+    source_snapshot_sha256: &str,
+) -> Result<Vec<RouteMembershipIndex>, RouteMembershipError> {
+    let route_id = relation_route_id(relation)?;
+    let mut result = Vec::new();
+    for direction in relation_directions(relation)? {
+        let segments = build_relation_segments(
+            relation,
+            response,
+            graph,
+            &direction,
+            source_snapshot_sha256,
+        )?;
+        if segments.is_empty() {
+            continue;
+        }
+        merge_membership(
+            &mut result,
+            RouteMembershipIndex {
+                membership_id: format!("route:{}:{}", route_id, direction),
+                route_id: route_id.clone(),
+                direction,
+                direction_mapping_version: ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION.into(),
+                segments,
+            },
+        );
+    }
+    Ok(result)
+}
+
+pub fn build_relation_memberships(
+    response: &OverpassResponse,
+    graph: &Graph,
+    source_snapshot_sha256: &str,
+    relation_ids: Option<&[i64]>,
+) -> Result<Vec<RouteMembershipIndex>, RouteMembershipError> {
+    validate_sha256(source_snapshot_sha256, "source_snapshot_sha256")?;
+    let mut result = Vec::new();
+    for relation in selected_route_relations(response, relation_ids) {
+        for membership in build_relation_memberships_for_relation(
+            relation,
+            response,
+            graph,
+            source_snapshot_sha256,
+        )? {
+            merge_membership(&mut result, membership);
         }
     }
     Ok(result)
+}
+
+/// Per-relation expansion outcome used by the full-coverage release mode.
+///
+/// A relation that cannot be expanded is recorded as `Fail` together with the
+/// fail-closed reason instead of aborting the whole build, so that a release
+/// artifact can account for every route relation in the OSM snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RouteRelationCoverageStatus {
+    Pass,
+    Fail,
+}
+
+/// Coverage record for one OSM route relation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RouteRelationCoverage {
+    pub relation_id: i64,
+    pub route_id: Option<String>,
+    pub status: RouteRelationCoverageStatus,
+    pub membership_ids: Vec<String>,
+    pub reason_code: Option<String>,
+    pub reason: Option<String>,
+}
+
+/// Reason code used when a relation expands without error but contributes no
+/// mainline route membership to the index.
+pub const ROUTE_RELATION_NO_MEMBERSHIP_CODE: &str = "ROUTE_RELATION_NO_MEMBERSHIP";
+
+impl RouteRelationCoverage {
+    pub fn failed(relation: &OsmElement, error: &RouteMembershipError) -> Self {
+        Self {
+            relation_id: relation.id,
+            route_id: relation_route_id(relation).ok(),
+            status: RouteRelationCoverageStatus::Fail,
+            membership_ids: Vec::new(),
+            reason_code: Some(error.code().to_string()),
+            reason: Some(error.to_string()),
+        }
+    }
+}
+
+/// Every selected route relation in the OSM snapshot, expanded or fail-closed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RouteRelationCoverageReport {
+    pub relations: Vec<RouteRelationCoverage>,
+}
+
+impl RouteRelationCoverageReport {
+    pub fn failed_relations(&self) -> impl Iterator<Item = &RouteRelationCoverage> {
+        self.relations
+            .iter()
+            .filter(|relation| relation.status == RouteRelationCoverageStatus::Fail)
+    }
+
+    pub fn expanded_relation_count(&self) -> usize {
+        self.relations.len() - self.failed_relations().count()
+    }
+}
+
+/// Route membership indices expanded from the selected route relations plus the
+/// per-relation coverage report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RouteRelationMembershipBuild {
+    pub membership_indices: Vec<RouteMembershipIndex>,
+    pub coverage: RouteRelationCoverageReport,
+}
+
+/// Every route relation in the OSM snapshot, ascending by relation id.
+///
+/// Full-coverage releases hash this whole set into the pair derivation input
+/// ledger, so the set must be stable and complete.
+pub fn all_route_relation_ids(response: &OverpassResponse) -> Vec<i64> {
+    let mut ids = response
+        .elements
+        .iter()
+        .filter(|element| is_route_relation(element))
+        .map(|element| element.id)
+        .collect::<Vec<_>>();
+    ids.sort_unstable();
+    ids.dedup();
+    ids
+}
+
+/// Legacy default relation subset (C1 and route 2), ascending by relation id.
+pub fn default_route_relation_ids(response: &OverpassResponse) -> Option<Vec<i64>> {
+    let mut ids = response
+        .elements
+        .iter()
+        .filter(|element| is_route_relation(element))
+        .filter(|element| {
+            matches!(
+                element.get_tag("ref").or_else(|| element.get_tag("route")),
+                Some("C1") | Some("2")
+            )
+        })
+        .map(|element| element.id)
+        .collect::<Vec<_>>();
+    ids.sort_unstable();
+    ids.dedup();
+    (!ids.is_empty()).then_some(ids)
+}
+
+/// Validate explicitly requested route relation ids against the OSM snapshot.
+///
+/// Fails closed for absent ids, non-relation elements, relations that are not
+/// `type=route`, and relations without a non-empty `ref` or `route` tag. The
+/// returned ids are sorted and de-duplicated so the selection stays stable.
+pub fn validate_requested_route_relation_ids(
+    response: &OverpassResponse,
+    requested: &[i64],
+) -> Result<Vec<i64>, String> {
+    let mut ids = requested.to_vec();
+    ids.sort_unstable();
+    ids.dedup();
+    if ids.iter().any(|id| *id <= 0) {
+        return Err("--relation-id values must be positive integers".into());
+    }
+    for id in &ids {
+        let Some(element) = response.elements.iter().find(|element| element.id == *id) else {
+            return Err(format!("route relation {id} is absent from the OSM input"));
+        };
+        if !element.is_relation() {
+            return Err(format!(
+                "--relation-id {id} is an OSM {} element, not a route relation",
+                element.element_type
+            ));
+        }
+        if element.get_tag("type") != Some("route") {
+            return Err(format!(
+                "--relation-id {id} is not an OSM type=route relation (type={})",
+                element.get_tag("type").unwrap_or("<none>")
+            ));
+        }
+        if element
+            .get_tag("ref")
+            .or_else(|| element.get_tag("route"))
+            .is_none_or(|value| value.is_empty())
+        {
+            return Err(format!(
+                "--relation-id {id} has no non-empty ref or route tag"
+            ));
+        }
+    }
+    Ok(ids)
+}
+
+/// Fail closed unless every explicitly requested relation was expanded.
+pub fn validate_requested_route_relations_expanded(
+    requested: &[i64],
+    coverage: &RouteRelationCoverageReport,
+) -> Result<(), String> {
+    for id in requested {
+        let Some(relation) = coverage
+            .relations
+            .iter()
+            .find(|relation| relation.relation_id == *id)
+        else {
+            return Err(format!(
+                "route relation {id} produced no route membership coverage record"
+            ));
+        };
+        if relation.status != RouteRelationCoverageStatus::Pass {
+            return Err(format!(
+                "route relation {id} produced no route membership: {}",
+                relation.reason.as_deref().unwrap_or_default()
+            ));
+        }
+        if relation.membership_ids.is_empty() {
+            return Err(format!(
+                "route relation {id} produced an empty route membership"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Expand the selected route relations and record a pass/fail record for each one.
+pub fn build_route_relation_coverage(
+    response: &OverpassResponse,
+    graph: &Graph,
+    source_snapshot_sha256: &str,
+    relation_ids: Option<&[i64]>,
+) -> Result<RouteRelationMembershipBuild, RouteMembershipError> {
+    validate_sha256(source_snapshot_sha256, "source_snapshot_sha256")?;
+    let mut membership_indices: Vec<RouteMembershipIndex> = Vec::new();
+    let mut relations = Vec::new();
+    for relation in selected_route_relations(response, relation_ids) {
+        match build_relation_memberships_for_relation(
+            relation,
+            response,
+            graph,
+            source_snapshot_sha256,
+        ) {
+            Ok(memberships) => {
+                let membership_ids = memberships
+                    .iter()
+                    .map(|membership| membership.membership_id.clone())
+                    .collect::<Vec<_>>();
+                for membership in memberships {
+                    merge_membership(&mut membership_indices, membership);
+                }
+                relations.push(RouteRelationCoverage {
+                    relation_id: relation.id,
+                    route_id: relation_route_id(relation).ok(),
+                    status: RouteRelationCoverageStatus::Pass,
+                    reason_code: membership_ids
+                        .is_empty()
+                        .then(|| ROUTE_RELATION_NO_MEMBERSHIP_CODE.to_string()),
+                    reason: membership_ids.is_empty().then(|| {
+                        format!(
+                            "relation {} expanded without a usable mainline route membership",
+                            relation.id
+                        )
+                    }),
+                    membership_ids,
+                });
+            }
+            Err(error) => relations.push(RouteRelationCoverage::failed(relation, &error)),
+        }
+    }
+    Ok(RouteRelationMembershipBuild {
+        membership_indices,
+        coverage: RouteRelationCoverageReport { relations },
+    })
 }
 
 fn validate_ordered_edges<'a>(
@@ -1804,12 +2055,32 @@ pub fn build_route_membership_indices(
     graph: &Graph,
     options: &RouteMembershipBuildOptions,
 ) -> Result<Vec<RouteMembershipIndex>, RouteMembershipError> {
-    let mut result = build_relation_memberships(
+    let built = build_route_membership_indices_with_coverage(response, graph, options)?;
+    if let Some(failed) = built.route_relations.failed_relations().next() {
+        return Err(RouteMembershipError::Relation(format!(
+            "route relation {} ({}) could not be expanded: {}",
+            failed.relation_id,
+            failed.route_id.as_deref().unwrap_or("unknown route"),
+            failed.reason.as_deref().unwrap_or_default()
+        )));
+    }
+    Ok(built.route_memberships)
+}
+
+/// Build the schema 4 route membership indices together with a pass/fail record
+/// for every selected route relation.
+pub fn build_route_membership_indices_with_coverage(
+    response: &OverpassResponse,
+    graph: &Graph,
+    options: &RouteMembershipBuildOptions,
+) -> Result<RouteMembershipCoverage, RouteMembershipError> {
+    let coverage = build_route_relation_coverage(
         response,
         graph,
         &options.source_snapshot_sha256,
         options.relation_ids.as_deref(),
     )?;
+    let mut result = coverage.membership_indices;
     let bound = build_bound_ramp_memberships(
         graph,
         &options.source_snapshot_sha256,
@@ -1825,7 +2096,17 @@ pub fn build_route_membership_indices(
         &options.source_snapshot_sha256,
         &options.bound_ramp_evidence,
     )?;
-    Ok(result)
+    Ok(RouteMembershipCoverage {
+        route_memberships: result,
+        route_relations: coverage.coverage,
+    })
+}
+
+/// Route membership indices plus the per-relation expansion coverage report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RouteMembershipCoverage {
+    pub route_memberships: Vec<RouteMembershipIndex>,
+    pub route_relations: RouteRelationCoverageReport,
 }
 
 fn relation_from_source_id<'a>(
@@ -5797,5 +6078,215 @@ mod tests {
             "ramp:exit",
         )
         .is_err());
+    }
+
+    fn second_route_relation(id: i64, ref_tag: &str, members: Vec<OsmMember>) -> OsmElement {
+        let mut tags = BTreeMap::new();
+        tags.insert("type".into(), "route".into());
+        tags.insert("route".into(), "road".into());
+        tags.insert("ref".into(), ref_tag.into());
+        tags.insert("direction".into(), "forward".into());
+        OsmElement {
+            element_type: "relation".into(),
+            id,
+            lat: None,
+            lon: None,
+            nodes: None,
+            tags: Some(tags),
+            members: Some(members),
+        }
+    }
+
+    #[test]
+    fn requested_route_relation_ids_reject_every_non_route_input() {
+        let (mut response, _graph, _snapshot) = synthetic();
+        response
+            .elements
+            .push(second_route_relation(11, "", vec![member(101)]));
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[999])
+                .unwrap_err()
+                .as_str(),
+            "route relation 999 is absent from the OSM input"
+        );
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[0]).unwrap_err(),
+            "--relation-id values must be positive integers"
+        );
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[101])
+                .unwrap_err()
+                .as_str(),
+            "--relation-id 101 is an OSM way element, not a route relation"
+        );
+        let mut node_element = way(105, vec![1, 2]);
+        node_element.element_type = "node".into();
+        response.elements.push(node_element);
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[105])
+                .unwrap_err()
+                .as_str(),
+            "--relation-id 105 is an OSM node element, not a route relation"
+        );
+        let mut boundary = relation(12, "forward", vec![member(101)]);
+        boundary
+            .tags
+            .as_mut()
+            .unwrap()
+            .insert("type".to_string(), "boundary".to_string());
+        response.elements.push(boundary);
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[12])
+                .unwrap_err()
+                .as_str(),
+            "--relation-id 12 is not an OSM type=route relation (type=boundary)"
+        );
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[11])
+                .unwrap_err()
+                .as_str(),
+            "--relation-id 11 has no non-empty ref or route tag"
+        );
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[10, 10]).unwrap(),
+            vec![10]
+        );
+    }
+
+    #[test]
+    fn full_coverage_records_a_failure_instead_of_aborting_the_build() {
+        let (mut response, mut graph, snapshot) = synthetic();
+        response.elements.push(way(301, vec![1, 2]));
+        response
+            .elements
+            .push(second_route_relation(11, "R2", vec![member(301)]));
+        graph
+            .edges
+            .push(edge("e:w301:0:f", "n:1", "n:2", EdgeKind::Shutoko));
+        graph
+            .edges
+            .push(edge("e:w301:0:r", "n:2", "n:1", EdgeKind::Shutoko));
+        let broken = second_route_relation(12, "R3", vec![member(999)]);
+        response.elements.push(broken);
+
+        let build = build_route_relation_coverage(&response, &graph, &snapshot, None).unwrap();
+        assert_eq!(build.coverage.relations.len(), 3);
+        assert_eq!(build.coverage.expanded_relation_count(), 2);
+        let failed = build
+            .coverage
+            .relations
+            .iter()
+            .find(|relation| relation.relation_id == 12)
+            .unwrap();
+        assert_eq!(failed.status, RouteRelationCoverageStatus::Fail);
+        assert_eq!(
+            failed.reason_code.as_deref(),
+            Some("ROUTE_MEMBERSHIP_RELATION_INVALID")
+        );
+        assert!(failed
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains("references missing way 999"));
+        let expanded = build
+            .coverage
+            .relations
+            .iter()
+            .find(|relation| relation.relation_id == 11)
+            .unwrap();
+        assert_eq!(expanded.status, RouteRelationCoverageStatus::Pass);
+        assert_eq!(
+            expanded.membership_ids,
+            vec!["route:R2:forward".to_string()]
+        );
+        assert!(build
+            .membership_indices
+            .iter()
+            .any(|membership| membership.membership_id == "route:R2:forward"));
+
+        // The strict entry point keeps failing closed on the same input.
+        let strict = build_route_membership_indices(
+            &response,
+            &graph,
+            &RouteMembershipBuildOptions {
+                source_snapshot_sha256: snapshot.clone(),
+                relation_ids: None,
+                bound_ramp_evidence: Vec::new(),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(strict.code(), "ROUTE_MEMBERSHIP_RELATION_INVALID");
+        assert!(strict
+            .to_string()
+            .contains("route relation 12 (R3) could not be expanded"));
+        assert!(validate_requested_route_relations_expanded(&[11], &build.coverage).is_ok());
+        assert!(
+            validate_requested_route_relations_expanded(&[12], &build.coverage)
+                .unwrap_err()
+                .contains("produced no route membership")
+        );
+        assert!(
+            validate_requested_route_relations_expanded(&[13], &build.coverage)
+                .unwrap_err()
+                .contains("produced no route membership coverage record")
+        );
+    }
+
+    #[test]
+    fn full_coverage_hash_binds_relations_outside_the_legacy_default() {
+        let (mut response, mut graph, snapshot) = synthetic();
+        response.elements.push(way(301, vec![1, 2]));
+        response
+            .elements
+            .push(second_route_relation(11, "R2", vec![member(301)]));
+        graph
+            .edges
+            .push(edge("e:w301:0:f", "n:1", "n:2", EdgeKind::Shutoko));
+        graph
+            .edges
+            .push(edge("e:w301:0:r", "n:2", "n:1", EdgeKind::Shutoko));
+
+        let full = build_route_relation_coverage(&response, &graph, &snapshot, None).unwrap();
+        let full_hash = route_memberships_sha256(&full.membership_indices).unwrap();
+        let legacy =
+            build_route_relation_coverage(&response, &graph, &snapshot, Some(&[10])).unwrap();
+        assert_eq!(legacy.coverage.relations.len(), 1);
+        assert!(!legacy
+            .membership_indices
+            .iter()
+            .any(|membership| membership.membership_id == "route:R2:forward"));
+        assert_ne!(
+            full_hash,
+            route_memberships_sha256(&legacy.membership_indices).unwrap()
+        );
+
+        // An OSM change in a relation outside the legacy default selection must
+        // still move the hashed route membership index.
+        response.elements.push(way(302, vec![2, 3]));
+        response.elements.push(second_route_relation(
+            11,
+            "R2",
+            vec![member(301), member(302)],
+        ));
+        graph
+            .edges
+            .push(edge("e:w302:0:f", "n:2", "n:3", EdgeKind::Shutoko));
+        graph
+            .edges
+            .push(edge("e:w302:0:r", "n:3", "n:2", EdgeKind::Shutoko));
+        let extended = build_route_relation_coverage(&response, &graph, &snapshot, None).unwrap();
+        assert_ne!(
+            full_hash,
+            route_memberships_sha256(&extended.membership_indices).unwrap()
+        );
+        assert_eq!(
+            route_memberships_sha256(
+                &build_route_relation_coverage(&response, &graph, &snapshot, Some(&[10]))
+                    .unwrap()
+                    .membership_indices,
+            )
+            .unwrap(),
+            route_memberships_sha256(&legacy.membership_indices).unwrap()
+        );
     }
 }

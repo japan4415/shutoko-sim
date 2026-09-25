@@ -21,6 +21,8 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: cargo test --release -p shutoko-routing-core --test real_graph_contract --locked -- --ignored
+      - run: cargo test --release -p shutoko-graph-builder --test release_v4_contract --locked -- --ignored
+      - run: cargo test --release -p shutoko-graph-builder --test route_relation_coverage --locked -- --ignored
       - name: Verify fixture regeneration determinism
         run: |
           snapshot_dir="$(mktemp -d)"

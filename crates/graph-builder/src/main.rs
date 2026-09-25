@@ -4,9 +4,10 @@
 //! from OSM Overpass export JSON and human-verified billing pair seeds.
 
 use shutoko_graph_builder::{
-    apply_od_tariffs_to_graph, audit_first_public_road_connections, bind_ramps_to_graph,
-    bound_ramp_evidence_from_inventory, build_manifest, build_route_membership_indices,
-    build_topology_with_report, derive_pair_candidates_from_source_bytes,
+    all_route_relation_ids, apply_od_tariffs_to_graph, audit_first_public_road_connections,
+    bind_ramps_to_graph, bound_ramp_evidence_from_inventory, build_manifest,
+    build_route_membership_indices_with_coverage, build_topology_with_report,
+    default_route_relation_ids, derive_pair_candidates_from_source_bytes,
     generate_diagnostic_radial_route_plans,
     graph_schema_v4_to_deterministic_json_with_radial_and_catalog,
     graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3,
@@ -15,11 +16,12 @@ use shutoko_graph_builder::{
     route_memberships_sha256, snap_index_to_deterministic_json, tariff_overrides_from_catalog,
     to_deterministic_json, validate_od_tariffs, validate_osm_ramp_bindings,
     validate_osm_ramp_bindings_against_osm, validate_promoted_legacy_pairs_from_source,
-    validate_radial_seed_binding_candidates, validate_ramp_inventory, BillingPairProvenance,
-    EdgeKind, EndpointSupportState, ManifestConfig, ManifestPairDerivation, OdTariffsFile,
-    OsmRampBindingsFile, OverpassResponse, PairDerivationReport, ParsedBillingPairsSeed,
-    RampInventoryFile, RampKind, RampsArtifact, RouteMembershipBuildOptions, TopologyConfig,
-    VerificationStatus,
+    validate_radial_seed_binding_candidates, validate_ramp_inventory,
+    validate_requested_route_relation_ids, validate_requested_route_relations_expanded,
+    BillingPairProvenance, EdgeKind, EndpointSupportState, ManifestConfig, ManifestPairDerivation,
+    OdTariffsFile, OsmRampBindingsFile, OverpassResponse, PairDerivationReport,
+    ParsedBillingPairsSeed, RampInventoryFile, RampKind, RampsArtifact,
+    RouteMembershipBuildOptions, RouteMembershipCoverage, TopologyConfig, VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -72,30 +74,31 @@ fn repository_data_path(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn default_route_membership_relation_ids(response: &OverpassResponse) -> Option<Vec<i64>> {
-    let mut ids = response
-        .elements
-        .iter()
-        .filter(|element| element.is_relation())
-        .filter(|element| {
-            element.get_tag("type") == Some("route")
-                && matches!(
-                    element.get_tag("ref").or_else(|| element.get_tag("route")),
-                    Some("C1") | Some("2")
-                )
-        })
-        .map(|element| element.id)
-        .collect::<Vec<_>>();
-    ids.sort_unstable();
-    ids.dedup();
-    (!ids.is_empty()).then_some(ids)
-}
-
+/// Route relation selection for the schema 4 route membership index.
+///
+/// `None` selects every route relation in the OSM snapshot, which is what the
+/// full-coverage releases require so that the pair derivation input ledger
+/// hashes a complete `RouteMembershipIndex`.
 fn selected_route_membership_relation_ids(
     response: &OverpassResponse,
     requested: Option<&[i64]>,
     all_relations: bool,
+    full_coverage_required: bool,
 ) -> Result<Option<Vec<i64>>, String> {
+    if full_coverage_required {
+        if requested.is_some_and(|ids| !ids.is_empty()) {
+            return Err(
+                "--relation-id cannot be combined with a full-coverage release; the pair \
+                 derivation input hash requires every route relation"
+                    .into(),
+            );
+        }
+        let ids = all_route_relation_ids(response);
+        if ids.is_empty() {
+            return Err("the OSM input has no route relation to expand".into());
+        }
+        return Ok(None);
+    }
     if all_relations {
         if requested.is_some() {
             return Err("--all-route-relations cannot be combined with --relation-id".into());
@@ -103,20 +106,11 @@ fn selected_route_membership_relation_ids(
         return Ok(None);
     }
     let Some(requested) = requested else {
-        return Ok(default_route_membership_relation_ids(response));
+        return Ok(default_route_relation_ids(response));
     };
-    let mut ids = requested.to_vec();
-    ids.sort_unstable();
-    ids.dedup();
-    if ids.iter().any(|id| *id <= 0) {
-        return Err("--relation-id values must be positive integers".into());
-    }
-    for id in &ids {
-        if !response.elements.iter().any(|element| element.id == *id) {
-            return Err(format!("route relation {id} is absent from the OSM input"));
-        }
-    }
-    Ok(Some(ids))
+    Ok(Some(validate_requested_route_relation_ids(
+        response, requested,
+    )?))
 }
 
 fn endpoint_support_state_wire_value(state: EndpointSupportState) -> &'static str {
@@ -124,6 +118,27 @@ fn endpoint_support_state_wire_value(state: EndpointSupportState) -> &'static st
         EndpointSupportState::VerifiedBound => "verified_bound",
         EndpointSupportState::Unresolved => "unresolved",
         EndpointSupportState::Unsupported => "unsupported",
+    }
+}
+
+/// Report the per-relation expansion result so that a full-coverage release
+/// never hides relations that could not be expanded.
+fn print_route_relation_coverage(built: &RouteMembershipCoverage) {
+    let total = built.route_relations.relations.len();
+    let failed = built.route_relations.failed_relations().count();
+    println!(
+        "  - route relations: {} expanded, {} failed ({} memberships)",
+        total - failed,
+        failed,
+        built.route_memberships.len()
+    );
+    for relation in built.route_relations.failed_relations() {
+        println!(
+            "    ! route relation {} ({}) not expanded: {}",
+            relation.relation_id,
+            relation.route_id.as_deref().unwrap_or("unknown route"),
+            relation.reason.as_deref().unwrap_or_default()
+        );
     }
 }
 
@@ -413,10 +428,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             e
         )
     })?;
+    let requested_relation_ids = args.relation_ids.clone();
     let relation_ids = selected_route_membership_relation_ids(
         &overpass_resp,
         args.relation_ids.as_deref(),
         args.all_route_relations,
+        is_v4_release,
     )?;
 
     // 2. Build topology
@@ -728,6 +745,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 4. Serialize graph.json and snap-index.json deterministically
+    let mut route_relation_coverage = None;
     let route_memberships = if args.graph_schema == 4 {
         let source_snapshot_sha256 = shutoko_graph_builder::compute_sha256(osm_raw.as_bytes());
         let options = RouteMembershipBuildOptions {
@@ -735,8 +753,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             relation_ids,
             bound_ramp_evidence: route_membership_evidence,
         };
-        build_route_membership_indices(&overpass_resp, &graph, &options)
-            .map_err(|error| format!("route membership build failed: {}", error))?
+        let built: RouteMembershipCoverage =
+            build_route_membership_indices_with_coverage(&overpass_resp, &graph, &options)
+                .map_err(|error| format!("route membership build failed: {}", error))?;
+        if let Some(requested) = requested_relation_ids.as_deref() {
+            validate_requested_route_relations_expanded(requested, &built.route_relations)
+                .map_err(|error| format!("route membership build failed: {}", error))?;
+        }
+        print_route_relation_coverage(&built);
+        route_relation_coverage = Some(built.route_relations);
+        built.route_memberships
     } else {
         Vec::new()
     };
@@ -901,9 +927,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let seed_raw = seed_bytes.as_ref().ok_or_else(|| {
             "release all-real-v4 requires a readable billing pair seed".to_string()
         })?;
+        let relation_coverage = route_relation_coverage
+            .as_ref()
+            .ok_or_else(|| {
+                "release all-real-v4 requires schema 4 route relation coverage".to_string()
+            })?
+            .relations
+            .clone();
         let report = derive_pair_candidates_from_source_bytes(
             &graph,
             &route_memberships,
+            &relation_coverage,
             osm_raw.as_bytes(),
             &inventory_raw,
             &support_raw,

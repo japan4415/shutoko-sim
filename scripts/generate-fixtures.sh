@@ -2,8 +2,12 @@
 set -euo pipefail
 
 # scripts/generate-fixtures.sh
-# Deterministically rebuild generated graph, snap-index, and manifest fixtures
-# from fixtures/osm/shutoko-all.json and data/billing-pairs-seed.json.
+# Deterministically rebuild the generated release fixtures (graph, snap-index,
+# ramps, manifest, od-tariffs, pair-candidates) from fixtures/osm/shutoko-all.json
+# and the data/*.json inputs. The default release is all-real-v4, whose manifest
+# binds five artifacts and records billingPairsVersion=v3 plus tariffModelVersion=1.
+# Older releases stay reproducible by passing the release id as the 7th argument
+# (rollback targets all-real-v3 / all-real-v2).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -16,7 +20,7 @@ BINDINGS_PATH="${5:-"${REPO_ROOT}/data/osm-ramp-bindings.json"}"
 TARIFFS_PATH="${6:-"${REPO_ROOT}/data/od-tariffs.json"}"
 ADJACENCY_PATH="${SHUTOKO_ADJACENCY_PATH:-"${REPO_ROOT}/data/billing-pair-adjacency.json"}"
 SUPPORT_DECISIONS_PATH="${SHUTOKO_SUPPORT_DECISIONS_PATH:-"${REPO_ROOT}/data/ramp-support-decisions.json"}"
-RELEASE_ID="${7:-"${SHUTOKO_RELEASE_ID:-all-real-v3}"}"
+RELEASE_ID="${7:-"${SHUTOKO_RELEASE_ID:-all-real-v4}"}"
 
 cargo run --manifest-path "${REPO_ROOT}/Cargo.toml" --bin shutoko-graph-builder --locked -- \
   --osm "${OSM_PATH}" \

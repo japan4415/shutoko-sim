@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "releaseId": "all-real-v3",
+  "releaseId": "all-real-v4",
   "engineVersion": "0.1.0",
   "graphVersion": "1.0.0",
   "graphSchemaVersion": 4,
   "routePlanVersion": 1,
-  "routeMembershipsSha256": "ff8281f4d4c8f823051d1323eb2fbfc679a27dca758d2bcb31f2cce0d406a61b",
+  "routeMembershipsSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
   "builtAt": "2026-09-24T00:00:00Z",
   "sourceDate": "2026-09-16",
   "coverage": {
@@ -281,7 +281,29 @@
   },
   "vehicleProfile": "passenger-car-etc",
   "timeModelVersion": "v1-static-speeds",
-  "billingPairsVersion": "v2",
+  "billingPairsVersion": "v3",
+  "tariffModelVersion": 1,
+  "pairDerivation": {
+    "schemaVersion": 2,
+    "rule": "billingPairDerivation/v2",
+    "inputHashes": {
+      "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
+      "rampLedgerSha256": "760eac45a2b0796a2cfe1c159acbeca87482b356e01f819f530c9514d213db77",
+      "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
+      "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
+      "odTariffsSha256": "6154b54f4437837c2ff562503f8e0cde5101a396d522e2f33661cbea4099999f"
+    },
+    "summary": {
+      "candidateTotal": 11,
+      "eligibleForReview": 9,
+      "hold": 2,
+      "relationCoverage": {
+        "relationTotal": 26,
+        "relationExpanded": 11,
+        "relationFailed": 15
+      }
+    }
+  },
   "attribution": "© OpenStreetMap contributors",
   "odblLicenseUrl": "https://www.openstreetmap.org/copyright",
   "unverifiedSections": [
@@ -852,17 +874,27 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "a97f8876fa0a8060a548b685e5c92ab1f2eda8ad680a134105d9b67b321098b4",
-      "byteLength": 7413419
+      "sha256": "ef1ee18f422136d50f9fe0bfcb8682b49090458734ba45a459bb90ba04372b66",
+      "byteLength": 7605829
+    },
+    {
+      "path": "od-tariffs.json",
+      "sha256": "6154b54f4437837c2ff562503f8e0cde5101a396d522e2f33661cbea4099999f",
+      "byteLength": 48271
+    },
+    {
+      "path": "pair-candidates.json",
+      "sha256": "eeba8630c42209bafa900e2703e3c64d74056c4a173906d84b2edc5c4c290eba",
+      "byteLength": 75671
     },
     {
       "path": "ramps.json",
-      "sha256": "5c8e500257003c0b8a31faf2afb8f69c616450f8a117dc7d24de616078083826",
+      "sha256": "b5523c0a86310b678cd66a2c0e08c73759705d0e08a89ca0a91b80c771f37cc1",
       "byteLength": 278142
     },
     {
       "path": "snap-index.json",
-      "sha256": "29d59df6aa506cba4eef563812b7699e11804512e4d1c2410090a4a2e0df8f81",
+      "sha256": "e83846c7f80290bbf4718aa643132ecbf0e6ad9d9d10d29d663613eada0ebfab",
       "byteLength": 15244
     }
   ]

@@ -55,7 +55,7 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
       const exitId = `fixture-exit-${String(index)}`;
       return {
         id,
-        releaseId: "all-real-v3",
+        releaseId: "all-real-v4",
         origin: { lat: 35.6896727, lon: 139.7644248 },
         originNodeId: "fixture-origin",
         snappedOrigin: { nodeId: "fixture-origin", lat: 35.6896727, lon: 139.7644248, distanceMeters: 500 + index },
@@ -91,7 +91,7 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
     };
     const result = {
       requestId: "",
-      releaseId: "all-real-v3",
+      releaseId: "all-real-v4",
       status: "ok",
       reason: null,
       rankingMode: "time_per_yen",
@@ -103,7 +103,7 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
     class FixtureWorker {
       onmessage: ((event: MessageEvent) => void) | null = null;
       constructor() {
-        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v3" } } as MessageEvent), 0);
+        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v4" } } as MessageEvent), 0);
       }
       postMessage(message: { requestId: string }): void {
         const response = { type: "result", requestId: message.requestId, result: { ...result, requestId: message.requestId } };
@@ -122,7 +122,7 @@ async function stubWorkerWithRadialCandidate(
   await page.addInitScript((variant) => {
     const candidate = {
       id: "fixture-candidate-radial",
-      releaseId: "all-real-v3",
+      releaseId: "all-real-v4",
       pairKind: "radialReturn",
       routePlanVersion: 1,
       origin: { lat: 35.6896727, lon: 139.7644248 },
@@ -311,7 +311,7 @@ async function stubWorkerWithRadialCandidate(
     }
     const result = {
       requestId: "",
-      releaseId: "all-real-v3",
+      releaseId: "all-real-v4",
       status: "ok",
       reason: null,
       rankingMode: variant === "pricedIneligible" ? "shutoko_time" : "time_per_yen",
@@ -323,7 +323,7 @@ async function stubWorkerWithRadialCandidate(
     class FixtureWorker {
       onmessage: ((event: MessageEvent) => void) | null = null;
       constructor() {
-        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v3" } } as MessageEvent), 0);
+        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v4" } } as MessageEvent), 0);
       }
       postMessage(message: { requestId: string }): void {
         const response = { type: "result", requestId: message.requestId, result: { ...result, requestId: message.requestId } };

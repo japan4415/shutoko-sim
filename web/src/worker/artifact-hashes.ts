@@ -11,5 +11,9 @@ export const KNOWN_RELEASES: readonly string[] = [
   "all-real-v1",
   "all-real-v2",
   "all-real-v3",
+  "all-real-v4",
 ];
-export const DEFAULT_RELEASE_ID = "all-real-v3";
+// 既定は最新release。異常時は all-real-v3 へ戻す（workers/wrangler.toml の
+// ALLOWED_RELEASES に all-real-v3 を残したまま運用する。web/test/release-rollback.test.ts
+// が Web の allowlist と Worker の allowlist の同期を検査する）。
+export const DEFAULT_RELEASE_ID = "all-real-v4";

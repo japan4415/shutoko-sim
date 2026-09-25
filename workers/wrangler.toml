@@ -3,7 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2026-08-22"
 
 [vars]
-ALLOWED_RELEASES = "c1-real-v1,c1-real-v2,all-real-v1,all-real-v2,all-real-v3"
+# all-real-v3 以前を allowlist に残すのは rollback 用。Web の既定（web/src/worker/
+# artifact-hashes.ts の DEFAULT_RELEASE_ID）を戻すだけで配信を戻せるようにする。
+ALLOWED_RELEASES = "c1-real-v1,c1-real-v2,all-real-v1,all-real-v2,all-real-v3,all-real-v4"
 
 [[r2_buckets]]
 binding = "ARTIFACTS_BUCKET"

@@ -229,8 +229,11 @@ describe("parseGraphDocument", () => {
     expect(() => parseGraphDocument(JSON.stringify(partial))).toThrowError(/routeMemberships/);
   });
 
-  it("loadRelease が schema 4 graph を WASM prepare へ渡せる", async () => {
-    const releaseId = "graph-v4-fixture-v1";
+  /** schema 4 の manifest / engine.json / graph.json / wasm / glue を組み立てる。 */
+  async function schema4Files(
+    releaseId: string,
+    billingPairsVersion: string,
+  ): Promise<Record<string, Uint8Array>> {
     const graphBytes = encoder.encode(schema4Graph);
     const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
     const glueBytes = encoder.encode("export default function(){}");
@@ -240,14 +243,14 @@ describe("parseGraphDocument", () => {
     const routeHash = await routeMembershipsSha256(
       (JSON.parse(schema4Graph) as { routeMemberships: unknown }).routeMemberships,
     );
-    const files = {
+    return {
       [`/releases/${releaseId}/manifest.json`]: encoder.encode(
         JSON.stringify({
           schemaVersion: 1,
           releaseId,
           graphSchemaVersion: 4,
           routePlanVersion: 1,
-          billingPairsVersion: "v2",
+          billingPairsVersion,
           routeMembershipsSha256: routeHash,
           artifacts: [{ path: "graph.json", ...graphExpected }],
         }),
@@ -266,20 +269,40 @@ describe("parseGraphDocument", () => {
       [`/releases/${releaseId}/shutoko_routing_bg.wasm`]: wasmBytes,
       [`/releases/${releaseId}/shutoko_routing.js`]: glueBytes,
     };
-    const { fetch } = mockFetch(files);
-    let preparedGraphJson = "";
-    const glue: WasmGlueModule = {
+  }
+
+  function recordingGlue(prepared: { json: string }): WasmGlueModule {
+    return {
       default: async () => {},
       prepare: (graphJson: string) => {
-        preparedGraphJson = graphJson;
+        prepared.json = graphJson;
         return { free() {} };
       },
       searchPrepared: () => "{}",
     };
-    const loaded = await loadRelease(fetch, releaseId, async () => glue);
-    expect(JSON.parse(preparedGraphJson).schemaVersion).toBe(4);
-    expect(JSON.parse(preparedGraphJson).billingPairs).toHaveLength(2);
-    loaded.free();
+  }
+
+  // v2 は all-real-v3（rollback 先）、v3 は all-real-v4。どちらも同じ reader で読む。
+  it.each(["v2", "v3"])(
+    "loadRelease が billingPairsVersion=%s の schema 4 graph を WASM prepare へ渡せる",
+    async (billingPairsVersion) => {
+      const releaseId = "graph-v4-fixture-v1";
+      const { fetch } = mockFetch(await schema4Files(releaseId, billingPairsVersion));
+      const prepared = { json: "" };
+      const loaded = await loadRelease(fetch, releaseId, async () => recordingGlue(prepared));
+      expect(JSON.parse(prepared.json).schemaVersion).toBe(4);
+      expect(JSON.parse(prepared.json).billingPairs).toHaveLength(2);
+      loaded.free();
+    },
+  );
+
+  it("未知の billingPairsVersion は graph を prepare せず ARTIFACT_MISMATCH で止める", async () => {
+    const releaseId = "graph-v4-fixture-v1";
+    const { fetch, calls } = mockFetch(await schema4Files(releaseId, "v9"));
+    await expect(loadRelease(fetch, releaseId, async () => recordingGlue({ json: "" }))).rejects.toThrowError(
+      /billingPairsVersion/,
+    );
+    expect(calls.every((url) => !url.endsWith("graph.json"))).toBe(true);
   });
 });
 

@@ -48,7 +48,7 @@ test("bench ページが cold/warm の 1 試行ずつを完走し envelope を�
 
   // 2 パターン × (cold 1 + warm 1) = 4 試行
   expect(envelope.trials).toHaveLength(4);
-  expect(envelope.releaseId).toBe("all-real-v3");
+  expect(envelope.releaseId).toBe("all-real-v4");
   expect(envelope.targets.searchP95Ms).toBe(2000);
 
   const cold0 = findTrial(envelope, 0, "cold");

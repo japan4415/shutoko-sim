@@ -57,10 +57,16 @@ schema4Pg.free();
 const generatedPg = prepare(generatedGraph, '{}');
 generatedPg.free();
 assert.equal(JSON.parse(generatedGraph).schemaVersion, 4);
+assert.equal(generatedManifest.releaseId, 'all-real-v4');
 assert.equal(generatedManifest.graphSchemaVersion, 4);
-assert.equal(generatedManifest.billingPairsVersion, 'v2');
+assert.equal(generatedManifest.billingPairsVersion, 'v3');
+assert.equal(generatedManifest.tariffModelVersion, 1);
 assert.equal(generatedManifest.routePlanVersion, 1);
 assert.match(generatedManifest.routeMembershipsSha256, /^[0-9a-f]{64}$/);
+assert.deepEqual(
+  generatedManifest.artifacts.map((artifact) => artifact.path).sort(),
+  ['graph.json', 'od-tariffs.json', 'pair-candidates.json', 'ramps.json', 'snap-index.json'],
+);
 
 for (const record of deviceVerificationManifest.verifications) {
   record.osVersion = 'test-os';

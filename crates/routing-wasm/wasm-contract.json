@@ -1,8 +1,9 @@
 {
-  "contractVersion": 4,
+  "contractVersion": 5,
   "engineVersion": "0.1.0",
   "graphSchemaVersion": 4,
   "supportedGraphSchemaVersions": [2, 3, 4],
+  "tariffModelVersion": 1,
   "requiredGraphFields": [
     "odTariffs",
     "ramps[].id",
@@ -13,5 +14,30 @@
     "billingPairs[].pairKind",
     "billingPairs[].anchor.anchorKind",
     "billingPairs[].routePlan.anchor.anchorKind"
-  ]
+  ],
+  "requiredCandidateTollFields": [
+    "amountYen",
+    "pricingAt",
+    "effectiveFrom",
+    "effectiveTo",
+    "billingDistanceMeters",
+    "tollSource",
+    "assignmentId",
+    "ruleId",
+    "evidenceId",
+    "distanceEvidenceId",
+    "fareLabel",
+    "vehicleClass",
+    "paymentMethod",
+    "fareBasis",
+    "discountsExcluded"
+  ],
+  "productTariff": {
+    "vehicleClass": "ordinary",
+    "paymentMethod": "etc",
+    "fareBasis": "base_toll_excluding_discounts",
+    "fareLabel": "普通車ETC基本料金（割引適用前）",
+    "tollSource": "official_distance_rule",
+    "discountsExcluded": true
+  }
 }

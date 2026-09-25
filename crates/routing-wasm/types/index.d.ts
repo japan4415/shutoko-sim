@@ -94,6 +94,204 @@ export interface OdTariff {
   effectiveTo?: string | null;
 }
 
+// --- 料金 v3（tariff model v1）の製品スコープ ---
+// 値は crates/routing-core/src/tariff.rs の PRODUCT_* 定数と同値であり、この範囲を
+// 別の条件へ変えてはならない。Web reader は候補の toll がこのスコープと一致することを
+// 実行時検証し、ずれた候補は RESULT_CONTRACT_MISMATCH として捨てる。
+
+/** 製品の車種。 */
+export type ProductVehicleClass = "ordinary";
+/** 製品の支払方法。 */
+export type ProductPaymentMethod = "etc";
+/** 製品の料金種別。割引適用前の基本料金のみを扱う。 */
+export type ProductFareBasis = "base_toll_excluding_discounts";
+
+/** 割引として除外する識別子（すべてが tariff rule の discountsExcluded に入る）。 */
+export type ExcludedTariffDiscount =
+  | "midnight_discount"
+  | "central_tokyo_inflow_discount"
+  | "environmental_road_pricing_discount"
+  | "etc2_discount"
+  | "frequent_user_discount";
+
+/** 製品の profile。車種・支払方法・料金種別と対になる。 */
+export type ProductVehicleProfile = "passenger-car-etc";
+
+/** 料金 v3 の出所。`official_distance_rule` は距離基準の公定料金のみ。 */
+export type TariffTollSource = "official_distance_rule" | "table";
+
+/** 候補の toll に付く料金 v3 の証拠（tariff v3 を持つ release でのみ現れる）。 */
+export interface TariffProvenance {
+  /** 適用された期間の出所。 */
+  tollSource?: string | null;
+  /** 適用された TariffAssignment の ID。 */
+  assignmentId?: string | null;
+  /** 適用された TariffRule の ID。 */
+  ruleId?: string | null;
+  /** 適用された期間そのものの BillingDistanceEvidence の ID。 */
+  evidenceId?: string | null;
+  /** OD 全体の BillingDistanceEvidence の ID。 */
+  distanceEvidenceId?: string | null;
+  /** 画面表示に使う料金ラベル。 */
+  fareLabel?: string | null;
+  vehicleClass?: string | null;
+  paymentMethod?: string | null;
+  fareBasis?: string | null;
+  /** 割引を一切適用していないことを示すフラグ。 */
+  discountsExcluded?: boolean;
+}
+
+/** 料金 v3 の丸め規則。 */
+export interface TariffRoundingV3 {
+  mode: string;
+  multipleYen: number;
+}
+
+/** 料金規則が依拠する出典。documentId を持つ場合は版 PDF の特定ページを指す。 */
+export interface TariffSourceRefV3 {
+  documentId?: string | null;
+  source?: string | null;
+  page?: number | null;
+  status?: string | null;
+  location: string;
+}
+
+/** 依拠する公定料金表の版。 */
+export interface TariffDocumentV3 {
+  documentId: string;
+  edition: string;
+  url: string;
+  cachePath: string;
+  documentSha256?: string | null;
+  status: string;
+  reviewedAt?: string | null;
+  reviewMethod?: string[];
+  manualAcquisitionRequired?: boolean;
+}
+
+/** 半開区間 [effectiveFrom, effectiveTo) の距離基準料金規則。 */
+export interface TariffRuleV3 {
+  ruleId: string;
+  vehicleClass: string;
+  paymentMethod: string;
+  fareBasis: string;
+  discountsExcluded?: string[];
+  distanceUnitMeters: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  /** 100m あたりのマイクロ円単価。 */
+  rateMicrosYenPerUnit: number;
+  terminalChargeYen: number;
+  taxBasisPoints: number;
+  minimumYen: number;
+  maximumYen: number;
+  minimumDistanceMeters?: number | null;
+  rounding: TariffRoundingV3;
+  sourceRefs: TariffSourceRefV3[];
+}
+
+/** OD 割当の、1 期間ぶんの料金。 */
+export interface TariffPriceV3 {
+  status: string;
+  tariffStatus: string;
+  amountYen?: number | null;
+  /** 当該版の PDF セルに記載された観測基本料金額。 */
+  observedBaseFareYen?: number | null;
+  observedDistanceMeters?: number | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  ruleId: string;
+  /** 当該期間の証拠 ID。 */
+  evidenceId: string;
+  distanceEvidenceId: string;
+}
+
+/** 人手レビュー済みの料金距離の証拠（PDF セル 1 セル = 1 レコード）。 */
+export interface DistanceEvidenceV3 {
+  evidenceId: string;
+  documentId: string;
+  edition: string;
+  documentSha256: string;
+  page: number;
+  routeLabel: string;
+  rowLabel: string;
+  columnLabel: string;
+  cell: string;
+  fareVariant: string;
+  ink: string;
+  distanceMeters: number;
+  distanceLabel: string;
+  observedBaseFareYen: number;
+  calculatedBaseFareYen: number;
+  entryRampId: string;
+  exitRampId: string;
+  url: string;
+  reviewedAt: string;
+  reviewMethod?: string[];
+}
+
+/** まだ PDF レビューが済む前の証拠。金額は持たない（unpriced のまま扱う）。 */
+export interface PendingEvidenceV3 {
+  evidenceId: string;
+  documentId: string;
+  edition: string;
+  page?: number | null;
+  rowLabel: string;
+  columnLabel: string;
+  cell?: string | null;
+  fareVariant: string;
+  status: string;
+  observedBaseFareYen?: number | null;
+  observedDistanceMeters?: number | null;
+  reviewedAt?: string | null;
+}
+
+/** OD 1 件に対する料金割当。 */
+export interface TariffAssignmentV3 {
+  assignmentId: string;
+  odKey: string;
+  /** 同じ OD を共有する課金ペアの ID。 */
+  pairIds: string[];
+  entryName: string;
+  exitName: string;
+  entryRampId: string;
+  exitRampId: string;
+  vehicleProfile: string;
+  vehicleClass: string;
+  paymentMethod: string;
+  fareBasis: string;
+  billingDistanceMeters: number;
+  distanceEvidenceId: string;
+  verificationStatus: string;
+  endpointBindingStatus?: string | null;
+  endpointBindingReason?: string | null;
+  prices: TariffPriceV3[];
+}
+
+/** od-tariffs.json（version 3）の全体形。 */
+export interface OdTariffsFileV3 {
+  version: 3;
+  source: string;
+  sourceDate: string;
+  vehicleProfile: string;
+  vehicleClass: string;
+  paymentMethod: string;
+  fareBasis: string;
+  fareLabel: string;
+  discountsExcluded: string[];
+  documents: TariffDocumentV3[];
+  tariffRules: TariffRuleV3[];
+  distanceEvidence: DistanceEvidenceV3[];
+  pendingEvidence: PendingEvidenceV3[];
+  assignments: TariffAssignmentV3[];
+  /** version 2 時代の互換フィールド。 */
+  rules?: unknown;
+  verifiedOdPairs?: OdTariff[];
+  deprecatedAssignments?: unknown[];
+  migration?: unknown;
+  pendingResolution?: unknown;
+}
+
 export interface GeoJsonLineString {
   type: "LineString";
   coordinates: [number, number][]; // [lon, lat]
@@ -142,10 +340,26 @@ export interface LoopValidation {
   status: LoopValidationStatus;
 }
 
-export interface Tariff {
+/**
+ * graph.json の billingPairs[].tariff（料金 v3）。
+ *
+ * build 時点の値をそのまま持つ。`status: "priced"` のときは `amountYen` と
+ * `observedBaseFareYen` が一致し、`assignmentId` / `ruleId` / `evidenceId` /
+ * `distanceEvidenceId` / `tollSource` と製品スコープが必ず揃う。
+ * `observedBaseFareYen` は当該版 PDF セルに記載された観測額、`observedDistanceMeters`
+ * は同じセルが表す料金距離で、`amountYen` の算出根拠そのもの。
+ */
+export interface Tariff extends TariffProvenance {
   status: TariffStatus;
   amountYen: number | null;
+  /** 当該版 PDF セルに記載された観測基本料金額。 */
+  observedBaseFareYen?: number | null;
+  /** 当該版 PDF セルが表す料金距離。 */
+  observedDistanceMeters?: number | null;
   billingDistanceMeters: number | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  /** 全期間の価格。2026-10 改定後は 2 期間になる。 */
   prices: Price[];
 }
 
@@ -245,6 +459,13 @@ export interface LegacyRingBillingPairV2 {
   exitId: string;
   entryRampId?: string | null;
   exitRampId?: string | null;
+  /** 正規化された入口・出口の名称（画面表示と OD 突合に使う）。 */
+  entryName?: string | null;
+  exitName?: string | null;
+  /** 適用された料金割当と各期間の価格（tariff v3 以降）。 */
+  assignmentId?: string | null;
+  prices?: Price[];
+  billingDistanceMeters?: number | null;
   anchor: SameNodeAnchor;
   entryToAnchorEdgeIds: string[];
   anchorToExitEdgeIds: string[];
@@ -303,7 +524,15 @@ export interface GraphDocument {
   routeMemberships?: RouteMembershipIndex[];
 }
 
-export interface LegacyToll {
+/**
+ * C1 legacyRing 候補の toll。
+ *
+ * 料金 v3 を持つ release では `TariffProvenance` のフィールドがすべて揃い、
+ * `amountYen` は「普通車ETC基本料金（割引適用前）」の額になる。`tariffStatus` が
+ * `priced` でないときは、金額・料金距離・期間・各 ID がすべて null / 不在のまま
+ * 残る（engine は未確定を金額で埋めない）。
+ */
+export interface LegacyToll extends TariffProvenance {
   billingPairId: string;
   chargedSectionCount: number;
   amountYen: number | null;
@@ -311,17 +540,19 @@ export interface LegacyToll {
   effectiveFrom: string | null;
   effectiveTo: string | null;
   billingDistanceMeters?: number | null;
-  tollSource?: string | null;
 }
 
-export interface RadialToll {
+/**
+ * radialReturn / topologyOnly 候補の toll。`LegacyToll` から
+ * `chargedSectionCount` だけが無い形で、料金 v3 の証拠は同じ規則で付く。
+ */
+export interface RadialToll extends TariffProvenance {
   billingPairId: string;
   amountYen: number | null;
   pricingAt: string;
   effectiveFrom: string | null;
   effectiveTo: string | null;
   billingDistanceMeters?: number | null;
-  tollSource?: string | null;
 }
 
 export type TopologyOnlyToll = RadialToll;
@@ -427,6 +658,8 @@ interface CandidateBase {
 
 export interface LegacyCandidate extends CandidateBase {
   pairKind?: "legacyRing";
+  /** 料金の確定状況。旧 engine の LegacyCandidate は付けないため optional とする。 */
+  tariffStatus?: TariffStatus;
   toll: LegacyToll;
   loop: Loop;
   handoff: Handoff;

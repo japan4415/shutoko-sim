@@ -91,7 +91,8 @@ function graphTariffMismatch(message: string): never {
  * graph.json の billingPairs[].tariff（料金 v3）を製品スコープと照合する。
  *
  * build 時点で確定済みの証拠だけが書かれているので、候補側と同じ規則で
- * 検査できる。参照する時刻は成果物に無いため、適用期間は from < to だけを見る。
+ * 検査できる。参照する時刻は成果物に無いため、適用期間は読めるかどうかだけを見る。
+ * 適用期間を読む場所は engine と同じ規則にする（top-level か prices[] か）。
  */
 function validateSchema4PairTariff(value: unknown, index: number): void {
   const tariff = isRecord(value) ? value.tariff : undefined;
@@ -106,6 +107,7 @@ function validateSchema4PairTariff(value: unknown, index: number): void {
     tariff.status,
     `graph.json: billingPairs[${String(index)}].tariff`,
     null,
+    true,
     graphTariffMismatch,
   );
 }
@@ -1018,6 +1020,28 @@ function halfOpenInterval(effectiveFrom: unknown, effectiveTo: unknown): [number
 }
 
 /**
+ * 確定料金に適用期間が示されているかを見る。
+ *
+ * engine は graph.json の tariff について、top-level の `effectiveFrom` /
+ * `effectiveTo` が無いときは `prices[]` の 1 件の期間を使う
+ * （`Tariff::validate_tariff_wire_contract` と tariff override の解決）。
+ * engine が読める graph だけを Worker が落とすことになるため、graph 側は
+ * `fromPrices` で同じ規則にする。候補側は engine が必ず top-level の期間を
+ * 付けるので、`fromPrices` を落として top-level だけを求める。
+ */
+function hasPricedInterval(tariff: Record<string, unknown>, fromPrices: boolean): boolean {
+  if (halfOpenInterval(tariff.effectiveFrom, tariff.effectiveTo) !== null) {
+    return true;
+  }
+  if (!fromPrices || !Array.isArray(tariff.prices) || tariff.prices.length === 0) {
+    return false;
+  }
+  return tariff.prices.every(
+    (price) => isRecord(price) && halfOpenInterval(price.effectiveFrom, price.effectiveTo) !== null,
+  );
+}
+
+/**
  * 料金 v3 の証拠契約に従うかを検証する。候補の toll と graph.json の
  * billingPairs[].tariff のどちらにも使う。
  *
@@ -1025,6 +1049,10 @@ function halfOpenInterval(effectiveFrom: unknown, effectiveTo: unknown): [number
  * 1 つでも現れるなら製品スコープ（車種・支払方法・料金種別・割引除外）を要求し、
  * `priced` なら金額・料金距離・適用期間・割当 ID・規則 ID・証拠 ID・出所を
  * すべて要求する。`priced` でなければそれらのフィールドを一切認めない。
+ *
+ * `intervalFromPrices` は graph.json 側だけ true にする。適用期間を読む場所
+ * （top-level か `prices[]` か）を engine と揃えるための指定で、判断は
+ * `hasPricedInterval` に集約してある。
  *
  * `pricingAt` を渡したときだけ、提示する時点が実際の適用期間に入ることも求める。
  * engine と UI で期間解釈がずれていれば、古い規則の金額をいまの金額として見せる
@@ -1037,6 +1065,7 @@ function validateTariffProvenance(
   status: TariffStatusValue,
   label: string,
   pricingAt: string | null,
+  intervalFromPrices = false,
   fail: (message: string) => never = contractMismatch,
 ): void {
   if (!hasAnyTariffProvenance(tariff)) {
@@ -1054,7 +1083,7 @@ function validateTariffProvenance(
   if (status === "priced") {
     const interval = halfOpenInterval(tariff.effectiveFrom, tariff.effectiveTo);
     if (
-      interval === null ||
+      !hasPricedInterval(tariff, intervalFromPrices) ||
       !isNonNegativeSafeInteger(tariff.amountYen) ||
       !isNonNegativeSafeInteger(tariff.billingDistanceMeters) ||
       !requiredId(tariff.assignmentId) ||
@@ -1063,9 +1092,9 @@ function validateTariffProvenance(
       !requiredId(tariff.distanceEvidenceId) ||
       tariff.tollSource !== OFFICIAL_DISTANCE_RULE_SOURCE
     ) {
-      fail(`${label} 確定料金の証拠がそろっていません`);
+      fail(`${label} 確定料金の証拠と適用期間がそろっていません`);
     }
-    if (pricingAt === null) {
+    if (interval === null || pricingAt === null) {
       return;
     }
     const at = isTimestamp(pricingAt) ? Date.parse(pricingAt) : Number.NaN;

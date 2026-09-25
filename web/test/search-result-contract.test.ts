@@ -545,6 +545,30 @@ describe("料金 v3 の実行時検証", () => {
     ).rejects.toThrowError(/適用期間/);
   });
 
+  it("候補は engine と同じく top-level の適用期間だけを求める", async () => {
+    // engine の候補解決は top-level の期間から必ず解決する。候補側に prices[] を
+    // 足しても期間は読めないものとして落とす。
+    await expect(
+      parseWithCandidate(
+        radialWithToll(
+          pricedToll({
+            effectiveFrom: null,
+            effectiveTo: null,
+            prices: [{ amountYen: 790, effectiveFrom: "2022-03-31T15:00:00Z", effectiveTo: null }],
+          }),
+        ),
+      ),
+    ).rejects.toThrowError(/適用期間/);
+    // top-level の終了時刻が始点以前という壊れた区間も、同じ規則で落とす。
+    await expect(
+      parseWithCandidate(
+        radialWithToll(
+          pricedToll({ effectiveFrom: "2026-09-30T15:00:00Z", effectiveTo: "2026-09-30T15:00:00Z" }),
+        ),
+      ),
+    ).rejects.toThrowError(/適用期間/);
+  });
+
   it("未確定の候補に金額や証拠が残っていれば捨てる", async () => {
     const unpricedBase = {
         billingPairId: "fixture:radial",

@@ -348,6 +348,10 @@ export interface LoopValidation {
  * `distanceEvidenceId` / `tollSource` と製品スコープが必ず揃う。
  * `observedBaseFareYen` は当該版 PDF セルに記載された観測額、`observedDistanceMeters`
  * は同じセルが表す料金距離で、`amountYen` の算出根拠そのもの。
+ *
+ * 適用期間は top-level の `effectiveFrom` / `effectiveTo` か `prices[]` の
+ * どちらかで示される。engine も tariff override の解決で同じ順に探すため、
+ * 一方が無くても他方が読めれば有効な成果物。
  */
 export interface Tariff extends TariffProvenance {
   status: TariffStatus;
@@ -357,7 +361,9 @@ export interface Tariff extends TariffProvenance {
   /** 当該版 PDF セルが表す料金距離。 */
   observedDistanceMeters?: number | null;
   billingDistanceMeters: number | null;
+  /** 適用期間の始点。`prices[]` 側だけが示される形もある。 */
   effectiveFrom?: string | null;
+  /** 適用期間の終点（半開区間なので含まない）。 */
   effectiveTo?: string | null;
   /** 全期間の価格。2026-10 改定後は 2 期間になる。 */
   prices: Price[];

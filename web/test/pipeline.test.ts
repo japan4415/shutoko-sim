@@ -170,6 +170,47 @@ describe("parseGraphDocument", () => {
     }
   });
 
+  it("graph の確定料金は prices[] の期間だけでも engine と同じ規則で通す", () => {
+    const graph = JSON.parse(generatedGraph) as Record<string, unknown>;
+    const billingPairs = graph.billingPairs as Record<string, unknown>[];
+    const priced = billingPairs.find(
+      (pair) => (pair.tariff as Record<string, unknown> | undefined)?.status === "priced",
+    );
+    expect(priced).toBeDefined();
+    if (priced === undefined) return;
+    const tariff = priced.tariff as Record<string, unknown>;
+    const pricesOnly = {
+      ...tariff,
+      effectiveFrom: undefined,
+      effectiveTo: undefined,
+      prices: [
+        { amountYen: 300, effectiveFrom: "2022-03-31T15:00:00Z", effectiveTo: "2026-09-30T15:00:00Z" },
+        { amountYen: 300, effectiveFrom: "2026-09-30T15:00:00Z", effectiveTo: null },
+      ],
+    };
+    const withTariff = (next: Record<string, unknown>): string =>
+      JSON.stringify({
+        ...graph,
+        billingPairs: [
+          ...billingPairs.filter((pair) => pair !== priced),
+          { ...priced, tariff: next },
+        ],
+      });
+
+    // engine は top-level の期間が無くても prices[] の 1 件の期間を使う。
+    expect(() => parseGraphDocument(withTariff(pricesOnly))).not.toThrow();
+
+    // どちらにも読める期間が無ければ engine も prepare できない。
+    for (const broken of [
+      { ...pricesOnly, prices: [] },
+      { ...pricesOnly, prices: [{ amountYen: 300, effectiveFrom: "not-a-timestamp", effectiveTo: null }] },
+      { ...pricesOnly, prices: [{ amountYen: 300, effectiveTo: null }] },
+      { ...pricesOnly, prices: "2026-09-30T15:00:00Z" },
+    ]) {
+      expect(() => parseGraphDocument(withTariff(broken))).toThrowError(/適用期間/);
+    }
+  });
+
   it("未知 version、未知 pairKind、routeMemberships 欠落を拒否する", () => {
     const graph = JSON.parse(schema4Graph) as Record<string, unknown>;
     expect(() => parseGraphDocument(JSON.stringify({ ...graph, schemaVersion: 5 }))).toThrowError(

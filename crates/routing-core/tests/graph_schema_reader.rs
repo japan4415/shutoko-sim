@@ -399,3 +399,37 @@ fn schema_4_rejects_inconsistent_radial_capability_and_statuses() {
     contradictory["billingPairs"][0]["loopValidation"]["status"] = Value::from("unresolved");
     assert!(prepare_json(&contradictory.to_string(), "{}").is_err());
 }
+
+/// 料金 v3 の legacyRing ペア。製品スコープと証拠は engine / Worker 共通の値を入れる。
+fn priced_v3_legacy_graph() -> Value {
+    let mut graph = with_fragment("legacy");
+    let tariff = &mut graph["billingPairs"][0]["tariff"];
+    tariff["assignmentId"] = Value::from("assignment:1:daikancho-kasumigaseki");
+    tariff["ruleId"] = Value::from("shutoko-etc-ordinary-2022-04");
+    tariff["evidenceId"] = Value::from("evidence:2022-04:p02:1-daikancho-kasumigaseki");
+    tariff["distanceEvidenceId"] = Value::from("evidence:2022-04:p02:1-daikancho-kasumigaseki");
+    tariff["fareLabel"] = Value::from("普通車ETC基本料金（割引適用前）");
+    tariff["vehicleClass"] = Value::from("ordinary");
+    tariff["paymentMethod"] = Value::from("etc");
+    tariff["fareBasis"] = Value::from("base_toll_excluding_discounts");
+    tariff["discountsExcluded"] = Value::from(true);
+    tariff["tollSource"] = Value::from("official_distance_rule");
+    graph
+}
+
+#[test]
+fn schema_4_priced_tariff_period_may_come_from_prices_only() {
+    // top-level の適用期間が無くても prices[] が読めれば prepare できる。
+    // Worker 側の graph 検証も同じ規則に揃える（web/src/worker/pipeline.ts）。
+    let mut graph = priced_v3_legacy_graph();
+    assert!(graph["billingPairs"][0]["tariff"]["effectiveFrom"].is_null());
+    assert!(!graph["billingPairs"][0]["tariff"]["prices"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(prepare_json(&graph.to_string(), "{}").is_ok());
+
+    // どちらにも適用期間が無い形だけは prepare できない。
+    graph["billingPairs"][0]["tariff"]["prices"] = Value::from(Vec::<Value>::new());
+    assert!(prepare_json(&graph.to_string(), "{}").is_err());
+}

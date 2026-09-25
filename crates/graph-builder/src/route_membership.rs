@@ -1487,9 +1487,69 @@ pub fn bound_ramp_evidence_from_inventory(
         .iter()
         .map(|binding| (binding.ramp_id.as_str(), binding))
         .collect();
+    let verified_candidate_by_ramp: HashMap<&str, &crate::inventory::OsmRampBindingCandidate> =
+        bindings
+            .binding_candidates
+            .iter()
+            .filter(|candidate| candidate.status == "verified_bound")
+            .map(|candidate| (candidate.ramp_id.as_str(), candidate))
+            .collect();
     let mut result = Vec::new();
     for item in &inventory.ramps {
         if !is_verified_general_ramp(item) {
+            continue;
+        }
+        if let Some(candidate) = verified_candidate_by_ramp
+            .get(item.ramp_id.as_str())
+            .copied()
+        {
+            let [segment] = candidate.directed_segments.as_slice() else {
+                return Err(RouteMembershipError::RampBinding(format!(
+                    "ramp {} verified candidate must have exactly one directed segment",
+                    item.ramp_id
+                )));
+            };
+            let edges = segment
+                .edge_ids
+                .iter()
+                .map(|edge_id| {
+                    graph
+                        .edges
+                        .iter()
+                        .find(|edge| edge.id == *edge_id)
+                        .ok_or_else(|| {
+                            RouteMembershipError::RampBinding(format!(
+                                "ramp {} candidate references missing graph edge {}",
+                                item.ramp_id, edge_id
+                            ))
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            if edges.first().map(|edge| edge.from.as_str()) != Some(segment.from_node_id.as_str())
+                || edges.last().map(|edge| edge.to.as_str()) != Some(segment.to_node_id.as_str())
+                || edges.windows(2).any(|pair| pair[0].to != pair[1].from)
+                || segment.osm_node_ids.len() != edges.len() + 1
+            {
+                return Err(RouteMembershipError::RampBinding(format!(
+                    "ramp {} candidate segment is not an ordered graph path",
+                    item.ramp_id
+                )));
+            }
+            result.push(BoundRampEvidence {
+                binding_evidence_id: format!(
+                    "osm-ramp-binding-candidate:{}",
+                    candidate.candidate_id
+                ),
+                ramp_id: item.ramp_id.clone(),
+                route_id: item.route.clone(),
+                direction: item.direction.clone(),
+                osm_way_ids: segment.osm_way_ids.clone(),
+                osm_node_ids: segment.osm_node_ids.clone(),
+                edge_ids: segment.edge_ids.clone(),
+                from_node_id: segment.from_node_id.clone(),
+                to_node_id: segment.to_node_id.clone(),
+                edge_ids_sha256: segment.edge_ids_sha256.clone(),
+            });
             continue;
         }
         let binding = binding_by_ramp.get(item.ramp_id.as_str()).ok_or_else(|| {

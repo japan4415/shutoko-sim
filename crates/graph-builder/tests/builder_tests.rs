@@ -4359,7 +4359,7 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
     shutoko_graph_builder::validate_ramp_inventory(&inventory).unwrap();
     shutoko_graph_builder::validate_osm_ramp_bindings(&bindings, &inventory).unwrap();
     let (ramps, _artifact, _notes) =
-        shutoko_graph_builder::bind_ramps_to_graph(&graph, &inventory, &bindings);
+        shutoko_graph_builder::bind_ramps_to_graph(&mut graph, &inventory, &bindings);
     graph.ramps = ramps;
     let source_snapshot_sha256 = compute_sha256(&std::fs::read(&osm_path).unwrap());
     let evidence = bound_ramp_evidence_from_inventory(&graph, &inventory, &bindings).unwrap();

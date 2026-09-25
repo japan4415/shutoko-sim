@@ -13,14 +13,16 @@ pub mod topology;
 pub mod validate;
 
 pub use inventory::{
-    apply_od_tariffs_to_graph, audit_osm_ramp_binding_candidate_against_osm, bind_ramps_to_graph,
+    apply_od_tariffs_to_graph, audit_first_public_road_connections,
+    audit_osm_ramp_binding_candidate_against_osm, bind_ramps_to_graph,
     classify_endpoint_capabilities, ramps_artifact_to_deterministic_json,
     validate_endpoint_capability_contract, validate_od_tariffs, validate_osm_ramp_bindings,
     validate_osm_ramp_bindings_against_osm, validate_ramp_inventory,
-    validate_verified_billing_pair_endpoints, CanonicalRampInventoryItem, OdTariffsFile,
-    OsmRampBinding, OsmRampBindingCandidate, OsmRampBindingsFile, OsmRampDirectedSegment,
-    OsmRampRouteEvidence, RampArtifactEntry, RampInventoryFile, RampsArtifact,
-    SharedPhysicalOverride, TariffRules,
+    validate_verified_billing_pair_endpoints, CanonicalRampInventoryItem,
+    FirstPublicRoadConnectionDiagnosticMismatch, FirstPublicRoadConnectionDiagnosticReport,
+    OdTariffsFile, OsmRampBinding, OsmRampBindingCandidate, OsmRampBindingsFile,
+    OsmRampDirectedSegment, OsmRampRouteEvidence, RampArtifactEntry, RampInventoryFile,
+    RampsArtifact, SharedPhysicalOverride, TariffRules,
 };
 
 pub use billing::{

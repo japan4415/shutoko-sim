@@ -808,6 +808,16 @@ issue #10 の探索コア・WASM 境界拡張に伴い、`graph.json` には次�
 - **検証済み OD ペア**:
   - 頻出・代表的な OD ペア（C1 各ランプ、八重洲線接続、主要放射線連絡等）について公式料金距離および料金額を検証済みデータとして保持。
 
+### 9.1 Tariff v3 data and pending 2026-10 review
+
+`data/od-tariffs.json` version 3 separates `tariffRules`, period-specific `distanceEvidence`, and ten unique OD `assignments`. The 2025-04 evidence is based on the locally cached `2504_pamphlet_fee_table.pdf`; each record identifies the PDF page, row, column, cell, base-fare variant, distance, and SHA-256. The 2025-04 ordinary rule covers `[2022-03-31T15:00:00Z, 2026-09-30T15:00:00Z)`. The 2026-10 rule starts at `2026-09-30T15:00:00Z` and records 32.472 yen/km, 300 yen minimum, 2,130 yen maximum, 150 yen terminal charge, 1.10 tax, 100 m distance units, and half-up rounding to 10 yen. The 2026-10 rule source is the cached 2026-04 guide for the formula structure; it is not an OD fare-cell review.
+
+The two Route 2 plans share one unique tariff assignment for Meguro entry to Tengenji exit. The verified 2025-04 cell is page 4, row `目黒`, column `天現寺`, 19.4 km, and 790 yen. The earlier 14.2 km / 630 yen design value referred to a different column and is not used.
+
+Every assignment has one 2025-04 `priced` record and one 2026-10 `pending_pdf_review` record. Pending records have a stable pending evidence ID but null fare, distance, page, and cell values. Runtime must resolve a pending record as `unpriced`; it must not calculate a substitute amount from the rule or from OSM distance. The legacy `verifiedOdPairs` projection remains temporarily so the existing all-real-v3 reader and regression tests remain compatible; it is not v3 authority.
+
+When the user places `.cache/official-fare/ryoukin-kaitei_toll_rates.pdf`, the next integration step must calculate its SHA-256, review all ten page/row/column cells twice, fill the matching `pendingEvidence` records, and then update each post-2026-10 assignment price with the reviewed amount, distance, `evidenceId`, and `distanceEvidenceId`. Only a priced record whose rule calculation equals the reviewed PDF cell may change the runtime status from `unpriced` to `priced`.
+
 ## 10. 成果物公開アーティファクト（`ramps.json`）
 
 グラフビルダーは、ビルド時に以下のアーティファクトを生成・出力する:

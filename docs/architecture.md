@@ -57,7 +57,7 @@ flowchart LR
 2. **通行規制の反映**:
    OSM リレーションの `type=restriction`（右左折禁止・Uターン禁止等）を解析し、連続して通過できないエッジ列（`forbiddenTransitions`）としてグラフに埋め込む。`*:conditional` / `oneway:conditional` / `reversible` / `alternating` は静的な時間モデルでは一意に評価できないためスキップし、標準エラー出力とマニフェストへ記録する。ランプ端点の一般道接続判定では同系統の条件付きタグを **fail-closed（unresolved）** として扱い、時間帯モデルが導入されるまで条件付きアクセスを常時の公道接続として採用しない。
 3. **端点の確定（`firstPublicRoadConnection/v1`）**:
-   ランプ鎖を進行方向へたどり、最初に合法な一般車用 public surface way へ一意に接続した node を端点とする。アクセスタグ階層（`motorcar` → `motor_vehicle` → `vehicle` → `access`）、`highway` 種別の許可リスト、`service=alley` 以外の service sub-tag 拒否、`oneway` と進行方向の適合、接続の一意性を順に評価し、0 本または複数なら fail-closed とする。`hgv:conditional` は passenger-car の通行条件ではないため製品向けの例外として無視する。
+   ランプ鎖を進行方向へたどり、最初に合法な一般車用 public surface way へ接続した node を端点とする（way が複数ある場合は競合として扱わず `groundWayIds[]` に記録し、互換の単数 `groundWayId` はその先頭 way ID とする）。アクセスタグ階層（`motorcar` → `motor_vehicle` → `vehicle` → `access`）、`highway` 種別の許可リスト、`service=alley` 以外の service sub-tag 拒否、`oneway` と進行方向の適合、接続の終端条件を順に評価し、公道接続が 0 本、または最初の接続 node より後に別の合法公道接続があるときは fail-closed とする。`hgv:conditional` は passenger-car の通行条件ではないため製品向けの例外として無視する。
 4. **課金ペアと経路の厳格検証**:
    人手検証済みのシード定義（`data/billing-pairs-seed.json`）を読み込み、入口ランプから本線基準点、本線基準点から出口ランプへの連結性、本線の一周経路の存在、接続路内部に隠れた周回（hidden loop）が存在しないことをビルド時に自動検証する。First Exit は relation の所属と方向を尊重した **corridor 制約つき**で判定し、全体グラフでの最短出口を「1区間先」にしない。
 5. **課金ペアの自動導出レポート**:

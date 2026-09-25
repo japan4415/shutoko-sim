@@ -14,7 +14,7 @@
 
 「実際に走る周回経路」と「料金の対象となる1区間」を分けることが設計の中心です。一般道で出発地点に戻ることは今回の企画案です。所要時間は予測で、Google マップでの周回再現は先行検証が必要です。
 
-表示する料金は **普通車 ETC 基本料金（割引適用前）** に固定しています（車種 `ordinary` / 支払方法 `etc` / 料金種別 `base_toll_excluding_discounts`、適用する割引は列挙して除外）。深夜割引・都心流入割引・環境道路料金割引・ETC2.0 割引・ETC フリート割引は含みません。検証済みの商品課金ペアは 9 件（legacy 7 + radial 2）で、2026-10-01 の改定をまたぐ期間を保持し、1 件が未検証（`bp:c1-outer:shibakoen-iikura`）として商品推薦から外れています。金额が確認済みの候補集合では時間効率（`time_per_yen`）順に並びます。
+表示する料金は **普通車 ETC 基本料金（割引適用前）** に固定しています（車種 `ordinary` / 支払方法 `etc` / 料金種別 `base_toll_excluding_discounts`、適用する割引は列挙して除外）。深夜割引・都心流入割引・環境道路料金割引・ETC2.0 割引・ETC フリート割引は含みません。検証済みの商品課金ペアは 9 件（legacy 7 + radial 2）で、2026-10-01 の改定をまたぐ期間を保持し、1 件が未検証（`bp:c1-outer:shibakoen-iikura`）として商品推薦から外れています。金額（`amountYen`）が確認済みの候補集合では時間効率（`time_per_yen`）順に並びます。
 
 ## 実データ生成パイプラインと graph-builder
 
@@ -116,7 +116,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
 
 - **対象範囲**: 首都高速道路 都心環状線（C1）8 区間と 2 号目黒線（目黒入口 → 天現寺出口）の 2 区間、およびそれぞれの接続ランプ（進入・退出）。路線グラフ自体は全 24 路線を収録していますが、公開する商品課金ペアは上記 10 件だけです。
 - **対応車両**: 普通乗用車・ETC（`passenger-car-etc`）。券種は普通車 ETC 基本料金（割引適用前）です。
-- **検証済み課金区間**: 9 ペア。legacy 7 ペア（`bp:c1-outer:kandabashi-takaracho`、`bp:c1-outer:kasumigaseki-daikancho`、`bp:c1-outer:ginza-shibakoen`、`bp:c1-inner:kasumigaseki-shibakoen`、`bp:c1-inner:daikancho-kasumigaseki`、`bp:c1-inner:shibakoen-shiodome`、`bp:c1-inner:takaracho-kandabashi`）と radial 2 ペア（`bp:2-inbound:meguro:c1-inner:tengenji`、`bp:2-inbound:meguro:c1-outer:tengenji`）。いずれも公式路線図と公式料金表のセル証跡（版ごとに別の `evidenceId`）を保持し、2026-10-01 改定の期間別金額を区別します。出典は `manifest.json` の `provenance`、一覧と値は [`docs/data-pipeline.md`](docs/data-pipeline.md) を参照してください。
+- **検証済み課金区間**: 9 ペア。legacy 7 ペア（`bp:c1-outer:kandabashi-takaracho`、`bp:c1-outer:kasumigaseki-daikancho`、`bp:c1-outer:ginza-shibakoen`、`bp:c1-inner:kasumigaseki-shibakoen`、`bp:c1-inner:daikancho-kasumigaseki`、`bp:c1-inner:shibakoen-shiodome`、`bp:c1-inner:takaracho-kandabashi`）と radial 2 ペア（`bp:2-inbound:meguro:c1-inner:tengenji`、`bp:2-inbound:meguro:c1-outer:tengenji`）。いずれも公式路線図と公式料金表のセル証跡（版ごとに別の `evidenceId`）を保持し、2026-10-01 改定の期間別金額を区別します。出典はペアごとに異なり、legacy 7 ペアは `fixtures/generated/manifest.json` の `provenance`、radial 2 ペアは `data/billing-pairs-seed.json` の `billingPairs[].provenance` と `data/od-tariffs.json` の `assignmentId: assignment:2:meguro-tengenji`（`prices[].evidenceId` / `prices[].distanceEvidenceId`）と `documents[]` にあります。radial 2 ペアの出典を `manifest.json` の `provenance` へ伝播させる実装はまだないため、manifest だけを読む検証者には該当 2 件の出典が伝わりません。一覧と値は [`docs/data-pipeline.md`](docs/data-pipeline.md) を参照してください。
 - **未検証のまま残す項目**:
   - `bp:c1-outer:shibakoen-iikura`（芝公園入口 → 飯倉出口）は、接続する一般道 way `40969792` に `access:conditional` があるため端点が unresolved で、**商品推薦から外したうえで未検証を保持**します。時間帯モデルが導入されるまで昇格は凍結です。
   - `bp:c1-inner:ginza-shintomicho`（内回り銀座入口 → 新富町出口）も、OSM 上の分流点が銀座入口の合流点より上流にあり relation 制約つきの First Exit 検証が通らないため**未検証のまま**です。導出レポートでも `hold` として出力されます。

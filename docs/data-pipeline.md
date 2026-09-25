@@ -763,7 +763,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 `crates/graph-builder` は探索用グラフ `graph.json` に加え、正規ランプ台帳をグラフの各エッジ・ノードに紐付けた公開成果物 `fixtures/generated/ramps.json` を同時に生成する。
 
-- `ramps.json`: 正規ランプ台帳全399件を保持し、`verified_bound` 236件を bound にする。そのうち `routable` 201件だけが周回候補端点であり、`structural_no_loop` 35件はdisabled/診断表示に使う。`unsupported` 135件、境界JCT 24件、閉鎖済み4件（合計 `not_routable` 28件）は unbound とする。
+- `ramps.json`: 正規ランプ台帳全399件を保持し、`verified_bound` 236件を bound にする。そのうち `routable` 201件だけが周回候補端点であり、`structural_no_loop` 35件は disabled / 診断表示に使う。`unsupported` 135件、境界JCT 24件、閉鎖済み4件（合計 `not_routable` 28件）は unbound とする。
 
 ## 7. OSM ランプバインディング（`data/osm-ramp-bindings.json`）
 
@@ -866,7 +866,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
 | `data/od-tariffs.json` | 料金表 v3 の assignment |
 | `data/billing-pairs-seed.json` | 登録済みの商品ペア |
 
-上表のうち 5 入力の SHA-256（`osmSnapshotSha256` / `rampLedgerSha256` / `routeMembershipIndexSha256` / `billingPairAdjacencySha256` / `odTariffsSha256`）を `pair-candidates.json` と `manifest.json` の `pairDerivation.inputHashes` に記録し、導出結果の再現性を入力側から固定する。
+`pairDerivation.inputHashes` に記録されるのは上表 8 行の入力に対する 5 つのハッシュ（`osmSnapshotSha256` / `rampLedgerSha256` / `routeMembershipIndexSha256` / `billingPairAdjacencySha256` / `odTariffsSha256`）で、`pair-candidates.json` と `manifest.json` に同じ値を入れる。ただし 5 つのハッシュと 8 行の入力は 1 対 1 に対応しない。`rampLedgerSha256` は `data/ramp-inventory.json` 単体のハッシュではなく、台帳・`data/ramp-support-decisions.json`・`data/osm-ramp-bindings.json` の 3 つを 1 つの JSON 配列にまとめて直列化した合成ハッシュであり、`routeMembershipIndexSha256` はファイルではなく `RouteMembershipIndex` 列を直列化した値である。登録済み商品ペアの `data/billing-pairs-seed.json` も導出入力の 1 つだがハッシュは記録しないため、seed まで含めた完全な再現性は現状この 5 つのハッシュでは固定されない。seed のハッシュの追加は未実施であり、必要になれば `inputHashes` へのキー追加というコード変更を要する。
 
 ### ゲート構造
 
@@ -894,7 +894,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
 | 展開できた relation | 11 |
 | 展開できなかった relation | 15（すべて `ROUTE_MEMBERSHIP_RELATION_INVALID` などの reason code 付き） |
 
-展開できた 11 relation は C1（`4256008`）、C2（`4256077`）、Y（`4256119`、membership は 0 件）、2号（`4256339`）と、全 route relation cover の `forward` 7 件（C2 / 9 / 11 / K2 / K5 / K6 / K7）である。展開できなかった 15 件には「要求方向に graph エッジが無い」「方向の無い mainline member が曖昧」「`motorway_link` に Shutoko エッジが無い」といった理由が残る。
+展開できた relation は 11 件で、`relationCoverage[]` の `status=pass` 11 レコードと distinct な `relationId` 11 件が一致する。内訳は C1（`4256008`）、C2（`4256077`）、Y（`4256119`）、2号（`4256339`）と、9号（`4257496`）、11号（`4257564`）、K2（`4258166`）、K5（`4259192`）、K6（`4259197`）、K7（`10355798` と `10732984` の 2 relation）である。routeId でまとめると 10 種類になる（K7 が 2 relation を持ち、どちらも `route:K7:forward` へ展開される）。C2（`4256077`）は C1 / C2 / Y / 2号 のグループにも `forward` グループにも現れる 1 本の relation であり、二重計上しない。Y（`4256119`）は `status=pass` だが `reasonCode=ROUTE_RELATION_NO_MEMBERSHIP` で `membershipIds` は 0 件のため、mainline membership は作られていない。展開できなかった 15 件はすべて `reasonCode=ROUTE_MEMBERSHIP_RELATION_INVALID` で、その detail には「way に Shutoko エッジが無い」「方向の無い mainline member が曖昧」「`motorway_link` を含む relation」など理由が残る。
 
 ### 人手レビューと seed 更新
 

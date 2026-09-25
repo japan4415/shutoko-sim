@@ -1,6 +1,6 @@
 # ルート探索設計
 
-本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は graph-builder、schema 4 reader、core/WASM/Web consumer、公開 release の atomic activation まで実装済みとする。公開 release は `all-real-v4`（`billingPairsVersion=v3`、`tariffModelVersion=1`）を次の候補として扱い、`all-real-v3` は rollback 用に残す。
+本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は graph-builder、schema 4 reader、core/WASM/Web consumer、公開 release のコードと fixture まで実装済みとする（R2 投入・read-back・本番 deploy を含む atomic activation は未実施）。公開 release は `all-real-v4`（`billingPairsVersion=v3`、`tariffModelVersion=1`）を次の候補として扱い、`all-real-v3` は rollback 用に残す。
 
 ## 探索問題
 
@@ -117,7 +117,7 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 2. アクセスタグ階層（`motorcar` → `motor_vehicle` → `vehicle` → `access`）。拒否値は `no` / `private` / `customers` / `delivery` / `destination` / `permit` / `agricultural` / `forestry` / `military` / `emergency`、許可値は `yes` / `public` / `designated` / `permissive` / 未指定、未知値は fail-closed。
 3. `highway` 種別の判定。`trunk` / `trunk_link` / `primary` / `primary_link` / `secondary` / `secondary_link` / `tertiary` / `tertiary_link` / `unclassified` / `residential` / `living_street` / `service` を許可し、`service` は `service=alley` のみ許可する（`parking_aisle` / `driveway` / `drive-through` / `emergency_access` / `slipway` / 未指定は拒否）。`motorway` / `motorway_link` / `footway` / `path` / `cycleway` / `steps` / `pedestrian` / `track` / `bus_guideway` / `escape` / `raceway` / `road` / `construction` / `proposed` / `abandoned` / `disused` は拒否し、`area=yes` も拒否する。
 4. `oneway` とランプ接続の進行方向の適合性。`yes` / `1` / `true` は node 順方向のみ、`no` / `0` / `false` は双方向、`reverse` / `-1` は node 逆順のみ許可する。`reversible` / `alternating` は 1 段目で fail-closed になる。
-5. 接続の一意性。進行可能な public way がちょうど 1 本で、かつランプ鎖の分岐がちょうど 1 本。複数なら `MULTIPLE_GROUND_CONNECTION_CANDIDATES`、0 本なら `NO_GROUND_CONNECTION` で fail-closed。
+5. 接続の終端条件。ランプ鎖のどの node にも合法な公道接続が 1 本もなければ `NO_GROUND_CONNECTION`、最初の接続 node より後にも別の合法公道接続があれば `AMBIGUOUS_GROUND_ENDPOINT` で fail-closed。最初の接続 node に複数の合法 way があることは競合ではなく、way ID を昇順の `groundWayIds[]` に并列記録して `verified_bound` とする。ランプ鎖の分岐は、合法な `motorway_link` 後継が 0 本なら `NO_RAMP_SUCCESSOR`、2 本以上なら `MULTIPLE_RAMP_SUCCESSORS`、1 本でも宣言した鎖の次の node と違えば `RAMP_SUCCESSOR_MISMATCH`。宣言された ground way が合法集合に含まれなければ `GROUND_WAY_MISMATCH`。
 
 ### 2号目黒線の課金ペア形状（seed統合・route plan 実装済み・binding verified）
 
@@ -250,7 +250,7 @@ Issue #69でdynamic ODを`TopologyOnlyCandidate`へ移行した。`eligibilitySt
 
 ### 実装 issue は単独で検証できる順に分ける
 
-graph schema 4 は reader/consumer と `all-real-v4` の atomic activation まで実装した。builder の既定出力、generated fixtures、manifest、WASM contract、Web pipeline、Workers allowlist、versioned release ID を同時に整合させ、旧 `all-real-v3` は rollback 用に残す。`--graph-schema 2` を明示した場合だけ legacy schema 2 を生成する。
+graph schema 4 は reader/consumer と `all-real-v4` の生成物・許可リストまで実装した。builder の既定出力、generated fixtures、manifest、WASM contract、Web pipeline、Workers allowlist、versioned release ID を同時に整合させる。atomic activation（`releases/all-real-v4/` への R2 投入と read-back、`manifest.json` の本番配置、production deploy）は未実施で、正本は [`docs/delivery.md`](delivery.md#all-real-v4-の-atomic-release-runbook) の runbook とする。rollback は Worker の許可リストを狭めずに Web の既定 1 行だけ戻す方針で、Web の `DEFAULT_RELEASE_ID` は `all-real-v4`、Worker の `ALLOWED_RELEASES` は `c1-real-v1,c1-real-v2,all-real-v1,all-real-v2,all-real-v3,all-real-v4` を保持し、1 行戻した先が `all-real-v3` になる。`--graph-schema 2` を明示した場合だけ legacy schema 2 を生成する。
 
 | Issue | 実装範囲 | 主な受け入れ条件 | 依存 |
 | ---: | --- | --- | --- |
@@ -258,7 +258,7 @@ graph schema 4 は reader/consumer と `all-real-v4` の atomic activation ま�
 | 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance（#63実装済み） | `--graph-schema 4` の明示時だけ `relationMainline` と `boundRamp` を別 segment として生成し、way順、node接続、Edge順、hash、binding証拠を個別に検証する。逆方向、同名JCT、非所属mainline way、ramp証拠なし、別arm近道、short connector、relationの逆順を拒否する。#64のradial route plan生成・検証を同じindex上で実行する。 | 1 |
 | 3 | directed mandatory lap と return-corridor First Exit（#64実装済み） | synthetic radial fixtureと実 inner/outer snapshotでM→B長弧、return corridor、first general Exitを分解する。C1 legacyを完全維持し、segment内反復を拒否しつつ、route planが宣言したsegment間反復を許可する。 | 1, 2 |
 | 4 | graph schema 4 reader と consumer 契約（#65実装済み） | core、WASM型、Web Workerがschema 2 / 3 / 4を読む。`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`を判別し、wire fragmentとfield failure fixtureを追加する。未知kind / version、部分data、route legの重複・欠落を拒否する。 | 1, 3 |
-| 5 | graph schema 4 の atomic release activation（#66実装済み） | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
+| 5 | graph schema 4 の atomic release activation（#66 コード・fixture 実装済み、R2 投入と本番 deploy は未実施） | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
 | 6 | 天現寺 exact directed binding（#67診断完了・verified） | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。way `172358461` → `422023171` → `931759044` → `172358460` の4 way / 16 Edge と `n:1832672162`、`groundWayIds=[258834790]`、hashを固定する。`n:1832672205`へ続くtailは最初の接続後の別node接続として診断だけに残す。 | なし |
 | 7 | 2号 inner / outer radial pair 統合（#68診断統合・binding verified） | schema2 seedへ2件を追加し、graph-builderが両route planと4 resolved segmentを検証する。両pairはschema 4 unionの`radialReturn`とpublic candidateへ昇格し、2025-04 / 2026-10の期間別tariffを保持する。 | 3, 5, 6 |
 | 8 | Candidate route legs と商品・tariff状態（#69実装済み） | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。dynamic ODは`TopologyOnlyCandidate`として`chargedSectionCount` / `ONE_SECTION_TOLL`を撤去し、radialにも同じ項目を出さない。 | 4 |

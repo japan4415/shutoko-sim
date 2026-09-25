@@ -3981,7 +3981,11 @@ pub fn promote_verified_radial_pair(
                 }
             },
             amount_yen: seed.tariff.amount_yen,
+            observed_base_fare_yen: None,
+            observed_distance_meters: None,
             billing_distance_meters: seed.tariff.billing_distance_meters,
+            effective_from: None,
+            effective_to: None,
             prices: seed
                 .tariff
                 .prices
@@ -3992,6 +3996,16 @@ pub fn promote_verified_radial_pair(
                     effective_to: price.effective_to.clone(),
                 })
                 .collect(),
+            assignment_id: None,
+            rule_id: None,
+            evidence_id: None,
+            distance_evidence_id: None,
+            fare_label: None,
+            vehicle_class: None,
+            payment_method: None,
+            fare_basis: None,
+            discounts_excluded: false,
+            toll_source: None,
         },
     })
 }

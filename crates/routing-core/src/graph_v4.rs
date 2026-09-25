@@ -1,5 +1,7 @@
 use crate::{
-    invalid, utc, BillingPair, EdgeKind, Graph, Price, RampKind, RoutingError, VerificationStatus,
+    invalid,
+    tariff::{read_tariff_v3, TariffResolver},
+    utc, BillingPair, EdgeKind, Graph, Price, RampKind, RoutingError, VerificationStatus,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -132,8 +134,45 @@ pub struct LoopValidation {
 pub struct Tariff {
     pub status: TariffStatus,
     pub amount_yen: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_base_fare_yen: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_distance_meters: Option<u64>,
     pub billing_distance_meters: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_to: Option<String>,
+    #[serde(default)]
     pub prices: Vec<Price>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignment_id: Option<String>,
+    #[serde(
+        default,
+        alias = "tariffRuleId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub rule_id: Option<String>,
+    #[serde(default, alias = "evidenceId", skip_serializing_if = "Option::is_none")]
+    pub evidence_id: Option<String>,
+    #[serde(
+        default,
+        alias = "billingDistanceEvidenceId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub distance_evidence_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fare_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vehicle_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payment_method: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fare_basis: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub discounts_excluded: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toll_source: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -320,6 +359,8 @@ pub(crate) struct ParsedGraph {
     pub(crate) graph: Graph,
     pub(crate) radial_billing_pairs: Vec<RadialReturnBillingPair>,
     pub(crate) route_memberships: Vec<RouteMembershipIndex>,
+    pub(crate) tariff_resolver: Option<TariffResolver>,
+    pub(crate) tariff_overrides: HashMap<String, Tariff>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -336,7 +377,19 @@ struct GraphEnvelope {
     #[serde(default)]
     ramps: Vec<crate::Ramp>,
     #[serde(default)]
-    od_tariffs: Vec<crate::OdTariff>,
+    od_tariffs: Option<Value>,
+    #[serde(default)]
+    tariff: Option<Value>,
+    #[serde(default)]
+    od_tariffs_v3: Option<Value>,
+    #[serde(default)]
+    tariff_catalog: Option<Value>,
+    #[serde(default)]
+    tariff_model: Option<Value>,
+    #[serde(default)]
+    billing_pairs_version: Option<String>,
+    #[serde(default)]
+    tariff_model_version: Option<u32>,
     #[serde(default)]
     route_memberships: Option<Vec<RouteMembershipIndex>>,
 }
@@ -361,9 +414,56 @@ pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> 
     if schema_version != 4 && has_route_memberships {
         return Err(invalid("routeMemberships requires graph schema 4"));
     }
+    if envelope
+        .billing_pairs_version
+        .as_deref()
+        .is_some_and(|version| !matches!(version, "v2" | "v3"))
+        || envelope
+            .tariff_model_version
+            .is_some_and(|version| version != crate::tariff::TARIFF_MODEL_VERSION)
+    {
+        return Err(invalid("unsupported tariff model version"));
+    }
+    let (od_tariffs, od_tariff_resolver) = match envelope.od_tariffs {
+        Some(Value::Array(values)) => {
+            let tariffs = serde_json::from_value(Value::Array(values))
+                .map_err(|_| invalid("invalid legacy odTariffs"))?;
+            (tariffs, None)
+        }
+        Some(value) => {
+            let resolver = parse_graph_tariff_catalog(&value, "odTariffs")?;
+            (Vec::new(), resolver)
+        }
+        None => (Vec::new(), None),
+    };
+    let mut tariff_resolver = od_tariff_resolver;
+    for (value, label) in [
+        (envelope.tariff.as_ref(), "tariff"),
+        (envelope.od_tariffs_v3.as_ref(), "odTariffsV3"),
+        (envelope.tariff_catalog.as_ref(), "tariffCatalog"),
+        (envelope.tariff_model.as_ref(), "tariffModel"),
+    ] {
+        if let Some(value) = value {
+            if let Some(resolver) = parse_graph_tariff_catalog(value, label)? {
+                if tariff_resolver.is_some() {
+                    return Err(invalid("multiple tariff catalogs are not allowed"));
+                }
+                tariff_resolver = Some(resolver);
+            }
+        }
+    }
+    if tariff_resolver
+        .as_ref()
+        .is_some_and(|resolver| resolver.catalog().vehicle_profile != envelope.vehicle_profile)
+    {
+        return Err(invalid(
+            "tariff catalog vehicle profile does not match graph",
+        ));
+    }
     let mut billing_pairs = Vec::with_capacity(envelope.billing_pairs.len());
     let mut schema4_legacy_pairs = Vec::new();
     let mut radial_billing_pairs = Vec::new();
+    let mut tariff_overrides = HashMap::new();
     for value in envelope.billing_pairs {
         match schema_version {
             2 | 3 => billing_pairs.push(
@@ -379,12 +479,14 @@ pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> 
                     "legacyRing" => {
                         let pair: LegacyRingBillingPair = serde_json::from_value(value)
                             .map_err(|_| invalid("invalid legacyRing billing pair"))?;
+                        tariff_overrides.insert(pair.id.clone(), pair.tariff.clone());
                         billing_pairs.push(pair.to_legacy()?);
                         schema4_legacy_pairs.push(pair);
                     }
                     "radialReturn" => {
                         let pair: RadialReturnBillingPair = serde_json::from_value(value)
                             .map_err(|_| invalid("invalid radialReturn billing pair"))?;
+                        tariff_overrides.insert(pair.id.clone(), pair.tariff.clone());
                         if pair.pair_kind != PairKind::RadialReturn {
                             return Err(invalid("radialReturn billing pair kind mismatch"));
                         }
@@ -411,7 +513,7 @@ pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> 
         billing_pairs,
         forbidden_transitions: envelope.forbidden_transitions,
         ramps: envelope.ramps,
-        od_tariffs: envelope.od_tariffs,
+        od_tariffs,
     };
     let route_memberships = match schema_version {
         4 => envelope
@@ -430,7 +532,42 @@ pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> 
         graph,
         radial_billing_pairs,
         route_memberships,
+        tariff_resolver,
+        tariff_overrides,
     })
+}
+
+fn parse_graph_tariff_catalog(
+    value: &Value,
+    label: &str,
+) -> Result<Option<TariffResolver>, RoutingError> {
+    if value.is_null() {
+        return Ok(None);
+    }
+    let Some(object) = value.as_object() else {
+        if label == "tariffModel" {
+            return Ok(None);
+        }
+        return Err(invalid(format!("{label} must be an object")));
+    };
+    let nested = object
+        .get("catalog")
+        .or_else(|| object.get("tariffCatalog"))
+        .or_else(|| object.get("odTariffs"));
+    let value = nested.unwrap_or(value);
+    let Some(object) = value.as_object() else {
+        return Err(invalid(format!("{label} catalog must be an object")));
+    };
+    if object.get("assignments").is_none() || object.get("tariffRules").is_none() {
+        return Ok(None);
+    }
+    let serialized = serde_json::to_string(value)
+        .map_err(|_| invalid(format!("{label} could not be serialized")))?;
+    let catalog = read_tariff_v3(&serialized)
+        .map_err(|error| invalid(format!("{label} is invalid: {error}")))?;
+    TariffResolver::new(catalog)
+        .map(Some)
+        .map_err(|error| invalid(format!("{label} is invalid: {error}")))
 }
 
 impl LegacyRingBillingPair {
@@ -477,13 +614,28 @@ impl LegacyRingBillingPair {
             tariff: Tariff {
                 status: tariff_status,
                 amount_yen: pair.prices.first().map(|price| price.amount_yen),
+                observed_base_fare_yen: None,
+                observed_distance_meters: None,
                 billing_distance_meters: pair.billing_distance_meters,
+                effective_from: None,
+                effective_to: None,
                 prices: pair.prices.clone(),
+                assignment_id: None,
+                rule_id: None,
+                evidence_id: None,
+                distance_evidence_id: None,
+                fare_label: None,
+                vehicle_class: None,
+                payment_method: None,
+                fare_basis: None,
+                discounts_excluded: false,
+                toll_source: None,
             },
         })
     }
 
     fn to_legacy(&self) -> Result<BillingPair, RoutingError> {
+        validate_tariff_wire_contract(&self.tariff)?;
         let RouteAnchor::SameNode(anchor) = &self.anchor else {
             return Err(invalid("legacyRing requires sameNode anchor"));
         };
@@ -498,7 +650,13 @@ impl LegacyRingBillingPair {
         );
         let tariff_consistent = match self.tariff.status {
             TariffStatus::Priced => {
-                !self.tariff.prices.is_empty() && self.tariff.amount_yen.is_some()
+                (!self.tariff.prices.is_empty() && self.tariff.amount_yen.is_some())
+                    || (self.tariff.amount_yen.is_some()
+                        && self.tariff.billing_distance_meters.is_some()
+                        && self.tariff.assignment_id.is_some()
+                        && self.tariff.rule_id.is_some()
+                        && self.tariff.evidence_id.is_some()
+                        && self.tariff.distance_evidence_id.is_some())
             }
             TariffStatus::Unpriced => {
                 self.tariff.prices.is_empty() && self.tariff.amount_yen.is_none()
@@ -893,9 +1051,16 @@ pub(crate) fn validate_radial_return_pair(
     {
         return Err(invalid("invalid radialReturn billing pair identity"));
     }
+    validate_tariff_wire_contract(&pair.tariff)?;
     validate_prices(&pair.tariff.prices)?;
-    if matches!(pair.tariff.status, TariffStatus::Priced)
-        && (pair.tariff.prices.is_empty() || pair.tariff.amount_yen.is_none())
+    let priced_contract = (!pair.tariff.prices.is_empty() && pair.tariff.amount_yen.is_some())
+        || (pair.tariff.amount_yen.is_some()
+            && pair.tariff.billing_distance_meters.is_some()
+            && pair.tariff.assignment_id.is_some()
+            && pair.tariff.rule_id.is_some()
+            && pair.tariff.evidence_id.is_some()
+            && pair.tariff.distance_evidence_id.is_some());
+    if matches!(pair.tariff.status, TariffStatus::Priced) && !priced_contract
         || matches!(pair.tariff.status, TariffStatus::Unpriced)
             && (!pair.tariff.prices.is_empty()
                 || pair.tariff.amount_yen.is_some()
@@ -1522,6 +1687,62 @@ fn edge_way_id(edge_id: &str) -> Option<i64> {
 
 fn graph_node_osm_id(node_id: &str) -> Option<i64> {
     node_id.strip_prefix("n:")?.parse().ok()
+}
+
+fn validate_tariff_wire_contract(tariff: &Tariff) -> Result<(), RoutingError> {
+    let has_v3_fields = tariff.assignment_id.is_some()
+        || tariff.rule_id.is_some()
+        || tariff.evidence_id.is_some()
+        || tariff.distance_evidence_id.is_some()
+        || tariff.fare_label.is_some()
+        || tariff.vehicle_class.is_some()
+        || tariff.payment_method.is_some()
+        || tariff.fare_basis.is_some()
+        || tariff.discounts_excluded
+        || tariff.toll_source.is_some();
+    if !has_v3_fields {
+        return Ok(());
+    }
+    if tariff.fare_label.as_deref() != Some(crate::PRODUCT_FARE_LABEL)
+        || tariff.vehicle_class.as_deref() != Some(crate::PRODUCT_VEHICLE_CLASS)
+        || tariff.payment_method.as_deref() != Some(crate::PRODUCT_PAYMENT_METHOD)
+        || tariff.fare_basis.as_deref() != Some(crate::PRODUCT_FARE_BASIS)
+        || !tariff.discounts_excluded
+    {
+        return Err(invalid("tariff scope is inconsistent"));
+    }
+    match tariff.status {
+        TariffStatus::Priced => {
+            if tariff.amount_yen.is_none()
+                || tariff.billing_distance_meters.is_none()
+                || tariff.assignment_id.is_none()
+                || tariff.rule_id.is_none()
+                || tariff.evidence_id.is_none()
+                || tariff.distance_evidence_id.is_none()
+                || tariff.toll_source.as_deref() != Some(crate::OFFICIAL_DISTANCE_RULE_SOURCE)
+                || (tariff.effective_from.is_none() && tariff.prices.is_empty())
+            {
+                return Err(invalid("priced tariff provenance is incomplete"));
+            }
+        }
+        TariffStatus::Unpriced | TariffStatus::Expired | TariffStatus::NotApplicable => {
+            if tariff.amount_yen.is_some()
+                || tariff.billing_distance_meters.is_some()
+                || tariff.assignment_id.is_some()
+                || tariff.rule_id.is_some()
+                || tariff.evidence_id.is_some()
+                || tariff.distance_evidence_id.is_some()
+                || tariff.toll_source.is_some()
+            {
+                return Err(invalid("unpriced tariff contains priced fields"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn valid_id(value: &str, label: &str) -> Result<(), RoutingError> {

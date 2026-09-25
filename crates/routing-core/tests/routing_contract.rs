@@ -2162,35 +2162,75 @@ fn search_request_explicit_ramp_filters() {
 }
 
 #[test]
-fn official_etc_toll_calculation_contract() {
-    use shutoko_routing_core::calculate_etc_toll_yen;
+fn versioned_etc_toll_calculation_contract() {
+    use shutoko_routing_core::{calculate_tariff_yen, TariffRuleV3};
 
-    // Below minimum distance threshold (4,300m) -> 300 yen
-    assert_eq!(calculate_etc_toll_yen(0), 300);
-    assert_eq!(calculate_etc_toll_yen(1_000), 300);
-    assert_eq!(calculate_etc_toll_yen(4_300), 300);
+    let old_rule: TariffRuleV3 = serde_json::from_value(json!({
+        "ruleId": "old",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": [
+            "midnight_discount",
+            "central_tokyo_inflow_discount",
+            "environmental_road_pricing_discount",
+            "etc2_discount",
+            "frequent_user_discount"
+        ],
+        "distanceUnitMeters": 100,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "rateMicrosYenPerUnit": 2952000,
+        "terminalChargeYen": 150,
+        "taxBasisPoints": 11000,
+        "minimumYen": 300,
+        "maximumYen": 1950,
+        "minimumDistanceMeters": 4300,
+        "rounding": {"mode": "half_up", "multipleYen": 10},
+        "sourceRefs": [{"location": "fixture"}]
+    }))
+    .unwrap();
+    let new_rule: TariffRuleV3 = serde_json::from_value(json!({
+        "ruleId": "new",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": [
+            "midnight_discount",
+            "central_tokyo_inflow_discount",
+            "environmental_road_pricing_discount",
+            "etc2_discount",
+            "frequent_user_discount"
+        ],
+        "distanceUnitMeters": 100,
+        "effectiveFrom": "2026-09-30T15:00:00Z",
+        "effectiveTo": null,
+        "rateMicrosYenPerUnit": 3247200,
+        "terminalChargeYen": 150,
+        "taxBasisPoints": 11000,
+        "minimumYen": 300,
+        "maximumYen": 2130,
+        "minimumDistanceMeters": 3900,
+        "rounding": {"mode": "half_up", "multipleYen": 10},
+        "sourceRefs": [{"location": "fixture"}]
+    }))
+    .unwrap();
 
-    // Intermediate distances
-    // 5 km: (150 + 29.52 * 5) * 1.10 = 297.6 * 1.10 = 327.36 -> rounded to 330
-    assert_eq!(calculate_etc_toll_yen(5_000), 330);
-
-    // 10 km: (150 + 29.52 * 10) * 1.10 = 445.2 * 1.10 = 489.72 -> rounded to 490
-    assert_eq!(calculate_etc_toll_yen(10_000), 490);
-
-    // 20 km: (150 + 29.52 * 20) * 1.10 = 740.4 * 1.10 = 814.44 -> rounded to 810
-    assert_eq!(calculate_etc_toll_yen(20_000), 810);
-
-    // Cap at 1,950 yen
-    assert_eq!(calculate_etc_toll_yen(55_000), 1950);
-    assert_eq!(calculate_etc_toll_yen(100_000), 1950);
-    assert_eq!(calculate_etc_toll_yen(500_000), 1950);
-
-    // Multiple of 10 check for arbitrary distances
-    for d in (0..=100_000).step_by(1_337) {
-        let toll = calculate_etc_toll_yen(d);
-        assert!((300..=1950).contains(&toll));
-        assert_eq!(toll % 10, 0);
+    for (distance, expected) in [
+        (0, 300),
+        (4_300, 300),
+        (5_000, 330),
+        (10_000, 490),
+        (20_000, 810),
+        (55_000, 1950),
+    ] {
+        assert_eq!(calculate_tariff_yen(distance, &old_rule).unwrap(), expected);
     }
+    assert_eq!(calculate_tariff_yen(14_200, &old_rule).unwrap(), 630);
+    assert_eq!(calculate_tariff_yen(14_200, &new_rule).unwrap(), 670);
+    assert_eq!(calculate_tariff_yen(3_900, &new_rule).unwrap(), 300);
+    assert_eq!(calculate_tariff_yen(4_000, &new_rule).unwrap(), 310);
+    assert!(calculate_tariff_yen(4_050, &new_rule).is_err());
 }
 
 #[test]

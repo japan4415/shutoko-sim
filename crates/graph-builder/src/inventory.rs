@@ -139,6 +139,33 @@ pub struct OsmRampBindingsFile {
     pub shared_physical_overrides: Vec<SharedPhysicalOverride>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FirstPublicRoadConnectionDiagnosticMismatch {
+    pub ramp_id: String,
+    pub evidence_id: String,
+    pub declared_support_state: String,
+    pub resolved_support_state: String,
+    pub declared_ground_node_id: Option<i64>,
+    pub resolved_ground_node_id: Option<i64>,
+    pub resolved_ground_way_id: Option<i64>,
+    pub reason_codes: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FirstPublicRoadConnectionDiagnosticReport {
+    pub rule: String,
+    pub schema_binding_total: usize,
+    pub schema_binding_matched: usize,
+    pub schema_binding_mismatched: usize,
+    pub schema_binding_mismatches: Vec<FirstPublicRoadConnectionDiagnosticMismatch>,
+    pub binding_candidate_total: usize,
+    pub binding_candidate_matched: usize,
+    pub binding_candidate_mismatched: usize,
+    pub binding_candidate_mismatches: Vec<FirstPublicRoadConnectionDiagnosticMismatch>,
+}
+
 fn default_fixed_fee() -> u64 {
     150
 }
@@ -575,6 +602,7 @@ pub fn validate_osm_ramp_bindings(
     let mut candidate_ids = HashSet::new();
     let mut candidate_ramp_ids = HashSet::new();
     let mut candidate_segment_ids = HashSet::new();
+    let mut verified_candidate_ramp_ids = HashSet::new();
     for (i, candidate) in bindings.binding_candidates.iter().enumerate() {
         if candidate.candidate_id.is_empty() {
             errors.push(format!("bindingCandidate[{}] has empty candidateId", i));
@@ -608,9 +636,21 @@ pub fn validate_osm_ramp_bindings(
                 "binding candidate '{}' has direction '{}' but inventory requires '{}'",
                 candidate.candidate_id, candidate.direction, ramp.direction
             )),
-            Some(ramp) if ramp.support_state.as_deref() != Some("unsupported") => {
+            Some(ramp)
+                if candidate.status == "verified_bound"
+                    && ramp.support_state.as_deref() != Some("verified_bound") =>
+            {
                 errors.push(format!(
-                    "binding candidate '{}' must retain unsupported schema-2 inventory projection",
+                    "binding candidate '{}' is verified_bound but inventory projection is not",
+                    candidate.candidate_id
+                ))
+            }
+            Some(ramp)
+                if candidate.status != "verified_bound"
+                    && ramp.support_state.as_deref() != Some("unsupported") =>
+            {
+                errors.push(format!(
+                    "binding candidate '{}' is not verified_bound but inventory projection is",
                     candidate.candidate_id
                 ))
             }
@@ -622,26 +662,53 @@ pub fn validate_osm_ramp_bindings(
                 candidate.candidate_id
             ));
         }
-        if !matches!(candidate.status.as_str(), "unresolved" | "unsupported") {
+        if !matches!(
+            candidate.status.as_str(),
+            "unresolved" | "unsupported" | "verified_bound"
+        ) {
             errors.push(format!(
                 "binding candidate '{}' has invalid status '{}'",
                 candidate.candidate_id, candidate.status
             ));
         }
-        if candidate.public_projection != "excluded_unresolved" {
-            errors.push(format!(
-                "binding candidate '{}' has invalid publicProjection '{}'",
-                candidate.candidate_id, candidate.public_projection
-            ));
-        }
-        if candidate.unresolved_reason.trim().is_empty()
-            || candidate.unresolved_reason_codes.is_empty()
-            || candidate.support_evidence.is_empty()
-        {
-            errors.push(format!(
-                "binding candidate '{}' lacks reason/reasonCodes/evidence",
-                candidate.candidate_id
-            ));
+        if candidate.status == "verified_bound" {
+            verified_candidate_ramp_ids.insert(candidate.ramp_id.as_str());
+            if candidate.public_projection != "included_verified" {
+                errors.push(format!(
+                    "binding candidate '{}' has invalid publicProjection '{}'",
+                    candidate.candidate_id, candidate.public_projection
+                ));
+            }
+            if !candidate.unresolved_reason.trim().is_empty()
+                || !candidate.unresolved_reason_codes.is_empty()
+            {
+                errors.push(format!(
+                    "binding candidate '{}' is verified_bound but retains unresolved evidence",
+                    candidate.candidate_id
+                ));
+            }
+            if candidate.support_evidence.is_empty() {
+                errors.push(format!(
+                    "binding candidate '{}' lacks supportEvidence",
+                    candidate.candidate_id
+                ));
+            }
+        } else {
+            if candidate.public_projection != "excluded_unresolved" {
+                errors.push(format!(
+                    "binding candidate '{}' has invalid publicProjection '{}'",
+                    candidate.candidate_id, candidate.public_projection
+                ));
+            }
+            if candidate.unresolved_reason.trim().is_empty()
+                || candidate.unresolved_reason_codes.is_empty()
+                || candidate.support_evidence.is_empty()
+            {
+                errors.push(format!(
+                    "binding candidate '{}' lacks reason/reasonCodes/evidence",
+                    candidate.candidate_id
+                ));
+            }
         }
         if candidate.directed_segments.len() != 1 {
             errors.push(format!(
@@ -711,22 +778,24 @@ pub fn validate_osm_ramp_bindings(
     for r in &inv.ramps {
         if r.status == "active" && matches!(r.kind, RampKind::GeneralEntry | RampKind::GeneralExit)
         {
+            let has_schema_binding = bound_ramp_ids.contains(r.ramp_id.as_str());
+            let has_verified_candidate = verified_candidate_ramp_ids.contains(r.ramp_id.as_str());
             match (inv.version, r.support_state.as_deref()) {
-                (0..=2, _) if !bound_ramp_ids.contains(r.ramp_id.as_str()) => {
+                (0..=2, _) if !has_schema_binding => {
                     errors.push(format!(
                         "active general ramp '{}' has no OSM binding",
                         r.ramp_id
                     ));
                 }
-                (_, Some("verified_bound")) if !bound_ramp_ids.contains(r.ramp_id.as_str()) => {
+                (_, Some("verified_bound")) if !has_schema_binding && !has_verified_candidate => {
                     errors.push(format!(
-                        "verified active general ramp '{}' has no OSM binding",
+                        "verified active general ramp '{}' has no exact binding evidence",
                         r.ramp_id
                     ));
                 }
-                (_, Some("unsupported")) if bound_ramp_ids.contains(r.ramp_id.as_str()) => {
+                (_, Some("unsupported")) if has_schema_binding || has_verified_candidate => {
                     errors.push(format!(
-                        "unsupported active general ramp '{}' must not have an OSM binding",
+                        "unsupported active general ramp '{}' must not have exact binding evidence",
                         r.ramp_id
                     ));
                 }
@@ -954,6 +1023,49 @@ pub fn validate_osm_ramp_bindings_against_osm(
                     format!("binding candidate '{}': {error}", candidate.candidate_id)
                 }),
             );
+        }
+        let resolution = audit_first_public_road_connection(candidate, inv, osm_resp)
+            .unwrap_or_else(
+                |errors| crate::topology::FirstPublicRoadConnectionResolution {
+                    rule: crate::topology::FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+                    support_state: crate::seed::EndpointSupportState::Unresolved,
+                    ground_node_id: None,
+                    ground_way_id: None,
+                    ground_way_name: None,
+                    reason_codes: vec!["CANDIDATE_EVIDENCE_ERROR".to_string()],
+                    notes: errors,
+                },
+            );
+        if candidate.status == "verified_bound" {
+            let ramp = inventory_by_ramp_id
+                .get(candidate.ramp_id.as_str())
+                .expect("candidate ramp was checked by candidate audit");
+            let flow = ramp_flow_direction(ramp.kind).expect("candidate is a general ramp");
+            let expected_ground_node =
+                candidate
+                    .directed_segments
+                    .first()
+                    .and_then(|segment| match flow {
+                        crate::topology::RampFlowDirection::Exit => {
+                            segment.osm_node_ids.last().copied()
+                        }
+                        crate::topology::RampFlowDirection::Entry => {
+                            segment.osm_node_ids.first().copied()
+                        }
+                    });
+            if resolution.support_state != crate::seed::EndpointSupportState::VerifiedBound
+                || resolution.ground_way_id != Some(candidate.route_evidence.ground_way_id)
+                || resolution.ground_node_id != expected_ground_node
+            {
+                errors.push(format!(
+                    "binding candidate '{}' is not proven by {}: ground={:?}, way={:?}, reasons={:?}",
+                    candidate.candidate_id,
+                    crate::topology::FIRST_PUBLIC_ROAD_CONNECTION_RULE,
+                    resolution.ground_node_id,
+                    resolution.ground_way_id,
+                    resolution.reason_codes
+                ));
+            }
         }
     }
 
@@ -1334,6 +1446,12 @@ pub fn audit_osm_ramp_binding_candidate_against_osm(
         errors.push(format!(
             "binding candidate '{}' unresolved reason codes {:?} do not match audit {:?}",
             candidate.candidate_id, candidate.unresolved_reason_codes, reason_codes
+        ));
+    }
+    if candidate.status == "verified_bound" && !reason_codes.is_empty() {
+        errors.push(format!(
+            "binding candidate '{}' is verified_bound but has unresolved reason codes {:?}",
+            candidate.candidate_id, reason_codes
         ));
     }
 
@@ -1963,6 +2081,293 @@ fn validate_versioned_od_tariffs(
     }
 }
 
+/// Audits a binding candidate against the `firstPublicRoadConnection/v1` rule.
+pub fn audit_first_public_road_connection(
+    candidate: &OsmRampBindingCandidate,
+    inv: &RampInventoryFile,
+    osm_resp: &crate::osm::OverpassResponse,
+) -> Result<crate::topology::FirstPublicRoadConnectionResolution, Vec<String>> {
+    let Some(ramp) = inv
+        .ramps
+        .iter()
+        .find(|ramp| ramp.ramp_id == candidate.ramp_id)
+    else {
+        return Err(vec![format!(
+            "binding candidate '{}' references unknown ramp '{}'",
+            candidate.candidate_id, candidate.ramp_id
+        )]);
+    };
+    let [segment] = candidate.directed_segments.as_slice() else {
+        return Err(vec![format!(
+            "binding candidate '{}' must have exactly one directed segment",
+            candidate.candidate_id
+        )]);
+    };
+
+    let flow = match ramp.kind {
+        RampKind::GeneralExit | RampKind::BoundaryOut => crate::topology::RampFlowDirection::Exit,
+        RampKind::GeneralEntry | RampKind::BoundaryIn => crate::topology::RampFlowDirection::Entry,
+    };
+
+    Ok(
+        crate::topology::resolve_first_public_road_connection_from_osm(
+            &segment.osm_node_ids,
+            flow,
+            osm_resp,
+            Some(candidate.route_evidence.ground_way_id),
+        ),
+    )
+}
+
+fn ramp_flow_direction(kind: RampKind) -> Option<crate::topology::RampFlowDirection> {
+    match kind {
+        RampKind::GeneralExit | RampKind::BoundaryOut => {
+            Some(crate::topology::RampFlowDirection::Exit)
+        }
+        RampKind::GeneralEntry | RampKind::BoundaryIn => {
+            Some(crate::topology::RampFlowDirection::Entry)
+        }
+    }
+}
+
+fn schema_binding_chain(
+    binding: &OsmRampBinding,
+    flow: crate::topology::RampFlowDirection,
+    way: &crate::osm::OsmElement,
+) -> Result<Vec<i64>, String> {
+    let nodes = way
+        .nodes
+        .as_ref()
+        .ok_or_else(|| format!("binding way {} has no nodes", binding.osm_way_id))?;
+    let motorway_index = nodes
+        .iter()
+        .position(|node| *node == binding.motorway_node_id)
+        .ok_or_else(|| {
+            format!(
+                "binding way {} does not contain motorway node {}",
+                binding.osm_way_id, binding.motorway_node_id
+            )
+        })?;
+    let ground_index = nodes
+        .iter()
+        .position(|node| *node == binding.osm_node_id)
+        .ok_or_else(|| {
+            format!(
+                "binding way {} does not contain ground node {}",
+                binding.osm_way_id, binding.osm_node_id
+            )
+        })?;
+    match flow {
+        crate::topology::RampFlowDirection::Exit if motorway_index < ground_index => {
+            Ok(vec![binding.osm_node_id])
+        }
+        crate::topology::RampFlowDirection::Entry if ground_index < motorway_index => {
+            Ok(vec![binding.osm_node_id])
+        }
+        _ => Err(format!(
+            "binding {} endpoints are not ordered for {:?}",
+            binding.ramp_id, flow
+        )),
+    }
+}
+
+fn endpoint_support_state_wire_value(state: crate::seed::EndpointSupportState) -> &'static str {
+    match state {
+        crate::seed::EndpointSupportState::VerifiedBound => "verified_bound",
+        crate::seed::EndpointSupportState::Unresolved => "unresolved",
+        crate::seed::EndpointSupportState::Unsupported => "unsupported",
+    }
+}
+
+fn diagnostic_mismatch(
+    ramp_id: String,
+    evidence_id: String,
+    declared_support_state: String,
+    resolution: &crate::topology::FirstPublicRoadConnectionResolution,
+    declared_ground_node_id: Option<i64>,
+    mut reason_codes: Vec<String>,
+) -> FirstPublicRoadConnectionDiagnosticMismatch {
+    reason_codes.extend(resolution.reason_codes.iter().cloned());
+    reason_codes.sort();
+    reason_codes.dedup();
+    FirstPublicRoadConnectionDiagnosticMismatch {
+        ramp_id,
+        evidence_id,
+        declared_support_state,
+        resolved_support_state: endpoint_support_state_wire_value(resolution.support_state)
+            .to_string(),
+        declared_ground_node_id,
+        resolved_ground_node_id: resolution.ground_node_id,
+        resolved_ground_way_id: resolution.ground_way_id,
+        reason_codes,
+    }
+}
+
+pub fn audit_first_public_road_connections(
+    bindings: &OsmRampBindingsFile,
+    inv: &RampInventoryFile,
+    osm_resp: &crate::osm::OverpassResponse,
+) -> FirstPublicRoadConnectionDiagnosticReport {
+    let inventory_by_ramp_id: HashMap<&str, &CanonicalRampInventoryItem> = inv
+        .ramps
+        .iter()
+        .map(|ramp| (ramp.ramp_id.as_str(), ramp))
+        .collect();
+    let mut way_map: HashMap<i64, &crate::osm::OsmElement> = HashMap::new();
+    let mut node_to_ways: HashMap<i64, Vec<i64>> = HashMap::new();
+    for element in &osm_resp.elements {
+        if element.is_way() {
+            way_map.insert(element.id, element);
+            if let Some(nodes) = &element.nodes {
+                for node_id in nodes {
+                    node_to_ways.entry(*node_id).or_default().push(element.id);
+                }
+            }
+        }
+    }
+
+    let mut ordered_bindings = bindings.bindings.iter().collect::<Vec<_>>();
+    ordered_bindings.sort_by(|left, right| left.ramp_id.cmp(&right.ramp_id));
+    let mut schema_binding_mismatches = Vec::new();
+    for binding in ordered_bindings {
+        let Some(ramp) = inventory_by_ramp_id.get(binding.ramp_id.as_str()) else {
+            continue;
+        };
+        let Some(flow) = ramp_flow_direction(ramp.kind) else {
+            continue;
+        };
+        let chain = way_map
+            .get(&binding.osm_way_id)
+            .ok_or_else(|| format!("missing binding way {}", binding.osm_way_id))
+            .and_then(|way| schema_binding_chain(binding, flow, way));
+        let resolution = match chain {
+            Ok(chain) => crate::topology::resolve_first_public_road_connection(
+                &chain,
+                flow,
+                &way_map,
+                &node_to_ways,
+                None,
+            ),
+            Err(_) => crate::topology::FirstPublicRoadConnectionResolution {
+                rule: crate::topology::FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+                support_state: crate::seed::EndpointSupportState::Unresolved,
+                ground_node_id: None,
+                ground_way_id: None,
+                ground_way_name: None,
+                reason_codes: vec!["BINDING_CHAIN_UNAVAILABLE".to_string()],
+                notes: Vec::new(),
+            },
+        };
+        let mut reason_codes = Vec::new();
+        if resolution.support_state != crate::seed::EndpointSupportState::VerifiedBound {
+            reason_codes.push("SCHEMA_BINDING_STATUS_MISMATCH".to_string());
+        }
+        if resolution.ground_node_id != Some(binding.osm_node_id) {
+            reason_codes.push("DECLARED_GROUND_NODE_MISMATCH".to_string());
+            if resolution.support_state == crate::seed::EndpointSupportState::VerifiedBound {
+                reason_codes.push(crate::topology::REASON_EARLY_SURFACE_CONNECTION.to_string());
+            }
+        }
+        if !reason_codes.is_empty() {
+            schema_binding_mismatches.push(diagnostic_mismatch(
+                binding.ramp_id.clone(),
+                format!("osm-ramp-binding:{}", binding.ramp_id),
+                "verified_bound".to_string(),
+                &resolution,
+                Some(binding.osm_node_id),
+                reason_codes,
+            ));
+        }
+    }
+
+    let mut ordered_candidates = bindings.binding_candidates.iter().collect::<Vec<_>>();
+    ordered_candidates.sort_by(|left, right| left.candidate_id.cmp(&right.candidate_id));
+    let mut binding_candidate_mismatches = Vec::new();
+    for candidate in ordered_candidates {
+        let declared_ground_node_id = inventory_by_ramp_id
+            .get(candidate.ramp_id.as_str())
+            .and_then(|ramp| ramp_flow_direction(ramp.kind))
+            .and_then(|flow| {
+                candidate
+                    .directed_segments
+                    .first()
+                    .and_then(|segment| match flow {
+                        crate::topology::RampFlowDirection::Exit => {
+                            segment.osm_node_ids.last().copied()
+                        }
+                        crate::topology::RampFlowDirection::Entry => {
+                            segment.osm_node_ids.first().copied()
+                        }
+                    })
+            });
+        let resolution = match audit_first_public_road_connection(candidate, inv, osm_resp) {
+            Ok(resolution) => resolution,
+            Err(errors) => crate::topology::FirstPublicRoadConnectionResolution {
+                rule: crate::topology::FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+                support_state: crate::seed::EndpointSupportState::Unresolved,
+                ground_node_id: None,
+                ground_way_id: None,
+                ground_way_name: None,
+                reason_codes: vec!["CANDIDATE_EVIDENCE_ERROR".to_string()],
+                notes: errors,
+            },
+        };
+        let status_matches = (candidate.status == "verified_bound"
+            && resolution.support_state == crate::seed::EndpointSupportState::VerifiedBound)
+            || (candidate.status != "verified_bound"
+                && resolution.support_state == crate::seed::EndpointSupportState::Unresolved);
+        let mut reason_codes = Vec::new();
+        if !status_matches {
+            reason_codes.push("CANDIDATE_STATUS_MISMATCH".to_string());
+        }
+        let expected_projection = if candidate.status == "verified_bound" {
+            "included_verified"
+        } else {
+            "excluded_unresolved"
+        };
+        if candidate.public_projection != expected_projection {
+            reason_codes.push("PUBLIC_PROJECTION_MISMATCH".to_string());
+        }
+        if declared_ground_node_id.is_some() && declared_ground_node_id != resolution.ground_node_id
+        {
+            reason_codes.push("DECLARED_GROUND_NODE_MISMATCH".to_string());
+        }
+        if candidate.status != "verified_bound"
+            && resolution.support_state == crate::seed::EndpointSupportState::Unresolved
+            && !resolution.reason_codes.is_empty()
+            && resolution.reason_codes != candidate.unresolved_reason_codes
+        {
+            reason_codes.push("CANDIDATE_REASON_CODES_MISMATCH".to_string());
+        }
+        if !reason_codes.is_empty() {
+            binding_candidate_mismatches.push(diagnostic_mismatch(
+                candidate.ramp_id.clone(),
+                format!("osm-ramp-binding-candidate:{}", candidate.candidate_id),
+                candidate.status.clone(),
+                &resolution,
+                declared_ground_node_id,
+                reason_codes,
+            ));
+        }
+    }
+
+    let schema_binding_total = bindings.bindings.len();
+    let schema_binding_mismatched = schema_binding_mismatches.len();
+    let binding_candidate_total = bindings.binding_candidates.len();
+    let binding_candidate_mismatched = binding_candidate_mismatches.len();
+    FirstPublicRoadConnectionDiagnosticReport {
+        rule: crate::topology::FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+        schema_binding_total,
+        schema_binding_matched: schema_binding_total - schema_binding_mismatched,
+        schema_binding_mismatched,
+        schema_binding_mismatches,
+        binding_candidate_total,
+        binding_candidate_matched: binding_candidate_total - binding_candidate_mismatched,
+        binding_candidate_mismatched,
+        binding_candidate_mismatches,
+    }
+}
+
 /// Validates OD tariffs against the canonical inventory.
 pub fn validate_od_tariffs(
     tariffs: &OdTariffsFile,
@@ -2040,99 +2445,134 @@ pub fn validate_od_tariffs(
 /// 2. `Vec<RampArtifactEntry>` for `ramps.json` (all canonical ramps).
 /// 3. Informational messages for unbound ramps outside the graph coverage.
 pub fn bind_ramps_to_graph(
-    graph: &Graph,
+    graph: &mut Graph,
     inv: &RampInventoryFile,
     bindings: &OsmRampBindingsFile,
 ) -> (Vec<Ramp>, Vec<RampArtifactEntry>, Vec<String>) {
     let mut bound_ramps = Vec::new();
     let mut artifact_entries = Vec::new();
     let mut unbound_notes = Vec::new();
-
-    // Map ramp_id -> binding
     let binding_map: HashMap<&str, &OsmRampBinding> = bindings
         .bindings
         .iter()
-        .map(|b| (b.ramp_id.as_str(), b))
+        .map(|binding| (binding.ramp_id.as_str(), binding))
+        .collect();
+    let verified_candidate_map: HashMap<&str, &OsmRampBindingCandidate> = bindings
+        .binding_candidates
+        .iter()
+        .filter(|candidate| candidate.status == "verified_bound")
+        .map(|candidate| (candidate.ramp_id.as_str(), candidate))
         .collect();
 
-    // Pre-index graph edges by way ID
-    // Edge IDs have format "e:w{way_id}:{idx}:{dir}"
-    let mut edges_by_way: HashMap<i64, Vec<&crate::model::Edge>> = HashMap::new();
-    for e in &graph.edges {
-        let parts: Vec<&str> = e.id.split(':').collect();
-        if parts.len() >= 2 && parts[1].starts_with('w') {
-            if let Ok(wid) = parts[1][1..].parse::<i64>() {
-                edges_by_way.entry(wid).or_default().push(e);
-            }
-        }
-    }
-
     for item in &inv.ramps {
-        let binding = binding_map.get(item.ramp_id.as_str()).copied();
-
-        let mut matched_edge: Option<&crate::model::Edge> = None;
         let is_active_general = item.status == "active"
             && matches!(item.kind, RampKind::GeneralEntry | RampKind::GeneralExit);
-        if is_active_general {
-            if let Some(b) = binding {
-                if let Some(candidate_edges) = edges_by_way.get(&b.osm_way_id) {
-                    let is_entry = item.kind == RampKind::GeneralEntry;
-                    let target_kind = if is_entry {
-                        EdgeKind::Entry
-                    } else {
-                        EdgeKind::Exit
-                    };
-                    let ground_node = format!("n:{}", b.osm_node_id);
-                    let motorway_node = format!("n:{}", b.motorway_node_id);
-                    let (expected_from, expected_to) = if is_entry {
-                        (ground_node.as_str(), motorway_node.as_str())
-                    } else {
-                        (motorway_node.as_str(), ground_node.as_str())
-                    };
+        let target_kind = match item.kind {
+            RampKind::GeneralEntry => EdgeKind::Entry,
+            RampKind::GeneralExit => EdgeKind::Exit,
+            _ => EdgeKind::Shutoko,
+        };
+        let mut projection = None;
 
-                    // Bind the exact directed OSM segment named by the binding.
-                    // Selecting the first edge of a way can silently attach multiple
-                    // facilities to the wrong end of a multi-segment ramp.
-                    matched_edge = candidate_edges
+        if is_active_general {
+            if let Some(binding) = binding_map.get(item.ramp_id.as_str()).copied() {
+                let ground_node = format!("n:{}", binding.osm_node_id);
+                let motorway_node = format!("n:{}", binding.motorway_node_id);
+                let (expected_from, expected_to) = if item.kind == RampKind::GeneralEntry {
+                    (ground_node.as_str(), motorway_node.as_str())
+                } else {
+                    (motorway_node.as_str(), ground_node.as_str())
+                };
+                if let Some(edge) = graph.edges.iter().find(|edge| {
+                    edge.id.split(':').nth(1) == Some(format!("w{}", binding.osm_way_id).as_str())
+                        && edge.kind == target_kind
+                        && edge.from == expected_from
+                        && edge.to == expected_to
+                }) {
+                    let motorway_node_id =
+                        if graph.nodes.iter().any(|node| node.id == motorway_node) {
+                            motorway_node
+                        } else if item.kind == RampKind::GeneralEntry {
+                            edge.to.clone()
+                        } else {
+                            edge.from.clone()
+                        };
+                    projection = Some((
+                        edge.id.clone(),
+                        if item.kind == RampKind::GeneralEntry {
+                            edge.from.clone()
+                        } else {
+                            edge.to.clone()
+                        },
+                        motorway_node_id,
+                    ));
+                }
+            } else if let Some(candidate) =
+                verified_candidate_map.get(item.ramp_id.as_str()).copied()
+            {
+                if let [segment] = candidate.directed_segments.as_slice() {
+                    let ground_node = if item.kind == RampKind::GeneralEntry {
+                        segment.from_node_id.as_str()
+                    } else {
+                        segment.to_node_id.as_str()
+                    };
+                    let motorway_node = if item.kind == RampKind::GeneralEntry {
+                        segment.to_node_id.as_str()
+                    } else {
+                        segment.from_node_id.as_str()
+                    };
+                    let edges = segment
+                        .edge_ids
                         .iter()
-                        .find(|e| {
-                            e.kind == target_kind && e.from == expected_from && e.to == expected_to
+                        .map(|edge_id| {
+                            graph
+                                .edges
+                                .iter()
+                                .find(|edge| edge.id == *edge_id)
+                                .map(|edge| {
+                                    (edge.id.as_str(), edge.from.as_str(), edge.to.as_str())
+                                })
                         })
-                        .copied();
+                        .collect::<Option<Vec<_>>>();
+                    let valid_edges = edges.as_ref().is_some_and(|edges| {
+                        edges
+                            .first()
+                            .is_some_and(|(_, from, _)| *from == segment.from_node_id)
+                            && edges
+                                .last()
+                                .is_some_and(|(_, _, to)| *to == segment.to_node_id)
+                            && edges.windows(2).all(|pair| pair[0].2 == pair[1].1)
+                    });
+                    if valid_edges {
+                        let edge_ids = segment.edge_ids.iter().cloned().collect::<HashSet<_>>();
+                        for edge in &mut graph.edges {
+                            if edge_ids.contains(&edge.id) {
+                                edge.kind = target_kind;
+                            }
+                        }
+                        projection = Some((
+                            segment.edge_ids[0].clone(),
+                            ground_node.to_string(),
+                            motorway_node.to_string(),
+                        ));
+                    }
                 }
             }
         }
 
-        if let (Some(b), Some(edge)) = (binding, matched_edge) {
-            let is_entry = item.kind == RampKind::GeneralEntry;
-            let node_id = if is_entry {
-                edge.from.clone()
-            } else {
-                edge.to.clone()
-            };
-            let motorway_node_str = format!("n:{}", b.motorway_node_id);
-            let mainline_node_id = if graph.nodes.iter().any(|n| n.id == motorway_node_str) {
-                motorway_node_str
-            } else if is_entry {
-                edge.to.clone()
-            } else {
-                edge.from.clone()
-            };
-
-            let ramp = Ramp {
+        if let Some((edge_id, node_id, mainline_node_id)) = projection {
+            bound_ramps.push(Ramp {
                 id: item.ramp_id.clone(),
                 facility_id: item.facility_id.clone(),
                 name: item.facility_name.clone(),
                 route: item.route.clone(),
                 direction: item.direction.clone(),
                 kind: item.kind,
-                edge_id: edge.id.clone(),
+                edge_id: edge_id.clone(),
                 node_id: node_id.clone(),
                 mainline_node_id: mainline_node_id.clone(),
                 restrictions: item.restrictions.clone(),
-            };
-            bound_ramps.push(ramp);
-
+            });
             artifact_entries.push(RampArtifactEntry {
                 id: item.ramp_id.clone(),
                 facility_id: item.facility_id.clone(),
@@ -2149,7 +2589,7 @@ pub fn bind_ramps_to_graph(
                 routing_capability_reason: item.routing_capability_reason.clone(),
                 restrictions: item.restrictions.clone(),
                 bound: true,
-                edge_id: Some(edge.id.clone()),
+                edge_id: Some(edge_id),
                 node_id: Some(node_id),
                 mainline_node_id: Some(mainline_node_id),
             });
@@ -3062,6 +3502,122 @@ mod tests {
             decision["bindingCandidateEvidence"]["unresolvedReasonCodes"],
             json!(candidate.unresolved_reason_codes)
         );
+    }
+
+    #[test]
+    fn test_verified_multi_way_candidate_validates_and_projects() {
+        let (mut inventory, mut bindings, osm, mut candidate) = load_binding_candidate_fixture();
+        let segment = &mut candidate.directed_segments[0];
+        segment.osm_way_ids.pop();
+        segment.osm_node_ids.pop();
+        segment.edge_ids.pop();
+        segment.to_node_id = "n:1832672162".into();
+        segment.edge_ids_sha256 = crate::manifest::compute_sha256(
+            serde_json::to_string(&segment.edge_ids)
+                .unwrap_or_default()
+                .as_bytes(),
+        );
+        candidate.status = "verified_bound".into();
+        candidate.public_projection = "included_verified".into();
+        candidate.unresolved_reason.clear();
+        candidate.unresolved_reason_codes.clear();
+        candidate.route_evidence.ground_way_id = 258834790;
+        bindings.binding_candidates = vec![candidate.clone()];
+
+        let ramp = inventory
+            .ramps
+            .iter_mut()
+            .find(|ramp| ramp.ramp_id == candidate.ramp_id)
+            .unwrap();
+        ramp.support_state = Some("verified_bound".into());
+        ramp.support_reason =
+            Some("firstPublicRoadConnection/v1が4-way exact bindingを証明した。".into());
+        ramp.support_evidence
+            .push("fixtures/osm/shutoko-all.json:firstPublicRoadConnection/v1".into());
+        ramp.routing_capability = Some("routable".into());
+        ramp.routing_capability_reason = Some("有向Shutoko実グラフ上の周回接続を監査済み。".into());
+
+        validate_osm_ramp_bindings(&bindings, &inventory).unwrap();
+        validate_osm_ramp_bindings_against_osm(&bindings, &inventory, &osm).unwrap();
+        let audit = audit_first_public_road_connection(&candidate, &inventory, &osm).unwrap();
+        assert_eq!(
+            audit.support_state,
+            crate::seed::EndpointSupportState::VerifiedBound
+        );
+        assert_eq!(audit.ground_node_id, Some(1832672162));
+        assert_eq!(audit.ground_way_id, Some(258834790));
+
+        let mut graph: Graph = shutoko_routing_core::prepare_json(
+            include_str!("../../../fixtures/generated/graph.json"),
+            "{}",
+        )
+        .unwrap()
+        .graph()
+        .clone();
+        let original_billing_pairs = serde_json::to_value(&graph.billing_pairs).unwrap();
+        let (ramps, artifacts, notes) = bind_ramps_to_graph(&mut graph, &inventory, &bindings);
+        assert_eq!(ramps.len(), 233);
+        assert!(notes.iter().all(|note| !note.contains(&candidate.ramp_id)));
+        graph.ramps = ramps;
+        let projected = graph
+            .ramps
+            .iter()
+            .find(|ramp| ramp.id == candidate.ramp_id)
+            .unwrap();
+        assert_eq!(
+            projected.edge_id,
+            candidate.directed_segments[0].edge_ids[0]
+        );
+        assert_eq!(projected.node_id, "n:1832672162");
+        assert_eq!(projected.mainline_node_id, "n:252175582");
+        for edge_id in &candidate.directed_segments[0].edge_ids {
+            assert_eq!(
+                graph
+                    .edges
+                    .iter()
+                    .find(|edge| edge.id == *edge_id)
+                    .unwrap()
+                    .kind,
+                EdgeKind::Exit
+            );
+        }
+        let artifact = artifacts
+            .iter()
+            .find(|artifact| artifact.id == candidate.ramp_id)
+            .unwrap();
+        assert!(artifact.bound);
+        assert_eq!(artifact.support_state.as_deref(), Some("verified_bound"));
+        assert_eq!(
+            serde_json::to_value(&graph.billing_pairs).unwrap(),
+            original_billing_pairs
+        );
+
+        let evidence = crate::route_membership::bound_ramp_evidence_from_inventory(
+            &graph, &inventory, &bindings,
+        )
+        .unwrap();
+        let candidate_evidence = evidence
+            .iter()
+            .find(|evidence| evidence.ramp_id == candidate.ramp_id)
+            .unwrap();
+        assert_eq!(
+            candidate_evidence.edge_ids,
+            candidate.directed_segments[0].edge_ids
+        );
+        let source_snapshot_sha256 = crate::manifest::compute_sha256(
+            include_bytes!("../../../fixtures/osm/shutoko-all.json").as_slice(),
+        );
+        crate::route_membership::build_route_membership_indices(
+            &osm,
+            &graph,
+            &crate::route_membership::RouteMembershipBuildOptions {
+                source_snapshot_sha256,
+                relation_ids: Some(vec![4256008, 4256339]),
+                bound_ramp_evidence: evidence,
+            },
+        )
+        .unwrap();
+        validate_endpoint_capability_contract(&graph, &inventory).unwrap();
     }
 
     #[test]

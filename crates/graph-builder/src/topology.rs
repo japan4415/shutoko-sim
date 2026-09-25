@@ -11,6 +11,7 @@
 
 use crate::model::{Edge, EdgeKind, Graph, Node, SnapIndex, SnapNode};
 use crate::osm::{OsmElement, OverpassResponse};
+use crate::seed::EndpointSupportState;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// Diagnostic report capturing turn restriction and ramp topology statistics.
@@ -298,6 +299,591 @@ pub fn parse_oneway(element: &OsmElement) -> OnewayDirection {
         Some("-1" | "reverse") => OnewayDirection::ReverseOnly,
         _ => OnewayDirection::Bidirectional,
     }
+}
+
+pub const FIRST_PUBLIC_ROAD_CONNECTION_RULE: &str = "firstPublicRoadConnection/v1";
+
+pub const ALLOWED_SURFACE_HIGHWAYS: &[&str] = &[
+    "trunk",
+    "trunk_link",
+    "primary",
+    "primary_link",
+    "secondary",
+    "secondary_link",
+    "tertiary",
+    "tertiary_link",
+    "unclassified",
+    "residential",
+    "living_street",
+    "service",
+];
+
+pub const REJECTED_SURFACE_HIGHWAYS: &[&str] = &[
+    "motorway",
+    "motorway_link",
+    "footway",
+    "path",
+    "cycleway",
+    "steps",
+    "pedestrian",
+    "track",
+    "bus_guideway",
+    "escape",
+    "raceway",
+    "road",
+    "construction",
+    "proposed",
+    "abandoned",
+    "disused",
+];
+
+pub const REJECTED_ACCESS_VALUES: &[&str] = &[
+    "no",
+    "private",
+    "customers",
+    "delivery",
+    "destination",
+    "permit",
+    "agricultural",
+    "forestry",
+    "military",
+    "emergency",
+];
+
+pub const ALLOWED_ACCESS_VALUES: &[&str] = &["yes", "public", "designated", "permissive"];
+pub const ALLOWED_SERVICE_SUBTAGS: &[&str] = &["alley"];
+pub const REJECTED_SERVICE_SUBTAGS: &[&str] = &[
+    "parking_aisle",
+    "driveway",
+    "drive-through",
+    "emergency_access",
+    "slipway",
+    "unspecified",
+    "unknown",
+];
+
+pub const REASON_CONDITIONAL_ACCESS_RESTRICTION: &str = "CONDITIONAL_ACCESS_RESTRICTION";
+pub const REASON_NO_GROUND_CONNECTION: &str = "NO_GROUND_CONNECTION";
+pub const REASON_MULTIPLE_GROUND_CONNECTION_CANDIDATES: &str =
+    "MULTIPLE_GROUND_CONNECTION_CANDIDATES";
+pub const REASON_EARLY_SURFACE_CONNECTION: &str = "EARLY_SURFACE_CONNECTION";
+pub const REASON_UNRECOGNIZED_TAG_FAIL_CLOSED: &str = "UNRECOGNIZED_TAG_FAIL_CLOSED";
+pub const REASON_GROUND_WAY_MISMATCH: &str = "GROUND_WAY_MISMATCH";
+pub const REASON_NO_RAMP_SUCCESSOR: &str = "NO_RAMP_SUCCESSOR";
+pub const REASON_MULTIPLE_RAMP_SUCCESSORS: &str = "MULTIPLE_RAMP_SUCCESSORS";
+pub const REASON_RAMP_SUCCESSOR_MISMATCH: &str = "RAMP_SUCCESSOR_MISMATCH";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RampFlowDirection {
+    Exit,
+    Entry,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SurfaceWayConnectionFailure {
+    pub reason_code: String,
+    pub detail: String,
+}
+
+impl SurfaceWayConnectionFailure {
+    fn new(reason_code: &str, detail: impl Into<String>) -> Self {
+        Self {
+            reason_code: reason_code.to_string(),
+            detail: detail.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SurfaceWayConnectionAudit {
+    Legal,
+    Rejected(String),
+    FailClosed(SurfaceWayConnectionFailure),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FirstPublicRoadConnectionResolution {
+    pub rule: String,
+    pub support_state: EndpointSupportState,
+    pub ground_node_id: Option<i64>,
+    pub ground_way_id: Option<i64>,
+    pub ground_way_name: Option<String>,
+    pub reason_codes: Vec<String>,
+    pub notes: Vec<String>,
+}
+
+pub fn find_conditional_restriction(way: &OsmElement) -> Result<Option<String>, String> {
+    if let Some(tags) = &way.tags {
+        for (key, value) in tags {
+            if key.ends_with(":conditional") {
+                return Ok(Some(format!(
+                    "way {} has conditional tag '{key}={value}'",
+                    way.id
+                )));
+            }
+        }
+    }
+    if let Some(oneway) = way.get_tag("oneway") {
+        let normalized = oneway.trim().to_ascii_lowercase();
+        if matches!(normalized.as_str(), "reversible" | "alternating") {
+            return Ok(Some(format!(
+                "way {} has variable oneway '{normalized}'",
+                way.id
+            )));
+        }
+    }
+    if let Some(reversible) = way.get_tag("reversible") {
+        let normalized = reversible.trim().to_ascii_lowercase();
+        if matches!(normalized.as_str(), "yes" | "true" | "1") {
+            return Ok(Some(format!(
+                "way {} has reversible tag '{normalized}'",
+                way.id
+            )));
+        }
+        if !matches!(normalized.as_str(), "no" | "false" | "0") {
+            return Err(format!(
+                "way {} has unrecognized reversible tag '{normalized}'",
+                way.id
+            ));
+        }
+    }
+    Ok(None)
+}
+
+pub fn evaluate_access_hierarchy(way: &OsmElement) -> Result<bool, String> {
+    const HIERARCHY: &[&str] = &["motorcar", "motor_vehicle", "vehicle", "access"];
+    for tag_name in HIERARCHY {
+        if let Some(value) = way.get_tag(tag_name) {
+            let normalized = value.trim().to_ascii_lowercase();
+            if REJECTED_ACCESS_VALUES.contains(&normalized.as_str()) {
+                return Ok(false);
+            }
+            if ALLOWED_ACCESS_VALUES.contains(&normalized.as_str()) {
+                return Ok(true);
+            }
+            return Err(format!(
+                "way {} has unrecognized access tag '{tag_name}={normalized}'",
+                way.id
+            ));
+        }
+    }
+    Ok(true)
+}
+
+pub fn evaluate_highway_type(way: &OsmElement) -> Result<bool, SurfaceWayConnectionFailure> {
+    if let Some(area) = way.get_tag("area") {
+        let normalized = area.trim().to_ascii_lowercase();
+        if matches!(normalized.as_str(), "yes" | "1" | "true") {
+            return Ok(false);
+        }
+        if !matches!(normalized.as_str(), "no" | "0" | "false") {
+            return Err(SurfaceWayConnectionFailure::new(
+                REASON_UNRECOGNIZED_TAG_FAIL_CLOSED,
+                format!("way {} has unrecognized area tag '{normalized}'", way.id),
+            ));
+        }
+    }
+    let Some(highway) = way.get_tag("highway") else {
+        return Ok(false);
+    };
+    let normalized = highway.trim().to_ascii_lowercase();
+    if REJECTED_SURFACE_HIGHWAYS.contains(&normalized.as_str()) {
+        return Ok(false);
+    }
+    if normalized == "service" {
+        let Some(service) = way.get_tag("service") else {
+            return Ok(false);
+        };
+        let service = service.trim().to_ascii_lowercase();
+        if ALLOWED_SERVICE_SUBTAGS.contains(&service.as_str()) {
+            return Ok(true);
+        }
+        if REJECTED_SERVICE_SUBTAGS.contains(&service.as_str()) {
+            return Ok(false);
+        }
+        return Err(SurfaceWayConnectionFailure::new(
+            REASON_UNRECOGNIZED_TAG_FAIL_CLOSED,
+            format!("way {} has unrecognized service tag '{service}'", way.id),
+        ));
+    }
+    if ALLOWED_SURFACE_HIGHWAYS.contains(&normalized.as_str()) {
+        return Ok(true);
+    }
+    Err(SurfaceWayConnectionFailure::new(
+        REASON_UNRECOGNIZED_TAG_FAIL_CLOSED,
+        format!("way {} has unrecognized highway tag '{normalized}'", way.id),
+    ))
+}
+
+fn directed_next_node_ids(
+    way: &OsmElement,
+    node_id: i64,
+    flow: RampFlowDirection,
+) -> Result<Vec<i64>, String> {
+    let Some(nodes) = way.nodes.as_ref() else {
+        return Ok(Vec::new());
+    };
+    let normalized = way
+        .get_tag("oneway")
+        .map(|value| value.trim().to_ascii_lowercase())
+        .unwrap_or_default();
+    let mut next = Vec::new();
+    for (index, current) in nodes.iter().enumerate() {
+        if *current != node_id {
+            continue;
+        }
+        let forward = index + 1 < nodes.len();
+        let backward = index > 0;
+        let allowed = match normalized.as_str() {
+            "yes" | "1" | "true" => match flow {
+                RampFlowDirection::Exit => forward,
+                RampFlowDirection::Entry => backward,
+            },
+            "-1" | "reverse" => match flow {
+                RampFlowDirection::Exit => backward,
+                RampFlowDirection::Entry => forward,
+            },
+            "no" | "0" | "false" | "" => forward || backward,
+            "reversible" | "alternating" => {
+                return Err(format!("way {} has variable oneway '{normalized}'", way.id))
+            }
+            other => {
+                return Err(format!(
+                    "way {} has unrecognized oneway tag '{other}'",
+                    way.id
+                ))
+            }
+        };
+        if allowed {
+            let next_nodes = if normalized == "-1" || normalized == "reverse" {
+                if backward {
+                    vec![nodes[index - 1]]
+                } else {
+                    Vec::new()
+                }
+            } else if normalized.is_empty() || matches!(normalized.as_str(), "no" | "0" | "false") {
+                let mut next_nodes = Vec::with_capacity(2);
+                if forward {
+                    next_nodes.push(nodes[index + 1]);
+                }
+                if backward {
+                    next_nodes.push(nodes[index - 1]);
+                }
+                next_nodes
+            } else if forward {
+                vec![nodes[index + 1]]
+            } else {
+                vec![nodes[index - 1]]
+            };
+            for next_node in next_nodes {
+                if !next.contains(&next_node) {
+                    next.push(next_node);
+                }
+            }
+        }
+    }
+    Ok(next)
+}
+
+pub fn is_direction_continuation_legal(
+    way: &OsmElement,
+    node_id: i64,
+    flow: RampFlowDirection,
+) -> Result<bool, String> {
+    Ok(!directed_next_node_ids(way, node_id, flow)?.is_empty())
+}
+
+pub fn evaluate_surface_way_for_connection(
+    way: &OsmElement,
+    node_id: i64,
+    flow: RampFlowDirection,
+) -> SurfaceWayConnectionAudit {
+    let Some(nodes) = &way.nodes else {
+        return SurfaceWayConnectionAudit::Rejected("way has no nodes".into());
+    };
+    if !nodes.contains(&node_id) {
+        return SurfaceWayConnectionAudit::Rejected("node not in way".into());
+    }
+    match find_conditional_restriction(way) {
+        Err(error) => {
+            return SurfaceWayConnectionAudit::FailClosed(SurfaceWayConnectionFailure::new(
+                REASON_UNRECOGNIZED_TAG_FAIL_CLOSED,
+                error,
+            ))
+        }
+        Ok(Some(detail)) => {
+            return SurfaceWayConnectionAudit::FailClosed(SurfaceWayConnectionFailure::new(
+                REASON_CONDITIONAL_ACCESS_RESTRICTION,
+                detail,
+            ))
+        }
+        Ok(None) => {}
+    }
+    match evaluate_access_hierarchy(way) {
+        Err(error) => {
+            return SurfaceWayConnectionAudit::FailClosed(SurfaceWayConnectionFailure::new(
+                REASON_UNRECOGNIZED_TAG_FAIL_CLOSED,
+                error,
+            ))
+        }
+        Ok(false) => {
+            return SurfaceWayConnectionAudit::Rejected("access hierarchy rejected".into())
+        }
+        Ok(true) => {}
+    }
+    match evaluate_highway_type(way) {
+        Err(error) => return SurfaceWayConnectionAudit::FailClosed(error),
+        Ok(false) => return SurfaceWayConnectionAudit::Rejected("highway type not allowed".into()),
+        Ok(true) => {}
+    }
+    match directed_next_node_ids(way, node_id, flow) {
+        Err(error) => SurfaceWayConnectionAudit::FailClosed(SurfaceWayConnectionFailure::new(
+            REASON_UNRECOGNIZED_TAG_FAIL_CLOSED,
+            error,
+        )),
+        Ok(next_node_ids) if next_node_ids.is_empty() => {
+            SurfaceWayConnectionAudit::Rejected("oneway direction continuation illegal".into())
+        }
+        Ok(_) => SurfaceWayConnectionAudit::Legal,
+    }
+}
+
+fn unresolved_resolution(
+    ground_node_id: Option<i64>,
+    ground_way_id: Option<i64>,
+    ground_way_name: Option<String>,
+    reason_code: &str,
+    note: impl Into<String>,
+) -> FirstPublicRoadConnectionResolution {
+    FirstPublicRoadConnectionResolution {
+        rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+        support_state: EndpointSupportState::Unresolved,
+        ground_node_id,
+        ground_way_id,
+        ground_way_name,
+        reason_codes: vec![reason_code.to_string()],
+        notes: vec![note.into()],
+    }
+}
+
+fn ramp_successors_at_node(
+    node_id: i64,
+    way_map: &HashMap<i64, &OsmElement>,
+    node_to_ways: &HashMap<i64, Vec<i64>>,
+) -> Result<Vec<(i64, i64)>, SurfaceWayConnectionFailure> {
+    let mut successors = Vec::new();
+    let mut way_ids = node_to_ways
+        .get(&node_id)
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect::<Vec<_>>();
+    way_ids.sort_unstable();
+    way_ids.dedup();
+    for way_id in &way_ids {
+        let Some(way) = way_map.get(way_id) else {
+            continue;
+        };
+        let highway = way
+            .get_tag("highway")
+            .map(|value| value.trim().to_ascii_lowercase());
+        if highway.as_deref() != Some("motorway_link") {
+            continue;
+        }
+        let next_node_ids =
+            directed_next_node_ids(way, node_id, RampFlowDirection::Exit).map_err(|error| {
+                SurfaceWayConnectionFailure::new(REASON_UNRECOGNIZED_TAG_FAIL_CLOSED, error)
+            })?;
+        for next_node_id in next_node_ids {
+            if next_node_id != node_id && !successors.contains(&(*way_id, next_node_id)) {
+                successors.push((*way_id, next_node_id));
+            }
+        }
+    }
+    successors.sort_unstable();
+    Ok(successors)
+}
+
+pub fn resolve_first_public_road_connection(
+    chain_node_ids: &[i64],
+    flow: RampFlowDirection,
+    way_map: &HashMap<i64, &OsmElement>,
+    node_to_ways: &HashMap<i64, Vec<i64>>,
+    expected_ground_way: Option<i64>,
+) -> FirstPublicRoadConnectionResolution {
+    for (index, node_id) in chain_node_ids.iter().copied().enumerate() {
+        let mut legal_surface_ways = Vec::new();
+        let mut first_failure = None;
+        let mut way_ids = node_to_ways
+            .get(&node_id)
+            .into_iter()
+            .flatten()
+            .copied()
+            .collect::<Vec<_>>();
+        way_ids.sort_unstable();
+        way_ids.dedup();
+        for way_id in &way_ids {
+            let Some(way) = way_map.get(way_id) else {
+                continue;
+            };
+            let highway = way
+                .get_tag("highway")
+                .map(|value| value.trim().to_ascii_lowercase());
+            if matches!(highway.as_deref(), Some("motorway" | "motorway_link")) {
+                continue;
+            }
+            match evaluate_surface_way_for_connection(way, node_id, flow) {
+                SurfaceWayConnectionAudit::Legal => {
+                    if !legal_surface_ways.contains(way_id) {
+                        legal_surface_ways.push(*way_id);
+                    }
+                }
+                SurfaceWayConnectionAudit::Rejected(_) => {}
+                SurfaceWayConnectionAudit::FailClosed(failure) => {
+                    if first_failure.is_none() {
+                        first_failure = Some(failure);
+                    }
+                }
+            }
+        }
+        legal_surface_ways.sort_unstable();
+        if let Some(failure) = first_failure {
+            return unresolved_resolution(
+                Some(node_id),
+                None,
+                None,
+                &failure.reason_code,
+                failure.detail,
+            );
+        }
+        if legal_surface_ways.len() > 1 {
+            return unresolved_resolution(
+                Some(node_id),
+                None,
+                None,
+                REASON_MULTIPLE_GROUND_CONNECTION_CANDIDATES,
+                format!("node {node_id} has multiple legal public ways: {legal_surface_ways:?}"),
+            );
+        }
+        if let [ground_way_id] = legal_surface_ways.as_slice() {
+            let ground_way_name = way_map
+                .get(ground_way_id)
+                .and_then(|way| way.get_tag("name"))
+                .map(str::to_string);
+            if let Some(expected_ground_way) = expected_ground_way {
+                if expected_ground_way != *ground_way_id {
+                    return unresolved_resolution(
+                        Some(node_id),
+                        Some(*ground_way_id),
+                        ground_way_name,
+                        REASON_GROUND_WAY_MISMATCH,
+                        format!(
+                            "declared ground way {expected_ground_way} does not match first public way {ground_way_id}"
+                        ),
+                    );
+                }
+            }
+            return FirstPublicRoadConnectionResolution {
+                rule: FIRST_PUBLIC_ROAD_CONNECTION_RULE.to_string(),
+                support_state: EndpointSupportState::VerifiedBound,
+                ground_node_id: Some(node_id),
+                ground_way_id: Some(*ground_way_id),
+                ground_way_name,
+                reason_codes: Vec::new(),
+                notes: Vec::new(),
+            };
+        }
+        if index + 1 < chain_node_ids.len() {
+            let successors = match ramp_successors_at_node(node_id, way_map, node_to_ways) {
+                Ok(successors) => successors,
+                Err(failure) => {
+                    return unresolved_resolution(
+                        Some(node_id),
+                        None,
+                        None,
+                        &failure.reason_code,
+                        failure.detail,
+                    )
+                }
+            };
+            match successors.as_slice() {
+                [] => {
+                    return unresolved_resolution(
+                        Some(node_id),
+                        None,
+                        None,
+                        REASON_NO_RAMP_SUCCESSOR,
+                        format!("node {node_id} has no legal motorway_link successor"),
+                    )
+                }
+                [(_, next_node_id)] if *next_node_id == chain_node_ids[index + 1] => {}
+                [(_, next_node_id)] => {
+                    return unresolved_resolution(
+                        Some(node_id),
+                        None,
+                        None,
+                        REASON_RAMP_SUCCESSOR_MISMATCH,
+                        format!(
+                            "node {node_id} successor {next_node_id} does not match declared chain node {}",
+                            chain_node_ids[index + 1]
+                        ),
+                    )
+                }
+                _ => {
+                    return unresolved_resolution(
+                        Some(node_id),
+                        None,
+                        None,
+                        REASON_MULTIPLE_RAMP_SUCCESSORS,
+                        format!("node {node_id} has multiple ramp successors: {successors:?}"),
+                    )
+                }
+            }
+        }
+    }
+    unresolved_resolution(
+        None,
+        None,
+        None,
+        REASON_NO_GROUND_CONNECTION,
+        "no legal public surface road connection found along ramp chain",
+    )
+}
+
+pub fn find_first_public_road_connection(
+    chain_node_ids: &[i64],
+    flow: RampFlowDirection,
+    way_map: &HashMap<i64, &OsmElement>,
+    node_to_ways: &HashMap<i64, Vec<i64>>,
+) -> FirstPublicRoadConnectionResolution {
+    resolve_first_public_road_connection(chain_node_ids, flow, way_map, node_to_ways, None)
+}
+
+pub fn resolve_first_public_road_connection_from_osm(
+    chain_node_ids: &[i64],
+    flow: RampFlowDirection,
+    osm_resp: &OverpassResponse,
+    expected_ground_way: Option<i64>,
+) -> FirstPublicRoadConnectionResolution {
+    let mut way_map = HashMap::new();
+    let mut node_to_ways: HashMap<i64, Vec<i64>> = HashMap::new();
+    for element in &osm_resp.elements {
+        if element.is_way() {
+            way_map.insert(element.id, element);
+            if let Some(nodes) = &element.nodes {
+                for node_id in nodes {
+                    node_to_ways.entry(*node_id).or_default().push(element.id);
+                }
+            }
+        }
+    }
+    resolve_first_public_road_connection(
+        chain_node_ids,
+        flow,
+        &way_map,
+        &node_to_ways,
+        expected_ground_way,
+    )
 }
 
 /// Build `Graph`, `SnapIndex`, and diagnostic `RestrictionReport` from Overpass API elements.

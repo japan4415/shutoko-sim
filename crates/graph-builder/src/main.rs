@@ -4,13 +4,14 @@
 //! from OSM Overpass export JSON and human-verified billing pair seeds.
 
 use shutoko_graph_builder::{
-    apply_od_tariffs_to_graph, bind_ramps_to_graph, bound_ramp_evidence_from_inventory,
-    build_manifest, build_route_membership_indices, build_topology_with_report,
-    generate_and_validate_parsed_billing_pairs, generate_diagnostic_radial_route_plans,
-    graph_schema_v4_to_deterministic_json_with_radial, manifest_to_deterministic_json,
-    parse_billing_pairs_seed, promote_verified_radial_pair, ramps_artifact_to_deterministic_json,
-    route_memberships_sha256, snap_index_to_deterministic_json, to_deterministic_json,
-    validate_od_tariffs, validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
+    apply_od_tariffs_to_graph, audit_first_public_road_connections, bind_ramps_to_graph,
+    bound_ramp_evidence_from_inventory, build_manifest, build_route_membership_indices,
+    build_topology_with_report, generate_and_validate_parsed_billing_pairs,
+    generate_diagnostic_radial_route_plans, graph_schema_v4_to_deterministic_json_with_radial,
+    manifest_to_deterministic_json, parse_billing_pairs_seed, promote_verified_radial_pair,
+    ramps_artifact_to_deterministic_json, route_memberships_sha256,
+    snap_index_to_deterministic_json, to_deterministic_json, validate_od_tariffs,
+    validate_osm_ramp_bindings, validate_osm_ramp_bindings_against_osm,
     validate_radial_seed_binding_candidates, validate_ramp_inventory, BillingPairProvenance,
     EdgeKind, EndpointSupportState, ManifestConfig, OdTariffsFile, OsmRampBindingsFile,
     OverpassResponse, ParsedBillingPairsSeed, RampInventoryFile, RampKind, RampsArtifact,
@@ -427,6 +428,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     errs.join("\n  ")
                 )
             })?;
+            let diagnostics = audit_first_public_road_connections(&b, &inv, &overpass_resp);
+            println!(
+                "{}",
+                serde_json::to_string(&diagnostics)
+                    .map_err(|error| format!("binding diagnostic serialization failed: {error}"))?
+            );
             b
         } else {
             OsmRampBindingsFile {
@@ -439,7 +446,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let (bound_ramps, ramp_artifact_entries, unbound_notes) =
-            bind_ramps_to_graph(&graph, &inv, &bindings_file);
+            bind_ramps_to_graph(&mut graph, &inv, &bindings_file);
         graph.ramps = bound_ramps;
         if args.graph_schema == 4 {
             route_membership_evidence =

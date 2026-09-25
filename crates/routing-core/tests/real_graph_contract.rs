@@ -2098,7 +2098,7 @@ fn meguro_explicit_ramp_pair_matches_coordinate_route() {
 /// （web/test/integration-wasm.test.ts）と同じ項目を engine 側でも照合する。
 /// - 最寄りの入口（access node と距離、候補の入口ランプ）
 /// - 候補の件数・並び・pairId / pairKind
-/// - 。”（`tariffStatus` と 2026-10 改定をまたぐ 2 時点の金額・規則 ID・証拠 ID・適用期間）
+/// - 料金（`tariffStatus` と 2026-10 改定をまたぐ 2 時点の金額・規則 ID・証拠 ID・適用期間）
 /// - 推薦バッジが先頭 1 件だけであること
 /// - 同じ入力の再実行がバイト完全一致（並びも決定的）であること
 #[test]

@@ -6,16 +6,20 @@
 use shutoko_graph_builder::{
     apply_od_tariffs_to_graph, audit_first_public_road_connections, bind_ramps_to_graph,
     bound_ramp_evidence_from_inventory, build_manifest, build_route_membership_indices,
-    build_topology_with_report, generate_diagnostic_radial_route_plans,
-    graph_schema_v4_to_deterministic_json_with_radial_and_catalog, manifest_to_deterministic_json,
+    build_topology_with_report, derive_pair_candidates_from_source_bytes,
+    generate_diagnostic_radial_route_plans,
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog,
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3,
+    manifest_to_deterministic_json, pair_derivation_report_to_deterministic_json,
     parse_billing_pairs_seed, promote_verified_radial_pair, ramps_artifact_to_deterministic_json,
     route_memberships_sha256, snap_index_to_deterministic_json, tariff_overrides_from_catalog,
     to_deterministic_json, validate_od_tariffs, validate_osm_ramp_bindings,
     validate_osm_ramp_bindings_against_osm, validate_promoted_legacy_pairs_from_source,
     validate_radial_seed_binding_candidates, validate_ramp_inventory, BillingPairProvenance,
-    EdgeKind, EndpointSupportState, ManifestConfig, OdTariffsFile, OsmRampBindingsFile,
-    OverpassResponse, ParsedBillingPairsSeed, RampInventoryFile, RampKind, RampsArtifact,
-    RouteMembershipBuildOptions, TopologyConfig, VerificationStatus,
+    EdgeKind, EndpointSupportState, ManifestConfig, ManifestPairDerivation, OdTariffsFile,
+    OsmRampBindingsFile, OverpassResponse, PairDerivationReport, ParsedBillingPairsSeed,
+    RampInventoryFile, RampKind, RampsArtifact, RouteMembershipBuildOptions, TopologyConfig,
+    VerificationStatus,
 };
 use std::collections::HashMap;
 use std::env;
@@ -39,6 +43,10 @@ OPTIONS:
     --inventory <PATH>      Path to canonical ramp-inventory.json file
     --bindings <PATH>       Path to osm-ramp-bindings.json file
     --tariffs <PATH>        Path to od-tariffs.json file
+    --adjacency <PATH>      Path to billing-pair-adjacency.json file
+    --support-decisions <PATH> Path to ramp-support-decisions.json file
+    --relation-id <ID>      Route relation ID to include (can be specified multiple times)
+    --all-route-relations   Build route memberships for every route relation
     --release-id <STRING>   Release ID [default: "default-release"]
     --vehicle-profile <STR> Vehicle profile [default: "passenger-car-etc"]
     --built-at <ISO8601>    External fixed build timestamp [default: $SHUTOKO_BUILT_AT or "2026-09-10T00:00:00Z"]
@@ -54,8 +62,6 @@ OPTIONS:
     );
 }
 
-const ROUTE_MEMBERSHIP_RELATION_IDS: &[i64] = &[4256008, 4256339];
-
 fn repository_data_path(name: &str) -> PathBuf {
     let direct = PathBuf::from("data").join(name);
     if direct.exists() {
@@ -67,14 +73,50 @@ fn repository_data_path(name: &str) -> PathBuf {
 }
 
 fn default_route_membership_relation_ids(response: &OverpassResponse) -> Option<Vec<i64>> {
-    if ROUTE_MEMBERSHIP_RELATION_IDS
+    let mut ids = response
+        .elements
         .iter()
-        .all(|id| response.elements.iter().any(|element| element.id == *id))
-    {
-        Some(ROUTE_MEMBERSHIP_RELATION_IDS.to_vec())
-    } else {
-        None
+        .filter(|element| element.is_relation())
+        .filter(|element| {
+            element.get_tag("type") == Some("route")
+                && matches!(
+                    element.get_tag("ref").or_else(|| element.get_tag("route")),
+                    Some("C1") | Some("2")
+                )
+        })
+        .map(|element| element.id)
+        .collect::<Vec<_>>();
+    ids.sort_unstable();
+    ids.dedup();
+    (!ids.is_empty()).then_some(ids)
+}
+
+fn selected_route_membership_relation_ids(
+    response: &OverpassResponse,
+    requested: Option<&[i64]>,
+    all_relations: bool,
+) -> Result<Option<Vec<i64>>, String> {
+    if all_relations {
+        if requested.is_some() {
+            return Err("--all-route-relations cannot be combined with --relation-id".into());
+        }
+        return Ok(None);
     }
+    let Some(requested) = requested else {
+        return Ok(default_route_membership_relation_ids(response));
+    };
+    let mut ids = requested.to_vec();
+    ids.sort_unstable();
+    ids.dedup();
+    if ids.iter().any(|id| *id <= 0) {
+        return Err("--relation-id values must be positive integers".into());
+    }
+    for id in &ids {
+        if !response.elements.iter().any(|element| element.id == *id) {
+            return Err(format!("route relation {id} is absent from the OSM input"));
+        }
+    }
+    Ok(Some(ids))
 }
 
 fn endpoint_support_state_wire_value(state: EndpointSupportState) -> &'static str {
@@ -92,6 +134,10 @@ struct CliArgs {
     inventory_path: Option<PathBuf>,
     bindings_path: Option<PathBuf>,
     tariffs_path: Option<PathBuf>,
+    adjacency_path: Option<PathBuf>,
+    support_decisions_path: Option<PathBuf>,
+    relation_ids: Option<Vec<i64>>,
+    all_route_relations: bool,
     release_id: String,
     vehicle_profile: String,
     built_at: String,
@@ -116,6 +162,10 @@ fn parse_args() -> Result<CliArgs, String> {
     let mut inventory_path: Option<PathBuf> = None;
     let mut bindings_path: Option<PathBuf> = None;
     let mut tariffs_path: Option<PathBuf> = None;
+    let mut adjacency_path: Option<PathBuf> = None;
+    let mut support_decisions_path: Option<PathBuf> = None;
+    let mut relation_ids: Option<Vec<i64>> = None;
+    let mut all_route_relations = false;
     let mut release_id = "default-release".to_string();
     let mut vehicle_profile = "passenger-car-etc".to_string();
     let mut built_at =
@@ -180,6 +230,33 @@ fn parse_args() -> Result<CliArgs, String> {
                     return Err("--tariffs requires a path argument".into());
                 }
                 tariffs_path = Some(PathBuf::from(&raw_args[i]));
+            }
+            "--adjacency" | "--pair-adjacency" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err("--adjacency requires a path argument".into());
+                }
+                adjacency_path = Some(PathBuf::from(&raw_args[i]));
+            }
+            "--support-decisions" | "--ramp-support-decisions" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err("--support-decisions requires a path argument".into());
+                }
+                support_decisions_path = Some(PathBuf::from(&raw_args[i]));
+            }
+            "--relation-id" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err("--relation-id requires an integer argument".into());
+                }
+                let id = raw_args[i]
+                    .parse::<i64>()
+                    .map_err(|_| "--relation-id requires an integer argument".to_string())?;
+                relation_ids.get_or_insert_with(Vec::new).push(id);
+            }
+            "--all-route-relations" => {
+                all_route_relations = true;
             }
             "--release-id" => {
                 i += 1;
@@ -262,6 +339,10 @@ fn parse_args() -> Result<CliArgs, String> {
         inventory_path,
         bindings_path,
         tariffs_path,
+        adjacency_path,
+        support_decisions_path,
+        relation_ids,
+        all_route_relations,
         release_id,
         vehicle_profile,
         built_at,
@@ -284,6 +365,39 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    let is_v4_release = args.release_id == "all-real-v4";
+    if is_v4_release {
+        if args.graph_schema != 4 {
+            return Err("release all-real-v4 requires --graph-schema 4".into());
+        }
+        if args.seed_path.is_none()
+            || args.inventory_path.is_none()
+            || args.bindings_path.is_none()
+            || args.tariffs_path.is_none()
+        {
+            return Err(
+                "release all-real-v4 requires --seed, --inventory, --bindings, and --tariffs"
+                    .into(),
+            );
+        }
+    }
+    let adjacency_path = args
+        .adjacency_path
+        .clone()
+        .unwrap_or_else(|| repository_data_path("billing-pair-adjacency.json"));
+    let support_decisions_path = args
+        .support_decisions_path
+        .clone()
+        .unwrap_or_else(|| repository_data_path("ramp-support-decisions.json"));
+    if is_v4_release && (!adjacency_path.exists() || !support_decisions_path.exists()) {
+        return Err(format!(
+            "release all-real-v4 requires adjacency {} and support decisions {}",
+            adjacency_path.display(),
+            support_decisions_path.display()
+        )
+        .into());
+    }
+
     // 1. Read and parse OSM JSON
     let osm_raw = fs::read_to_string(&args.osm_path).map_err(|e| {
         format!(
@@ -299,6 +413,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             e
         )
     })?;
+    let relation_ids = selected_route_membership_relation_ids(
+        &overpass_resp,
+        args.relation_ids.as_deref(),
+        args.all_route_relations,
+    )?;
 
     // 2. Build topology
     let top_config = TopologyConfig {
@@ -313,6 +432,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut unverified_from_seeds = Vec::new();
     let mut billing_provenances = Vec::new();
     let mut parsed_seed_file: Option<ParsedBillingPairsSeed> = None;
+    let mut seed_bytes: Option<Vec<u8>> = None;
 
     if let Some(seed_file_path) = &args.seed_path {
         let seed_raw = fs::read_to_string(seed_file_path).map_err(|e| {
@@ -322,6 +442,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 e
             )
         })?;
+        seed_bytes = Some(seed_raw.as_bytes().to_vec());
         let seed_file = parse_billing_pairs_seed(&seed_raw).map_err(|e| {
             format!(
                 "failed to parse seed JSON {}: {}",
@@ -329,6 +450,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 e
             )
         })?;
+        if is_v4_release {
+            seed_file
+                .validate_tariff_assignment_refs()
+                .map_err(|error| format!("seed tariff assignment validation failed: {}", error))?;
+        }
         parsed_seed_file = Some(seed_file.clone());
 
         let report =
@@ -384,8 +510,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // 3.5. Process canonical ramp inventory, OSM bindings, and OD tariffs if provided
     let mut route_membership_evidence = Vec::new();
     let mut od_tariffs_v3 = None;
+    let mut od_tariffs_artifact_bytes: Option<Vec<u8>> = None;
     let mut tariff_overrides = HashMap::new();
     let mut ramps_artifact_opt: Option<(RampsArtifact, String)> = None;
+    let mut pair_derivation_report: Option<PairDerivationReport> = None;
+    let mut pair_candidates_artifact_bytes: Option<Vec<u8>> = None;
     if let Some(inv_path) = &args.inventory_path {
         let inv_raw = fs::read_to_string(inv_path).map_err(|e| {
             format!(
@@ -529,14 +658,21 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if let Some(tar_path) = &args.tariffs_path {
-            let tar_raw = fs::read_to_string(tar_path).map_err(|e| {
+            let tar_bytes = fs::read(tar_path).map_err(|e| {
                 format!("failed to read tariffs file {}: {}", tar_path.display(), e)
             })?;
-            let tariffs: OdTariffsFile = serde_json::from_str(&tar_raw).map_err(|e| {
+            let tar_raw = std::str::from_utf8(&tar_bytes).map_err(|error| {
+                format!(
+                    "tariffs file {} is not UTF-8: {}",
+                    tar_path.display(),
+                    error
+                )
+            })?;
+            let tariffs: OdTariffsFile = serde_json::from_str(tar_raw).map_err(|e| {
                 format!("failed to parse tariffs JSON {}: {}", tar_path.display(), e)
             })?;
             if tariffs.version >= 3 {
-                let catalog: shutoko_routing_core::OdTariffsFileV3 = serde_json::from_str(&tar_raw)
+                let catalog: shutoko_routing_core::OdTariffsFileV3 = serde_json::from_str(tar_raw)
                     .map_err(|e| {
                         format!(
                             "failed to parse v3 tariffs catalog {}: {}",
@@ -544,6 +680,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                             e
                         )
                     })?;
+                if is_v4_release {
+                    shutoko_routing_core::read_tariff_v3(tar_raw).map_err(|error| {
+                        format!("tariff v3 catalog validation failed: {}", error)
+                    })?;
+                    od_tariffs_artifact_bytes = Some(tar_bytes.clone());
+                }
                 od_tariffs_v3 =
                     Some(serde_json::to_value(&catalog).map_err(|error| {
                         format!("failed to serialize tariffs catalog: {error}")
@@ -581,13 +723,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|e| format!("ramps serialization failed: {}", e))?;
         ramps_artifact_opt = Some((artifact, ramps_json));
     }
+    if is_v4_release && od_tariffs_artifact_bytes.is_none() {
+        return Err("release all-real-v4 requires a version 3 tariff catalog".into());
+    }
 
     // 4. Serialize graph.json and snap-index.json deterministically
     let route_memberships = if args.graph_schema == 4 {
         let source_snapshot_sha256 = shutoko_graph_builder::compute_sha256(osm_raw.as_bytes());
         let options = RouteMembershipBuildOptions {
             source_snapshot_sha256,
-            relation_ids: default_route_membership_relation_ids(&overpass_resp),
+            relation_ids,
             bound_ramp_evidence: route_membership_evidence,
         };
         build_route_membership_indices(&overpass_resp, &graph, &options)
@@ -595,7 +740,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Vec::new()
     };
-    if args.graph_schema == 4 && (args.inventory_path.is_some() || args.bindings_path.is_some()) {
+    if args.graph_schema == 4
+        && !is_v4_release
+        && (args.inventory_path.is_some() || args.bindings_path.is_some())
+    {
         let inv_path = args.inventory_path.as_ref().ok_or_else(|| {
             "--inventory is required when --bindings is provided for schema 4".to_string()
         })?;
@@ -616,8 +764,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 error
             )
         })?;
-        let support_path = repository_data_path("ramp-support-decisions.json");
-        let adjacency_path = repository_data_path("billing-pair-adjacency.json");
+        let support_path = support_decisions_path.clone();
+        let adjacency_path = adjacency_path.clone();
         let support_raw = fs::read(&support_path).map_err(|error| {
             format!(
                 "failed to read support decisions {} for relation review: {}",
@@ -702,6 +850,75 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+    if is_v4_release {
+        let inventory_path = args
+            .inventory_path
+            .as_ref()
+            .ok_or_else(|| "release all-real-v4 requires --inventory".to_string())?;
+        let bindings_path = args
+            .bindings_path
+            .as_ref()
+            .ok_or_else(|| "release all-real-v4 requires --bindings".to_string())?;
+        let tariffs_path = args
+            .tariffs_path
+            .as_ref()
+            .ok_or_else(|| "release all-real-v4 requires --tariffs".to_string())?;
+        let inventory_raw = fs::read(inventory_path).map_err(|error| {
+            format!(
+                "failed to read inventory {} for pair derivation: {}",
+                inventory_path.display(),
+                error
+            )
+        })?;
+        let bindings_raw = fs::read(bindings_path).map_err(|error| {
+            format!(
+                "failed to read bindings {} for pair derivation: {}",
+                bindings_path.display(),
+                error
+            )
+        })?;
+        let support_raw = fs::read(&support_decisions_path).map_err(|error| {
+            format!(
+                "failed to read support decisions {} for pair derivation: {}",
+                support_decisions_path.display(),
+                error
+            )
+        })?;
+        let adjacency_raw = fs::read(&adjacency_path).map_err(|error| {
+            format!(
+                "failed to read adjacency {} for pair derivation: {}",
+                adjacency_path.display(),
+                error
+            )
+        })?;
+        let tariffs_raw = fs::read(tariffs_path).map_err(|error| {
+            format!(
+                "failed to read tariffs {} for pair derivation: {}",
+                tariffs_path.display(),
+                error
+            )
+        })?;
+        let seed_raw = seed_bytes.as_ref().ok_or_else(|| {
+            "release all-real-v4 requires a readable billing pair seed".to_string()
+        })?;
+        let report = derive_pair_candidates_from_source_bytes(
+            &graph,
+            &route_memberships,
+            osm_raw.as_bytes(),
+            &inventory_raw,
+            &support_raw,
+            &bindings_raw,
+            &adjacency_raw,
+            &tariffs_raw,
+            seed_raw,
+        )
+        .map_err(|error| format!("pair candidate derivation failed: {}", error))?;
+        let report_json = pair_derivation_report_to_deterministic_json(&report)
+            .map_err(|error| format!("pair candidate serialization failed: {}", error))?;
+        pair_candidates_artifact_bytes = Some(report_json.into_bytes());
+        pair_derivation_report = Some(report);
+    }
+
     let route_memberships_digest = if args.graph_schema == 4 {
         Some(
             route_memberships_sha256(&route_memberships)
@@ -711,13 +928,23 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
     let graph_json = if args.graph_schema == 4 {
-        graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
-            &graph,
-            &route_memberships,
-            radial_billing_pairs,
-            od_tariffs_v3,
-            tariff_overrides,
-        )
+        if is_v4_release {
+            graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3(
+                &graph,
+                &route_memberships,
+                radial_billing_pairs,
+                od_tariffs_v3,
+                tariff_overrides,
+            )
+        } else {
+            graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
+                &graph,
+                &route_memberships,
+                radial_billing_pairs,
+                od_tariffs_v3,
+                tariff_overrides,
+            )
+        }
         .map_err(|e| format!("graph schema 4 serialization failed: {}", e))?
     } else {
         to_deterministic_json(&graph).map_err(|e| format!("graph serialization failed: {}", e))?
@@ -891,7 +1118,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         coverage_area: args.coverage_area,
         vehicle_profile: args.vehicle_profile,
         time_model_version: "v1-static-speeds".into(),
-        billing_pairs_version: if args.graph_schema == 4 { "v2" } else { "v1" }.into(),
+        billing_pairs_version: if args.graph_schema == 4 {
+            if is_v4_release {
+                "v3"
+            } else {
+                "v2"
+            }
+        } else {
+            "v1"
+        }
+        .into(),
         unverified_sections: all_unverified,
         provenance: billing_provenances,
         routable_entry_ramp_ids: capability_ids(RampKind::GeneralEntry, "routable"),
@@ -913,13 +1149,30 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if let Some((_, ref r_json)) = ramps_artifact_opt {
         artifacts_to_bundle.push(("ramps.json", r_json.as_bytes()));
     }
+    if let Some(ref tariff_bytes) = od_tariffs_artifact_bytes {
+        artifacts_to_bundle.push(("od-tariffs.json", tariff_bytes));
+    }
+    if let Some(ref candidate_bytes) = pair_candidates_artifact_bytes {
+        artifacts_to_bundle.push(("pair-candidates.json", candidate_bytes));
+    }
 
-    let manifest = build_manifest(
+    let mut manifest = build_manifest(
         &manifest_config,
         verified_entries,
         verified_exits,
         artifacts_to_bundle,
     );
+    if is_v4_release {
+        manifest.tariff_model_version = Some(shutoko_routing_core::tariff::TARIFF_MODEL_VERSION);
+        if let Some(report) = &pair_derivation_report {
+            manifest.pair_derivation = Some(ManifestPairDerivation {
+                schema_version: report.schema_version,
+                rule: report.rule.clone(),
+                input_hashes: report.input_hashes.clone(),
+                summary: report.summary.clone(),
+            });
+        }
+    }
 
     let manifest_json = manifest_to_deterministic_json(&manifest)
         .map_err(|e| format!("manifest serialization failed: {}", e))?;
@@ -949,6 +1202,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         fs::write(&ramps_out, r_json.as_bytes())
             .map_err(|e| format!("failed to write {}: {}", ramps_out.display(), e))?;
     }
+    if let Some(ref tariff_bytes) = od_tariffs_artifact_bytes {
+        let tariffs_out = args.out_dir.join("od-tariffs.json");
+        fs::write(&tariffs_out, tariff_bytes)
+            .map_err(|e| format!("failed to write {}: {}", tariffs_out.display(), e))?;
+    }
+    if let Some(ref candidate_bytes) = pair_candidates_artifact_bytes {
+        let candidates_out = args.out_dir.join("pair-candidates.json");
+        fs::write(&candidates_out, candidate_bytes)
+            .map_err(|e| format!("failed to write {}: {}", candidates_out.display(), e))?;
+    }
 
     println!(
         "Successfully generated release \"{}\" in {}:",
@@ -973,6 +1236,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     println!("  - manifest.json ({} artifacts)", manifest.artifacts.len());
+    if od_tariffs_artifact_bytes.is_some() {
+        println!("  - od-tariffs.json (versioned tariff catalog)");
+    }
+    if pair_candidates_artifact_bytes.is_some() {
+        println!("  - pair-candidates.json (deterministic candidate report)");
+    }
 
     Ok(())
 }

@@ -128,6 +128,10 @@ pub struct GraphSchemaV4 {
     pub od_tariffs: Vec<OdTariff>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub od_tariffs_v3: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_pairs_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tariff_model_version: Option<u32>,
     pub route_memberships: Vec<RouteMembershipIndex>,
 }
 
@@ -199,6 +203,26 @@ impl GraphSchemaV4 {
         od_tariffs_v3: Option<serde_json::Value>,
         tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
     ) -> Result<Self, RouteMembershipError> {
+        Self::try_from_graph_with_radial_and_catalog_wire(
+            graph,
+            route_memberships,
+            radial_billing_pairs,
+            od_tariffs_v3,
+            tariff_overrides,
+            None,
+            None,
+        )
+    }
+
+    fn try_from_graph_with_radial_and_catalog_wire(
+        graph: &Graph,
+        route_memberships: Vec<RouteMembershipIndex>,
+        radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+        od_tariffs_v3: Option<serde_json::Value>,
+        tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+        billing_pairs_version: Option<String>,
+        tariff_model_version: Option<u32>,
+    ) -> Result<Self, RouteMembershipError> {
         let mut billing_pairs = graph
             .billing_pairs
             .iter()
@@ -234,6 +258,8 @@ impl GraphSchemaV4 {
             ramps: graph.ramps.clone(),
             od_tariffs: graph.od_tariffs.clone(),
             od_tariffs_v3,
+            billing_pairs_version,
+            tariff_model_version,
             route_memberships,
         })
     }
@@ -267,12 +293,52 @@ pub fn graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
     od_tariffs_v3: Option<serde_json::Value>,
     tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
 ) -> Result<String, serde_json::Error> {
-    let document = GraphSchemaV4::try_from_graph_with_radial_and_catalog(
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog_wire(
+        graph,
+        route_memberships,
+        radial_billing_pairs,
+        od_tariffs_v3,
+        tariff_overrides,
+        None,
+        None,
+    )
+}
+
+pub fn graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+    od_tariffs_v3: Option<serde_json::Value>,
+    tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+) -> Result<String, serde_json::Error> {
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog_wire(
+        graph,
+        route_memberships,
+        radial_billing_pairs,
+        od_tariffs_v3,
+        tariff_overrides,
+        Some("v3".to_string()),
+        Some(shutoko_routing_core::tariff::TARIFF_MODEL_VERSION),
+    )
+}
+
+fn graph_schema_v4_to_deterministic_json_with_radial_and_catalog_wire(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+    od_tariffs_v3: Option<serde_json::Value>,
+    tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+    billing_pairs_version: Option<String>,
+    tariff_model_version: Option<u32>,
+) -> Result<String, serde_json::Error> {
+    let document = GraphSchemaV4::try_from_graph_with_radial_and_catalog_wire(
         graph,
         route_memberships.to_vec(),
         radial_billing_pairs,
         od_tariffs_v3,
         tariff_overrides,
+        billing_pairs_version,
+        tariff_model_version,
     )
     .map_err(|error| serde_json::Error::io(std::io::Error::other(error.to_string())))?;
     let mut output = serde_json::to_string_pretty(&document)?;

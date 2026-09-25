@@ -627,6 +627,26 @@ fn support_state_wire_value(state: EndpointSupportState) -> &'static str {
 }
 
 impl ParsedBillingPairsSeed {
+    pub fn validate_tariff_assignment_refs(&self) -> Result<(), String> {
+        for seed in self.legacy_pairs() {
+            if seed.assignment_id.as_deref().is_none_or(str::is_empty) {
+                return Err(format!(
+                    "schema 4 seed {} has no tariff assignmentId",
+                    seed.id
+                ));
+            }
+        }
+        for seed in self.radial_pairs() {
+            if seed.assignment_id.is_empty() {
+                return Err(format!(
+                    "schema 4 seed {} has no tariff assignmentId",
+                    seed.id
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub fn schema_version(&self) -> u32 {
         match self {
             Self::Schema1(seed) => seed.schema_version,

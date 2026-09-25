@@ -50,6 +50,7 @@ pub use billing::{
 pub use manifest::{
     build_manifest, compute_sha256, manifest_to_deterministic_json, BillingPairProvenance,
     Manifest, ManifestArtifact, ManifestConfig, ManifestCoverage, ManifestEndpointCapabilities,
+    ManifestPairDerivation,
 };
 pub use model::{
     BillingPair, Edge, EdgeKind, Graph, Node, OdTariff, Price, Ramp, RampKind, SnapIndex, SnapNode,
@@ -65,7 +66,8 @@ pub use route_membership::{
     find_first_exit_on_corridor_with_budget, generate_directed_mandatory_lap,
     generate_route_plan_lap_v1, graph_schema_v4_to_deterministic_json,
     graph_schema_v4_to_deterministic_json_with_radial,
-    graph_schema_v4_to_deterministic_json_with_radial_and_catalog, ordered_edge_ids_sha256,
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog,
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3, ordered_edge_ids_sha256,
     promote_verified_radial_pair, resolve_diagnostic_radial_route_plan,
     resolve_directed_route_plan, route_memberships_sha256,
     validate_directed_junction_mandatory_lap, validate_mandatory_lap, validate_resolved_route_plan,

@@ -767,11 +767,9 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
         ).toEqual(location.expectedCandidates.map((expected) => expected.pairId));
 
         // 推薦は先頭 1 件だけ。商品対象外の候補は推薦しない。
-        const recommended = displayed
-          .map((candidate, index) => ({ candidate, index }))
-          .filter(({ candidate }) => recommendedLabel(candidate) !== null);
+        const recommended = displayed.filter((candidate) => recommendedLabel(candidate) !== null);
         expect(recommended.length, where).toBeLessThanOrEqual(1);
-        expect(recommended[0]?.candidate.toll.billingPairId ?? null, where).toBe(
+        expect(recommended[0]?.toll.billingPairId ?? null, where).toBe(
           location.expectedRecommendedPairId,
         );
 
@@ -866,7 +864,7 @@ describe("代表 4 地点の fixture（実 WASM）", () => {
         expect(displayed.length, location.label).toBe(location.expectedCandidates.length);
         for (const [index, model] of displayed.entries()) {
           const expected = location.expectedCandidates[index];
-          if (expected === undefined) return;
+          if (expected === undefined) continue;
           if (expected.tariffStatus !== "priced") {
             // 金額が未算出なら、料金のラベルも効率の注記も出さない。
             expect(model.fareLabelNote, location.label).toBeNull();

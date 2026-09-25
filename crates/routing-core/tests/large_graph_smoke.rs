@@ -202,6 +202,38 @@ fn large_graph_smoke_search() {
 ///   LARGE_GRAPH_PATH=<path> cargo test -p shutoko-routing-core --release \
 ///     --test large_graph_smoke -- large_graph_smoke_search_extended_limits \
 ///     --ignored --nocapture
+/// CI が実行する extended limits の非回帰。上の 2 件は `LARGE_GRAPH_PATH` をもつ手動
+/// スモークで、CI からは誰も実行しないので、拡張上限の経路が Rust API で壊れても
+/// 気付けない。ここでは同じ経路を小さな固定入力グラフで 1 度だけ通し、CI が
+/// `max_expanded_states` の上限値と探索の戻り方を監視できるようにする。
+#[test]
+fn extended_limits_path_is_covered_without_the_large_graph() {
+    let graph: Graph = serde_json::from_reader(std::io::Cursor::new(include_str!(
+        "../../../fixtures/synthetic-graph.json"
+    )))
+    .expect("the synthetic graph must parse through the public reader");
+    let limits = SearchLimits {
+        max_expanded_states: 1_000_000, // validation が許す最大値
+        ..SearchLimits::default()
+    };
+    let request: SearchRequest =
+        serde_json::from_str(include_str!("../../../fixtures/synthetic-request.json"))
+            .expect("the synthetic request must parse through the public reader");
+    let prepared = prepare(graph, &limits).expect("prepare must accept the maximum limit");
+    let result = search_prepared(&prepared, &request).expect("search must succeed");
+    assert_eq!(result.status, "ok");
+    assert!(
+        !result.candidates.is_empty(),
+        "the extended-limit search must still return candidates"
+    );
+    assert!(
+        result.expanded_states <= limits.max_expanded_states,
+        "expanded states {} exceeded the limit {}",
+        result.expanded_states,
+        limits.max_expanded_states
+    );
+}
+
 #[test]
 #[ignore = "requires LARGE_GRAPH_PATH; run manually with --ignored --nocapture"]
 fn large_graph_smoke_search_extended_limits() {

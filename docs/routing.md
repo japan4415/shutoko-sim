@@ -1,6 +1,6 @@
 # ルート探索設計
 
-本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は graph-builder、schema 4 reader、core/WASM/Web consumer、公開 release の atomic activation まで実装済みとする。公開 release は `all-real-v3` を次の候補として扱い、`all-real-v2` は rollback 用に残す。
+本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は graph-builder、schema 4 reader、core/WASM/Web consumer、公開 release のコードと fixture まで実装済みとする（R2 投入・read-back・本番 deploy を含む atomic activation は未実施）。公開 release は `all-real-v4`（`billingPairsVersion=v3`、`tariffModelVersion=1`）を次の候補として扱い、`all-real-v3` は rollback 用に残す。
 
 ## 探索問題
 
@@ -21,7 +21,7 @@
 
 ## Issue #42: Directed Route-Plan Lap v1（route membership・mandatory lap・return First Exit 実装済み）
 
-本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路を設計したもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型を実装し、Issue #63 で graph-builder 内限定の `RouteMembershipIndex`、relation mainline / bound ramp の生成・検証を実装した。Issue #64 で `routePlanLapV1` の M→B 長弧生成、cyclic relation segment の wrap-around、short connector 除外、return corridor 制約付き `find_first_exit_on_corridor`、未解決 binding の保持、route-plan segment の反復規則を実装した。Issue #65 で schema 2 / 3 / 4 dispatch、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の fail-closed reader と WASM/Web consumer 契約を追加した。Issue #69 で `LegacyCandidate` / `RadialCandidate` / `TopologyOnlyCandidate` の3種類、schema 4 radial pair のcore検索、4 highway leg・2 surface leg・商品・tariff statusの生成を実装した。Issue #66 で graph-builder の既定を schema 4 に切り替え、`graph.json` の最上位 `routeMemberships[]`、manifest の `graphSchemaVersion` / `routePlanVersion` / `routeMembershipsSha256`、Web/Workers の release allowlist を `all-real-v3` に接続した。`--graph-schema 2` を明示した場合だけ legacy 出力とする。現行 C1 8 ペアの挙動は変えない。
+本節は、環状線だけを扱う現行モデルと、放射線から環状線を通って元の路線へ戻る経路を設計したもの。Issue #62 で seed schema v2 の parser と diagnostic radial pair 型を実装し、Issue #63 で graph-builder 内限定の `RouteMembershipIndex`、relation mainline / bound ramp の生成・検証を実装した。Issue #64 で `routePlanLapV1` の M→B 長弧生成、cyclic relation segment の wrap-around、short connector 除外、return corridor 制約付き `find_first_exit_on_corridor`、未解決 binding の保持、route-plan segment の反復規則を実装した。Issue #65 で schema 2 / 3 / 4 dispatch、`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`、binding・hash・route leg の fail-closed reader と WASM/Web consumer 契約を追加した。Issue #69 で `LegacyCandidate` / `RadialCandidate` / `TopologyOnlyCandidate` の3種類、schema 4 radial pair のcore検索、4 highway leg・2 surface leg・商品・tariff statusの生成を実装した。Issue #66 で graph-builder の既定を schema 4 に切り替え、`graph.json` の最上位 `routeMemberships[]`、manifest の `graphSchemaVersion` / `routePlanVersion` / `routeMembershipsSha256`、Web/Workers の release allowlist を `all-real-v3` に接続した。`--graph-schema 2` を明示した場合だけ legacy 出力とする。現行 C1 8 ペアのうち 7 件の判定は変えず、`bp:c1-outer:shibakoen-iikura` の 1 件だけ端点が unresolved のまま `unverified` を保持する。
 
 ### 採用案は「指定 route の長弧を1周する」
 
@@ -58,7 +58,7 @@ entry approach
 - exact binding が未解決だから、その次の supported Exit
 - 別の JCT arm へ短く切り替える近道
 
-2号目黒線では、公式施設順と現行スナップから天現寺が次の出口候補となる。天現寺出口の exact directed OSM binding が解決するまでは、`verified_one_section_ahead` に昇格させない。目黒出口や他の supported 施設へ飛ばして「1区間先」を作らない。
+2号目黒線では、公式施設順と現行スナップから天現寺が次の出口候補となる。天現寺出口は `firstPublicRoadConnection/v1` で、ランプ鎖を4 way / 16 Edge進んだ最初の一般道接続 node `n:1832672162` を端点として `verified_bound` になる。接続 node に複数wayがあるため、way IDは昇順の `groundWayIds[]` に記録し、互換用の単数 `groundWayId` はその先頭とする。天現寺では `groundWayIds=[258834790]`（明治通り）であり、続く未採用 tail way は最初の接続後の別node接続があるため、診断用の未prune鎖では `AMBIGUOUS_GROUND_ENDPOINT` として fail-closed にする。天現寺を `verified_one_section_ahead` に昇格させる際も、目黒出口や他の supported 施設へ飛ばして「1区間先」を作らない。
 
 「1区間」は料金制度に存在する計算項目ではない。商品上で表示する入口 → 出口の関係であり、金額は常に公式の入口・出口間 `billingDistanceMeters` と料金規則から別に求める。金額、料金距離、端点 support、商品適格性を一つの `status` に混在させない。
 
@@ -102,12 +102,24 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 - 一ノ橋JCTで別armへ切り替える近道を使う。
 - relationに含まれないmainline wayを使う。
 - relationに含まれないrampをbinding証拠なしで使う。
-- multi-way rampのway順、node接続、Edge順、from/to endpoint、hashを検証し、終点前に別の一般道nodeがあれば`boundRamp`へ昇格しない。
+- multi-way rampのway順、node接続、Edge順、from/to endpoint、hashを検証し、最初の合法な一般道接続nodeより後に別の一般道nodeへ続く場合は `boundRamp` へ昇格しない。最初の接続nodeに複数wayが接続している場合は、way IDを `groundWayIds[]` に并列記録して `boundRamp` としてよい。
 - 同名または近接した別JCTのEdgeを使う。
 - excluded short connectorをmandatory lapとして選ぶ。
 - relationのmember順とgraphの有向接続順の不一致は、memberOrderMatchesRelation=falseの診断として記録し、接続順序をmember順に補完しない。GitHub issue #63 の「relationの順序と逆順のたどりを拒否する」完了条件は、onewayとroleに逆らう有向接続を拒否することで満たす。
 
-### 2号目黒線の課金ペア形状（seed統合・診断 route plan 実装済み・公開昇格はbinding unresolved）
+### firstPublicRoadConnection/v1 の端点契約
+
+端点の正本は、ランプ鎖を進行方向（exit は順方向、entry は逆方向）にたどり、最初に合法な一般道へ接続する node とする。同じ node に複数の合法な公道 way があることは競合ではなく、way ID を昇順の `groundWayIds[]` に記録する。既存の単数 `groundWayId` は互換フィールドであり、先頭の way ID とする。ランプ鎖が最初の接続後に別の node で一般道へ続く、途中で分岐する、conditional / reversible / alternating の条件付き制限がある、未知のタグ値がある、または一度も一般道へ接続しない場合は unresolved とする。`hgv:conditional` は passenger-car の通行条件ではないため、この製品向けの例外として無視する。天現寺は4-way / 16 Edgeの最初の接続 node `n:1832672162` と `groundWayIds=[258834790]` で verified になる。
+
+タグ評価の優先順位は次のとおり固定し、1 段目を先に判定する。
+
+1. 条件付き・可変通行規制（`*:conditional`、`oneway:conditional`、`reversible`、`alternating`）の有無 → あれば直ちに fail-closed（unresolved）。時間帯規制（例: `access:conditional=no @ (08:00-20:00)`）や曜日規制を含む場合も、時間帯モデルが導入されるまで公道接続の証跡として採用しない。
+2. アクセスタグ階層（`motorcar` → `motor_vehicle` → `vehicle` → `access`）。拒否値は `no` / `private` / `customers` / `delivery` / `destination` / `permit` / `agricultural` / `forestry` / `military` / `emergency`、許可値は `yes` / `public` / `designated` / `permissive` / 未指定、未知値は fail-closed。
+3. `highway` 種別の判定。`trunk` / `trunk_link` / `primary` / `primary_link` / `secondary` / `secondary_link` / `tertiary` / `tertiary_link` / `unclassified` / `residential` / `living_street` / `service` を許可し、`service` は `service=alley` のみ許可する（`parking_aisle` / `driveway` / `drive-through` / `emergency_access` / `slipway` / 未指定は拒否）。`motorway` / `motorway_link` / `footway` / `path` / `cycleway` / `steps` / `pedestrian` / `track` / `bus_guideway` / `escape` / `raceway` / `road` / `construction` / `proposed` / `abandoned` / `disused` は拒否し、`area=yes` も拒否する。
+4. `oneway` とランプ接続の進行方向の適合性。`yes` / `1` / `true` は node 順方向のみ、`no` / `0` / `false` は双方向、`reverse` / `-1` は node 逆順のみ許可する。`reversible` / `alternating` は 1 段目で fail-closed になる。
+5. 接続の終端条件。ランプ鎖のどの node にも合法な公道接続が 1 本もなければ `NO_GROUND_CONNECTION`、最初の接続 node より後にも別の合法公道接続があれば `AMBIGUOUS_GROUND_ENDPOINT` で fail-closed。最初の接続 node に複数の合法 way があることは競合ではなく、way ID を昇順の `groundWayIds[]` に并列記録して `verified_bound` とする。ランプ鎖の分岐は、合法な `motorway_link` 後継が 0 本なら `NO_RAMP_SUCCESSOR`、2 本以上なら `MULTIPLE_RAMP_SUCCESSORS`、1 本でも宣言した鎖の次の node と違えば `RAMP_SUCCESSOR_MISMATCH`。宣言された ground way が合法集合に含まれなければ `GROUND_WAY_MISMATCH`。
+
+### 2号目黒線の課金ペア形状（seed統合・route plan 実装済み・binding verified）
 
 目黒入口から2号上り、一ノ橋 JCT で C1 に入る。entry Edge は `e:w207535708:0:f`、ramp ID は `ramp:2-inbound:meguro-entry` であり、現行 binding は `verified_bound` である。C1 を長弧で1通りした後、2号下りへ戻り、次の一般 Exit 候補を天現寺とする。
 
@@ -121,32 +133,44 @@ route plan の leg は `sourceSegmentIds[]` で mainline と ramp の由来を�
 | 除外する B → M 短 connector | way `23297444`、23 edges、493m | way `24039737`、20 edges、461m |
 | B 後の2号下り initial Edge | `e:w45248411:0:f` | `e:w4853805:0:f` |
 | 天現寺候補までの距離 | 1,972m | 1,846m |
-| 天現寺 Exit の exact binding | `unresolved`：5 way鎖は連続するがground nodeが2候補 | `unresolved`：5 way鎖は連続するがground nodeが2候補 |
-| 公開可否 | `unverified`、公開 blocked | `unverified`、公開 blocked |
-| 料金 | `unpriced`、`amountYen=null`、`billingDistanceMeters=null` | 同左 |
+| 天現寺 Exit の exact binding | `verified_bound`：4 way / 16 Edge、最初の一般道接続は `n:1832672162`、`groundWayIds=[258834790]` | 同左 |
+| 公開可否 | `verified_one_section_ahead`、schema 4 `radialReturn` に含む | 同左 |
+| 料金 | 2025-04: 19.4km / 790円、2026-10: 19.4km / 860円 | 同左 |
 
-この2件は、wire-level schemaとroute shapeを確定した課金ペア設計である。Issue #62でschema適合のinner / outer diagnostic fixture、parser test、snapshot、C1非回帰テストを追加した。Issue #67では5 wayの順序、17 Edge、18 nodeとhash、2号下りrelation、公式施設順を監査したが、`n:1832672162`と`n:1832672205`が一般道へ接続するためground endpointが未確定である。Issue #68で両radial pairを`data/billing-pairs-seed.json`へ統合し、graph-builderがBから天現寺候補まで.inner 85 Edge / outer 84 Edgeのreturn corridorを解決する診断経路を追加した。現在のbinding unresolvedを理由に、`Graph.billingPairs`とpublic candidateは8件のlegacy pairのままとし、manifestには2件のdiagnostic-only記録だけを残す。ground endpoint、route/direction、First Exit、全端点がすべて通った4 resolved segmentだけをschema 4 unionの`radialReturn`として昇格する経路とverified synthetic fixtureを実装済みである。
+この2件は、wire-level schemaとroute shapeを確定した課金ペア設計である。Issue #62でschema適合のinner / outer fixture、parser test、snapshot、C1非回帰テストを追加した。Issue #67で4 way / 16 Edgeの順序、17 Edge、17 nodeとhash（`bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd`）、2号下りrelation、公式施設順を監査し、Issue #68で両radial pairを`data/billing-pairs-seed.json`へ統合した。graph-builderはBから天現寺候補まで.inner 85 Edge / outer 84 Edgeのreturn corridorを解決し、4 resolved segmentと未解決でないFirst Exitが一致した両pairをschema 4 unionの`radialReturn`として昇格する。way `172358466` を含む未prune chainは、最初の接続後に別node `n:1832672205` で一般道へ続くため、昇格する4-way evidenceには含めず、診断用の未prune鎖だけを `AMBIGUOUS_GROUND_ENDPOINT` として保持する。
 
 目黒入口 → 目黒出口のdynamic ODは別分類にする。entry Edgeは`e:w207535708:0:f`、exit Edgeは`e:w207535709:0:f`で、routing topology上は到達可能である。しかし物理的には天現寺Exitが先であり、exact bindingがなければ目黒を「1区間先」にできない。Issue #69以降は`TopologyOnlyCandidate`として`topology_only`を返し、「1区間先」「最低料金」、`time_per_yen`の対象から外す。`routingCapability=routable`は道路を追跡できることを示すが、商品eligibilityの証拠ではない。
 
-天現寺・荏原・戸越入口については、現行support dataでentry / exitのexact directed bindingが未解決である。候補wayや施設名をnearest nodeへ割り当てて補わない。天現寺binding issueは、multi-way ramp候補を順序付き`osmWayIds`、`osmNodeIds`、`edgeIds`、両端nodeとhashで表し、ground ↔ mainline接続、ramp IDの逆引き、公式施設順を同じevidence modelで扱う。実装済みcandidateは5 wayの連続性を保っていてもground endpointが二候補となるため、`status=unresolved`と`publicProjection=excluded_unresolved`を保持する。`supportState=verified_bound`では解決した`directedSegments[]`を必須とし、`unresolved` / `unsupported`では空配列と`bindingCandidates[]`だけを許す。
+天現寺・荏原・戸越入口については、support dataとroute planを同じevidence modelで判定する。天現寺は `supportState=verified_bound` と `directedSegments[]` を保持し、最初の接続 node `n:1832672162` と `groundWayIds=[258834790]` を記録する。候補wayや施設名をnearest nodeへ割り当てて補わない。`unresolved` / `unsupported` では空配列と `bindingCandidates[]` だけを許す。
 
 ### C1 8ペアは legacy adapter で変更しない
 
-8件はいずれも `pairKind` を持たない現行 v1 形式として読む。schema 2 の seed でも配列要素の意味と値は変えず、生成 graph の schema 4 で `pairKind=legacyRing` として明示する。`sameNode` anchor、entry / exit、First Exitの判定、300円→300円のlegacy price records、verified 2件 / unverified 6件を保つ。
+8件はいずれも `pairKind` を持たない現行 v1 形式として読む。schema 2 の seed でも配列要素の意味と値は変えず、生成 graph の schema 4 で `pairKind=legacyRing` として明示する。`sameNode` anchor、entry / exit、First Exitの判定、期間別price records、verified 7件 / unverified 1件を保つ。
 
 | ID | 意味 | 基準点 | 状態と First Exit 結果 |
 | --- | --- | ---: | --- |
-| `bp:c1-outer:kandabashi-takaracho` | 神田橋入口 → C1 outer → 宝町出口 | `499831338` | `verified`。宝町 Exit `e:w297864314:11:f` まで2,027mで唯一の First Exit。 |
-| `bp:c1-outer:kasumigaseki-daikancho` | 霞が関入口 → C1 outer → 代官町出口 | `577255571` | `verified`。endpoint exact audit と outer First Exit contract を維持。 |
-| `bp:c1-outer:ginza-shibakoen` | 銀座入口 → C1 outer → 芝公園出口 | `31254160` | `unverified`。同距離の2 Exit と endpoint exact reverse-map が未確定。 |
-| `bp:c1-outer:shibakoen-iikura` | 芝公園入口 → C1 outer → 飯倉出口 | `31296971` | `unverified`。endpoint exact reverse-map が未確定。 |
-| `bp:c1-inner:kasumigaseki-shibakoen` | 霞が関入口 → C1 inner → 芝公園出口 | `264877748` | `unverified`。way `203832854`（高樹町 Exit）が seed の芝公園 Exit より先。 |
-| `bp:c1-inner:daikancho-kasumigaseki` | 代官町入口 → C1 inner → 霞が関出口 | `297945194` | `unverified`。endpoint exact reverse-map が未確定。 |
-| `bp:c1-inner:shibakoen-shiodome` | 芝公園入口 → C1 inner → 汐留出口 | `31295430` | `unverified`。endpoint exact reverse-map が未確定。 |
-| `bp:c1-inner:takaracho-kandabashi` | 宝町入口 → C1 inner → 神田橋出口 | `1891818143` | `unverified`。way `199311811` が seed の神田橋 Exit より先。 |
+| `bp:c1-outer:kandabashi-takaracho` | 神田橋入口 → C1 outer → 宝町出口 | `499831338` | `verified_one_section_ahead`。宝町 Exit `e:w297864314:11:f` まで2,027mで唯一の First Exit。 |
+| `bp:c1-outer:kasumigaseki-daikancho` | 霞が関入口 → C1 outer → 代官町出口 | `577255571` | `verified_one_section_ahead`。endpoint exact audit と outer First Exit contract を維持。 |
+| `bp:c1-outer:ginza-shibakoen` | 銀座入口 → C1 outer → 芝公園出口 | `31254160` | `verified_one_section_ahead`。outer relation の exit順と way `944671542` の exact binding が一致。 |
+| `bp:c1-outer:shibakoen-iikura` | 芝公園入口 → C1 outer → 飯倉出口 | `31296971` | `unverified`。way `40969792` の `access:conditional=no @ (08:00-20:00)` により endpoint が unresolved。昇格は凍結。 |
+| `bp:c1-inner:kasumigaseki-shibakoen` | 霞が関入口 → C1 inner → 芝公園出口 | `264877748` | `verified_one_section_ahead`。inner relation の arm role により way `203873821` が最初の一般出口。 |
+| `bp:c1-inner:daikancho-kasumigaseki` | 代官町入口 → C1 inner → 霞が関出口 | `297945194` | `verified_one_section_ahead`。way `1232166619` の exact binding と inner relation の exit順が一致。 |
+| `bp:c1-inner:shibakoen-shiodome` | 芝公園入口 → C1 inner → 汐留出口 | `31295430` | `verified_one_section_ahead`。way `4853797` から `45068171` への binding と First Exit が一致。 |
+| `bp:c1-inner:takaracho-kandabashi` | 宝町入口 → C1 inner → 神田橋出口 | `1891818143` | `verified_one_section_ahead`。way `199311811` は connector、way `390441534` が最初の一般出口。 |
 
-既知の First Exit mismatch はこの設計で解消しない。legacy adapter の contract test として、2件の verified 結果と6件の unverified 結果を固定する。2号を同じ generated graph へ追加する際も、この表を変更にしない。
+legacy adapter の contract test として、verified 7件とunverified 1件を固定する。2号を同じ generated graph へ追加する際も、C1 legacyの判定は変更しない。
+
+### #34（内回り銀座入口 → 新富町出口）は未検証のまま昇格しない
+
+内回り銀座入口の 1 区間先は公式路線図上「新富町出口」だが、OSM の新富町出口 split が銀座入口の合流点より上流にあり、relation 制約つきの First Exit 検証が通らない。京橋出口は 2 区間先なので対象外とする。扱いは次の 3 点に固定する。
+
+- 隣接関係証跡 `data/billing-pair-adjacency.json` は `bp:c1-inner:ginza-shintomicho` を `reviewStatus: blocked` で保持し、自動導出レポート（`pair-candidates.json`）でも `promotionDecision: hold` として出力する。解決しないまま黙って落とさない。
+- 料金表 v3 には `assignment:c1-inner:ginza-shintomicho`（0.4km / 300円）を証拠つきで保持するが、これは「公式セルに料金がある」ことのみを意味し、「1 区間先として公開できる」ことは意味しない。商品ペアとしての seed / graph 登録は行わない。
+- 銀座・六本木といった代表地点の探索結果は、最寄りの入口が内回りランプ（銀座入口・飯倉入口）で、そこから 1 区間先に検証済みペアが無いため、未価格（金額なし）・商品対象外・推薦なしの `topology_only` 候補になるのが正しい期待である。実測値は [`docs/delivery.md`](delivery.md) の runbook step 5 と `fixtures/representative-locations.json` に固定した。
+
+### カタログの検証済みペア数と UI の表示件数は別の概念
+
+カタログ（seed / graph）が持つ検証済み商品ペアは **9 件**（legacy 7 + radial 2）で、未検証は 1 件（芝公園→飯倉）、商品ペアとして昇格させず未検証のまま残すものが 1 件（内回り銀座→新富町）ある。UI / engine が 1 検索で返す候補は最大 **3 件**で、最近接入口 tier ごとに評価する。カタログの件数と表示枠を混同しない。
 
 ### 所要時間・経路表示は正規の route leg で表す
 
@@ -203,19 +227,30 @@ Issue #72で`evaluate_device_verification_gate(manifest, routePlanId, releaseId,
 
 Issue #69でdynamic ODを`TopologyOnlyCandidate`へ移行した。`eligibilityStatus`と`loopValidationStatus`をともに`topology_only`へ固定し、商品推薦のreasonは`TOPOLOGY_ONLY`だけとする。`toll.chargedSectionCount`と`ONE_SECTION_TOLL`は生成せず、料金データがあれば`tariffStatus`と金額だけを反映する。dynamic ODは結果から削除せず、商品推薦の対象外として返す。
 
-Issue #41で公式billing distanceと版管理済み料金規則を確定するまでは、次の規律を適用する。
+### 2026-10 料金証拠と商品状態の分離
 
-- 2号 radial の `amountYen=null`、`billingDistanceMeters=null`、`tariffStatus=unpriced`。
-- 約21km の OSM driven distance を billing distance へ代入しない。
-- 「1区間の最低料金」「1区間料金」と表示しない。
-- `time_per_yen` を計算しない。unpriced 候補を含む cohort は `shutoko_time` で比較する。
-- routing v2の動的ODは`topology_only`とし、商品ranking cohortに入れない。
+`eligibilityStatus`、`amountYen`、`billingDistanceMeters`、`tariffStatus` を正本にし、`chargedSectionCount=1` と `ONE_SECTION_TOLL` は legacy adapter だけで維持する。radial output には「1区間の最低料金」を表示しない。
 
-#41 後も金額は entry → exit の公式 billing distance で決める。C1 8件は既存の300円→300円を当面保持しつつ、#41 で全件を再計算し、金額 source と tariff rule version を明示する。2号が下限料金より高くなる場合も、OSM 経路長に代えて公式距離で計算する。
+- 2号 radial は 2025-04 公式セルを 19.4km / 790円、2026-10 公式セルを 19.4km / 860円として `priced` で解決する。runtime は `pricingAt` が 2026-10-01 JST 以降なら後者を選ぶ。
+- C1 の legacy pair は料金表 v3 の assignment を正本とし、期間別の `observedBaseFareYen`・`amountYen`・`evidenceId` を使い、霞が関→代官町は両版とも 2.3km / 300円とする。距離は 0.1km 単位の量子に丸めてから規則で検算し、セル値と一致することを evidence ごとに確認する。570円 / 12.4km は霞が関→霞が関（対角セル）の値であり代官町列には適用しない。
+- 旧設計で用いていた 2号の値（14.2km / 630円）は別の OD セルの値であり採用しない。金額と料金距離は必ず期間別 evidence のセル値から取る。
+- OSM driven distance や未確認の tariff を billing distance / 金額へ代入しない。3号用賀と4号高井戸の同一地点折り返しは公式 OD セルが無いため assignment から deprecate し、`tariffStatus=unpriced` のまま扱う。
+- dynamic OD は `topology_only` とし、商品 ranking cohort に入れない。`time_per_yen` は `tariffStatus=priced` の候補だけで比較する。
+
+実測値（`fixtures/representative-locations.json`、改定前後の 2 時点で固定）:
+
+| 地点 | 最近接入口（距離） | 返る候補 | 商品区分 | 改定前 → 改定後 |
+| --- | --- | --- | --- | --- |
+| 東京駅 | `ramp:c1-inner:takaracho-entry`（746 m） | `bp:c1-inner:takaracho-kandabashi` 1 件 | `priced`・商品対象・`time_per_yen`・推薦 1 件 | 300 円 → 300 円 |
+| 目黒駅 | `ramp:2-inbound:meguro-entry`（313 m） | `bp:2-inbound:meguro:c1-outer:tengenji`（推薦）、`bp:2-inbound:meguro:c1-inner:tengenji` の 2 件 | `priced`・商品対象・`time_per_yen`・推薦は最大効率の 1 件 | 790 円 → 860 円 |
+| 銀座 | `ramp:c1-inner:ginza-entry`（511 m） | `od:ramp:c1-inner:ginza-entry:ramp:c1-inner:kasumigaseki-exit` 1 件 | `unpriced` の `topology_only`・商品対象外・推薦なし・`shutoko_time` | 金額なし → 金額なし |
+| 六本木 | `ramp:c1-inner:iikura-entry`（663 m） | `od:ramp:c1-inner:iikura-entry:ramp:c1-outer:iikura-exit` 1 件 | `unpriced` の `topology_only`・商品対象外・推薦なし・`shutoko_time` | 金額なし → 金額なし |
+
+カタログでは 9 件の `verified_one_section_ahead`（legacy 7 + radial 2）と 1 件の `unverified`（`bp:c1-outer:shibakoen-iikura`）を保持するが、この 4 地点の 1 検索が返す候補数はそれぞれ 1 / 2 / 1 / 1 件である。カタログの件数と UI の枠は別の概念であり、銀座・六本木で基本料金が出ないのは仕様どおりの期待である。
 
 ### 実装 issue は単独で検証できる順に分ける
 
-graph schema 4 は reader/consumer と `all-real-v3` の atomic activation まで実装した。builder の既定出力、generated fixtures、manifest、WASM contract、Web pipeline、Workers allowlist、versioned release ID を同時に整合させ、旧 `all-real-v2` は rollback 用に残す。`--graph-schema 2` を明示した場合だけ legacy schema 2 を生成する。
+graph schema 4 は reader/consumer と `all-real-v4` の生成物・許可リストまで実装した。builder の既定出力、generated fixtures、manifest、WASM contract、Web pipeline、Workers allowlist、versioned release ID を同時に整合させる。atomic activation（`releases/all-real-v4/` への R2 投入と read-back、`manifest.json` の本番配置、production deploy）は未実施で、正本は [`docs/delivery.md`](delivery.md#all-real-v4-の-atomic-release-runbook) の runbook とする。rollback は Worker の許可リストを狭めずに Web の既定 1 行だけ戻す方針で、Web の `DEFAULT_RELEASE_ID` は `all-real-v4`、Worker の `ALLOWED_RELEASES` は `c1-real-v1,c1-real-v2,all-real-v1,all-real-v2,all-real-v3,all-real-v4` を保持し、1 行戻した先が `all-real-v3` になる。`--graph-schema 2` を明示した場合だけ legacy schema 2 を生成する。
 
 | Issue | 実装範囲 | 主な受け入れ条件 | 依存 |
 | ---: | --- | --- | --- |
@@ -223,16 +258,18 @@ graph schema 4 は reader/consumer と `all-real-v3` の atomic activation ま�
 | 2 | `RouteMembershipIndex` とOSM relation / ramp binding provenance（#63実装済み） | `--graph-schema 4` の明示時だけ `relationMainline` と `boundRamp` を別 segment として生成し、way順、node接続、Edge順、hash、binding証拠を個別に検証する。逆方向、同名JCT、非所属mainline way、ramp証拠なし、別arm近道、short connector、relationの逆順を拒否する。#64のradial route plan生成・検証を同じindex上で実行する。 | 1 |
 | 3 | directed mandatory lap と return-corridor First Exit（#64実装済み） | synthetic radial fixtureと実 inner/outer snapshotでM→B長弧、return corridor、first general Exitを分解する。C1 legacyを完全維持し、segment内反復を拒否しつつ、route planが宣言したsegment間反復を許可する。 | 1, 2 |
 | 4 | graph schema 4 reader と consumer 契約（#65実装済み） | core、WASM型、Web Workerがschema 2 / 3 / 4を読む。`legacyRing` / `radialReturn`、`sameNode` / `directedJunction`を判別し、wire fragmentとfield failure fixtureを追加する。未知kind / version、部分data、route legの重複・欠落を拒否する。 | 1, 3 |
-| 5 | graph schema 4 の atomic release activation（#66実装済み） | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
-| 6 | 天現寺 exact directed binding（#67診断完了・unresolved） | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。way `172358461` → `422023171` → `931759044` → `172358460` → `172358466`のway順・18 node・17 Edge・hashは固定した。`n:1832672162`も一般道へ接続するためground endpointは未確定で、根拠付きunresolved candidateのままにする。 | なし |
-| 7 | 2号 inner / outer radial pair 統合（#68診断統合済み） | schema2 seedへ2件を追加し、graph-builderが両route planを検証する。exact binding未完ならdiagnostic planとmanifest記録だけとし、Graph radial pairとpublic eligibilityへ昇格しない。#41までtariffは未算出とする。 | 3, 5, 6 |
+| 5 | graph schema 4 の atomic release activation（#66 コード・fixture 実装済み、R2 投入と本番 deploy は未実施） | builderの既定output、core reader、WASM contract、Web pipeline、Workers artifact allowlist、新しいversioned release ID、manifest hashを同時に整合させる。旧releaseはrollback用に残す。 | 2, 3, 4 |
+| 6 | 天現寺 exact directed binding（#67診断完了・verified） | multi-way ramp corpus、ground ↔ mainline topology、ramp ID inverse-map、公式施設順を同じsupport evidenceとして扱う。way `172358461` → `422023171` → `931759044` → `172358460` の4 way / 16 Edge と `n:1832672162`、`groundWayIds=[258834790]`、hashを固定する。`n:1832672205`へ続くtailは最初の接続後の別node接続として診断だけに残す。 | なし |
+| 7 | 2号 inner / outer radial pair 統合（#68診断統合・binding verified） | schema2 seedへ2件を追加し、graph-builderが両route planと4 resolved segmentを検証する。両pairはschema 4 unionの`radialReturn`とpublic candidateへ昇格し、2025-04 / 2026-10の期間別tariffを保持する。 | 3, 5, 6 |
 | 8 | Candidate route legs と商品・tariff状態（#69実装済み） | synthetic Candidate fixtureで4 highway legsがEdge列を重複なく被覆し、surface legsが距離・時間を明示する。`distanceMeters`を総距離、`shutokoDistanceMeters`をEdge距離の合計にする。dynamic ODは`TopologyOnlyCandidate`として`chargedSectionCount` / `ONE_SECTION_TOLL`を撤去し、radialにも同じ項目を出さない。 | 4 |
 | 9 | Web の順序表示（#70実装済み） | entry / lap / return / exitを番号・線種・テキストで提示し、surface概算とhighway経路を混同しない。総距離とhighway距離を同じ定義で表示し、unpriced / topology_onlyへ「1区間料金」を出さない。C1 UI regressionを維持する。 | 5, 8 |
 | 10 | split Maps URL 生成（#71実装済み） | 3 waypoint / 2,048文字制限、legごとの手動継続、URL builder unit / E2Eを実装する。device verification manifestの型、JSON Schema、fixture、validator、handoff bindingを確定し、道路・向きを強制できないため実機gate通過までpublic handoffを無効にする。 | 8 |
 | 11 | Maps 実機検証と release gate（#72コード実装済み、実機検証待ち） | Issue #71で確定したmanifestを`data/device-verification-manifest.json`へ未検証状態で置く。gateはmanifest欠落・失敗・期限切れ・binding不一致でradial public departureを無効にし、C1への副作用がないことを確認する。Android / iOS × Web / appの実測完了までは公開handoffを閉じ続ける。 | 10 |
-| 12 | Issue #41 後の tariff 統合 | 公式billing distance、車種、税率、単価、最低・上限、丸め、effective intervalを版管理し、C1 8件と2号代表pairを再検証する。OSM distance fallbackとradialの`time_per_yen`無効状態を維持しない。 | #41, 7, 8 |
+| 12 | 2026-10 tariff 統合（料金表 v3、`tariffModelVersion=1`、実装済み） | 公式billing distance、車種、税率、単価、最低・上限、丸め、effective intervalを版管理し、10件の OD assignment を再検証する。period ごとに別の `evidenceId` と観測基本料金を持ち、整数演算で検算する。OSM distance fallback を持たず、3号用賀・4号高井戸は deprecate する。 | #41, 7, 8 |
+| 13 | 端点解決と billing pair 自動導出（`firstPublicRoadConnection/v1`、`billingPairDerivation/v2`、実装済み） | conditional / reversible / alternating を fail-closed として端点を確定し、天現寺を 4 way / 16 Edge で `verified_bound` にする。gate 8 個を通過した候補を `pair-candidates.json` に列挙し、seed は自動変更しない。relation 制約つきの First Exit として 1 区間先を確定し、芝公園→飯倉と内回り銀座→新富町は未検証のまま残す。 | 6, 7, 12 |
+| 14 | `all-real-v4` の atomic release 公開と代表 4 地点の固定（コード・fixture 実装済み、R2 投入と本番 deploy は未実施） | 5 成果物（graph / od-tariffs / pair-candidates / ramps / snap-index）の決定論的再生成、固定版 wrangler 照合、payload → `engine.json` → `manifest.json` の順の read-back、Web/Worker allowlist の同期を runbook にする。4 代表地点の探索結果を `fixtures/representative-locations.json` に固定し、Web 統合テストと engine 契約テストが再計算して照合する。 | 12, 13 |
 
-Issue #42 の設計完了は、この節と seed / graph の wire-level schema により2号課金ペア形状を確定することとする。実装済み verified public pair を Issue #42 の design 完了条件には含めない。天現寺 binding、schema 実装、device gate はそれぞれ実装上の公開を止める条件として残す。
+Issue #42 の設計完了は、この節と seed / graph の wire-level schema により2号課金ペア形状を確定することとする。天現寺は最初の一般道接続nodeで `verified_bound` として昇格し、schema実装とdevice gateはそれぞれ実装上の公開を止める条件として残す。
 
 ## 時間条件（現行 C1 legacy と routing v2 の共通式）
 
@@ -298,17 +335,15 @@ T_plan = T_base + buffer
    - `prepare` 時に Shutoko エッジだけの forward/reverse adjacency と強連結成分（SCC）を構築する。各 cyclic SCC からノードID順に最大32アンカーを均等抽出し、アンカーの各先頭エッジについて逆Dijkstraで決定論的な最短帰還路を作る。順序は `(アプローチ+イグレスの時間下界, anchorNodeId)`、同距離経路はedge ID辞書順で固定する。
    - 全線グラフでは単純路の全列挙を行わない。明示ODは入口からのforward Dijkstraと出口へのreverse Dijkstraにより、両方から到達可能なcyclic SCCカタログだけを評価する。座標・課金ペア検索も大規模グラフでは同じ逆最短閉路を用いる。小規模契約fixtureだけは全単純閉路列挙を維持する。
    - **マイクロループ排除（Micro-loop Filtering）**: JCT の渡り線やジャンクション内の極小周回（Uターンランプ等）による実質的に周回ドライブの体をなさない短絡ループを排除するため、ループ長が `min_loop_meters`（デフォルト 5,000m = 5km）未満の閉路を自動的に除外する。
-   - verified-bound 232端点は同じ静的到達性契約で全件分類する。197件は `routable`、35件（入口13・出口22）は循環SCCへ接続できない `structural_no_loop` であり、後者は探索前に `NO_LOOP` 診断へ利用できる。単にboundであることを機能保証とはしない。
+   - verified-bound 236端点（内訳は `firstPublicRoadConnection/v1` で確定した exact directed segment を持つ単一 way binding 235 件と、multi-way candidate の天現寺 1 件）は同じ静的到達性契約で全件分類する。201件は `routable`、35件（入口13・出口22）は循環SCCへ接続できない `structural_no_loop` であり、後者は探索前に `NO_LOOP` 診断へ利用できる。単にboundであることを機能保証とはしない。
    - **最大エッジ数の拡大**: C1 単独にとどまらず、C2（中央環状線、約47km）や湾岸線・放射線を跨ぐ広域周回ルートを探索できるよう、`max_loop_edges` の上限シーリングを 2,000 から 5,000 へ引き上げた。
 4. Entryエッジ、アプローチ、本線閉路、イグレス、Exitエッジを別フェーズで結合する。`min_loop_meters` は本線閉路だけに適用し、入口・出口への接続距離で5,000m条件を満たしたことにはしない。
 5. 全体の方向・禁止遷移、一度の入場と退出、1区間先の出口、一周の成立、時間条件を再検証する。
 6. **料金算出とスキーマ分離**:
    - **実走行距離（`shutoko_distance_meters`）**: 首都高本線およびランプの実走エッジ長の積算値。周回を含む実走距離を正確に記録。
    - **料金距離（`toll.billing_distance_meters`）**: 入口〜出口間の法定・最短料金距離（OD テーブルまたは最短経路）。
-   - **公式普通車 ETC 料金（`amount_yen`）**:
-     - 料金距離 ≤ 4.3km: 下限料金 300 円
-     - 料金距離 > 4.3km: 検証済み料金距離がある場合だけ、版管理された規則または料金表を利用する。料金根拠のない明示ODへOSM距離を代入しない。
-     - 料金テーブル（`prices` / `od_tariffs`）の有効期間（`effective_from` / `effective_to`）とリクエストの `pricing_at` を照合。
+   - **普通車 ETC 基本料金（`amountYen`）**: 券種は `vehicleClass=ordinary` / `paymentMethod=etc` / `fareBasis=base_toll_excluding_discounts` に固定する。適用する規則は `pricingAt` が `2026-09-30T15:00:00Z` 未満なら `shutoko-etc-ordinary-2022-04`（料金距離 ≤ 4.3km で下限 300 円、それ以外は 1km あたり 29.52 円 + 端数 150 円に税 1.10 を掛け 10 円単位に四捨五入、上限 1,950 円）、以降なら `shutoko-etc-ordinary-2026-10`（≤ 3.9km で下限 300 円、32.472 円 / km、上限 2,130 円）。距離は 100m 単位に丸め、税・端数処理はマイクロ円単位の整数演算で行う。検証済みの OD セルがあるときだけ `priced` として assignment を解決し、根拠のない明示 OD へ OSM 距離を代入しない。
+   - 金額と一緒に `assignmentId` / `ruleId` / `evidenceId` / `distanceEvidenceId` / `tollSource` / 適用期間 / `fareLabel` / `vehicleClass` / `paymentMethod` / `fareBasis` / `discountsExcluded` を候補の toll に出力する。Web reader は同じ組合せを `productTariff` として実行時に検証し、ずれた候補は `RESULT_CONTRACT_MISMATCH` で捨てる。
 7. **幾何合成と Google マップ引き継ぎ**:
    - **GeoJSON LineString 合成**: 全エッジ列（entry → loop → exit）から単一の LineString 座標列を生成。
    - **通過路線名の抽出**: 通過したエッジの `name` を重複除去した順序付きリスト `roadNames` として生成。
@@ -336,7 +371,7 @@ Google マップ上でのナビゲーションにおいて、一周を短絡（�
 
 最初に「一周後に1区間先で退出」という必須条件で絞る。1区間だからすべての入出口ペアが同額とは仮定しない。
 
-金額が確認済みの候補同士は `首都高走行秒数 / 料金円` の大きい順、同値なら首都高時間が長い順、一般道時間が短い順、安定 ID 順にする。無料等で料金0円のデータは初期対象に含めず別途扱いを設計する。
+金額が確認済みの候補同士は `首都高走行秒数 / 料金円` の大きい順、同値なら首都高時間が長い順、一般道時間が短い順、安定 ID 順にする。無料等で料金0円のデータは初期対象に含めず別途扱いを設計する。`RadialCandidate` の cohort も並び替えは同じ規則（`crates/routing-core/src/lib.rs` の radial 側の `sort_by`）を使い、この 4 段の tie-break で全順序になるため、同じ入力なら同じ入力順・同じ推薦になる（目黒の 2 件は同料金だが首都高走行時間が 1,359 秒 と 1,349 秒で異なるため、比率の大きい outer が先頭に推薦になる）。
 
 料金額が未確認なら比率は計算しない。同じ課金ペア内では首都高時間の長い順で比較できる。異なるペアをまたぐ場合は、金額比較ができないことを明示して時間基準の暫定推薦とする。検索候補集合に未確認額がある場合は集合全体をこの時間基準に切り替え、確認済みだけを不当に優先しない。全候補で金額が確認できた場合だけ金額あたりの比較を使う。「一番」は探索した候補集合内の順位であって、全経路の最適保証ではない。
 

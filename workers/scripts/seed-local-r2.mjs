@@ -12,13 +12,31 @@ const defaultRepoRoot = path.resolve(scriptDir, "../..");
 export const RELEASE_ID_REGEX = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 
 const MANIFEST_ARTIFACT_NAMES = ["graph.json", "snap-index.json"];
-const MANIFEST_ARTIFACT_ALLOWLIST = new Set([...MANIFEST_ARTIFACT_NAMES, "ramps.json"]);
+const MANIFEST_ARTIFACT_ALLOWLIST = new Set([
+  ...MANIFEST_ARTIFACT_NAMES,
+  "ramps.json",
+  // all-real-v4 が manifest に結ぶ入力由来の成果物。
+  "od-tariffs.json",
+  "pair-candidates.json",
+]);
 const ENGINE_ARTIFACT_NAMES = [
   "shutoko_routing_bg.wasm",
   "shutoko_routing.js",
   "shutoko_routing.d.ts",
   "index.d.ts",
 ];
+
+/** schema 4 graph が記録できる billingPairsVersion（v2=all-real-v3, v3=all-real-v4）。 */
+const SCHEMA4_BILLING_PAIRS_VERSIONS = new Set(["v2", "v3"]);
+/** billingPairsVersion=v3 が要求する tariffModelVersion。 */
+const TARIFF_MODEL_VERSION = 1;
+
+/**
+ * R2 object の投入に要する wrangler CLI の最小版。
+ * `wrangler r2 object put|get --file --content-type` が使える 4.x のうち
+ * 最も古い版を下限とし、これ未満は機能不足として停止する。
+ */
+const MINIMUM_WRANGLER_VERSION = "4.0.0";
 
 function sha256(content) {
   return crypto.createHash("sha256").update(content).digest("hex");
@@ -172,12 +190,16 @@ export function routeMembershipsSha256(value) {
 }
 
 function validateSchema4Contract(manifest, fixtureFiles) {
-  if (manifest.graphSchemaVersion !== 4 && manifest.releaseId !== "all-real-v3") return;
-  if (manifest.graphSchemaVersion !== 4) {
-    throw new Error("manifest.graphSchemaVersion=4 is required for all-real-v3");
+  if (manifest.graphSchemaVersion !== 4) return;
+  if (!SCHEMA4_BILLING_PAIRS_VERSIONS.has(manifest.billingPairsVersion)) {
+    throw new Error(
+      `manifest.billingPairsVersion must be one of ${[...SCHEMA4_BILLING_PAIRS_VERSIONS].join(", ")} for graph schema 4`,
+    );
   }
-  if (manifest.billingPairsVersion !== "v2") {
-    throw new Error("manifest.billingPairsVersion=v2 is required for graph schema 4");
+  if (manifest.billingPairsVersion === "v3" && manifest.tariffModelVersion !== TARIFF_MODEL_VERSION) {
+    throw new Error(
+      `manifest.tariffModelVersion=${TARIFF_MODEL_VERSION} is required for billingPairsVersion=v3`,
+    );
   }
   if (manifest.routePlanVersion !== 1) {
     throw new Error("manifest.routePlanVersion=1 is required for graph schema 4");
@@ -308,11 +330,137 @@ function isMissingObjectError(error) {
   );
 }
 
+/**
+ * PATH 上の実行ファイルを名前に解決する（npx へはフォールバックしない）。
+ * 実行可否は preflight の `wrangler --version` が実際に起動できるかで確定する
+ * ため、ここでは「その名前のファイルがあるか」までだけを見る。
+ */
+function resolveOnPath(name, env = process.env) {
+  if (name.includes(path.sep)) {
+    return isExecutableFile(name) ? path.resolve(name) : null;
+  }
+  for (const dir of (env.PATH ?? "").split(path.delimiter).filter(Boolean)) {
+    const candidate = path.join(dir, name);
+    if (isExecutableFile(candidate)) return candidate;
+  }
+  return null;
+}
+
+function isExecutableFile(candidate) {
+  try {
+    return fs.statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * wrangler の実行ファイルを WRANGLER_BIN → PATH の順で解決する。
+ * `WRANGLER_BIN` に相対パスを渡した場合は `cwd` を基準に解決する。
+ */
+export function resolveWranglerBinary({ env = process.env, cwd = defaultRepoRoot } = {}) {
+  const override = env.WRANGLER_BIN;
+  if (override !== undefined && override !== "") {
+    const absolute = path.isAbsolute(override) ? override : path.resolve(cwd, override);
+    const resolved = isExecutableFile(absolute) ? absolute : null;
+    if (resolved === null) {
+      throw new Error(
+        `WRANGLER_BIN=${override} is not a file (resolved to ${absolute}); fix the override or unset it`,
+      );
+    }
+    return { binary: resolved, source: "WRANGLER_BIN" };
+  }
+  const onPath = resolveOnPath("wrangler", env);
+  if (onPath !== null) {
+    return { binary: onPath, source: "PATH" };
+  }
+  throw new Error(
+    "wrangler was not found on PATH; install it (npm --prefix workers ci adds workers/node_modules/.bin to PATH) or set WRANGLER_BIN. npx is not used as a fallback.",
+  );
+}
+
+/** workers/package-lock.json が固定する wrangler 版。 */
+export function pinnedWranglerVersion(lockPath) {
+  let lock;
+  try {
+    lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+  } catch (error) {
+    throw new Error(`cannot read the wrangler pin from ${lockPath}: ${error.message}`);
+  }
+  const resolved = lock?.packages?.["node_modules/wrangler"]?.version;
+  if (typeof resolved === "string" && resolved !== "") return resolved;
+  const declared = lock?.packages?.[""]?.devDependencies?.wrangler;
+  if (typeof declared === "string") return declared.replace(/^[\^~>=<\s]*/, "");
+  throw new Error(`workers/package-lock.json does not pin wrangler (${lockPath})`);
+}
+
+function compareVersions(left, right) {
+  const parse = (value) => String(value).split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const a = parse(left);
+  const b = parse(right);
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const diff = (a[index] ?? 0) - (b[index] ?? 0);
+    if (diff !== 0) return diff < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+function readWranglerVersion({ runCommand, commandCwd, binary }) {
+  let stdout;
+  try {
+    stdout = runCommand(binary, ["--version"], {
+      cwd: commandCwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    throw new Error(
+      `wrangler preflight failed: \`${binary} --version\` did not run: ${commandErrorText(error)}`,
+    );
+  }
+  const match = /\d+\.\d+\.\d+/.exec(String(stdout ?? ""));
+  if (match === null) {
+    throw new Error(
+      `wrangler preflight failed: \`${binary} --version\` printed no version: ${String(stdout ?? "").trim()}`,
+    );
+  }
+  return match[0];
+}
+
+/**
+ * 投入前に wrangler の実行ファイルと版を確定する。
+ * - 実行ファイルは WRANGLER_BIN → PATH（npx フォールバックなし）
+ * - workers/package-lock.json の固定版と並べ、差があれば必ずログへ出す
+ * - 固定版未満（機能不足）と、SHUTOKO_REQUIRE_PINNED_WRANGLER=1 時の不一致は停止
+ */
+export function preflightWrangler({ runCommand, commandCwd, repoRoot, env = process.env, log }) {
+  const { binary, source } = resolveWranglerBinary({ env, cwd: repoRoot });
+  const pinned = pinnedWranglerVersion(path.join(repoRoot, "workers", "package-lock.json"));
+  const version = readWranglerVersion({ runCommand, commandCwd, binary });
+  const matchesPin = version === pinned;
+  log(`  ✓ wrangler ${version} (${source}: ${binary})`);
+  log(`      pinned ${pinned} (workers/package-lock.json)`);
+  if (!matchesPin) {
+    const detail = `wrangler ${version} differs from the pinned ${pinned}`;
+    if (env.SHUTOKO_REQUIRE_PINNED_WRANGLER === "1") {
+      throw new Error(
+        `${detail}; SHUTOKO_REQUIRE_PINNED_WRANGLER=1 requires an exact match. Install the pinned version or drop the variable.`,
+      );
+    }
+    log(`      ! version differs: ${detail} (continuing; the pinned build stays reproducible)`);
+  }
+  if (compareVersions(version, MINIMUM_WRANGLER_VERSION) < 0) {
+    throw new Error(
+      `wrangler ${version} is older than the required ${MINIMUM_WRANGLER_VERSION} (r2 object put/get); install a newer wrangler`,
+    );
+  }
+  return { binary, source, version, pinnedVersion: pinned, matchesPin };
+}
+
 function wranglerArgs(operation, bucketName, releaseId, file, modeFlag) {
   const objectKey = `${bucketName}/releases/${releaseId}/${file.name}`;
   if (operation === "put") {
     return [
-      "wrangler",
       "r2",
       "object",
       "put",
@@ -324,16 +472,23 @@ function wranglerArgs(operation, bucketName, releaseId, file, modeFlag) {
       modeFlag,
     ];
   }
-  return ["wrangler", "r2", "object", "get", objectKey, "--file", file.path, modeFlag];
+  return ["r2", "object", "get", objectKey, "--file", file.path, modeFlag];
 }
 
-function ensureRemoteReleaseIsNew({ runCommand, commandCwd, bucketName, releaseId, modeFlag }) {
+function ensureRemoteReleaseIsNew({
+  runCommand,
+  commandCwd,
+  wrangler,
+  bucketName,
+  releaseId,
+  modeFlag,
+}) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "shutoko-r2-preflight-"));
   const destination = path.join(tempDir, "manifest.json");
   const file = { name: "manifest.json", path: destination };
   try {
     try {
-      runCommand("npx", wranglerArgs("get", bucketName, releaseId, file, modeFlag), {
+      runCommand(wrangler, wranglerArgs("get", bucketName, releaseId, file, modeFlag), {
         cwd: commandCwd,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
@@ -352,11 +507,21 @@ function ensureRemoteReleaseIsNew({ runCommand, commandCwd, bucketName, releaseI
   }
 }
 
-function uploadFile({ runCommand, commandCwd, bucketName, releaseId, modeFlag, modeLabel, file, log }) {
+function uploadFile({
+  runCommand,
+  commandCwd,
+  wrangler,
+  bucketName,
+  releaseId,
+  modeFlag,
+  modeLabel,
+  file,
+  log,
+}) {
   const objectKey = `${bucketName}/releases/${releaseId}/${file.name}`;
   log(`Uploading ${file.path} to ${modeLabel} ${objectKey} (${contentTypeFor(file.name)})...`);
   try {
-    runCommand("npx", wranglerArgs("put", bucketName, releaseId, file, modeFlag), {
+    runCommand(wrangler, wranglerArgs("put", bucketName, releaseId, file, modeFlag), {
       cwd: commandCwd,
       stdio: "inherit",
     });
@@ -365,14 +530,23 @@ function uploadFile({ runCommand, commandCwd, bucketName, releaseId, modeFlag, m
   }
 }
 
-function verifyRemoteFiles({ runCommand, commandCwd, bucketName, releaseId, modeFlag, files, log }) {
+function verifyRemoteFiles({
+  runCommand,
+  commandCwd,
+  wrangler,
+  bucketName,
+  releaseId,
+  modeFlag,
+  files,
+  log,
+}) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "shutoko-r2-readback-"));
   try {
     for (const expected of files) {
       const destination = path.join(tempDir, expected.name);
       const remoteFile = { name: expected.name, path: destination };
       try {
-        runCommand("npx", wranglerArgs("get", bucketName, releaseId, remoteFile, modeFlag), {
+        runCommand(wrangler, wranglerArgs("get", bucketName, releaseId, remoteFile, modeFlag), {
           cwd: commandCwd,
           encoding: "utf8",
           stdio: ["ignore", "pipe", "pipe"],
@@ -402,6 +576,7 @@ export function seedR2({
   repoRoot = defaultRepoRoot,
   runCommand = defaultRunCommand,
   log = console.log,
+  env = process.env,
 } = {}) {
   const fixturesDir = path.join(repoRoot, "fixtures/generated");
   const wasmDir = path.join(repoRoot, "dist/wasm");
@@ -435,10 +610,17 @@ export function seedR2({
   const modeLabel = isRemote ? "remote" : "local";
   const bucketName = isRemote ? "shutoko-artifacts" : "shutoko-artifacts-preview";
 
+  // ローカルの検証（manifest / graph 契約 / engine 成果物）が全部通ってから wrangler を
+  // 触る。成果物が欠けていれば wrangler を実行せずに停止する。
+  log("Checking the wrangler CLI before any upload...");
+  const wranglerInfo = preflightWrangler({ runCommand, commandCwd, repoRoot, env, log });
+  const wrangler = wranglerInfo.binary;
+
   if (isRemote) {
     ensureRemoteReleaseIsNew({
       runCommand,
       commandCwd,
+      wrangler,
       bucketName,
       releaseId,
       modeFlag,
@@ -451,6 +633,7 @@ export function seedR2({
     uploadFile({
       runCommand,
       commandCwd,
+      wrangler,
       bucketName,
       releaseId,
       modeFlag,
@@ -464,6 +647,7 @@ export function seedR2({
     verifyRemoteFiles({
       runCommand,
       commandCwd,
+      wrangler,
       bucketName,
       releaseId,
       modeFlag,
@@ -475,6 +659,7 @@ export function seedR2({
   uploadFile({
     runCommand,
     commandCwd,
+    wrangler,
     bucketName,
     releaseId,
     modeFlag,
@@ -487,6 +672,7 @@ export function seedR2({
     verifyRemoteFiles({
       runCommand,
       commandCwd,
+      wrangler,
       bucketName,
       releaseId,
       modeFlag,
@@ -496,7 +682,11 @@ export function seedR2({
   }
 
   log(`${modeLabel[0].toUpperCase()}${modeLabel.slice(1)} R2 seeding completed successfully.`);
-  return { releaseId, files: filesInPublishOrder.map((file) => file.name) };
+  return {
+    releaseId,
+    files: filesInPublishOrder.map((file) => file.name),
+    wrangler: wranglerInfo,
+  };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {

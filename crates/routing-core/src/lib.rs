@@ -1,8 +1,9 @@
 //! Experimental, bounded routing on explicitly connected directed graphs.
 //! This engine does not establish real-world toll eligibility or navigation safety.
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::cell::RefCell;
-use std::collections::{BTreeSet, BinaryHeap, HashMap};
+use std::collections::{BTreeSet, BinaryHeap, HashMap, HashSet};
 use std::fmt;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
@@ -56,6 +57,7 @@ mod device_verification;
 mod graph_v4;
 pub mod grid;
 pub mod handoff;
+pub mod tariff;
 
 pub use device_verification::{
     evaluate_device_verification_gate, parse_device_verification_manifest,
@@ -84,6 +86,19 @@ pub use graph_v4::{
     ResolvedRouteSegment, ReturnCorridor, RouteAnchor, RouteMembershipIndex,
     RouteMembershipSegment, RouteMembershipSourceKind, RoutePlanSegmentRole, RoutePlanV1,
     RoutingCapability, SameNodeAnchor, Tariff, TariffStatus,
+};
+pub use tariff::{
+    calculate_tariff_micros_yen, calculate_tariff_yen, calculate_tariff_yen_checked,
+    calculate_tariff_yen_signed, calculate_versioned_tariff_micros_yen,
+    calculate_versioned_tariff_yen, load_tariff_v3, parse_tariff_v3, read_od_tariffs_v3,
+    read_tariff_v3, validate_od_tariffs, validate_od_tariffs_file, BillingDistanceEvidenceV1,
+    BillingDistanceEvidenceV3, DistanceEvidenceV3, OdTariffsFileV3, PendingEvidenceV3,
+    ResolvedTariff, TariffAssignmentV1, TariffAssignmentV3, TariffCalculator, TariffDocumentV3,
+    TariffError, TariffFileV3, TariffPriceV1, TariffPriceV3, TariffResolutionStatus,
+    TariffResolver, TariffResolverError, TariffRoundingV3, TariffRuleV1, TariffRuleV3, TariffScope,
+    TariffSourceRefV3, OFFICIAL_DISTANCE_RULE_SOURCE, PRODUCT_DISCOUNTS_EXCLUDED,
+    PRODUCT_FARE_BASIS, PRODUCT_FARE_LABEL, PRODUCT_PAYMENT_METHOD, PRODUCT_VEHICLE_CLASS,
+    PRODUCT_VEHICLE_PROFILE,
 };
 
 /// Google Maps handoff payload for a candidate route.
@@ -198,6 +213,8 @@ pub struct BillingPair {
     pub anchor_to_exit_edge_ids: Vec<String>,
     pub status: VerificationStatus,
     pub vehicle_profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignment_id: Option<String>,
     #[serde(default)]
     pub prices: Vec<Price>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -325,6 +342,32 @@ pub struct Toll {
     pub billing_distance_meters: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toll_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignment_id: Option<String>,
+    #[serde(
+        default,
+        alias = "tariffRuleId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub rule_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_id: Option<String>,
+    #[serde(
+        default,
+        alias = "billingDistanceEvidenceId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub distance_evidence_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fare_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vehicle_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payment_method: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fare_basis: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub discounts_excluded: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -393,6 +436,8 @@ pub struct LegacyCandidate {
     pub duration: Duration,
     pub distance_meters: u64,
     pub shutoko_distance_meters: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tariff_status: Option<TariffStatus>,
     pub toll: Toll,
     pub r#loop: Loop,
     pub reasons: Vec<String>,
@@ -517,6 +562,10 @@ impl fmt::Display for RoutingError {
     }
 }
 impl std::error::Error for RoutingError {}
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 pub(crate) fn invalid(message: impl Into<String>) -> RoutingError {
     RoutingError {
         code: "INVALID_INPUT".into(),
@@ -541,23 +590,6 @@ pub fn distance_meters(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let dx = (lon2 - lon1) * std::f64::consts::PI / 180.0 * phi.cos() * R;
     let dy = (lat2 - lat1) * std::f64::consts::PI / 180.0 * R;
     dx.hypot(dy)
-}
-
-/// Compute standard ETC toll for ordinary vehicles (普通車) on Metropolitan Expressway (首都高速).
-///
-/// Implements the official distance-based tariff (effective 2022-04-01):
-/// - Lower bound: 300 JPY (distance <= 4,300m).
-/// - Formula: (150 JPY base + 29.52 JPY/km * distance_km) * 1.10 (consumption tax),
-///   rounded to the nearest 10 JPY.
-/// - Upper bound: 1,950 JPY (for ordinary passenger cars).
-pub fn calculate_etc_toll_yen(distance_meters: u64) -> u64 {
-    if distance_meters <= 4_300 {
-        return 300;
-    }
-    let km = distance_meters as f64 / 1000.0;
-    let base_with_tax = (150.0 + 29.52 * km) * 1.10;
-    let rounded = (base_with_tax / 10.0).round() as u64 * 10;
-    rounded.clamp(300, 1950)
 }
 
 // ---------------------------------------------------------------------------
@@ -636,6 +668,8 @@ pub struct PreparedGraph {
     pub(crate) graph: Graph,
     pub(crate) radial_billing_pairs: Vec<RadialReturnBillingPair>,
     pub(crate) route_memberships: Vec<RouteMembershipIndex>,
+    pub(crate) tariff_resolver: Option<tariff::TariffResolver>,
+    pub(crate) tariff_overrides: HashMap<String, graph_v4::Tariff>,
     /// Search limits used during preparation (re-validated on each search).
     ///
     /// `pub(crate)` to keep `PreparedGraph` opaque outside the crate.
@@ -672,6 +706,14 @@ impl PreparedGraph {
 
     pub fn route_memberships(&self) -> &[RouteMembershipIndex] {
         &self.route_memberships
+    }
+
+    pub fn tariff_resolver(&self) -> Option<&tariff::TariffResolver> {
+        self.tariff_resolver.as_ref()
+    }
+
+    pub fn tariff_override(&self, pair_id: &str) -> Option<&graph_v4::Tariff> {
+        self.tariff_overrides.get(pair_id)
     }
 
     #[inline]
@@ -781,6 +823,49 @@ fn shutoko_components(
         component_has_cycle.push(size > 1 || self_loop);
     }
     (component_by_node, component_has_cycle)
+}
+
+fn multi_way_binding_without_membership(g: &Graph, edge: &Edge, ramp: &Ramp) -> bool {
+    let (start, target, kind) = match ramp.kind {
+        RampKind::GeneralEntry | RampKind::BoundaryIn => (
+            ramp.node_id.as_str(),
+            ramp.mainline_node_id.as_str(),
+            EdgeKind::Entry,
+        ),
+        RampKind::GeneralExit | RampKind::BoundaryOut => (
+            ramp.mainline_node_id.as_str(),
+            ramp.node_id.as_str(),
+            EdgeKind::Exit,
+        ),
+    };
+    if edge.kind != kind || edge.from != start {
+        return false;
+    }
+    let mut queue = vec![(edge.to.clone(), vec![edge.id.clone()])];
+    let mut visited = HashSet::from([edge.to.clone()]);
+    let mut cursor = 0;
+    while cursor < queue.len() {
+        let (node, path) = queue[cursor].clone();
+        cursor += 1;
+        if node == target {
+            return path.len() > 1;
+        }
+        if path.len() >= 20_000 {
+            return false;
+        }
+        for next in g
+            .edges
+            .iter()
+            .filter(|candidate| candidate.kind == kind && candidate.from == node)
+        {
+            if visited.insert(next.to.clone()) {
+                let mut next_path = path.clone();
+                next_path.push(next.id.clone());
+                queue.push((next.to.clone(), next_path));
+            }
+        }
+    }
+    false
 }
 
 /// Validate the graph structure and limits, then build the [`OwnedIndex`].
@@ -1013,7 +1098,35 @@ fn build_owned_index(
         {
             return Err(invalid("ramp references unknown node id"));
         }
-        let valid_binding = match r.kind {
+        let bound_ramp_segment = route_memberships
+            .iter()
+            .flat_map(|membership| membership.segments.iter())
+            .find(|segment| {
+                segment.source_kind == RouteMembershipSourceKind::BoundRamp
+                    && segment.ordered_edge_ids.contains(&r.edge_id)
+            });
+        let membership_multi_way_binding = bound_ramp_segment.is_some_and(|segment| {
+            let Some(first_id) = segment.ordered_edge_ids.first() else {
+                return false;
+            };
+            let Some(last_id) = segment.ordered_edge_ids.last() else {
+                return false;
+            };
+            let (Some(first), Some(last)) = (edge_pos.get(first_id), edge_pos.get(last_id)) else {
+                return false;
+            };
+            let first = &g.edges[*first];
+            let last = &g.edges[*last];
+            match r.kind {
+                RampKind::GeneralEntry | RampKind::BoundaryIn => {
+                    r.node_id == first.from && r.mainline_node_id == last.to
+                }
+                RampKind::GeneralExit | RampKind::BoundaryOut => {
+                    r.mainline_node_id == first.from && r.node_id == last.to
+                }
+            }
+        });
+        let direct_binding = match r.kind {
             RampKind::GeneralEntry | RampKind::BoundaryIn => {
                 edge.kind == EdgeKind::Entry
                     && r.node_id == edge.from
@@ -1025,6 +1138,13 @@ fn build_owned_index(
                     && r.node_id == edge.to
             }
         };
+        let multi_way_binding = membership_multi_way_binding
+            || (!direct_binding && multi_way_binding_without_membership(g, edge, r));
+        let edge_kind_matches = match r.kind {
+            RampKind::GeneralEntry | RampKind::BoundaryIn => edge.kind == EdgeKind::Entry,
+            RampKind::GeneralExit | RampKind::BoundaryOut => edge.kind == EdgeKind::Exit,
+        };
+        let valid_binding = direct_binding || (edge_kind_matches && multi_way_binding);
         if !valid_binding {
             return Err(invalid("ramp kind or directed graph binding mismatch"));
         }
@@ -1258,6 +1378,151 @@ fn path_pg<'pg>(pg: &'pg PreparedGraph, ids: &[String]) -> Result<Vec<&'pg Edge>
         return Err(invalid("disconnected path"));
     }
     Ok(edges)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_tariff_for_od(
+    pg: &PreparedGraph,
+    pair_id: &str,
+    entry_ramp_id: Option<&str>,
+    exit_ramp_id: Option<&str>,
+    embedded_assignment_id: Option<&str>,
+    legacy_prices: &[Price],
+    legacy_distance_meters: Option<u64>,
+    legacy_od_tariff: Option<&OdTariff>,
+    pricing_at: OffsetDateTime,
+) -> Result<tariff::ResolvedTariff, RoutingError> {
+    if let Some(resolver) = &pg.tariff_resolver {
+        return resolver
+            .resolve_at(
+                embedded_assignment_id,
+                entry_ramp_id,
+                exit_ramp_id,
+                (!pair_id.is_empty()).then_some(pair_id),
+                pricing_at,
+                &tariff::TariffScope::product(),
+            )
+            .map_err(|error| invalid(format!("tariff resolution failed: {error}")));
+    }
+
+    if let Some(override_tariff) = pg.tariff_overrides.get(pair_id) {
+        let has_override_contract = override_tariff.assignment_id.is_some()
+            || override_tariff.rule_id.is_some()
+            || override_tariff.evidence_id.is_some()
+            || override_tariff.distance_evidence_id.is_some()
+            || override_tariff.fare_label.is_some();
+        if has_override_contract {
+            let mut resolution = tariff::ResolvedTariff::unpriced();
+            if override_tariff.status == TariffStatus::Priced {
+                let active = override_tariff.prices.iter().find(|price| {
+                    utc(&price.effective_from).is_ok_and(|from| from <= pricing_at)
+                        && price
+                            .effective_to
+                            .as_deref()
+                            .is_none_or(|to| utc(to).is_ok_and(|to| pricing_at < to))
+                });
+                if let Some(price) = active {
+                    resolution.status = tariff::TariffResolutionStatus::Priced;
+                    resolution.amount_yen = Some(price.amount_yen);
+                    resolution.billing_distance_meters = override_tariff.billing_distance_meters;
+                    resolution.effective_from = Some(price.effective_from.clone());
+                    resolution.effective_to = price.effective_to.clone();
+                } else if let Some(from) = override_tariff.effective_from.as_deref() {
+                    let from = utc(from)?;
+                    let to = override_tariff
+                        .effective_to
+                        .as_deref()
+                        .map(utc)
+                        .transpose()?;
+                    if from <= pricing_at && to.is_none_or(|to| pricing_at < to) {
+                        resolution.status = tariff::TariffResolutionStatus::Priced;
+                        resolution.amount_yen = override_tariff.amount_yen;
+                        resolution.billing_distance_meters =
+                            override_tariff.billing_distance_meters;
+                        resolution.effective_from = override_tariff.effective_from.clone();
+                        resolution.effective_to = override_tariff.effective_to.clone();
+                    } else {
+                        resolution.status = tariff::TariffResolutionStatus::Expired;
+                    }
+                } else {
+                    resolution.status = tariff::TariffResolutionStatus::Expired;
+                }
+            }
+            resolution.assignment_id = override_tariff.assignment_id.clone();
+            resolution.rule_id = override_tariff.rule_id.clone();
+            resolution.evidence_id = override_tariff.evidence_id.clone();
+            resolution.distance_evidence_id = override_tariff.distance_evidence_id.clone();
+            resolution.fare_label = override_tariff.fare_label.clone();
+            resolution.vehicle_class = override_tariff.vehicle_class.clone();
+            resolution.payment_method = override_tariff.payment_method.clone();
+            resolution.fare_basis = override_tariff.fare_basis.clone();
+            resolution.discounts_excluded = override_tariff.discounts_excluded;
+            resolution.toll_source = override_tariff.toll_source.clone();
+            return Ok(resolution);
+        }
+    }
+
+    let mut resolution = tariff::ResolvedTariff::unpriced();
+    resolution.fare_label = None;
+    resolution.vehicle_class = None;
+    resolution.payment_method = None;
+    resolution.fare_basis = None;
+    resolution.discounts_excluded = false;
+    if let Some(price) = legacy_prices.iter().find(|price| {
+        utc(&price.effective_from).is_ok_and(|from| from <= pricing_at)
+            && price
+                .effective_to
+                .as_deref()
+                .is_none_or(|to| utc(to).is_ok_and(|to| pricing_at < to))
+    }) {
+        resolution.status = tariff::TariffResolutionStatus::Priced;
+        resolution.amount_yen = Some(price.amount_yen);
+        resolution.billing_distance_meters = legacy_od_tariff
+            .map(|value| value.billing_distance_meters)
+            .or(legacy_distance_meters);
+        resolution.effective_from = Some(price.effective_from.clone());
+        resolution.effective_to = price.effective_to.clone();
+        resolution.toll_source = Some(tariff::LEGACY_TARIFF_SOURCE.to_owned());
+        return Ok(resolution);
+    }
+    if !legacy_prices.is_empty() {
+        if legacy_prices
+            .iter()
+            .any(|price| utc(&price.effective_from).is_ok_and(|from| from <= pricing_at))
+        {
+            resolution.status = tariff::TariffResolutionStatus::Expired;
+        }
+        return Ok(resolution);
+    }
+    if let Some(value) = legacy_od_tariff.filter(|value| {
+        value
+            .effective_from
+            .as_deref()
+            .is_none_or(|from| utc(from).is_ok_and(|from| from <= pricing_at))
+            && value
+                .effective_to
+                .as_deref()
+                .is_none_or(|to| utc(to).is_ok_and(|to| pricing_at < to))
+    }) {
+        if let Some(amount) = value.amount_yen {
+            resolution.status = tariff::TariffResolutionStatus::Priced;
+            resolution.amount_yen = Some(amount);
+            resolution.billing_distance_meters = Some(value.billing_distance_meters);
+            resolution.effective_from = value.effective_from.clone();
+            resolution.effective_to = value.effective_to.clone();
+            resolution.toll_source = Some("od_tariff".to_owned());
+        }
+    }
+    Ok(resolution)
+}
+
+fn resolution_tariff_status(status: tariff::TariffResolutionStatus) -> TariffStatus {
+    match status {
+        tariff::TariffResolutionStatus::Priced => TariffStatus::Priced,
+        tariff::TariffResolutionStatus::Unpriced => TariffStatus::Unpriced,
+        tariff::TariffResolutionStatus::Expired => TariffStatus::Expired,
+        tariff::TariffResolutionStatus::NotApplicable => TariffStatus::NotApplicable,
+    }
 }
 
 fn allowed_pg(pg: &PreparedGraph, edges: &[&Edge]) -> bool {
@@ -1705,13 +1970,15 @@ pub fn prepare(g: Graph, l: &SearchLimits) -> Result<PreparedGraph, RoutingError
             "graph schema 4 must be prepared through the version-aware JSON reader",
         ));
     }
-    prepare_parts(g, Vec::new(), Vec::new(), l)
+    prepare_parts(g, Vec::new(), Vec::new(), None, HashMap::new(), l)
 }
 
 fn prepare_parts(
     g: Graph,
     radial_billing_pairs: Vec<RadialReturnBillingPair>,
     route_memberships: Vec<RouteMembershipIndex>,
+    tariff_resolver: Option<tariff::TariffResolver>,
+    tariff_overrides: HashMap<String, graph_v4::Tariff>,
     l: &SearchLimits,
 ) -> Result<PreparedGraph, RoutingError> {
     let index = build_owned_index(&g, &radial_billing_pairs, &route_memberships, l)?;
@@ -1719,6 +1986,8 @@ fn prepare_parts(
         graph: g,
         radial_billing_pairs,
         route_memberships,
+        tariff_resolver,
+        tariff_overrides,
         limits: l.clone(),
         index,
         reachable_cache: RefCell::new(HashMap::new()),
@@ -1867,52 +2136,30 @@ fn evaluate_dynamic_od(
                     && (pair.exit_ramp_id.as_deref() == Some(exit_ramp.id.as_str())
                         || pair.exit_id == exit_edge.id)
             });
-            let od_tariff = pg
+            let legacy_od_tariff = pg
                 .index
                 .od_tariff_map
                 .get(&(entry_ramp.id.clone(), exit_ramp.id.clone()))
                 .map(|&idx| &pg.graph.od_tariffs[idx]);
-            let tariff = od_tariff.filter(|tariff| {
-                tariff
-                    .effective_from
-                    .as_deref()
-                    .is_none_or(|from| utc(from).is_ok_and(|from| from <= now))
-                    && tariff
-                        .effective_to
-                        .as_deref()
-                        .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
-            });
-            let table_price = billing_pair.and_then(|pair| {
-                pair.prices.iter().find(|price| {
-                    utc(&price.effective_from).is_ok_and(|from| from <= now)
-                        && price
-                            .effective_to
-                            .as_deref()
-                            .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
-                })
-            });
-            let (amount, effective_from, effective_to, billing_distance, source) =
-                if let Some(price) = table_price {
-                    (
-                        Some(price.amount_yen),
-                        Some(price.effective_from.clone()),
-                        price.effective_to.clone(),
-                        tariff
-                            .map(|value| value.billing_distance_meters)
-                            .or_else(|| billing_pair.and_then(|pair| pair.billing_distance_meters)),
-                        Some("table".to_string()),
-                    )
-                } else if let Some(value) = tariff {
-                    (
-                        value.amount_yen,
-                        value.effective_from.clone(),
-                        value.effective_to.clone(),
-                        Some(value.billing_distance_meters),
-                        Some("od_tariff".to_string()),
-                    )
-                } else {
-                    (None, None, None, None, None)
-                };
+            let pair_id = billing_pair.map(|pair| pair.id.as_str()).unwrap_or("");
+            let resolution = resolve_tariff_for_od(
+                pg,
+                pair_id,
+                Some(entry_ramp.id.as_str()),
+                Some(exit_ramp.id.as_str()),
+                None,
+                billing_pair
+                    .map(|pair| pair.prices.as_slice())
+                    .unwrap_or(&[]),
+                billing_pair.and_then(|pair| pair.billing_distance_meters),
+                legacy_od_tariff,
+                now,
+            )?;
+            let amount = resolution.amount_yen;
+            let effective_from = resolution.effective_from.clone();
+            let effective_to = resolution.effective_to.clone();
+            let billing_distance = resolution.billing_distance_meters;
+            let source = resolution.toll_source.clone();
 
             let ids = edge_ids(&highway);
             let candidate_id = std::iter::once(entry_ramp.id.as_str())
@@ -1958,15 +2205,7 @@ fn evaluate_dynamic_od(
                     continue;
                 }
             };
-            let tariff_status = if amount.is_some() {
-                TariffStatus::Priced
-            } else if billing_pair.is_some_and(|pair| !pair.prices.is_empty())
-                || (od_tariff.is_some() && tariff.is_none())
-            {
-                TariffStatus::Expired
-            } else {
-                TariffStatus::Unpriced
-            };
+            let tariff_status = resolution_tariff_status(resolution.status);
             let highway_distance = meters(&highway);
             let total_distance = highway_distance
                 .checked_add(access_distance_meters)
@@ -2044,6 +2283,15 @@ fn evaluate_dynamic_od(
                     effective_to,
                     billing_distance_meters: billing_distance,
                     toll_source: source,
+                    assignment_id: resolution.assignment_id.clone(),
+                    rule_id: resolution.rule_id.clone(),
+                    evidence_id: resolution.evidence_id.clone(),
+                    distance_evidence_id: resolution.distance_evidence_id.clone(),
+                    fare_label: resolution.fare_label.clone(),
+                    vehicle_class: resolution.vehicle_class.clone(),
+                    payment_method: resolution.payment_method.clone(),
+                    fare_basis: resolution.fare_basis.clone(),
+                    discounts_excluded: resolution.discounts_excluded,
                 },
                 r#loop: Loop {
                     anchor_node_id: pg.graph.nodes[anchor].id.clone(),
@@ -2372,12 +2620,6 @@ fn coordinate_tier_search(
                         break 'verified;
                     }
                     tier_candidate_edges += highway.len();
-                    let price = p.prices.iter().find(|v| {
-                        utc(&v.effective_from).is_ok_and(|from| from <= now)
-                            && v.effective_to
-                                .as_deref()
-                                .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
-                    });
                     let ids = edge_ids(&highway);
                     let id = std::iter::once(p.id.as_str())
                         .chain(ids.iter().map(String::as_str))
@@ -2483,56 +2725,23 @@ fn coordinate_tier_search(
                             .map(|&idx| &pg.graph.od_tariffs[idx]),
                         _ => None,
                     };
-
-                    let (toll_amount, toll_from, toll_to, toll_distance, toll_source) =
-                        if let Some(price) = price {
-                            (
-                                Some(price.amount_yen),
-                                Some(price.effective_from.clone()),
-                                price.effective_to.clone(),
-                                od_tariff
-                                    .map(|t| t.billing_distance_meters)
-                                    .or(p.billing_distance_meters),
-                                Some("table".to_string()),
-                            )
-                        } else if !p.prices.is_empty() {
-                            (
-                                None,
-                                None,
-                                None,
-                                od_tariff
-                                    .map(|t| t.billing_distance_meters)
-                                    .or(p.billing_distance_meters),
-                                None,
-                            )
-                        } else if let Some(tariff) = od_tariff.filter(|t| {
-                            t.effective_from
-                                .as_deref()
-                                .is_none_or(|from| utc(from).is_ok_and(|from| from <= now))
-                                && t.effective_to
-                                    .as_deref()
-                                    .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
-                        }) {
-                            (
-                                tariff.amount_yen.or_else(|| {
-                                    Some(calculate_etc_toll_yen(tariff.billing_distance_meters))
-                                }),
-                                tariff.effective_from.clone(),
-                                tariff.effective_to.clone(),
-                                Some(tariff.billing_distance_meters),
-                                Some("od_tariff".to_string()),
-                            )
-                        } else if let Some(dist) = p.billing_distance_meters {
-                            (
-                                Some(calculate_etc_toll_yen(dist)),
-                                None,
-                                None,
-                                Some(dist),
-                                Some("calculated".to_string()),
-                            )
-                        } else {
-                            (None, None, None, None, None)
-                        };
+                    let resolution = resolve_tariff_for_od(
+                        pg,
+                        p.id.as_str(),
+                        entry_ramp_info.ramp_id.as_deref(),
+                        exit_ramp_info.ramp_id.as_deref(),
+                        None,
+                        &p.prices,
+                        p.billing_distance_meters,
+                        od_tariff,
+                        now,
+                    )?;
+                    let toll_amount = resolution.amount_yen;
+                    let toll_from = resolution.effective_from.clone();
+                    let toll_to = resolution.effective_to.clone();
+                    let toll_distance = resolution.billing_distance_meters;
+                    let toll_source = resolution.toll_source.clone();
+                    let tariff_status = resolution_tariff_status(resolution.status);
 
                     tier_candidates.push(LegacyCandidate {
                         id,
@@ -2562,6 +2771,7 @@ fn coordinate_tier_search(
                         },
                         distance_meters: meters(&highway),
                         shutoko_distance_meters: meters(&highway),
+                        tariff_status: resolution.discounts_excluded.then_some(tariff_status),
                         toll: Toll {
                             billing_pair_id: p.id.clone(),
                             charged_section_count: 1,
@@ -2571,6 +2781,15 @@ fn coordinate_tier_search(
                             effective_to: toll_to,
                             billing_distance_meters: toll_distance,
                             toll_source,
+                            assignment_id: resolution.assignment_id.clone(),
+                            rule_id: resolution.rule_id.clone(),
+                            evidence_id: resolution.evidence_id.clone(),
+                            distance_evidence_id: resolution.distance_evidence_id.clone(),
+                            fare_label: resolution.fare_label.clone(),
+                            vehicle_class: resolution.vehicle_class.clone(),
+                            payment_method: resolution.payment_method.clone(),
+                            fare_basis: resolution.fare_basis.clone(),
+                            discounts_excluded: resolution.discounts_excluded,
                         },
                         r#loop: Loop {
                             anchor_node_id: p.anchor_node_id.clone(),
@@ -3206,34 +3425,24 @@ fn build_radial_candidate(
             }
         }
     }
-    let (tariff_status, active_price) = match pair.tariff.status {
-        TariffStatus::Priced => {
-            let active_price = pair.tariff.prices.iter().find(|price| {
-                utc(&price.effective_from).is_ok_and(|from| from <= now)
-                    && price
-                        .effective_to
-                        .as_deref()
-                        .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
-            });
-            let status = if active_price.is_some() {
-                TariffStatus::Priced
-            } else if pair
-                .tariff
-                .prices
-                .iter()
-                .any(|price| utc(&price.effective_from).is_ok_and(|from| from <= now))
-            {
-                TariffStatus::Expired
-            } else {
-                TariffStatus::Unpriced
-            };
-            (status, active_price)
-        }
-        status @ (TariffStatus::Unpriced | TariffStatus::Expired | TariffStatus::NotApplicable) => {
-            (status, None)
-        }
-    };
-    let amount_yen = active_price.map(|price| price.amount_yen);
+    let legacy_od_tariff = pg
+        .index
+        .od_tariff_map
+        .get(&(entry_ramp.id.clone(), exit_ramp.id.clone()))
+        .map(|&idx| &pg.graph.od_tariffs[idx]);
+    let resolution = resolve_tariff_for_od(
+        pg,
+        pair.id.as_str(),
+        Some(entry_ramp.id.as_str()),
+        Some(exit_ramp.id.as_str()),
+        pair.tariff.assignment_id.as_deref(),
+        &pair.tariff.prices,
+        pair.tariff.billing_distance_meters,
+        legacy_od_tariff,
+        now,
+    )?;
+    let tariff_status = resolution_tariff_status(resolution.status);
+    let amount_yen = resolution.amount_yen;
     let candidate_id = std::iter::once(pair.id.as_str())
         .chain(edge_ids.iter().map(String::as_str))
         .map(|value| format!("{}:{}", value.len(), value))
@@ -3310,10 +3519,19 @@ fn build_radial_candidate(
             billing_pair_id: pair.id.clone(),
             amount_yen,
             pricing_at: r.pricing_at.clone(),
-            effective_from: active_price.map(|price| price.effective_from.clone()),
-            effective_to: active_price.and_then(|price| price.effective_to.clone()),
-            billing_distance_meters: active_price.and(pair.tariff.billing_distance_meters),
-            toll_source: None,
+            effective_from: resolution.effective_from.clone(),
+            effective_to: resolution.effective_to.clone(),
+            billing_distance_meters: resolution.billing_distance_meters,
+            toll_source: resolution.toll_source.clone(),
+            assignment_id: resolution.assignment_id.clone(),
+            rule_id: resolution.rule_id.clone(),
+            evidence_id: resolution.evidence_id.clone(),
+            distance_evidence_id: resolution.distance_evidence_id.clone(),
+            fare_label: resolution.fare_label.clone(),
+            vehicle_class: resolution.vehicle_class.clone(),
+            payment_method: resolution.payment_method.clone(),
+            fare_basis: resolution.fare_basis.clone(),
+            discounts_excluded: resolution.discounts_excluded,
         },
         reasons: Vec::new(),
         warnings: vec![
@@ -3640,12 +3858,6 @@ pub fn search_prepared(
                 break 'pairs;
             }
             candidate_edges += highway.len();
-            let price = p.prices.iter().find(|v| {
-                utc(&v.effective_from).is_ok_and(|from| from <= now)
-                    && v.effective_to
-                        .as_deref()
-                        .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
-            });
             let ids = edge_ids(&highway);
             let id = std::iter::once(p.id.as_str())
                 .chain(ids.iter().map(String::as_str))
@@ -3753,55 +3965,23 @@ pub fn search_prepared(
                 _ => None,
             };
 
-            let (toll_amount, toll_from, toll_to, toll_distance, toll_source) =
-                if let Some(price) = price {
-                    (
-                        Some(price.amount_yen),
-                        Some(price.effective_from.clone()),
-                        price.effective_to.clone(),
-                        od_tariff
-                            .map(|t| t.billing_distance_meters)
-                            .or(p.billing_distance_meters),
-                        Some("table".to_string()),
-                    )
-                } else if !p.prices.is_empty() {
-                    (
-                        None,
-                        None,
-                        None,
-                        od_tariff
-                            .map(|t| t.billing_distance_meters)
-                            .or(p.billing_distance_meters),
-                        None,
-                    )
-                } else if let Some(tariff) = od_tariff.filter(|t| {
-                    t.effective_from
-                        .as_deref()
-                        .is_none_or(|from| utc(from).is_ok_and(|from| from <= now))
-                        && t.effective_to
-                            .as_deref()
-                            .is_none_or(|to| utc(to).is_ok_and(|to| now < to))
-                }) {
-                    (
-                        tariff.amount_yen.or_else(|| {
-                            Some(calculate_etc_toll_yen(tariff.billing_distance_meters))
-                        }),
-                        tariff.effective_from.clone(),
-                        tariff.effective_to.clone(),
-                        Some(tariff.billing_distance_meters),
-                        Some("od_tariff".to_string()),
-                    )
-                } else if let Some(dist) = p.billing_distance_meters {
-                    (
-                        Some(calculate_etc_toll_yen(dist)),
-                        None,
-                        None,
-                        Some(dist),
-                        Some("calculated".to_string()),
-                    )
-                } else {
-                    (None, None, None, None, None)
-                };
+            let resolution = resolve_tariff_for_od(
+                pg,
+                p.id.as_str(),
+                entry_info.ramp_id.as_deref(),
+                exit_info.ramp_id.as_deref(),
+                None,
+                &p.prices,
+                p.billing_distance_meters,
+                od_tariff,
+                now,
+            )?;
+            let toll_amount = resolution.amount_yen;
+            let toll_from = resolution.effective_from.clone();
+            let toll_to = resolution.effective_to.clone();
+            let toll_distance = resolution.billing_distance_meters;
+            let toll_source = resolution.toll_source.clone();
+            let tariff_status = resolution_tariff_status(resolution.status);
 
             candidates.push(LegacyCandidate {
                 id,
@@ -3831,6 +4011,7 @@ pub fn search_prepared(
                 },
                 distance_meters: meters(&highway),
                 shutoko_distance_meters: meters(&highway),
+                tariff_status: resolution.discounts_excluded.then_some(tariff_status),
                 toll: Toll {
                     billing_pair_id: p.id.clone(),
                     charged_section_count: 1,
@@ -3840,6 +4021,15 @@ pub fn search_prepared(
                     effective_to: toll_to,
                     billing_distance_meters: toll_distance,
                     toll_source,
+                    assignment_id: resolution.assignment_id.clone(),
+                    rule_id: resolution.rule_id.clone(),
+                    evidence_id: resolution.evidence_id.clone(),
+                    distance_evidence_id: resolution.distance_evidence_id.clone(),
+                    fare_label: resolution.fare_label.clone(),
+                    vehicle_class: resolution.vehicle_class.clone(),
+                    payment_method: resolution.payment_method.clone(),
+                    fare_basis: resolution.fare_basis.clone(),
+                    discounts_excluded: resolution.discounts_excluded,
                 },
                 r#loop: Loop {
                     anchor_node_id: p.anchor_node_id.clone(),
@@ -4036,6 +4226,37 @@ pub fn search(
 
 const MAX_SEARCH_LIMITS_JSON_BYTES: usize = 2 * 1024 * 1024;
 
+fn parse_search_request_json(input: &str) -> Result<SearchRequest, RoutingError> {
+    let mut value: Value =
+        serde_json::from_str(input).map_err(|_| invalid("invalid request JSON"))?;
+    let object = value
+        .as_object_mut()
+        .ok_or_else(|| invalid("request JSON must be an object"))?;
+    let mut scope = tariff::TariffScope::product();
+    let mut take_string = |name: &str, target: &mut String| -> Result<(), RoutingError> {
+        let Some(value) = object.remove(name) else {
+            return Ok(());
+        };
+        let text = value
+            .as_str()
+            .ok_or_else(|| invalid(format!("request {name} must be a string")))?;
+        *target = text.to_owned();
+        Ok(())
+    };
+    take_string("vehicleClass", &mut scope.vehicle_class)?;
+    take_string("paymentMethod", &mut scope.payment_method)?;
+    take_string("fareBasis", &mut scope.fare_basis)?;
+    if let Some(value) = object.remove("discountsExcluded") {
+        scope.discounts_excluded = value
+            .as_bool()
+            .ok_or_else(|| invalid("request discountsExcluded must be boolean"))?;
+    }
+    scope
+        .validate()
+        .map_err(|error| invalid(format!("request tariff scope is unsupported: {error}")))?;
+    serde_json::from_value(value).map_err(|_| invalid("invalid request JSON"))
+}
+
 /// Parse and validate strict JSON, then serialize the search response.
 ///
 /// Internally uses [`prepare`] + [`search_prepared`] to avoid cloning the
@@ -4055,14 +4276,15 @@ pub fn search_json(
         return Err(invalid("JSON payload exceeds prototype size limit"));
     }
     let parsed_graph = graph_v4::read_graph_json(graph_json)?;
-    let r: SearchRequest =
-        serde_json::from_str(request_json).map_err(|_| invalid("invalid request JSON"))?;
+    let r = parse_search_request_json(request_json)?;
     let l: SearchLimits =
         serde_json::from_str(limits_json).map_err(|_| invalid("invalid limits JSON"))?;
     let pg = prepare_parts(
         parsed_graph.graph,
         parsed_graph.radial_billing_pairs,
         parsed_graph.route_memberships,
+        parsed_graph.tariff_resolver,
+        parsed_graph.tariff_overrides,
         &l,
     )?;
     serde_json::to_string(&search_prepared(&pg, &r)?)
@@ -4086,6 +4308,8 @@ pub fn prepare_json(graph_json: &str, limits_json: &str) -> Result<PreparedGraph
         parsed_graph.graph,
         parsed_graph.radial_billing_pairs,
         parsed_graph.route_memberships,
+        parsed_graph.tariff_resolver,
+        parsed_graph.tariff_overrides,
         &l,
     )
 }
@@ -4101,8 +4325,7 @@ pub fn search_prepared_json(
     if request_json.len() > 16 * 1024 {
         return Err(invalid("JSON payload exceeds prototype size limit"));
     }
-    let r: SearchRequest =
-        serde_json::from_str(request_json).map_err(|_| invalid("invalid request JSON"))?;
+    let r = parse_search_request_json(request_json)?;
     serde_json::to_string(&search_prepared(pg, &r)?)
         .map_err(|_| invalid("result serialization failed"))
 }

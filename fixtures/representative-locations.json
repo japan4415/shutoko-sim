@@ -1,0 +1,316 @@
+{
+  "fixtureVersion": 2,
+  "note": "4 地点（東京駅・目黒駅・銀座・六本木）の探索結果を固定する。Web の統合テスト (web/test/integration-wasm.test.ts) と engine 契約テスト (crates/routing-core/tests/real_graph_contract.rs) が実 WASM / 実 engine で再計算し、最寄りの入口と距離・候補の件数と並び・商品区分・基本料金（割引適用前）の金額と証拠を照合する。料金は 2026-10 改定をまたぐ 2 時点（pricingWindows）を固定する。公開 release を差し替えたときは releaseId が変わるため、このファイルも合わせて更新すること。",
+  "releaseId": "all-real-v4",
+  "vehicleProfile": "passenger-car-etc",
+  "fareLabel": "普通車ETC基本料金（割引適用前）",
+  "tollSource": "official_distance_rule",
+  "maxDisplayedCandidates": 3,
+  "pricingWindows": [
+    {
+      "id": "before-2026-10-revision",
+      "pricingAt": "2026-09-10T00:00:00Z"
+    },
+    {
+      "id": "after-2026-10-revision",
+      "pricingAt": "2026-10-10T00:00:00Z"
+    }
+  ],
+  "orderingRule": "time_per_yen は 首都高走行秒数 / 料金円 の大きい順、同値なら首都高時間・一般道時間・安定 ID の順で totally ordered になる",
+  "locations": [
+    {
+      "id": "tokyo-station",
+      "label": "東京駅",
+      "origin": {
+        "lat": 35.6812,
+        "lon": 139.7671
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "expectedStatus": "ok",
+      "expectedReason": null,
+      "expectedRankingMode": "time_per_yen",
+      "expectedCandidateCount": 1,
+      "expectedNearestAccess": {
+        "nodeId": "n:1105125663",
+        "entryRampId": "ramp:c1-inner:takaracho-entry",
+        "entryName": "宝町",
+        "distanceMeters": 746.277,
+        "kind": "general_entry",
+        "route": "C1",
+        "direction": "inner"
+      },
+      "expectedRecommendedPairId": "bp:c1-inner:takaracho-kandabashi",
+      "expectedCandidates": [
+        {
+          "pairId": "bp:c1-inner:takaracho-kandabashi",
+          "pairKind": "legacyRing",
+          "entryRampId": "ramp:c1-inner:takaracho-entry",
+          "exitRampId": "ramp:c1-inner:kandabashi-exit",
+          "entryName": "宝町入口",
+          "exitName": "神田橋出口",
+          "productEligible": true,
+          "recommended": true,
+          "tariffStatus": "priced",
+          "assignmentId": "assignment:c1-inner:takaracho-kandabashi",
+          "shutokoSeconds": 1148,
+          "planSeconds": 1707,
+          "pricing": [
+            {
+              "window": "before-2026-10-revision",
+              "tariffStatus": "priced",
+              "amountYen": 300,
+              "billingDistanceMeters": 1700,
+              "ruleId": "shutoko-etc-ordinary-2022-04",
+              "evidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi",
+              "distanceEvidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi",
+              "effectiveFrom": "2022-03-31T15:00:00Z",
+              "effectiveTo": "2026-09-30T15:00:00Z"
+            },
+            {
+              "window": "after-2026-10-revision",
+              "tariffStatus": "priced",
+              "amountYen": 300,
+              "billingDistanceMeters": 1700,
+              "ruleId": "shutoko-etc-ordinary-2026-10",
+              "evidenceId": "evidence:2026-10:p03:c1-takaracho-kandabashi",
+              "distanceEvidenceId": "evidence:2026-10:p03:c1-takaracho-kandabashi",
+              "effectiveFrom": "2026-09-30T15:00:00Z",
+              "effectiveTo": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "meguro-station",
+      "label": "目黒駅",
+      "origin": {
+        "lat": 35.6339,
+        "lon": 139.7158
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "expectedStatus": "ok",
+      "expectedReason": null,
+      "expectedRankingMode": "time_per_yen",
+      "expectedCandidateCount": 2,
+      "expectedNearestAccess": {
+        "nodeId": "n:2177935837",
+        "entryRampId": "ramp:2-inbound:meguro-entry",
+        "entryName": "目黒",
+        "distanceMeters": 313.474,
+        "kind": "general_entry",
+        "route": "2",
+        "direction": "inbound"
+      },
+      "expectedRecommendedPairId": "bp:2-inbound:meguro:c1-outer:tengenji",
+      "expectedCandidates": [
+        {
+          "pairId": "bp:2-inbound:meguro:c1-outer:tengenji",
+          "pairKind": "radialReturn",
+          "entryRampId": "ramp:2-inbound:meguro-entry",
+          "exitRampId": "ramp:2-outbound:tengenji-exit",
+          "entryName": "目黒入口",
+          "exitName": "天現寺出口",
+          "productEligible": true,
+          "recommended": true,
+          "tariffStatus": "priced",
+          "assignmentId": "assignment:2:meguro-tengenji",
+          "shutokoSeconds": 1359,
+          "planSeconds": 2006,
+          "pricing": [
+            {
+              "window": "before-2026-10-revision",
+              "tariffStatus": "priced",
+              "amountYen": 790,
+              "billingDistanceMeters": 19400,
+              "ruleId": "shutoko-etc-ordinary-2022-04",
+              "evidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+              "distanceEvidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+              "effectiveFrom": "2022-03-31T15:00:00Z",
+              "effectiveTo": "2026-09-30T15:00:00Z"
+            },
+            {
+              "window": "after-2026-10-revision",
+              "tariffStatus": "priced",
+              "amountYen": 860,
+              "billingDistanceMeters": 19400,
+              "ruleId": "shutoko-etc-ordinary-2026-10",
+              "evidenceId": "evidence:2026-10:p04:2-meguro-tengenji",
+              "distanceEvidenceId": "evidence:2026-10:p04:2-meguro-tengenji",
+              "effectiveFrom": "2026-09-30T15:00:00Z",
+              "effectiveTo": null
+            }
+          ]
+        },
+        {
+          "pairId": "bp:2-inbound:meguro:c1-inner:tengenji",
+          "pairKind": "radialReturn",
+          "entryRampId": "ramp:2-inbound:meguro-entry",
+          "exitRampId": "ramp:2-outbound:tengenji-exit",
+          "entryName": "目黒入口",
+          "exitName": "天現寺出口",
+          "productEligible": true,
+          "recommended": false,
+          "tariffStatus": "priced",
+          "assignmentId": "assignment:2:meguro-tengenji",
+          "shutokoSeconds": 1349,
+          "planSeconds": 1994,
+          "pricing": [
+            {
+              "window": "before-2026-10-revision",
+              "tariffStatus": "priced",
+              "amountYen": 790,
+              "billingDistanceMeters": 19400,
+              "ruleId": "shutoko-etc-ordinary-2022-04",
+              "evidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+              "distanceEvidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+              "effectiveFrom": "2022-03-31T15:00:00Z",
+              "effectiveTo": "2026-09-30T15:00:00Z"
+            },
+            {
+              "window": "after-2026-10-revision",
+              "tariffStatus": "priced",
+              "amountYen": 860,
+              "billingDistanceMeters": 19400,
+              "ruleId": "shutoko-etc-ordinary-2026-10",
+              "evidenceId": "evidence:2026-10:p04:2-meguro-tengenji",
+              "distanceEvidenceId": "evidence:2026-10:p04:2-meguro-tengenji",
+              "effectiveFrom": "2026-09-30T15:00:00Z",
+              "effectiveTo": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ginza",
+      "label": "銀座",
+      "origin": {
+        "lat": 35.6719,
+        "lon": 139.7648
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "expectedStatus": "ok",
+      "expectedReason": null,
+      "expectedRankingMode": "shutoko_time",
+      "expectedCandidateCount": 1,
+      "expectedNearestAccess": {
+        "nodeId": "n:31254351",
+        "entryRampId": "ramp:c1-inner:ginza-entry",
+        "entryName": "銀座",
+        "distanceMeters": 510.761,
+        "kind": "general_entry",
+        "route": "C1",
+        "direction": "inner"
+      },
+      "expectedRecommendedPairId": null,
+      "expectedCandidates": [
+        {
+          "pairId": "od:ramp:c1-inner:ginza-entry:ramp:c1-inner:kasumigaseki-exit",
+          "pairKind": "topologyOnly",
+          "entryRampId": "ramp:c1-inner:ginza-entry",
+          "exitRampId": "ramp:c1-inner:kasumigaseki-exit",
+          "entryName": "銀座",
+          "exitName": "霞が関",
+          "productEligible": false,
+          "recommended": false,
+          "tariffStatus": "unpriced",
+          "assignmentId": null,
+          "shutokoSeconds": 1468,
+          "planSeconds": 2144,
+          "pricing": [
+            {
+              "window": "before-2026-10-revision",
+              "tariffStatus": "unpriced",
+              "amountYen": null,
+              "billingDistanceMeters": null,
+              "ruleId": null,
+              "evidenceId": null,
+              "distanceEvidenceId": null,
+              "effectiveFrom": null,
+              "effectiveTo": null
+            },
+            {
+              "window": "after-2026-10-revision",
+              "tariffStatus": "unpriced",
+              "amountYen": null,
+              "billingDistanceMeters": null,
+              "ruleId": null,
+              "evidenceId": null,
+              "distanceEvidenceId": null,
+              "effectiveFrom": null,
+              "effectiveTo": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "roppongi",
+      "label": "六本木",
+      "origin": {
+        "lat": 35.6628,
+        "lon": 139.7314
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "expectedStatus": "ok",
+      "expectedReason": null,
+      "expectedRankingMode": "shutoko_time",
+      "expectedCandidateCount": 1,
+      "expectedNearestAccess": {
+        "nodeId": "n:266237326",
+        "entryRampId": "ramp:c1-inner:iikura-entry",
+        "entryName": "飯倉",
+        "distanceMeters": 662.501,
+        "kind": "general_entry",
+        "route": "C1",
+        "direction": "inner"
+      },
+      "expectedRecommendedPairId": null,
+      "expectedCandidates": [
+        {
+          "pairId": "od:ramp:c1-inner:iikura-entry:ramp:c1-outer:iikura-exit",
+          "pairKind": "topologyOnly",
+          "entryRampId": "ramp:c1-inner:iikura-entry",
+          "exitRampId": "ramp:c1-outer:iikura-exit",
+          "entryName": "飯倉",
+          "exitName": "飯倉",
+          "productEligible": false,
+          "recommended": false,
+          "tariffStatus": "unpriced",
+          "assignmentId": null,
+          "shutokoSeconds": 2151,
+          "planSeconds": 2816,
+          "pricing": [
+            {
+              "window": "before-2026-10-revision",
+              "tariffStatus": "unpriced",
+              "amountYen": null,
+              "billingDistanceMeters": null,
+              "ruleId": null,
+              "evidenceId": null,
+              "distanceEvidenceId": null,
+              "effectiveFrom": null,
+              "effectiveTo": null
+            },
+            {
+              "window": "after-2026-10-revision",
+              "tariffStatus": "unpriced",
+              "amountYen": null,
+              "billingDistanceMeters": null,
+              "ruleId": null,
+              "evidenceId": null,
+              "distanceEvidenceId": null,
+              "effectiveFrom": null,
+              "effectiveTo": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

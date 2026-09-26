@@ -55,7 +55,7 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
       const exitId = `fixture-exit-${String(index)}`;
       return {
         id,
-        releaseId: "all-real-v3",
+        releaseId: "all-real-v4",
         origin: { lat: 35.6896727, lon: 139.7644248 },
         originNodeId: "fixture-origin",
         snappedOrigin: { nodeId: "fixture-origin", lat: 35.6896727, lon: 139.7644248, distanceMeters: 500 + index },
@@ -91,7 +91,7 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
     };
     const result = {
       requestId: "",
-      releaseId: "all-real-v3",
+      releaseId: "all-real-v4",
       status: "ok",
       reason: null,
       rankingMode: "time_per_yen",
@@ -103,7 +103,7 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
     class FixtureWorker {
       onmessage: ((event: MessageEvent) => void) | null = null;
       constructor() {
-        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v3" } } as MessageEvent), 0);
+        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v4" } } as MessageEvent), 0);
       }
       postMessage(message: { requestId: string }): void {
         const response = { type: "result", requestId: message.requestId, result: { ...result, requestId: message.requestId } };
@@ -117,12 +117,13 @@ async function stubWorkerWithTwoCandidates(page: Page): Promise<void> {
 
 async function stubWorkerWithRadialCandidate(
   page: Page,
-  variant: "radial" | "radialEnabled" | "topologyOnly" | "pricedIneligible" = "radial",
+  variant: "radial" | "radialEnabled" | "topologyOnly" | "topologyOnlyUnpriced" | "pricedIneligible" =
+    "radial",
 ): Promise<void> {
   await page.addInitScript((variant) => {
     const candidate = {
       id: "fixture-candidate-radial",
-      releaseId: "all-real-v3",
+      releaseId: "all-real-v4",
       pairKind: "radialReturn",
       routePlanVersion: 1,
       origin: { lat: 35.6896727, lon: 139.7644248 },
@@ -302,6 +303,35 @@ async function stubWorkerWithRadialCandidate(
       Reflect.deleteProperty(candidate, "anchor");
       Reflect.deleteProperty(candidate, "routePlan");
       Reflect.deleteProperty(candidate, "edgeRouteLegs");
+    } else if (variant === "topologyOnlyUnpriced") {
+      // 銀座・六本木と同じ状態（未価格の topologyOnly）。商品対象外・推薦なしのままで
+      // 表示され、料金の注記は出ないことを runbook の期待値として固定する。
+      candidate.id = "fixture-candidate-topology-unpriced";
+      candidate.pairKind = "topologyOnly";
+      candidate.eligibilityStatus = "topology_only";
+      candidate.loopValidationStatus = "topology_only";
+      candidate.tariffStatus = "unpriced";
+      candidate.toll.amountYen = null;
+      candidate.toll.effectiveFrom = null;
+      candidate.toll.effectiveTo = null;
+      candidate.reasons = ["TOPOLOGY_ONLY"];
+      candidate.loop = {
+        anchorNodeId: "fixture-merge",
+        edgeIds: ["fixture-lap"],
+        durationSeconds: 1200,
+        distanceMeters: 20000,
+        validated: false,
+      };
+      candidate.handoff = {
+        origin: { lat: 35.6896727, lon: 139.7644248 },
+        destination: { lat: 35.6896727, lon: 139.7644248 },
+        waypoints: [],
+        mapsUrl: "https://www.google.com/maps/dir/?api=1&candidate=topology-unpriced",
+        verificationSetVersion: "fixture",
+      };
+      Reflect.deleteProperty(candidate, "anchor");
+      Reflect.deleteProperty(candidate, "routePlan");
+      Reflect.deleteProperty(candidate, "edgeRouteLegs");
     } else if (variant === "pricedIneligible") {
       candidate.eligibilityStatus = "unverified";
       candidate.loopValidationStatus = "unresolved";
@@ -311,10 +341,13 @@ async function stubWorkerWithRadialCandidate(
     }
     const result = {
       requestId: "",
-      releaseId: "all-real-v3",
+      releaseId: "all-real-v4",
       status: "ok",
       reason: null,
-      rankingMode: variant === "pricedIneligible" ? "shutoko_time" : "time_per_yen",
+      rankingMode:
+        variant === "pricedIneligible" || variant === "topologyOnlyUnpriced"
+          ? "shutoko_time"
+          : "time_per_yen",
       expandedStates: 1,
       candidates: [candidate],
       nearestAccess: null,
@@ -323,7 +356,7 @@ async function stubWorkerWithRadialCandidate(
     class FixtureWorker {
       onmessage: ((event: MessageEvent) => void) | null = null;
       constructor() {
-        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v3" } } as MessageEvent), 0);
+        setTimeout(() => this.onmessage?.({ data: { type: "ready", releaseId: "all-real-v4" } } as MessageEvent), 0);
       }
       postMessage(message: { requestId: string }): void {
         const response = { type: "result", requestId: message.requestId, result: { ...result, requestId: message.requestId } };
@@ -433,7 +466,7 @@ test("(1) 住所検索の候補選択で出発地点が確定し探索できる"
   await radios.nth(1).check();
   await expect(page.locator("#origin-summary")).toContainText("東京都中央区日本橋");
 
-  await setTimeRange(page, "15", "60");
+  await setTimeRange(page, "15", "120");
   await page.click("#search-btn");
 
   const firstCard = page.locator("#results .card").first();
@@ -503,7 +536,7 @@ test("(5) 候補なしから時間を広げる導線で上限が増える", asyn
   await openApp(page);
   await searchByAddress(page, 0);
 
-  // 大手町の最近接 tier（神田橋入口）の最短計画は約 42 分。15〜30 分窓では
+  // 大手町の最近接 tier（神田橋入口）の最短計画は約 40 分。15〜30 分窓では
   // どの周回も上限を超えるため、候補なし + 上限拡大の復帰導線になる。
   await setTimeRange(page, "15", "30");
   await page.click("#search-btn");
@@ -527,9 +560,8 @@ test("(6) カード選択と地図が同期し帰属表示と経路線がある"
   await page.click("#search-btn");
 
   const cards = page.locator("#results .card");
-  // 大手町 15〜60 は最近接の神田橋入口 tier が宝町・代官町の 2 出口を動的 OD として
-  // 候補化する（Issue #57）。
-  await expect(cards).toHaveCount(2);
+  // 大手町 15〜60 は最近接の神田橋入口 tier の1出口を動的 OD として候補化する。
+  await expect(cards).toHaveCount(1);
   // 先頭候補が初期選択される。
   await expect(cards.nth(0)).toHaveAttribute("aria-current", "true");
 
@@ -573,12 +605,11 @@ test("(8) 各カードに 1 始まりの候補番号バッジがある", async (
   await page.click("#search-btn");
 
   const cards = page.locator("#results .card");
-  // Issue #57: 大手町 15〜60 は最近接 tier の動的 OD が 2 件返る。
-  await expect(cards).toHaveCount(2);
+  // Issue #57: 大手町 15〜60 は最近接 tier の動的 OD が1件返る。
+  await expect(cards).toHaveCount(1);
   const badges = page.locator("#results .card .candidate-index");
-  await expect(badges).toHaveCount(2);
+  await expect(badges).toHaveCount(1);
   await expect(badges.nth(0)).toHaveText("1");
-  await expect(badges.nth(1)).toHaveText("2");
 });
 
 // --- issue #15 追加の must-have テスト（レビュー指摘の未カバー経路） ---
@@ -693,8 +724,8 @@ test("(12) キーボードで候補選択でき、出発ボタンの Enter は�
   await page.click("#search-btn");
 
   const cards = page.locator("#results .card");
-  // Issue #57: 大手町 15〜60 は 2 候補。先頭が初期選択される。
-  await expect(cards).toHaveCount(2);
+  // Issue #57: 大手町 15〜60 は1候補。先頭が初期選択される。
+  await expect(cards).toHaveCount(1);
   await expect(cards.nth(0)).toHaveAttribute("aria-current", "true");
 
   // カードにフォーカスして Enter → 選択維持。
@@ -1092,7 +1123,7 @@ test("(27) prefers-reduced-motion では座標確定の地図追従がアニメ�
 });
 
 test("(28) 240/240 では上限を広げず、最小時間を下げる導線で値が実際に変わり再検索できる", async ({ page }) => {
-  // 大手町の最近接 tier（神田橋入口、plan 2,520s ≒ 42 分）は下限 240 分に届かない。
+  // 大手町の最近接 tier（神田橋入口、plan 2,412s ≒ 40 分）は下限 240 分に届かない。
   // 上限は既に製品上限 240 分なので「時間の上限を広げる」を出さず、最小時間を下げて
   // 実際に値を変更する（review R2-01: 240 分へ「広げました」と偽る旧導線の回帰防止）。
   // Issue #57 以降も座標検索が TIME_WINDOW + minPlanSeconds を返すため、復帰導線は
@@ -1105,12 +1136,12 @@ test("(28) 240/240 では上限を広げず、最小時間を下げる導線で�
   await expect(recovery).toBeVisible();
   // 上限 240 分では拡大操作（値が変わらない）を出さない。
   await expect(recovery.locator("button", { hasText: "時間の上限を広げる" })).toHaveCount(0);
-  const lower = recovery.locator("button", { hasText: "最小時間を 35 分に下げる" });
+  const lower = recovery.locator("button", { hasText: "最小時間を 33 分に下げる" });
   await expect(lower).toBeVisible();
 
   await lower.click();
-  // 値が実際に変わる（240 → 35）。上限は変わらない。
-  await expect(page.locator("#min-minutes")).toHaveValue("35");
+  // 値が実際に変わる（240 → 33）。上限は変わらない。
+  await expect(page.locator("#min-minutes")).toHaveValue("33");
   await expect(page.locator("#max-minutes")).toHaveValue("240");
 
   // 次の検索が実行でき、下限を下げたことで候補が返る。
@@ -1119,16 +1150,16 @@ test("(28) 240/240 では上限を広げず、最小時間を下げる導線で�
 });
 
 test("(29) 240/240 の復帰導線は最小時間を手入力すると失効し、そのまま再検索できる", async ({ page }) => {
-  // 復帰ボタンと同じ 35 を手入力（change は blur で発火）。古い「下げる」ボタンが
-  // 残ると 35→35 の no-op を『下げました』と偽る（review R3-01）。
+  // 復帰ボタンと同じ 33 を手入力（change は blur で発火）。古い「下げる」ボタンが
+  // 残ると 33→33 の no-op を『下げました』と偽る（review R3-01）。
   await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
   const recovery = page.locator("#recovery-actions");
   await expect(recovery).toBeVisible();
   await expect(
-    recovery.locator("button", { hasText: "最小時間を 35 分に下げる" }),
+    recovery.locator("button", { hasText: "最小時間を 33 分に下げる" }),
   ).toBeVisible();
 
-  await page.locator("#min-minutes").fill("35");
+  await page.locator("#min-minutes").fill("33");
   await page.locator("#max-minutes").focus(); // change を確定させる
   await expect(recovery).toBeHidden();
   await expect(page.locator("#status")).toContainText("条件が変更");
@@ -1157,7 +1188,7 @@ test("(30) 復帰ボタンより小さい 15 を手入力しても古い導線�
 test("(31) 復帰ボタン押下時も現在値と比較し、引上げや no-op を成功と告げない", async ({ page }) => {
   await searchFromCoordinate(page, "35.6866", "139.7643", "240", "240");
   const recovery = page.locator("#recovery-actions");
-  const lower = recovery.locator("button", { hasText: "最小時間を 35 分に下げる" });
+  const lower = recovery.locator("button", { hasText: "最小時間を 33 分に下げる" });
   await expect(lower).toBeVisible();
 
   // change を発火させずに値を 15 へ変える（描画後に現在値が変わった状態を模す）。
@@ -1169,7 +1200,7 @@ test("(31) 復帰ボタン押下時も現在値と比較し、引上げや no-op
   });
   await lower.click();
 
-  // 15 → 35 の引上げは行わず、成功も告げない。値は手入力のまま。
+  // 15 → 33 の引上げは行わず、成功も告げない。値は手入力のまま。
   await expect(page.locator("#min-minutes")).toHaveValue("15");
   await expect(page.locator("#status")).toContainText("ままです");
   await expect(page.locator("#status")).not.toContainText("下げました");
@@ -1200,7 +1231,7 @@ test("(32) 成果物不一致の再読み込み案内は条件変更では消え
 
 // --- 全首都高ランプ選択 UI（R2）の E2E 検証 ---
 
-test("(33) 明示指定モード切替、全399件確認、197件選択可能（入口99/出口98）、探索ボタン制御", async ({ page }) => {
+test("(33) 明示指定モード切替、全399件確認、201件選択可能（入口100/出口101）、探索ボタン制御", async ({ page }) => {
   let rampRequests = 0;
   await page.route("**/releases/*/ramps.json*", async (route) => {
     rampRequests += 1;
@@ -1227,28 +1258,28 @@ test("(33) 明示指定モード切替、全399件確認、197件選択可能（
   expect(rampRequests, "明示モード初回だけ ramps.json を取得する").toBe(1);
 
   // 入口・出口それぞれの件数と選択可能件数の整合性
-  // 入口: 全399件表示、99件が選択可能
+  // 入口: 全399件表示、100件が選択可能
   const entryItems = page.locator("#entry-ramp-list .ramp-item");
   await expect(entryItems).toHaveCount(399);
   expect(await page.locator("#entry-ramp-list").getAttribute("tabindex")).toBeNull();
   const entrySelectable = page.locator('#entry-ramp-list input[type="radio"]:not([disabled])');
-  await expect(entrySelectable).toHaveCount(99);
+  await expect(entrySelectable).toHaveCount(100);
   const entryDisabled = page.locator('#entry-ramp-list input[type="radio"][disabled]');
-  await expect(entryDisabled).toHaveCount(300);
-  await expect(page.locator("#entry-count-info")).toContainText("全 399 件（選択可能 99 件）");
+  await expect(entryDisabled).toHaveCount(299);
+  await expect(page.locator("#entry-count-info")).toContainText("全 399 件（選択可能 100 件）");
 
-  // 出口: 全399件表示、98件が選択可能
+  // 出口: 全399件表示、101件が選択可能
   const exitItems = page.locator("#exit-ramp-list .ramp-item");
   await expect(exitItems).toHaveCount(399);
   expect(await page.locator("#exit-ramp-list").getAttribute("tabindex")).toBeNull();
   const exitSelectable = page.locator('#exit-ramp-list input[type="radio"]:not([disabled])');
-  await expect(exitSelectable).toHaveCount(98);
+  await expect(exitSelectable).toHaveCount(101);
   const exitDisabled = page.locator('#exit-ramp-list input[type="radio"][disabled]');
-  await expect(exitDisabled).toHaveCount(301);
-  await expect(page.locator("#exit-count-info")).toContainText("全 399 件（選択可能 98 件）");
+  await expect(exitDisabled).toHaveCount(298);
+  await expect(page.locator("#exit-count-info")).toContainText("全 399 件（選択可能 101 件）");
 
-  // 合計選択可能件数は 197 (99 + 98)
-  expect((await entrySelectable.count()) + (await exitSelectable.count())).toBe(197);
+  // 合計選択可能件数は 201 (100 + 101)
+  expect((await entrySelectable.count()) + (await exitSelectable.count())).toBe(201);
 
   // 入口・出口が未選択なので探索ボタンは無効化されている
   const searchBtn = page.locator("#search-btn");
@@ -1272,7 +1303,7 @@ test("(34) ランプ検索（施設名/路線/方向/ID）、絞り込み件数�
   // クリアボタンで絞り込み解除
   await page.click("#entry-clear-search-btn");
   await expect(entrySearch).toHaveValue("");
-  await expect(page.locator("#entry-count-info")).toContainText("全 399 件（選択可能 99 件）");
+  await expect(page.locator("#entry-count-info")).toContainText("全 399 件（選択可能 100 件）");
 
   // 路線記号「C1」で絞り込み
   await entrySearch.fill("C1");
@@ -1298,10 +1329,10 @@ test("(34) ランプ検索（施設名/路線/方向/ID）、絞り込み件数�
   await expect(page.locator("#entry-zero-message")).toBeHidden();
   await expect(page.locator("#entry-ramp-list")).toBeVisible();
   await expect(entrySearch).toHaveValue("");
-  await expect(page.locator("#entry-count-info")).toContainText("全 399 件（選択可能 99 件）");
+  await expect(page.locator("#entry-count-info")).toContainText("全 399 件（選択可能 100 件）");
 });
 
-test("(35) 非対応・無効ランプの理由（周回不可・未対応・境界JCT・閉鎖・役割不一致）が明示される", async ({ page }) => {
+test("(35) 非対応・無効ランプの理由（周回不可・未対応・未解決・境界JCT・閉鎖・役割不一致）が明示される", async ({ page }) => {
   await openApp(page);
   await page.click('input[name="search-mode"][value="explicit"]');
   await expect(page.locator("#ramps-loading-status")).toContainText("399 件を検証完了");
@@ -1317,12 +1348,15 @@ test("(35) 非対応・無効ランプの理由（周回不可・未対応・境
   await expect(ikejiri.locator(".ramp-disabled-reason")).toContainText("循環SCC");
   await expect(ikejiri.locator('input[type="radio"]')).toBeDisabled();
 
-  // 2. 未対応 (unsupported): 139件のいずれか（例: 芝公園入口内回り）
-  await entrySearch.fill("ramp:c1-inner:shibakoen-entry");
+  // 2. 未解決 (supportState=unresolved): 条件付きアクセスを持つ芝公園入口外回り
+  await entrySearch.fill("ramp:c1-outer:shibakoen-entry");
   const shibakoenIn = page.locator("#entry-ramp-list .ramp-item").first();
   await expect(shibakoenIn).toBeVisible();
-  await expect(shibakoenIn.locator(".ramp-status-badge")).toContainText("未対応");
-  await expect(shibakoenIn.locator(".ramp-disabled-reason")).toContainText("未対応");
+  await expect(shibakoenIn.locator(".ramp-status-badge")).toContainText("未解決");
+  await expect(shibakoenIn.locator(".ramp-disabled-reason")).toContainText("未解決");
+  await expect(shibakoenIn.locator(".ramp-disabled-reason")).toContainText(
+    "CONDITIONAL_ACCESS_RESTRICTION",
+  );
   await expect(shibakoenIn.locator('input[type="radio"]')).toBeDisabled();
 
   // 3. 役割不一致 (出口専用): 入口リストで出口ランプを探す
@@ -1461,7 +1495,7 @@ test("(39) 375x667 / 1280x800 でradio・本文・状態・理由が視認でき
 
     await page.click('input[name="search-mode"][value="explicit"]');
     await expect(page.locator("#ramps-loading-status")).toContainText("399 件を検証完了");
-    await page.locator("#entry-ramp-search").fill("ramp:c1-inner:shibakoen-entry");
+    await page.locator("#entry-ramp-search").fill("ramp:c1-outer:shibakoen-entry");
     await expect(page.locator("#entry-ramp-list .ramp-item")).toHaveCount(1);
     const item = page.locator("#entry-ramp-list .ramp-item").first();
     await expect(item).toBeVisible();
@@ -1474,8 +1508,8 @@ test("(39) 375x667 / 1280x800 でradio・本文・状態・理由が視認でき
     expect(contentBox!.width).toBeGreaterThan(150);
     await expect(item.locator(".ramp-name")).toContainText("芝公園");
     await expect(item.locator(".ramp-route-badge")).toContainText("C1");
-    await expect(item.locator(".ramp-dir-badge")).toContainText("内回り");
-    await expect(item.locator(".ramp-status-badge")).toContainText("未対応");
+    await expect(item.locator(".ramp-dir-badge")).toContainText("外回り");
+    await expect(item.locator(".ramp-status-badge")).toContainText("未解決");
     await expect(item.locator(".ramp-disabled-reason")).toBeVisible();
 
     const overflow = await page.evaluate(() => {
@@ -1675,25 +1709,33 @@ test("(44) topologyOnly は1区間文言と課金区間のオーバーレイを�
   await expect(page.locator("#map .leaflet-overlay-pane path")).toHaveCount(3);
 });
 
-test("(45) 目黒座標のTopologyOnly候補は区間順序と商品対象外を実結果で固定する", async ({ page }) => {
+test("(45) 目黒座標の検証済みradial候補は4区間と商品対象を実結果で固定する", async ({ page }) => {
   await searchFromCoordinate(page, "35.635681", "139.718489", "15", "60");
 
   const card = page.locator("#results .card").first();
   await expect(card).toBeVisible();
-  await expect(card.locator(".charging")).toHaveText("道路形状のみ（商品対象外）");
-  await expect(card.locator(".route-order-list li")).toHaveCount(3);
-  await expect(card.locator(".route-order-list")).toContainText("一般道アクセス（推定）");
-  await expect(card.locator(".route-order-list")).toContainText("首都高の道路形状");
-  await expect(card.locator(".route-order-list")).toContainText("一般道帰路（推定）");
+  await expect(card.locator(".charging")).toHaveText("首都高区間: 入口 → 周回 → 戻り");
+  await expect(card.locator(".toll")).toHaveText("料金額: 790 円（最安順位 1 位）");
+  // 金額は割引適用前の基本料金。円あたり効率も同じ料金での比較だと分かるようにする。
+  await expect(card.locator(".fare-label")).toHaveText("上記は普通車ETC基本料金（割引適用前）です");
+  // 金額は適用期間で変わるため数値そのものは固定せず、効率行の書き方と注記を固定する。
+  await expect(card.locator(".efficiency")).toHaveText(
+    /^1 円あたり 約 [\d.]+ 分（普通車ETC基本料金（割引適用前）で比較）$/,
+  );
+  const routeSteps = card.locator(".route-order-list li");
+  await expect(routeSteps).toHaveCount(4);
+  await expect(routeSteps.nth(0)).toContainText("入口アプローチ");
+  await expect(routeSteps.nth(1)).toContainText("必須周回");
+  await expect(routeSteps.nth(2)).toContainText("戻り経路");
+  await expect(routeSteps.nth(3)).toContainText("出口アプローチ");
   await expect(card.locator(".estimated-legs li")).toHaveCount(2);
   await expect(card.locator(".distance--total")).toContainText("総距離:");
   await expect(card.locator(".distance--shutoko")).toContainText("首都高距離:");
-  await expect(card).not.toContainText("1区間");
-  await expect(card).not.toContainText("最低料金");
   await expect(card.locator(".depart")).toHaveCount(0);
   await expect(card.locator(".maps-handoff-notice")).toHaveText(
-    "この候補は道路形状のみの参考経路のため、Google マップへの引き継ぎはできません",
+    "Google マップへの引き継ぎは、実機での確認が済むまで利用できません",
   );
+  await expect(page.locator("#map .leaflet-overlay-pane path")).toHaveCount(8);
 });
 
 test("(46) pricedでも商品cohort外のradialは効率と最安順位を表示しない", async ({ page }) => {
@@ -1707,8 +1749,28 @@ test("(46) pricedでも商品cohort外のradialは効率と最安順位を表示
   await expect(card.locator(".charging")).toHaveText(
     "首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）",
   );
-  await expect(card.locator(".toll")).toHaveText("料金額: 500 円");
+  // 金額は決まっていても商品対象外なので、金額のラベルは「参考料金」に揃える。
+  // 「料金額」のままだと、その下の注記が購入可能な金額のように読める。
+  await expect(card.locator(".toll")).toHaveText("参考料金: 500 円");
+  await expect(card.locator(".fare-label")).toHaveText("上記は普通車ETC基本料金（割引適用前）です");
   await expect(card.locator(".efficiency")).toHaveCount(0);
   await expect(card.locator(".rank")).toHaveCount(0);
+  await expect(card.locator(".recommended")).toHaveCount(0);
+});
+
+test("(73) 未価格の候補には料金の注記を出さない（商品対象外の表示と金額を混同しない）", async ({
+  page,
+}) => {
+  await stubWorkerWithRadialCandidate(page, "topologyOnlyUnpriced");
+  await openApp(page);
+  await setTimeRange(page, "15", "60");
+  await page.click("#search-btn");
+
+  const card = page.locator("#results .card").first();
+  await expect(card).toBeVisible();
+  await expect(card.locator(".charging")).toHaveText("道路形状のみ（商品対象外）");
+  // 金額が未算出なら、どの料金の額か示せないので注記も付けない。
+  await expect(card.locator(".toll")).toHaveText("参考料金: 未算出");
+  await expect(card.locator(".fare-label")).toHaveCount(0);
   await expect(card.locator(".recommended")).toHaveCount(0);
 });

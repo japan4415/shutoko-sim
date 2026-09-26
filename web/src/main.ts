@@ -5,6 +5,7 @@
 // - 10 秒で setTimeout → worker.terminate() → TIMEOUT 文言 → 次回検索時に Worker を再生成する
 // - 候補カードと地図は同じ候補 ID に紐付け、条件変更で選択と出発リンクを失効させる
 import {
+  MAX_DISPLAY_CANDIDATES,
   MAX_PRODUCT_MINUTES,
   PRESET_KANDABASHI,
   RELEASE_ID,
@@ -1228,7 +1229,7 @@ function renderResult(result: SearchResult): void {
   const max = Number(el.maxMinutes.value);
   setStatus(statusMessage(result, min, max));
 
-  const candidates = result.candidates.slice(0, 3);
+  const candidates = result.candidates.slice(0, MAX_DISPLAY_CANDIDATES);
   if (candidates.length === 0) {
     el.results.replaceChildren();
     mapView?.renderCandidates([]);
@@ -1468,6 +1469,14 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
     model.rankLabel === null ? model.toll : `${model.toll}（${model.rankLabel}）`;
   card.appendChild(toll);
 
+  // 金額が確定した候補には、割引適用前の基本料金であることを添える。
+  if (model.fareLabelNote !== null) {
+    const fareLabel = document.createElement("p");
+    fareLabel.className = "fare-label";
+    fareLabel.textContent = model.fareLabelNote;
+    card.appendChild(fareLabel);
+  }
+
   // 入口・出口は「課金対象」と重複するため 1 行に統合する（restraint）。
   const charging = document.createElement("p");
   charging.className = "charging";
@@ -1506,10 +1515,12 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
   }
 
   // 円当たり効率は金額が算出できたときだけ示す（docs/requirements.md:24）。
+  // 比較に使うのは基本料金だと分かるよう、同じ行に注記を添える。
   if (model.timePerYen !== null) {
     const efficiency = document.createElement("p");
     efficiency.className = "efficiency";
-    efficiency.textContent = `1区間の料金で首都高を ${model.timePerYen}`;
+    efficiency.textContent =
+      model.timePerYenNote === null ? model.timePerYen : `${model.timePerYen}${model.timePerYenNote}`;
     card.appendChild(efficiency);
   }
 
@@ -1700,7 +1711,7 @@ function retryMap(): void {
   // 楽観的に解除しない。タイルが実際に読めた時点（tileload）で解除する。
   tileErrorCount = 0;
   if (mapView !== null) {
-    mapView.renderCandidates(currentResult?.candidates.slice(0, 3) ?? []);
+    mapView.renderCandidates(currentResult?.candidates.slice(0, MAX_DISPLAY_CANDIDATES) ?? []);
     if (selectedCandidateId !== null) {
       mapView.selectCandidate(selectedCandidateId);
     }

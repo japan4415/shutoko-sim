@@ -1,0 +1,2421 @@
+{
+  "schemaVersion": 2,
+  "rule": "billingPairDerivation/v2",
+  "automaticSeedWrite": false,
+  "inputHashes": {
+    "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
+    "rampLedgerSha256": "97ad8b378f1dcdd7d1c6af95164727860e040635bb821eaee043cb840b0aa5cc",
+    "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
+    "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
+    "odTariffsSha256": "37056d2b46b8c42168fdf54073ef856939c5152cec566de5dfea27ce6b26d763"
+  },
+  "relationCoverage": [
+    {
+      "relationId": 4256008,
+      "routeId": "C1",
+      "status": "pass",
+      "membershipIds": [
+        "route:C1:inner",
+        "route:C1:outer"
+      ],
+      "reasonCode": null,
+      "reason": null
+    },
+    {
+      "relationId": 4256077,
+      "routeId": "C2",
+      "status": "pass",
+      "membershipIds": [
+        "route:C2:forward"
+      ],
+      "reasonCode": null,
+      "reason": null
+    },
+    {
+      "relationId": 4256119,
+      "routeId": "Y",
+      "status": "pass",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_RELATION_NO_MEMBERSHIP",
+      "reason": "relation 4256119 expanded without a usable mainline route membership"
+    },
+    {
+      "relationId": 4256202,
+      "routeId": "B",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4256202 has an ambiguous directionless mainline member 679258598"
+    },
+    {
+      "relationId": 4256217,
+      "routeId": "1",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4256217 way 199311812 has no graph edges in requested direction backward"
+    },
+    {
+      "relationId": 4256244,
+      "routeId": "1",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4256244 way 5213544 has no graph edges in requested direction backward"
+    },
+    {
+      "relationId": 4256339,
+      "routeId": "2",
+      "status": "pass",
+      "membershipIds": [
+        "route:2:inbound",
+        "route:2:outbound"
+      ],
+      "reasonCode": null,
+      "reason": null
+    },
+    {
+      "relationId": 4256376,
+      "routeId": "3",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4256376 way 45332352 has no graph edges in requested direction backward"
+    },
+    {
+      "relationId": 4256522,
+      "routeId": "4",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4256522 way 24636612 has no graph edges in requested direction backward"
+    },
+    {
+      "relationId": 4256611,
+      "routeId": "5",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4256611 way 23297417 has no graph edges in requested direction backward"
+    },
+    {
+      "relationId": 4256960,
+      "routeId": "6",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4256960 way 28188273 has no graph edges in requested direction backward"
+    },
+    {
+      "relationId": 4256985,
+      "routeId": "6",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4256985 way 1199150818 has no graph edges in requested direction backward"
+    },
+    {
+      "relationId": 4257465,
+      "routeId": "7",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4257465 way 156796455 has no graph edges in requested direction backward"
+    },
+    {
+      "relationId": 4257496,
+      "routeId": "9",
+      "status": "pass",
+      "membershipIds": [
+        "route:9:forward"
+      ],
+      "reasonCode": null,
+      "reason": null
+    },
+    {
+      "relationId": 4257498,
+      "routeId": "10",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4257498 includes motorway_link way 568584518 without a Shutoko graph edge"
+    },
+    {
+      "relationId": 4257564,
+      "routeId": "11",
+      "status": "pass",
+      "membershipIds": [
+        "route:11:forward"
+      ],
+      "reasonCode": null,
+      "reason": null
+    },
+    {
+      "relationId": 4258155,
+      "routeId": "S1",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4258155 way 44351425 has no graph edges in requested direction backward"
+    },
+    {
+      "relationId": 4258165,
+      "routeId": "K1",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4258165 way 1022520297 has no graph edges in requested direction forward"
+    },
+    {
+      "relationId": 4258166,
+      "routeId": "K2",
+      "status": "pass",
+      "membershipIds": [
+        "route:K2:forward"
+      ],
+      "reasonCode": null,
+      "reason": null
+    },
+    {
+      "relationId": 4259160,
+      "routeId": "K3",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4259160 includes motorway_link way 435743369 without a Shutoko graph edge"
+    },
+    {
+      "relationId": 4259192,
+      "routeId": "K5",
+      "status": "pass",
+      "membershipIds": [
+        "route:K5:forward"
+      ],
+      "reasonCode": null,
+      "reason": null
+    },
+    {
+      "relationId": 4259197,
+      "routeId": "K6",
+      "status": "pass",
+      "membershipIds": [
+        "route:K6:forward"
+      ],
+      "reasonCode": null,
+      "reason": null
+    },
+    {
+      "relationId": 4259487,
+      "routeId": "S2",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4259487 way 904689118 has no graph edges in requested direction forward"
+    },
+    {
+      "relationId": 4259488,
+      "routeId": "S5",
+      "status": "fail",
+      "membershipIds": [],
+      "reasonCode": "ROUTE_MEMBERSHIP_RELATION_INVALID",
+      "reason": "ROUTE_MEMBERSHIP_RELATION_INVALID: relation 4259488 includes motorway_link way 56132891 without a Shutoko graph edge"
+    },
+    {
+      "relationId": 10355798,
+      "routeId": "K7",
+      "status": "pass",
+      "membershipIds": [
+        "route:K7:forward"
+      ],
+      "reasonCode": null,
+      "reason": null
+    },
+    {
+      "relationId": 10732984,
+      "routeId": "K7",
+      "status": "pass",
+      "membershipIds": [
+        "route:K7:forward"
+      ],
+      "reasonCode": null,
+      "reason": null
+    }
+  ],
+  "relationManifest": [
+    {
+      "membershipId": "route:10:inbound",
+      "routeId": "10",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:10:outbound",
+      "routeId": "10",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:11:forward",
+      "routeId": "11",
+      "direction": "forward",
+      "relationIds": [
+        4257564
+      ],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:11:inbound",
+      "routeId": "11",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:11:outbound",
+      "routeId": "11",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:1H:inbound",
+      "routeId": "1H",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:1H:outbound",
+      "routeId": "1H",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:1U:inbound",
+      "routeId": "1U",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:1U:outbound",
+      "routeId": "1U",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:2:inbound",
+      "routeId": "2",
+      "direction": "inbound",
+      "relationIds": [
+        4256339
+      ],
+      "candidatePairIds": [
+        "bp:2-inbound:meguro:c1-inner:tengenji",
+        "bp:2-inbound:meguro:c1-outer:tengenji"
+      ],
+      "routePlanResolved": 2,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:2:outbound",
+      "routeId": "2",
+      "direction": "outbound",
+      "relationIds": [
+        4256339
+      ],
+      "candidatePairIds": [
+        "bp:2-inbound:meguro:c1-inner:tengenji",
+        "bp:2-inbound:meguro:c1-outer:tengenji"
+      ],
+      "routePlanResolved": 2,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:3:inbound",
+      "routeId": "3",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:3:outbound",
+      "routeId": "3",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:4:inbound",
+      "routeId": "4",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:4:outbound",
+      "routeId": "4",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:5:inbound",
+      "routeId": "5",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:5:outbound",
+      "routeId": "5",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:6M:inbound",
+      "routeId": "6M",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:6M:outbound",
+      "routeId": "6M",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:6S:inbound",
+      "routeId": "6S",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:6S:outbound",
+      "routeId": "6S",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:7:inbound",
+      "routeId": "7",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:7:outbound",
+      "routeId": "7",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:9:forward",
+      "routeId": "9",
+      "direction": "forward",
+      "relationIds": [
+        4257496
+      ],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:9:inbound",
+      "routeId": "9",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:9:outbound",
+      "routeId": "9",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:B:east",
+      "routeId": "B",
+      "direction": "east",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:B:west",
+      "routeId": "B",
+      "direction": "west",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:C1:inner",
+      "routeId": "C1",
+      "direction": "inner",
+      "relationIds": [
+        4256008
+      ],
+      "candidatePairIds": [
+        "bp:2-inbound:meguro:c1-inner:tengenji",
+        "bp:c1-inner:daikancho-kasumigaseki",
+        "bp:c1-inner:ginza-shintomicho",
+        "bp:c1-inner:kasumigaseki-shibakoen",
+        "bp:c1-inner:shibakoen-shiodome",
+        "bp:c1-inner:takaracho-kandabashi"
+      ],
+      "routePlanResolved": 5,
+      "routePlanUnresolved": 1,
+      "status": "fail"
+    },
+    {
+      "membershipId": "route:C1:outer",
+      "routeId": "C1",
+      "direction": "outer",
+      "relationIds": [
+        4256008
+      ],
+      "candidatePairIds": [
+        "bp:2-inbound:meguro:c1-outer:tengenji",
+        "bp:c1-outer:ginza-shibakoen",
+        "bp:c1-outer:kandabashi-takaracho",
+        "bp:c1-outer:kasumigaseki-daikancho",
+        "bp:c1-outer:shibakoen-iikura"
+      ],
+      "routePlanResolved": 5,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:C2:forward",
+      "routeId": "C2",
+      "direction": "forward",
+      "relationIds": [
+        4256077
+      ],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:C2:inner",
+      "routeId": "C2",
+      "direction": "inner",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:C2:outer",
+      "routeId": "C2",
+      "direction": "outer",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K1:inbound",
+      "routeId": "K1",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K1:outbound",
+      "routeId": "K1",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K2:forward",
+      "routeId": "K2",
+      "direction": "forward",
+      "relationIds": [
+        4258166
+      ],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K2:inbound",
+      "routeId": "K2",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K2:outbound",
+      "routeId": "K2",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K3:inbound",
+      "routeId": "K3",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K3:outbound",
+      "routeId": "K3",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K5:forward",
+      "routeId": "K5",
+      "direction": "forward",
+      "relationIds": [
+        4259192
+      ],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K6:forward",
+      "routeId": "K6",
+      "direction": "forward",
+      "relationIds": [
+        4259197
+      ],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K6:inbound",
+      "routeId": "K6",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K6:outbound",
+      "routeId": "K6",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K7:forward",
+      "routeId": "K7",
+      "direction": "forward",
+      "relationIds": [
+        10355798,
+        10732984
+      ],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K7:inbound",
+      "routeId": "K7",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:K7:outbound",
+      "routeId": "K7",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:S1:inbound",
+      "routeId": "S1",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:S1:outbound",
+      "routeId": "S1",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:S2:inbound",
+      "routeId": "S2",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:S2:outbound",
+      "routeId": "S2",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:S5:inbound",
+      "routeId": "S5",
+      "direction": "inbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    },
+    {
+      "membershipId": "route:S5:outbound",
+      "routeId": "S5",
+      "direction": "outbound",
+      "relationIds": [],
+      "candidatePairIds": [],
+      "routePlanResolved": 0,
+      "routePlanUnresolved": 0,
+      "status": "pass"
+    }
+  ],
+  "candidates": [
+    {
+      "candidateId": "candidate:f3c7823f1bf1f056fae5fe16bb55a277f76159395ab285acf89ebcfd28121320",
+      "pairId": "bp:2-inbound:meguro:c1-inner:tengenji",
+      "pairKind": "radialReturn",
+      "routeId": "C1",
+      "direction": "inner",
+      "entry": {
+        "rampId": "ramp:2-inbound:meguro-entry",
+        "name": "目黒",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:2-inbound:meguro-entry",
+        "routeMembershipId": "route:2:inbound",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:2-outbound:tengenji-exit",
+        "name": "天現寺",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding-candidate:tengenji:g201:172358461-422023171-931759044-172358460",
+        "routeMembershipId": "route:2:outbound",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:2-inbound:meguro:c1-inner:tengenji",
+        "edgeIdsSha256": "a1942be00315a00c07f2a879717b4e1dea017f3e2304682eabc53674ba452072",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding-candidate:tengenji:g201:172358461-422023171-931759044-172358460:segment:0",
+          "binding:osm-ramp-binding:ramp:2-inbound:meguro-entry:segment:0",
+          "relation:4256008:inner:0",
+          "relation:4256339:inbound:0",
+          "relation:4256339:inbound:2",
+          "relation:4256339:outbound:0",
+          "relation:4256339:outbound:2"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "1e2794fa281987fc6fb70aad80dffab32481a0f8427ea1b5c7e4fc385873a848",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:2-inbound:meguro-entry:segment:0",
+              "relation:4256339:inbound:0",
+              "relation:4256339:inbound:2"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "a8000572876f3db78726921d9fb1a95a19289dd2f1f7dbdd9cb3fbd425f40a1f",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "8fdd5c4aefa9903a127aeadd7b5bb7be718785c71d171d8a233400705cda04f6",
+            "sourceSegmentIds": [
+              "relation:4256339:outbound:2",
+              "relation:4256339:outbound:0"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding-candidate:tengenji:g201:172358461-422023171-931759044-172358460:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:2-inbound:meguro:c1-inner:tengenji",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:2:meguro-tengenji",
+        "billingDistanceMeters": 19400,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 790,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+            "distanceEvidenceId": "evidence:2025-04:p04:2-meguro-tengenji"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 860,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p04:2-meguro-tengenji",
+            "distanceEvidenceId": "evidence:2026-10:p04:2-meguro-tengenji"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
+    },
+    {
+      "candidateId": "candidate:8d37c359398642c5f391ce16d57aec96ac9769e1b963bcf3bcb1ed577e07baf8",
+      "pairId": "bp:2-inbound:meguro:c1-outer:tengenji",
+      "pairKind": "radialReturn",
+      "routeId": "C1",
+      "direction": "outer",
+      "entry": {
+        "rampId": "ramp:2-inbound:meguro-entry",
+        "name": "目黒",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:2-inbound:meguro-entry",
+        "routeMembershipId": "route:2:inbound",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:2-outbound:tengenji-exit",
+        "name": "天現寺",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding-candidate:tengenji:g201:172358461-422023171-931759044-172358460",
+        "routeMembershipId": "route:2:outbound",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:2-inbound:meguro:c1-outer:tengenji",
+        "edgeIdsSha256": "e886e6bf03a7d38b6fc8d0932651276bd3564e9c9fd0955083ced7843ea477ce",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding-candidate:tengenji:g201:172358461-422023171-931759044-172358460:segment:0",
+          "binding:osm-ramp-binding:ramp:2-inbound:meguro-entry:segment:0",
+          "relation:4256008:outer:0",
+          "relation:4256339:inbound:0",
+          "relation:4256339:inbound:1",
+          "relation:4256339:outbound:0"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "bf39a1c3e2b07098f784dd0df9dfed089e7591a5e5c4166fdd9fbe6d61b8b9ea",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:2-inbound:meguro-entry:segment:0",
+              "relation:4256339:inbound:0",
+              "relation:4256339:inbound:1"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "78584b39c2362e4ae6ed6fd0a361eaaa074704dccc8d038da97b5f294bad5fb3",
+            "sourceSegmentIds": [
+              "relation:4256008:outer:0"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "eaedc03e17d11e4d642d5cfba4367ea7e7cc19fdb0fceae958678500b80396db",
+            "sourceSegmentIds": [
+              "relation:4256339:outbound:0"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding-candidate:tengenji:g201:172358461-422023171-931759044-172358460:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:2-inbound:meguro:c1-outer:tengenji",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:2:meguro-tengenji",
+        "billingDistanceMeters": 19400,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 790,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p04:2-meguro-tengenji",
+            "distanceEvidenceId": "evidence:2025-04:p04:2-meguro-tengenji"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 860,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p04:2-meguro-tengenji",
+            "distanceEvidenceId": "evidence:2026-10:p04:2-meguro-tengenji"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
+    },
+    {
+      "candidateId": "candidate:c548245411cfbabb318041e7f84a06cf271f0e6e05e00a24af7a8548f698c143",
+      "pairId": "bp:c1-inner:daikancho-kasumigaseki",
+      "pairKind": "legacyRing",
+      "routeId": "C1",
+      "direction": "inner",
+      "entry": {
+        "rampId": "ramp:c1-inner:daikancho-entry",
+        "name": "代官町",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-inner:daikancho-entry",
+        "routeMembershipId": "route:C1:inner",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c1-inner:kasumigaseki-exit",
+        "name": "霞が関",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-inner:kasumigaseki-exit",
+        "routeMembershipId": "route:C1:inner",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c1-inner:daikancho-kasumigaseki",
+        "edgeIdsSha256": "09aec1b7bad79e8de1efd585e29be4008215b9819b990cd0610b6372d0af05d7",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c1-inner:daikancho-entry:segment:0",
+          "binding:osm-ramp-binding:ramp:c1-inner:kasumigaseki-exit:segment:0",
+          "relation:4256008:inner:0"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "9bd99d4b0d36ca13f5e3d79ef72e55bb8e7e118aac978ebb9389bedc858ce954",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-inner:daikancho-entry:segment:0"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "fbb74d6868c5a5c3b9127dcdae5d893c3e6a223474a439c5e189c4b703f7dcea",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "a353233e58de3cc1aac75fd3525f520e357b4d71164dbd38334b598ad70c7353",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "eb8180705f1d5553a03cf618b0ccfd95184dd8f4ebad573b6c69edfa1481193f",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-inner:kasumigaseki-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c1-inner:daikancho-kasumigaseki",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c1-inner:daikancho-kasumigaseki",
+        "billingDistanceMeters": 2300,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p03:c1-daikancho-kasumigaseki",
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-daikancho-kasumigaseki"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p03:c1-daikancho-kasumigaseki",
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-daikancho-kasumigaseki"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
+    },
+    {
+      "candidateId": "candidate:3bf0b00ccbab33968de4f7cb8e2408d21aa1d1f1bdf7d64704e7e854f853b8e3",
+      "pairId": "bp:c1-inner:ginza-shintomicho",
+      "pairKind": "legacyRing",
+      "routeId": "C1",
+      "direction": "inner",
+      "entry": {
+        "rampId": "ramp:c1-outer:ginza-entry",
+        "name": "銀座",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-outer:ginza-entry",
+        "routeMembershipId": "route:C1:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c1-inner:shintomicho-exit",
+        "name": "新富町",
+        "supportState": "unsupported",
+        "bindingEvidenceId": null,
+        "routeMembershipId": null,
+        "gate": {
+          "status": "failed",
+          "reasonCodes": [
+            "EXIT_BINDING_UNSUPPORTED"
+          ]
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c1-inner:ginza-shintomicho",
+        "edgeIdsSha256": null,
+        "loopValidationStatus": "unresolved",
+        "sourceSegmentIds": [],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "unresolved",
+            "edgeIdsSha256": null,
+            "sourceSegmentIds": []
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "unresolved",
+            "edgeIdsSha256": null,
+            "sourceSegmentIds": []
+          },
+          {
+            "role": "return_corridor",
+            "status": "unresolved",
+            "edgeIdsSha256": null,
+            "sourceSegmentIds": []
+          },
+          {
+            "role": "exit_approach",
+            "status": "unresolved",
+            "edgeIdsSha256": null,
+            "sourceSegmentIds": []
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "unresolved",
+          "reasonCodes": [
+            "EXIT_EXACT_BINDING_UNRESOLVED",
+            "ROUTE_PLAN_EVIDENCE_UNRESOLVED"
+          ]
+        },
+        "route": {
+          "status": "failed",
+          "reasonCodes": [
+            "LEGACY_ROUTE_RESOLUTION_FAILED"
+          ]
+        },
+        "direction": {
+          "status": "unresolved",
+          "reasonCodes": [
+            "LEGACY_DIRECTION_UNRESOLVED"
+          ]
+        },
+        "firstExit": {
+          "status": "unresolved",
+          "reasonCodes": [
+            "FIRST_EXIT_UNRESOLVED"
+          ]
+        },
+        "mandatoryLap": {
+          "status": "unresolved",
+          "reasonCodes": [
+            "MANDATORY_LAP_UNRESOLVED"
+          ]
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "failed",
+          "reasonCodes": [
+            "EXIT_BINDING_UNSUPPORTED"
+          ]
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "unverified",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c1-inner:ginza-shintomicho",
+        "oneSectionAheadVerified": false
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c1-inner:ginza-shintomicho",
+        "billingDistanceMeters": 400,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p03:c1-ginza-shintomicho",
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-ginza-shintomicho"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p03:c1-ginza-shintomicho",
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-ginza-shintomicho"
+          }
+        ]
+      },
+      "promotionDecision": "hold",
+      "automaticSeedWrite": false,
+      "rejectionReasons": [
+        "EXIT_BINDING_UNSUPPORTED",
+        "EXIT_EXACT_BINDING_UNRESOLVED",
+        "FIRST_EXIT_UNRESOLVED",
+        "LEGACY_DIRECTION_UNRESOLVED",
+        "LEGACY_ROUTE_RESOLUTION_FAILED",
+        "MANDATORY_LAP_UNRESOLVED",
+        "ROUTE_PLAN_EVIDENCE_UNRESOLVED",
+        "ROUTE_PLAN_ROLES_UNRESOLVED"
+      ]
+    },
+    {
+      "candidateId": "candidate:da7dd59667fc69801c5649bf7d5a759d04b4d97ad75dee9c1acfaa4de0b10bdd",
+      "pairId": "bp:c1-inner:kasumigaseki-shibakoen",
+      "pairKind": "legacyRing",
+      "routeId": "C1",
+      "direction": "inner",
+      "entry": {
+        "rampId": "ramp:c1-inner:kasumigaseki-entry",
+        "name": "霞が関",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-inner:kasumigaseki-entry",
+        "routeMembershipId": "route:C1:inner",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c1-inner:shibakoen-exit",
+        "name": "芝公園",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-inner:shibakoen-exit",
+        "routeMembershipId": "route:C1:inner",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c1-inner:kasumigaseki-shibakoen",
+        "edgeIdsSha256": "ba0236b58ae7905b3597a29f7a388e01d9a88abe72231c0ef298228481fdfac1",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c1-inner:kasumigaseki-entry:segment:0",
+          "binding:osm-ramp-binding:ramp:c1-inner:shibakoen-exit:segment:0",
+          "relation:4256008:inner:0"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "628805856c85b0956b243830b1d617342fd1dc674fdffd9ec92055bebf0662b4",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-inner:kasumigaseki-entry:segment:0"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "67c68fb58f5eb001545b4e65567601da1c055638d37af580ae95daaa8218fb61",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "2e60933b4ebc52228eb532c6915946c3d8f31fd177bbe9f1adb061ae941ecce3",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "1dad394613bce9862402467142148852d7719b02397932ac75124b0ebad55d08",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-inner:shibakoen-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c1-inner:kasumigaseki-shibakoen",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c1-inner:kasumigaseki-shibakoen",
+        "billingDistanceMeters": 3700,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p03:c1-kasumigaseki-shibakoen",
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-shibakoen"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p03:c1-kasumigaseki-shibakoen",
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-kasumigaseki-shibakoen"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
+    },
+    {
+      "candidateId": "candidate:cfc18c2ea1085109998e08fc805c073b8ff3ecc3cea83f1fbf2638434ad85168",
+      "pairId": "bp:c1-inner:shibakoen-shiodome",
+      "pairKind": "legacyRing",
+      "routeId": "C1",
+      "direction": "inner",
+      "entry": {
+        "rampId": "ramp:c1-inner:shibakoen-entry",
+        "name": "芝公園",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-inner:shibakoen-entry",
+        "routeMembershipId": "route:C1:inner",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c1-inner:shiodome-exit",
+        "name": "汐留",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-inner:shiodome-exit",
+        "routeMembershipId": "route:C1:inner",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c1-inner:shibakoen-shiodome",
+        "edgeIdsSha256": "8d9ea2ef6458fd0f8893ae6bb35a79061de36450804b1e28bb70eed46d49297f",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c1-inner:shibakoen-entry:segment:0",
+          "binding:osm-ramp-binding:ramp:c1-inner:shiodome-exit:segment:0",
+          "relation:4256008:inner:0"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "65eb18c7c1fe3aa6f0f3e1b89220315894122779d6647c7b852fd68815d94998",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-inner:shibakoen-entry:segment:0"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "dbef6b7c7b78ef299fed70e4b1c1f242fb163965ce631ab7e4fa697e5820796b",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "0146ca4dafcb5ff543a2741c59e698abdf729e345795f0c6e66af8a32ba28e9d",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "d28440a9502fce766a8140f3655d7df1a5adefa99b77c96d771876a5b2021305",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-inner:shiodome-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c1-inner:shibakoen-shiodome",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c1-inner:shibakoen-shiodome",
+        "billingDistanceMeters": 2400,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p03:c1-shibakoen-shiodome",
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-shibakoen-shiodome"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p03:c1-shibakoen-shiodome",
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-shibakoen-shiodome"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
+    },
+    {
+      "candidateId": "candidate:71917b344f28f8967f52d08a05a1a22c537d72227a1c7e2f397105cb49530392",
+      "pairId": "bp:c1-inner:takaracho-kandabashi",
+      "pairKind": "legacyRing",
+      "routeId": "C1",
+      "direction": "inner",
+      "entry": {
+        "rampId": "ramp:c1-inner:takaracho-entry",
+        "name": "宝町",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-inner:takaracho-entry",
+        "routeMembershipId": "route:C1:inner",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c1-inner:kandabashi-exit",
+        "name": "神田橋",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-inner:kandabashi-exit",
+        "routeMembershipId": "route:C1:inner",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c1-inner:takaracho-kandabashi",
+        "edgeIdsSha256": "842dde322cda29d8eaed105c24b2049e3aa278791e0c0d7e32eab1f2336bf566",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c1-inner:kandabashi-exit:segment:0",
+          "binding:osm-ramp-binding:ramp:c1-inner:takaracho-entry:segment:0",
+          "relation:4256008:inner:0"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "53a4292282b533f436ca83aef3bc3f4f998644cb8582b937981ee6e63c1dab3f",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-inner:takaracho-entry:segment:0"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "990011a5f7830cf040b12aa5dff5f966a41702f185545a179dd445b3409a451e",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "1ed29e12bdffdbd534a00a0da0825a3b6289dab166c92ca2502468fcb7ca80e2",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "d39cf13e4ad30c83d0b1303c018c86a6bd640ca514cfe7dc415df3249340d943",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-inner:kandabashi-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c1-inner:takaracho-kandabashi",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c1-inner:takaracho-kandabashi",
+        "billingDistanceMeters": 1700,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi",
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-takaracho-kandabashi"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p03:c1-takaracho-kandabashi",
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-takaracho-kandabashi"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
+    },
+    {
+      "candidateId": "candidate:a74ea9585ae90c95551a890e6ac74f698d9c694a7624c40ef5b3969b113face2",
+      "pairId": "bp:c1-outer:ginza-shibakoen",
+      "pairKind": "legacyRing",
+      "routeId": "C1",
+      "direction": "outer",
+      "entry": {
+        "rampId": "ramp:c1-outer:ginza-entry",
+        "name": "銀座",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-outer:ginza-entry",
+        "routeMembershipId": "route:C1:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c1-outer:shibakoen-exit",
+        "name": "芝公園",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-outer:shibakoen-exit",
+        "routeMembershipId": "route:C1:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c1-outer:ginza-shibakoen",
+        "edgeIdsSha256": "17391c2f143922abd56d3d037b0992433572898ec951446bb6388bbd98633ac3",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c1-outer:ginza-entry:segment:0",
+          "binding:osm-ramp-binding:ramp:c1-outer:shibakoen-exit:segment:0",
+          "relation:4256008:outer:0"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "28ae8a0c968d99c6871ca26e18ec031513f94925ff41ef9b915b9e7045f3c4da",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-outer:ginza-entry:segment:0"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "d8cdc9361f049a4a26cbb3fa46e096e7d2d7e6c5938f0c70f1bbb3830ff9953d",
+            "sourceSegmentIds": [
+              "relation:4256008:outer:0"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "d1410f5e099e980c2305ba869240834b1fe90fea3b5bc7a0d32136c680078c32",
+            "sourceSegmentIds": [
+              "relation:4256008:outer:0"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "d0e05de576bb8b95ef355a46471d3d0bdfd5d8701f72646fd92a312cbb78aecf",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-outer:shibakoen-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c1-outer:ginza-shibakoen",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c1-outer:ginza-shibakoen",
+        "billingDistanceMeters": 3400,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p03:c1-ginza-shibakoen",
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-ginza-shibakoen"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p03:c1-ginza-shibakoen",
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-ginza-shibakoen"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
+    },
+    {
+      "candidateId": "candidate:5ecee0b354afbc9406de1c20c8afc798f02dac603b8b2d7d5487f7843caf9ffc",
+      "pairId": "bp:c1-outer:kandabashi-takaracho",
+      "pairKind": "legacyRing",
+      "routeId": "C1",
+      "direction": "outer",
+      "entry": {
+        "rampId": "ramp:c1-outer:kandabashi-entry",
+        "name": "神田橋",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-outer:kandabashi-entry",
+        "routeMembershipId": "route:C1:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c1-outer:takaracho-exit",
+        "name": "宝町",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-outer:takaracho-exit",
+        "routeMembershipId": "route:C1:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c1-outer:kandabashi-takaracho",
+        "edgeIdsSha256": "7a4fbf37103292c3371682698fa1641b6c99ccd0a7c2e14886402674f6c3df5b",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c1-outer:kandabashi-entry:segment:0",
+          "binding:osm-ramp-binding:ramp:c1-outer:takaracho-exit:segment:0",
+          "relation:4256008:outer:0"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "227949fdd1976edda6d2b09757e1c64ce3cbc32df8d77e9bac83642ac10cd071",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-outer:kandabashi-entry:segment:0"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "0e66ae9a088a40289624ad82f1241840ff9d8a4424c39579242b5703623a088d",
+            "sourceSegmentIds": [
+              "relation:4256008:outer:0"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "4ccfe8f5f891d8626bddff7d82620ed9034a8602a9cc10c6facf1effd6bcc447",
+            "sourceSegmentIds": [
+              "relation:4256008:outer:0"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "5263d6244890b0ca89cdf08797b55f696da587fa701cb0ba95b2bf9d39bad4ac",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-outer:takaracho-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c1-outer:kandabashi-takaracho",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c1-outer:kandabashi-takaracho",
+        "billingDistanceMeters": 1700,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p03:c1-kandabashi-takaracho",
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-kandabashi-takaracho"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p03:c1-kandabashi-takaracho",
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-kandabashi-takaracho"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
+    },
+    {
+      "candidateId": "candidate:3a1ddd22158222e8c542968e095ce5a2efd6e9c644d0356a05c391987ca0b1d2",
+      "pairId": "bp:c1-outer:kasumigaseki-daikancho",
+      "pairKind": "legacyRing",
+      "routeId": "C1",
+      "direction": "outer",
+      "entry": {
+        "rampId": "ramp:c1-outer:kasumigaseki-entry",
+        "name": "霞が関",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-outer:kasumigaseki-entry",
+        "routeMembershipId": "route:C1:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c1-outer:daikancho-exit",
+        "name": "代官町",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-outer:daikancho-exit",
+        "routeMembershipId": "route:C1:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c1-outer:kasumigaseki-daikancho",
+        "edgeIdsSha256": "96846518d9baf3fb6bcb814d7e6ba38e8ae8178eef1889b108a921159bc03f98",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c1-outer:daikancho-exit:segment:0",
+          "binding:osm-ramp-binding:ramp:c1-outer:kasumigaseki-entry:segment:0",
+          "relation:4256008:outer:0"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "9b0fe7a605c7b329603df366b71a84a769a58b63673e033b7b69a06965a93747",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-outer:kasumigaseki-entry:segment:0"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "8b46328aa068c92f290d6d84b4b571eba13bf0f1472d9f4b32eea8c209ff4137",
+            "sourceSegmentIds": [
+              "relation:4256008:outer:0"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "7d13a3fcbe80f295a321918db2995cc9883acdc577ce15039480afadb4f53b49",
+            "sourceSegmentIds": [
+              "relation:4256008:outer:0"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "4fc6ec4c8c4933f6b3f642bebc7346bdf2d27e844c442fd3a0d3f8c687bfc498",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-outer:daikancho-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c1-outer:kasumigaseki-daikancho",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c1-outer:kasumigaseki-daikancho",
+        "billingDistanceMeters": 2300,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho",
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-kasumigaseki-daikancho"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p03:c1-kasumigaseki-daikancho",
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-kasumigaseki-daikancho"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
+    },
+    {
+      "candidateId": "candidate:77201d9676dcf53a4b69232b31b6d0dc6ee378b027044e89a42e0799b2df218c",
+      "pairId": "bp:c1-outer:shibakoen-iikura",
+      "pairKind": "legacyRing",
+      "routeId": "C1",
+      "direction": "outer",
+      "entry": {
+        "rampId": "ramp:c1-outer:shibakoen-entry",
+        "name": "芝公園",
+        "supportState": "unresolved",
+        "supportReasonCode": "CONDITIONAL_ACCESS_RESTRICTION",
+        "bindingEvidenceId": null,
+        "routeMembershipId": null,
+        "gate": {
+          "status": "unresolved",
+          "reasonCodes": [
+            "ENTRY_BINDING_UNRESOLVED"
+          ]
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c1-outer:iikura-exit",
+        "name": "飯倉",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-outer:iikura-exit",
+        "routeMembershipId": "route:C1:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c1-outer:shibakoen-iikura",
+        "edgeIdsSha256": "8b8e91c66bdc5b8038874d5ea63b7feb58489e45bfdc2803a8781571634d874c",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c1-outer:iikura-exit:segment:0",
+          "relation:4256008:outer:0"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "unresolved",
+            "edgeIdsSha256": "a81db83fcccfda4ee93993b147531070fb0ad8fdd5ed2aff52043f5c06dd0ca6",
+            "sourceSegmentIds": []
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "f98d59714edf654080a83b031a271b0443932c67d4a19f2e455f9eaccc8562c2",
+            "sourceSegmentIds": [
+              "relation:4256008:outer:0"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "e00076ca8571b549f034aa8f2a4452006629b414dbfea16345883e7ded2364ce",
+            "sourceSegmentIds": [
+              "relation:4256008:outer:0"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "42db1fb2aef3b5be936667a807afcf2e07ea0307fc0dd38403f203bf7c4644f9",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-outer:iikura-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "unresolved",
+          "reasonCodes": [
+            "ENTRY_BINDING_UNRESOLVED"
+          ]
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "unverified",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c1-outer:shibakoen-iikura",
+        "oneSectionAheadVerified": false
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c1-outer:shibakoen-iikura",
+        "billingDistanceMeters": 1600,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p03:c1-shibakoen-iikura",
+            "distanceEvidenceId": "evidence:2025-04:p03:c1-shibakoen-iikura"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 300,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p03:c1-shibakoen-iikura",
+            "distanceEvidenceId": "evidence:2026-10:p03:c1-shibakoen-iikura"
+          }
+        ]
+      },
+      "promotionDecision": "hold",
+      "automaticSeedWrite": false,
+      "rejectionReasons": [
+        "ENTRY_BINDING_UNRESOLVED",
+        "ROUTE_PLAN_ROLES_UNRESOLVED"
+      ]
+    }
+  ],
+  "summary": {
+    "candidateTotal": 11,
+    "eligibleForReview": 9,
+    "hold": 2,
+    "relationCoverage": {
+      "relationTotal": 26,
+      "relationExpanded": 11,
+      "relationFailed": 15
+    }
+  }
+}

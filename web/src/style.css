@@ -401,6 +401,12 @@ button.chip {
   font-weight: 600;
 }
 
+/* 料金の出所（割引適用前の基本料金）。本文より小さく、色の違いには頼らない。 */
+.card .fare-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 /* 課金対象は料金の補足。オレンジの強さは料金より一段落とす。 */
 .card .charging {
   font-size: 0.85rem;

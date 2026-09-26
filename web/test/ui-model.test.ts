@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import radialCandidateJson from "../../fixtures/candidate-v2/radial-valid.json?raw";
 import {
   MAX_ACCESS_DISTANCE_METERS,
+  MAX_DISPLAY_CANDIDATES,
   MAX_PRODUCT_MINUTES,
   MAX_PRODUCT_SECONDS,
+  PRODUCT_FARE_LABEL,
   RADIAL_HANDOFF_NOTICE,
   TOPOLOGY_HANDOFF_NOTICE,
   SEARCH_TIMEOUT_MS,
@@ -18,6 +20,7 @@ import {
   coordinateLabel,
   distanceText,
   errorMessage,
+  fareLabelNote,
   formatLatLng,
   formatRank,
   geocodeErrorMessage,
@@ -604,7 +607,10 @@ describe("toCardModel", () => {
 
     const model = toCardModel(radial);
 
-    expect(model.toll).toBe("料金額: 500 円");
+    // 金額は決まっていても商品対象外なので、金額のラベルと注記は「参考料金」に揃える。
+    // 「料金額: 500 円」の下に「上記は普通車ETC基本料金…」が来ると購入可能な金額に見える。
+    expect(model.toll).toBe("参考料金: 500 円");
+    expect(model.fareLabelNote).toBe("上記は普通車ETC基本料金（割引適用前）です");
     expect(model.timePerYen).toBeNull();
     expect(model.chargedSection).toBe("首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）");
     expect(canRankByPrice("time_per_yen", [radial])).toBe(false);
@@ -726,6 +732,48 @@ describe("toCardModel の新フィールド", () => {
     );
     expect(model.tollShort).toBe("未算出");
     expect(model.timePerYen).toBeNull();
+  });
+});
+
+describe("基本料金（割引適用前）の表示", () => {
+  function toll(amountYen: number | null) {
+    return {
+      billingPairId: "bp:x",
+      chargedSectionCount: 1,
+      amountYen,
+      pricingAt: "2026-09-10T00:00:00Z",
+      effectiveFrom: amountYen === null ? null : "2022-03-31T15:00:00Z",
+      effectiveTo: amountYen === null ? null : "2026-09-30T15:00:00Z",
+    };
+  }
+
+  it("表示上限は 3 件（カタログの検証済み OD 数とは別）", () => {
+    expect(MAX_DISPLAY_CANDIDATES).toBe(3);
+  });
+
+  it("金額が確定した候補には基本料金であることを添える", () => {
+    expect(fareLabelNote(toll(300))).toBe("上記は普通車ETC基本料金（割引適用前）です");
+    const model = toCardModel(sampleCandidate({ toll: toll(300) }));
+    expect(model.fareLabelNote).toBe(`上記は${PRODUCT_FARE_LABEL}です`);
+    expect(model.toll).toBe("料金額: 300 円");
+  });
+
+  it("未算出の候補には料金のラベルも効率の注記も出さない", () => {
+    expect(fareLabelNote(toll(null))).toBeNull();
+    const model = toCardModel(sampleCandidate({ toll: toll(null) }));
+    expect(model.fareLabelNote).toBeNull();
+    expect(model.timePerYen).toBeNull();
+    expect(model.timePerYenNote).toBeNull();
+  });
+
+  it("円あたり効率は基本料金での比較だと注記する", () => {
+    const model = toCardModel(sampleCandidate({ toll: toll(300) }));
+    expect(model.timePerYen).toBe("1 円あたり 約 0.08 分");
+    expect(model.timePerYenNote).toBe("（普通車ETC基本料金（割引適用前）で比較）");
+  });
+
+  it("割引適用前のラベルを製品の定数と共有する", () => {
+    expect(PRODUCT_FARE_LABEL).toBe("普通車ETC基本料金（割引適用前）");
   });
 });
 

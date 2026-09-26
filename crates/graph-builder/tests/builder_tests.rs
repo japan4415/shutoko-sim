@@ -14,6 +14,14 @@ fn generated_legacy_graph() -> Graph {
     assert_eq!(wire["schemaVersion"], 4);
     wire["schemaVersion"] = json!(2);
     wire.as_object_mut().unwrap().remove("routeMemberships");
+    wire.as_object_mut().unwrap().remove("odTariffsV3");
+    // all-real-v4 が記録する版メタデータ（schema 2 の reader には無い）。
+    wire.as_object_mut().unwrap().remove("billingPairsVersion");
+    wire.as_object_mut().unwrap().remove("tariffModelVersion");
+    wire["billingPairs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|pair| pair["pairKind"] == json!("legacyRing"));
     let ramp_data = wire["ramps"]
         .as_array()
         .unwrap()
@@ -532,6 +540,7 @@ fn test_routing_core_search_integration() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -660,6 +669,7 @@ fn test_billing_pair_seed_and_pathfinding_success() {
         exit_osm_way_id: 6,
         anchor_osm_node_id: 3,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         one_section_ahead_verified: true,
         provenance: SeedProvenance {
@@ -748,6 +758,7 @@ fn test_reject_hidden_loop_in_billing_pair() {
         ],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -819,6 +830,7 @@ fn test_reject_graph_with_no_loop_from_anchor() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -853,6 +865,7 @@ fn test_forbidden_transitions_not_adopted_and_rejected() {
         exit_osm_way_id: 6,
         anchor_osm_node_id: 3,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         one_section_ahead_verified: true,
         provenance: SeedProvenance {
@@ -891,6 +904,7 @@ fn test_forbidden_transitions_not_adopted_and_rejected() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -921,6 +935,7 @@ fn test_reject_disconnected_path() {
         anchor_to_exit_edge_ids: vec!["e:w4:0:f".into(), "e:w6:0:f".into()], // e:w4 starts at n:4, but anchor is n:3!
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -960,6 +975,7 @@ fn test_reject_invalid_edge_kinds() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -989,6 +1005,7 @@ fn test_reject_invalid_prices_and_overlapping_intervals() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 0, // Invalid 0 amount!
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -1043,6 +1060,7 @@ fn test_reject_mismatched_vehicle_profile() {
         anchor_to_exit_edge_ids: vec!["e:w3:0:f".into(), "e:w6:0:f".into()],
         status: VerificationStatus::Verified,
         vehicle_profile: "heavy-truck".into(), // graph is passenger-car-etc
+        assignment_id: None,
         prices: vec![Price {
             amount_yen: 300,
             effective_from: "2026-01-01T00:00:00Z".into(),
@@ -1069,6 +1087,7 @@ fn test_reject_unverified_section_marked_verified() {
         exit_osm_way_id: 6,
         anchor_osm_node_id: 3,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         one_section_ahead_verified: false, // Inconsistent with status=verified!
         provenance: SeedProvenance {
@@ -1159,6 +1178,7 @@ fn test_deterministic_byte_identical_output_two_runs() {
             exit_osm_way_id: 6,
             anchor_osm_node_id: 3,
             vehicle_profile: "passenger-car-etc".into(),
+            assignment_id: None,
             status: VerificationStatus::Verified,
             one_section_ahead_verified: true,
             provenance: SeedProvenance {
@@ -1888,6 +1908,7 @@ fn test_refutation_first_exit_mismatch_shintomicho() {
         exit_osm_way_id: 760760233,    // Shintomicho exit
         anchor_osm_node_id: 499831338, // Anchor node
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         one_section_ahead_verified: true,
         provenance: SeedProvenance {
@@ -1934,6 +1955,7 @@ fn test_provenance_url_and_date_validation() {
         exit_osm_way_id: 6,
         anchor_osm_node_id: 3,
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         one_section_ahead_verified: true,
         provenance: SeedProvenance {
@@ -2312,6 +2334,7 @@ fn test_refutation_unsound_pruning_codex_counterexample() {
         entry_to_anchor_edge_ids: vec!["entry".into()],
         anchor_to_exit_edge_ids: vec!["e1".into(), "e4".into(), "exit2".into()],
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         prices: vec![Price {
             amount_yen: 300,
@@ -2722,6 +2745,7 @@ fn test_refutation_counterexample_b_opus5() {
         entry_to_anchor_edge_ids: vec!["entry_e".into()],
         anchor_to_exit_edge_ids: vec!["e9".into(), "e10".into()],
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         prices: vec![Price {
             amount_yen: 300,
@@ -2758,6 +2782,7 @@ fn test_refutation_counterexample_b_opus5() {
             "e8".into(),
         ],
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         prices: vec![Price {
             amount_yen: 300,
@@ -3001,6 +3026,7 @@ fn test_refutation_counterexample_c_codex() {
             "exit2".into(),
         ],
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         prices: vec![Price {
             amount_yen: 300,
@@ -3292,6 +3318,7 @@ fn test_issue6_item2_simple_path_first_exit() {
         entry_to_anchor_edge_ids: vec!["entry_e".into()],
         anchor_to_exit_edge_ids: vec!["e4".into(), "exit_simple".into()],
         vehicle_profile: "passenger-car-etc".into(),
+        assignment_id: None,
         status: VerificationStatus::Verified,
         prices: Vec::new(),
         entry_name: None,
@@ -3495,15 +3522,13 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     let verified_pair_ids = [
         "bp:c1-outer:kandabashi-takaracho",
         "bp:c1-outer:kasumigaseki-daikancho",
-    ];
-    let unverified_pair_ids = [
-        "bp:c1-inner:kasumigaseki-shibakoen",
-        "bp:c1-inner:takaracho-kandabashi",
         "bp:c1-outer:ginza-shibakoen",
-        "bp:c1-outer:shibakoen-iikura",
+        "bp:c1-inner:kasumigaseki-shibakoen",
         "bp:c1-inner:daikancho-kasumigaseki",
         "bp:c1-inner:shibakoen-shiodome",
+        "bp:c1-inner:takaracho-kandabashi",
     ];
+    let unverified_pair_ids = ["bp:c1-outer:shibakoen-iikura"];
 
     for expected_id in &verified_pair_ids {
         let seed_pair = legacy_pairs
@@ -3513,21 +3538,12 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
 
         assert_eq!(seed_pair.status, VerificationStatus::Verified);
         assert!(seed_pair.one_section_ahead_verified);
-        assert_eq!(
-            seed_pair.prices.len(),
-            2,
-            "seed pair {} must have exactly 2 price records",
-            expected_id
-        );
-        assert_eq!(seed_pair.prices[0].amount_yen, 300);
-        assert_eq!(seed_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
-        assert_eq!(
-            seed_pair.prices[0].effective_to.as_deref(),
-            Some("2026-09-30T15:00:00Z")
-        );
-        assert_eq!(seed_pair.prices[1].amount_yen, 300);
-        assert_eq!(seed_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-        assert_eq!(seed_pair.prices[1].effective_to, None);
+        // seed は assignmentId 参照だけを持ち、金額と距離は持たない。
+        assert!(seed_pair.prices.is_empty());
+        assert!(seed_pair
+            .assignment_id
+            .as_deref()
+            .is_some_and(|id| id.starts_with("assignment:")));
     }
     for unverified_id in &unverified_pair_ids {
         let seed_pair = legacy_pairs
@@ -3538,9 +3554,9 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
         assert!(!seed_pair.one_section_ahead_verified);
     }
 
-    // 2. The full-network graph retains all audited pairs, but the two
-    // FIRST_EXIT_MISMATCH pairs must remain explicitly unverified so
-    // routing-core will not make them searchable.
+    // 2. The full-network graph retains all audited pairs, while the
+    // conditional Shibakoen pair remains explicitly unverified so routing-core
+    // will not make it searchable.
     let graph = generated_legacy_graph();
     assert_eq!(
         graph.billing_pairs.len(),
@@ -3556,12 +3572,7 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
             .unwrap_or_else(|| panic!("graph pair {} not found in graph.json", expected_id));
 
         assert_eq!(graph_pair.status, VerificationStatus::Verified);
-        assert_eq!(
-            graph_pair.prices.len(),
-            2,
-            "graph.json billing pair {} prices must contain 2 records",
-            expected_id
-        );
+        assert_eq!(graph_pair.prices.len(), 2);
         assert_eq!(graph_pair.prices[0].amount_yen, 300);
         assert_eq!(graph_pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
         assert_eq!(
@@ -3570,7 +3581,6 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
         );
         assert_eq!(graph_pair.prices[1].amount_yen, 300);
         assert_eq!(graph_pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
-        assert_eq!(graph_pair.prices[1].effective_to, None);
     }
     for unverified_id in &unverified_pair_ids {
         let graph_pair = graph
@@ -4068,16 +4078,6 @@ fn test_cli_with_inventory_bindings_and_tariffs() {
         "version": 1,
         "source": "https://www.shutoko.jp/fee/fee-info/basic-fee/",
         "sourceDate": "2026-09-16",
-        "rules": {
-            "vehicleProfile": "passenger_car",
-            "fixedFeeYen": 150,
-            "taxRate": 1.10,
-            "minTollYen": 300,
-            "maxTollYen": 1950,
-            "minDistanceMeters": 4300,
-            "baseRatePerKmYen": 29.52,
-            "roundingYen": 10
-        },
         "verifiedOdPairs": [
             {
                 "entryRampId": "ramp:c1-inner:kandabashi-entry",
@@ -4266,13 +4266,7 @@ fn test_cli_with_full_fixtures() {
         .filter_map(Value::as_str)
         .filter(|section| section.starts_with("diagnostic-only:"))
         .collect::<Vec<_>>();
-    assert_eq!(
-        diagnostic_only,
-        vec![
-            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved",
-            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved",
-        ]
-    );
+    assert!(diagnostic_only.is_empty());
     let route_memberships: Vec<RouteMembershipIndex> =
         serde_json::from_value(graph_json["routeMemberships"].clone()).unwrap();
     assert_eq!(
@@ -4283,13 +4277,13 @@ fn test_cli_with_full_fixtures() {
     let ramps_raw = std::fs::read_to_string(out_dir.join("ramps.json")).unwrap();
     let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
     assert_eq!(ramps_json["totalRamps"], 399);
-    assert_eq!(ramps_json["boundRamps"], 232);
+    assert_eq!(ramps_json["boundRamps"], 236);
 
     let manifest_raw = std::fs::read_to_string(out_dir.join("manifest.json")).unwrap();
     let manifest_json: serde_json::Value = serde_json::from_str(&manifest_raw).unwrap();
     let capabilities = &manifest_json["coverage"]["endpointCapabilities"];
-    assert_eq!(capabilities["routableEntryCount"], 99);
-    assert_eq!(capabilities["routableExitCount"], 98);
+    assert_eq!(capabilities["routableEntryCount"], 100);
+    assert_eq!(capabilities["routableExitCount"], 101);
     assert_eq!(capabilities["structuralNoLoopEntryCount"], 13);
     assert_eq!(capabilities["structuralNoLoopExitCount"], 22);
 
@@ -4307,21 +4301,35 @@ fn test_cli_with_full_fixtures() {
             .iter()
             .filter(|r| r["supportState"] == "verified_bound" && r["bound"] == true)
             .count(),
-        232
+        236
     );
     assert_eq!(
         active_general
             .iter()
             .filter(|r| r["supportState"] == "unsupported" && r["bound"] == false)
             .count(),
-        139
+        134
     );
+    // 芝公園入口外回りだけは exact binding が未解決（access:conditional）で、
+    // 恒久的な利用不可（unsupported）とは区別して reason code 付きで公開する。
+    let unresolved = active_general
+        .iter()
+        .filter(|r| r["supportState"] == "unresolved")
+        .collect::<Vec<_>>();
+    assert_eq!(unresolved.len(), 1);
+    assert_eq!(unresolved[0]["id"], "ramp:c1-outer:shibakoen-entry");
+    assert_eq!(
+        unresolved[0]["supportReasonCode"],
+        "CONDITIONAL_ACCESS_RESTRICTION"
+    );
+    assert_eq!(unresolved[0]["routingCapability"], "unsupported");
+    assert_eq!(unresolved[0]["bound"], false);
     assert_eq!(
         active_general
             .iter()
             .filter(|r| r["routingCapability"] == "routable")
             .count(),
-        197
+        201
     );
     assert_eq!(
         active_general
@@ -4359,7 +4367,7 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
     shutoko_graph_builder::validate_ramp_inventory(&inventory).unwrap();
     shutoko_graph_builder::validate_osm_ramp_bindings(&bindings, &inventory).unwrap();
     let (ramps, _artifact, _notes) =
-        shutoko_graph_builder::bind_ramps_to_graph(&graph, &inventory, &bindings);
+        shutoko_graph_builder::bind_ramps_to_graph(&mut graph, &inventory, &bindings);
     graph.ramps = ramps;
     let source_snapshot_sha256 = compute_sha256(&std::fs::read(&osm_path).unwrap());
     let evidence = bound_ramp_evidence_from_inventory(&graph, &inventory, &bindings).unwrap();
@@ -4379,13 +4387,9 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
         shutoko_graph_builder::generate_diagnostic_radial_route_plans(&graph, &memberships, &seed);
     assert_eq!(generated_plans.len(), 2);
     assert!(generated_plans.iter().all(|plan| plan.error.is_none()));
-    assert!(generated_plans.iter().all(|plan| plan
-        .resolution
-        .as_ref()
-        .unwrap()
-        .first_exit
-        .exit
-        .is_none()));
+    assert!(generated_plans
+        .iter()
+        .all(|plan| { plan.resolution.as_ref().unwrap().first_exit.exit.is_some() }));
     let radial_pairs = seed.radial_pairs();
     assert_eq!(radial_pairs.len(), 2);
     assert_eq!(
@@ -4401,14 +4405,17 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
     for pair in radial_pairs {
         assert_eq!(
             pair.pair_eligibility.status,
-            shutoko_graph_builder::PairEligibilityStatus::Unverified
+            shutoko_graph_builder::PairEligibilityStatus::VerifiedOneSectionAhead
         );
         assert_eq!(
             pair.tariff.status,
-            shutoko_graph_builder::TariffStatus::Unpriced
+            shutoko_graph_builder::TariffStatus::Priced
         );
-        assert!(pair.tariff.amount_yen.is_none());
-        assert!(pair.tariff.billing_distance_meters.is_none());
+        // 金額は seed ではなく data/od-tariffs.json の assignment が正本。
+        assert_eq!(pair.tariff.amount_yen, None);
+        assert_eq!(pair.tariff.billing_distance_meters, None);
+        assert!(pair.tariff.prices.is_empty());
+        assert_eq!(pair.assignment_id, "assignment:2:meguro-tengenji");
         let lap =
             generate_route_plan_lap_v1(&graph, &memberships, &pair.route_plan.anchor).unwrap();
         assert_eq!(lap.merge_node_id, pair.route_plan.anchor.merge_node_id);
@@ -4432,47 +4439,22 @@ fn test_real_schema4_directed_mandatory_laps_select_wrap_around_long_arcs() {
                 .unwrap();
         assert_eq!(
             resolution.first_exit.exact_directed_binding,
-            pair.route_plan
-                .return_corridor
-                .first_general_exit
-                .exact_directed_binding
+            shutoko_graph_builder::EndpointSupportState::VerifiedBound
         );
-        assert!(resolution.first_exit.exit.is_none());
+        let exit = resolution.first_exit.exit.as_ref().unwrap();
+        assert_eq!(exit.ramp_id, "ramp:2-outbound:tengenji-exit");
         assert_eq!(
-            resolution.first_exit.exact_directed_binding,
-            shutoko_graph_builder::EndpointSupportState::Unresolved
+            exit.exit_edge_id,
+            pair.exit_endpoint.directed_segments[0]
+                .edge_ids
+                .first()
+                .unwrap()
+                .as_str()
         );
-        let expected_return_length = if pair.route_plan.anchor.direction == "inner" {
-            85
-        } else {
-            84
-        };
-        assert_eq!(
-            resolution.first_exit.mainline_edge_ids.len(),
-            expected_return_length
-        );
+        assert!(!resolution.first_exit.mainline_edge_ids.is_empty());
         assert!(!resolution.first_exit.mainline_source_segment_ids.is_empty());
-        assert_eq!(
-            resolution.first_exit.blocked_ramp_id.as_deref(),
-            Some("ramp:2-outbound:tengenji-exit")
-        );
-        assert_eq!(
-            resolution.first_exit.blocked_exit_edge_id.as_deref(),
-            Some("e:w172358461:0:f")
-        );
-        let return_end_node_id = graph
-            .edges
-            .iter()
-            .find(|edge| edge.id == *resolution.first_exit.mainline_edge_ids.last().unwrap())
-            .map(|edge| edge.to.as_str());
-        assert_eq!(
-            return_end_node_id,
-            Some(
-                pair.exit_endpoint.binding_candidates[0].directed_segments[0]
-                    .from_node_id
-                    .as_str()
-            )
-        );
+        assert!(resolution.first_exit.blocked_ramp_id.is_none());
+        assert!(resolution.first_exit.blocked_exit_edge_id.is_none());
     }
 }
 
@@ -4596,27 +4578,55 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
         .filter(|section| section.starts_with("diagnostic-only:"))
         .map(str::to_owned)
         .collect::<Vec<_>>();
-    assert_eq!(
-        diagnostic_only,
-        vec![
-            "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved".to_owned(),
-            "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved".to_owned(),
-        ]
-    );
+    assert!(diagnostic_only.is_empty());
     assert_eq!(graph_json["schemaVersion"], 4);
-    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 8);
-    for pair in graph_json["billingPairs"].as_array().unwrap() {
-        assert_eq!(pair["pairKind"], "legacyRing");
+    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 10);
+    let legacy_pairs = graph_json["billingPairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|pair| pair["pairKind"] == "legacyRing")
+        .collect::<Vec<_>>();
+    let radial_pairs = graph_json["billingPairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|pair| pair["pairKind"] == "radialReturn")
+        .collect::<Vec<_>>();
+    assert_eq!(legacy_pairs.len(), 8);
+    assert_eq!(radial_pairs.len(), 2);
+    for pair in legacy_pairs {
         assert_eq!(pair["anchor"]["anchorKind"], "sameNode");
         assert_eq!(pair["anchor"]["arcPolicy"], "sameNodeLoop");
         assert!(pair["pairEligibility"]["status"].is_string());
         assert_eq!(pair["loopValidation"]["status"], "declared_route_validated");
         assert!(pair["tariff"]["status"].is_string());
+        assert!(pair["tariff"]["assignmentId"].is_string());
+        assert!(pair["tariff"]["billingDistanceMeters"].is_u64());
+    }
+    for pair in radial_pairs {
+        assert_eq!(
+            pair["routePlan"]["anchor"]["anchorKind"],
+            "directedJunction"
+        );
+        assert_eq!(pair["routePlan"]["anchor"]["arcPolicy"], "ordinaryLongArc");
+        assert_eq!(
+            pair["tariff"]["assignmentId"],
+            "assignment:2:meguro-tengenji"
+        );
+        assert_eq!(pair["tariff"]["amountYen"], 790);
+        assert_eq!(pair["tariff"]["billingDistanceMeters"], 19400);
+        assert_eq!(pair["tariff"]["prices"].as_array().unwrap().len(), 2);
+        assert_eq!(pair["tariff"]["prices"][1]["amountYen"], 860);
+        assert_eq!(
+            pair["tariff"]["prices"][1]["effectiveFrom"],
+            "2026-09-30T15:00:00Z"
+        );
     }
     let prepared = shutoko_routing_core::prepare_json(&graph_raw, "{}").unwrap();
     assert_eq!(prepared.graph().schema_version, 4);
     assert_eq!(prepared.graph().billing_pairs.len(), 8);
-    assert!(prepared.radial_billing_pairs().is_empty());
+    assert_eq!(prepared.radial_billing_pairs().len(), 2);
     let edge_ids = graph_json["edges"]
         .as_array()
         .unwrap()

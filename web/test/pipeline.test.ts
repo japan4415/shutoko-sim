@@ -141,6 +141,76 @@ describe("parseGraphDocument", () => {
     );
   });
 
+  it("graph の tariff が製品スコープと違えば ARTIFACT_MISMATCH で止める", () => {
+    const graph = JSON.parse(generatedGraph) as Record<string, unknown>;
+    // 生成済みの graph は全 billingPairs が料金 v3 の製品スコープを満たす。
+    expect(() => parseGraphDocument(generatedGraph)).not.toThrow();
+    const billingPairs = graph.billingPairs as Record<string, unknown>[];
+    const priced = billingPairs.find(
+      (pair) => (pair.tariff as Record<string, unknown> | undefined)?.status === "priced",
+    );
+    expect(priced).toBeDefined();
+    if (priced === undefined) return;
+    for (const overrides of [
+      { fareLabel: "普通車ETC基本料金" },
+      { vehicleClass: "truck" },
+      { discountsExcluded: false },
+    ]) {
+      expect(() =>
+        parseGraphDocument(
+          JSON.stringify({
+            ...graph,
+            billingPairs: [
+              ...billingPairs,
+              { ...priced, tariff: { ...(priced.tariff as Record<string, unknown>), ...overrides } },
+            ],
+          }),
+        ),
+      ).toThrowError(/製品スコープ/);
+    }
+  });
+
+  it("graph の確定料金は prices[] の期間だけでも engine と同じ規則で通す", () => {
+    const graph = JSON.parse(generatedGraph) as Record<string, unknown>;
+    const billingPairs = graph.billingPairs as Record<string, unknown>[];
+    const priced = billingPairs.find(
+      (pair) => (pair.tariff as Record<string, unknown> | undefined)?.status === "priced",
+    );
+    expect(priced).toBeDefined();
+    if (priced === undefined) return;
+    const tariff = priced.tariff as Record<string, unknown>;
+    const pricesOnly = {
+      ...tariff,
+      effectiveFrom: undefined,
+      effectiveTo: undefined,
+      prices: [
+        { amountYen: 300, effectiveFrom: "2022-03-31T15:00:00Z", effectiveTo: "2026-09-30T15:00:00Z" },
+        { amountYen: 300, effectiveFrom: "2026-09-30T15:00:00Z", effectiveTo: null },
+      ],
+    };
+    const withTariff = (next: Record<string, unknown>): string =>
+      JSON.stringify({
+        ...graph,
+        billingPairs: [
+          ...billingPairs.filter((pair) => pair !== priced),
+          { ...priced, tariff: next },
+        ],
+      });
+
+    // engine は top-level の期間が無くても prices[] の 1 件の期間を使う。
+    expect(() => parseGraphDocument(withTariff(pricesOnly))).not.toThrow();
+
+    // どちらにも読める期間が無ければ engine も prepare できない。
+    for (const broken of [
+      { ...pricesOnly, prices: [] },
+      { ...pricesOnly, prices: [{ amountYen: 300, effectiveFrom: "not-a-timestamp", effectiveTo: null }] },
+      { ...pricesOnly, prices: [{ amountYen: 300, effectiveTo: null }] },
+      { ...pricesOnly, prices: "2026-09-30T15:00:00Z" },
+    ]) {
+      expect(() => parseGraphDocument(withTariff(broken))).toThrowError(/適用期間/);
+    }
+  });
+
   it("未知 version、未知 pairKind、routeMemberships 欠落を拒否する", () => {
     const graph = JSON.parse(schema4Graph) as Record<string, unknown>;
     expect(() => parseGraphDocument(JSON.stringify({ ...graph, schemaVersion: 5 }))).toThrowError(
@@ -159,8 +229,11 @@ describe("parseGraphDocument", () => {
     expect(() => parseGraphDocument(JSON.stringify(partial))).toThrowError(/routeMemberships/);
   });
 
-  it("loadRelease が schema 4 graph を WASM prepare へ渡せる", async () => {
-    const releaseId = "graph-v4-fixture-v1";
+  /** schema 4 の manifest / engine.json / graph.json / wasm / glue を組み立てる。 */
+  async function schema4Files(
+    releaseId: string,
+    billingPairsVersion: string,
+  ): Promise<Record<string, Uint8Array>> {
     const graphBytes = encoder.encode(schema4Graph);
     const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
     const glueBytes = encoder.encode("export default function(){}");
@@ -170,14 +243,14 @@ describe("parseGraphDocument", () => {
     const routeHash = await routeMembershipsSha256(
       (JSON.parse(schema4Graph) as { routeMemberships: unknown }).routeMemberships,
     );
-    const files = {
+    return {
       [`/releases/${releaseId}/manifest.json`]: encoder.encode(
         JSON.stringify({
           schemaVersion: 1,
           releaseId,
           graphSchemaVersion: 4,
           routePlanVersion: 1,
-          billingPairsVersion: "v2",
+          billingPairsVersion,
           routeMembershipsSha256: routeHash,
           artifacts: [{ path: "graph.json", ...graphExpected }],
         }),
@@ -196,20 +269,45 @@ describe("parseGraphDocument", () => {
       [`/releases/${releaseId}/shutoko_routing_bg.wasm`]: wasmBytes,
       [`/releases/${releaseId}/shutoko_routing.js`]: glueBytes,
     };
-    const { fetch } = mockFetch(files);
-    let preparedGraphJson = "";
-    const glue: WasmGlueModule = {
+  }
+
+  function recordingGlue(prepared: { json: string }): WasmGlueModule {
+    return {
       default: async () => {},
       prepare: (graphJson: string) => {
-        preparedGraphJson = graphJson;
+        prepared.json = graphJson;
         return { free() {} };
       },
       searchPrepared: () => "{}",
     };
-    const loaded = await loadRelease(fetch, releaseId, async () => glue);
-    expect(JSON.parse(preparedGraphJson).schemaVersion).toBe(4);
-    expect(JSON.parse(preparedGraphJson).billingPairs).toHaveLength(2);
-    loaded.free();
+  }
+
+  // v2 は all-real-v3（rollback 先）、v3 は all-real-v4。どちらも同じ reader で読む。
+  it.each(["v2", "v3"])(
+    "loadRelease が billingPairsVersion=%s の schema 4 graph を WASM prepare へ渡せる",
+    async (billingPairsVersion) => {
+      const releaseId = "graph-v4-fixture-v1";
+      const { fetch } = mockFetch(await schema4Files(releaseId, billingPairsVersion));
+      const prepared = { json: "" };
+      const loaded = await loadRelease(fetch, releaseId, async () => recordingGlue(prepared));
+      expect(JSON.parse(prepared.json).schemaVersion).toBe(4);
+      expect(JSON.parse(prepared.json).billingPairs).toHaveLength(2);
+      loaded.free();
+    },
+  );
+
+  it("未知の billingPairsVersion は graph を prepare せず ARTIFACT_MISMATCH で止める", async () => {
+    const releaseId = "graph-v4-fixture-v1";
+    const { fetch, calls } = mockFetch(await schema4Files(releaseId, "v9"));
+    await expect(loadRelease(fetch, releaseId, async () => recordingGlue({ json: "" }))).rejects.toThrowError(
+      /billingPairsVersion/,
+    );
+    // graph.json は route membership hash の照合に要るので取得する。WASM / glue へは進まない。
+    expect(calls).toEqual([
+      `/releases/${releaseId}/manifest.json`,
+      `/releases/${releaseId}/engine.json`,
+      `/releases/${releaseId}/graph.json`,
+    ]);
   });
 });
 

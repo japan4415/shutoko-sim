@@ -12,9 +12,20 @@ import type {
 } from "../worker/types";
 
 import { DEFAULT_RELEASE_ID } from "../worker/artifact-hashes";
+import { PRODUCT_FARE_LABEL } from "../worker/tariff-contract";
 
 export const RELEASE_ID = DEFAULT_RELEASE_ID;
 export const VEHICLE_PROFILE = "passenger-car-etc";
+
+export { PRODUCT_FARE_LABEL };
+
+/**
+ * 1 回の検索で画面へ出す候補の上限。
+ *
+ * カタログ上の検証済み OD 数とは別の考え方で、こちらは「3 件まで比較する」という
+ * 表示数の制限。エンジンの `SearchLimits.maxCandidates` の既定値 3 と揃える。
+ */
+export const MAX_DISPLAY_CANDIDATES = 3;
 
 /** 神田橋プリセット（crates/routing-core/tests/real_graph_contract.rs:520-528）。 */
 export const PRESET_KANDABASHI = { lat: 35.6896727, lon: 139.7644248 } as const;
@@ -455,6 +466,17 @@ export function tollText(toll: Toll): string {
     : `料金額: ${toll.amountYen.toLocaleString("ja-JP")} 円`;
 }
 
+/**
+ * 金額の出所を示す注記。金額が確定した候補にだけ付ける。
+ *
+ * 金額は「普通車ETC基本料金（割引適用前）」の額なので、割引込みの金額と
+ * 読み違えないよう、金額のすぐ下にこの文言を必ず添える。未算出の候補には
+ * 付けない（どの料金の額なのか示せないため）。
+ */
+export function fareLabelNote(toll: Toll): string | null {
+  return toll.amountYen === null ? null : `上記は${PRODUCT_FARE_LABEL}です`;
+}
+
 /** 推薦理由コードの日本語文言（docs/interfaces.md:148-151）。未知コードはそのまま返す。 */
 export function reasonText(code: string): string {
   switch (code) {
@@ -648,7 +670,11 @@ export interface CardModel {
   pathSummary: string | null;
   toll: string;
   tollShort: string;
+  /** 金額の出所（普通車ETC基本料金）の注記。金額が未算出なら null。 */
+  fareLabelNote: string | null;
   timePerYen: string | null;
+  /** 円あたり効率が基本料金での比較であることを示す注記。 */
+  timePerYenNote: string | null;
   rankLabel: string | null;
   reasons: string[];
   route: string;
@@ -770,7 +796,8 @@ function referenceTollText(toll: Toll): string {
 
 /**
  * 円あたり効率（首都高時間 / 料金）。amountYen が null のときは算出しない。
- * 「1区間の料金で首都高を約 s 分走る」の比較値をカードに添えるための文字列。
+ * 比較に使うのは画面の金額と同じ「普通車ETC基本料金（割引適用前）」の額で、
+ * この値だけ見て割引込みの効率と読み違えないよう注記を別途添える。
  */
 function timePerYenText(candidate: Candidate): string | null {
   if (!isProductEligible(candidate)) {
@@ -834,6 +861,7 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
   const estimatedLegs = estimatedLegModels(candidate);
   const routeOverview = topologyRouteOverview(candidate, estimatedLegs);
   const routePathSummary = pathSummary(candidate);
+  const timePerYen = timePerYenText(candidate);
   return {
     id: candidate.id,
     index,
@@ -849,9 +877,14 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     estimatedLegs,
     routeOverview,
     pathSummary: routePathSummary,
-    toll: isTopologyOnly ? referenceTollText(candidate.toll) : tollText(candidate.toll),
+    // 商品対象外の候補（topologyOnly と、形式は radialReturn でも商品対象外のペア）は
+    // 「参考料金」として出す。金額のラベルと注記の整合を 1 か所にまとめ、注記が
+    // 購入可能な金額のように読める状態を作らない。
+    toll: productEligible ? tollText(candidate.toll) : referenceTollText(candidate.toll),
     tollShort: tollShortText(candidate.toll),
-    timePerYen: timePerYenText(candidate),
+    fareLabelNote: fareLabelNote(candidate.toll),
+    timePerYen,
+    timePerYenNote: timePerYen === null ? null : `（${PRODUCT_FARE_LABEL}で比較）`,
     rankLabel: null,
     reasons: candidate.reasons
       .filter(

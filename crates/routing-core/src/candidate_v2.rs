@@ -66,6 +66,32 @@ pub struct CandidateV2Toll {
     pub billing_distance_meters: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toll_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignment_id: Option<String>,
+    #[serde(
+        default,
+        alias = "tariffRuleId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub rule_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_id: Option<String>,
+    #[serde(
+        default,
+        alias = "billingDistanceEvidenceId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub distance_evidence_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fare_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vehicle_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payment_method: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fare_basis: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub discounts_excluded: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -241,6 +267,7 @@ pub fn validate_radial_return_candidate(
     if !interval_valid || !tariff_consistent {
         return Err(invalid("radialReturn tariff status is inconsistent"));
     }
+    validate_tariff_contract_fields(&candidate.toll, candidate.tariff_status)?;
     let expected_roles = [
         RoutePlanSegmentRole::EntryApproach,
         RoutePlanSegmentRole::MandatoryLap,
@@ -382,6 +409,7 @@ pub fn validate_topology_only_candidate(
     if !tariff_consistent {
         return Err(invalid("topologyOnly tariff status is inconsistent"));
     }
+    validate_tariff_contract_fields(&candidate.toll, candidate.tariff_status)?;
     validate_estimated_legs(&candidate.estimated_legs)?;
     validate_v2_duration_distance(
         &candidate.estimated_legs,
@@ -473,6 +501,62 @@ fn ordered_edge_ids_sha256(edge_ids: &[String]) -> Option<String> {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     Some(format!("{:x}", hasher.finalize()))
+}
+
+fn validate_tariff_contract_fields(
+    toll: &CandidateV2Toll,
+    status: TariffStatus,
+) -> Result<(), RoutingError> {
+    let has_v3_fields = toll.assignment_id.is_some()
+        || toll.rule_id.is_some()
+        || toll.evidence_id.is_some()
+        || toll.distance_evidence_id.is_some()
+        || toll.fare_label.is_some()
+        || toll.vehicle_class.is_some()
+        || toll.payment_method.is_some()
+        || toll.fare_basis.is_some()
+        || toll.discounts_excluded
+        || toll.toll_source.as_deref() == Some(crate::OFFICIAL_DISTANCE_RULE_SOURCE);
+    if !has_v3_fields {
+        return Ok(());
+    }
+    if toll.fare_label.as_deref() != Some(crate::PRODUCT_FARE_LABEL)
+        || toll.vehicle_class.as_deref() != Some(crate::PRODUCT_VEHICLE_CLASS)
+        || toll.payment_method.as_deref() != Some(crate::PRODUCT_PAYMENT_METHOD)
+        || toll.fare_basis.as_deref() != Some(crate::PRODUCT_FARE_BASIS)
+        || !toll.discounts_excluded
+    {
+        return Err(invalid("candidate tariff scope is inconsistent"));
+    }
+    if status == TariffStatus::Priced {
+        if toll.amount_yen.is_none()
+            || toll.billing_distance_meters.is_none()
+            || toll.effective_from.is_none()
+            || toll.assignment_id.is_none()
+            || toll.rule_id.is_none()
+            || toll.evidence_id.is_none()
+            || toll.distance_evidence_id.is_none()
+            || toll.toll_source.as_deref() != Some(crate::OFFICIAL_DISTANCE_RULE_SOURCE)
+        {
+            return Err(invalid("priced candidate tariff provenance is incomplete"));
+        }
+    } else if toll.amount_yen.is_some()
+        || toll.billing_distance_meters.is_some()
+        || toll.effective_from.is_some()
+        || toll.effective_to.is_some()
+        || toll.assignment_id.is_some()
+        || toll.rule_id.is_some()
+        || toll.evidence_id.is_some()
+        || toll.distance_evidence_id.is_some()
+        || toll.toll_source.is_some()
+    {
+        return Err(invalid("unpriced candidate tariff contains priced fields"));
+    }
+    Ok(())
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn validate_sha256(value: &str) -> Result<(), RoutingError> {

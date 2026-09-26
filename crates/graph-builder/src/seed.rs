@@ -36,10 +36,12 @@ pub struct BillingPairSeed {
     pub exit_name: Option<String>,
     pub anchor_osm_node_id: i64,
     pub vehicle_profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignment_id: Option<String>,
     pub status: VerificationStatus,
     pub one_section_ahead_verified: bool,
     pub provenance: SeedProvenance,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prices: Vec<SeedPrice>,
 }
 
@@ -91,6 +93,7 @@ pub struct RadialReturnBillingPairSeed {
     pub pair_kind: PairKind,
     pub route_plan_version: RoutePlanVersion,
     pub vehicle_profile: String,
+    pub assignment_id: String,
     pub entry_endpoint: DiagnosticEndpoint,
     pub exit_endpoint: DiagnosticEndpoint,
     pub route_plan: DiagnosticRoutePlan,
@@ -310,8 +313,11 @@ pub enum LoopValidationStatus {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DiagnosticTariff {
     pub status: TariffStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub amount_yen: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub billing_distance_meters: Option<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prices: Vec<SeedPrice>,
 }
 
@@ -423,10 +429,36 @@ impl BillingPairsSeedFileV2 {
             }
             if let Some(seed) = entry.as_radial_return() {
                 seed.validate()?;
+                reject_tariff_authority(
+                    seed.id.as_str(),
+                    seed.tariff.amount_yen,
+                    seed.tariff.billing_distance_meters,
+                    seed.tariff.prices.len(),
+                )?;
+            } else if let Some(seed) = entry.as_legacy_ring() {
+                reject_tariff_authority(seed.id.as_str(), None, None, seed.prices.len())?;
             }
         }
         Ok(())
     }
+}
+
+/// schema 2 以降の seed は assignmentId 参照だけを持ち、手書きの金額と距離を持たない。
+/// 金額と距離の正本は `data/od-tariffs.json` の assignments だけなので、
+/// seed に書き写した値が残っている場合はビルドを fail-closed にする。
+fn reject_tariff_authority(
+    pair_id: &str,
+    amount_yen: Option<u64>,
+    billing_distance_meters: Option<u64>,
+    price_count: usize,
+) -> Result<(), String> {
+    if amount_yen.is_none() && billing_distance_meters.is_none() && price_count == 0 {
+        return Ok(());
+    }
+    Err(format!(
+        "billing pair {} must not carry a handwritten tariff (amountYen={:?}, billingDistanceMeters={:?}, prices={}); data/od-tariffs.json assignments is the only authority",
+        pair_id, amount_yen, billing_distance_meters, price_count
+    ))
 }
 
 impl RadialReturnBillingPairSeed {
@@ -624,6 +656,26 @@ fn support_state_wire_value(state: EndpointSupportState) -> &'static str {
 }
 
 impl ParsedBillingPairsSeed {
+    pub fn validate_tariff_assignment_refs(&self) -> Result<(), String> {
+        for seed in self.legacy_pairs() {
+            if seed.assignment_id.as_deref().is_none_or(str::is_empty) {
+                return Err(format!(
+                    "schema 4 seed {} has no tariff assignmentId",
+                    seed.id
+                ));
+            }
+        }
+        for seed in self.radial_pairs() {
+            if seed.assignment_id.is_empty() {
+                return Err(format!(
+                    "schema 4 seed {} has no tariff assignmentId",
+                    seed.id
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub fn schema_version(&self) -> u32 {
         match self {
             Self::Schema1(seed) => seed.schema_version,
@@ -811,6 +863,7 @@ mod tests {
             let mut value: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
             value["billingPairs"][1]["exitEndpoint"]["supportState"] =
                 json!(support_state_wire_value(state));
+            value["billingPairs"][1]["exitEndpoint"]["directedSegments"] = json!([]);
             let raw = serde_json::to_string(&value).unwrap();
             assert!(parse_billing_pairs_seed(&raw).is_ok());
         }
@@ -819,16 +872,15 @@ mod tests {
     #[test]
     fn rejects_missing_or_mismatched_osm_node_evidence() {
         let mut missing: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
-        missing["billingPairs"][1]["exitEndpoint"]["bindingCandidates"][0]["directedSegments"][0]
-            ["osmNodeIds"]
+        missing["billingPairs"][1]["exitEndpoint"]["directedSegments"][0]["osmNodeIds"]
             .as_array_mut()
             .unwrap()
             .pop();
         assert!(parse_billing_pairs_seed(&missing.to_string()).is_err());
 
         let mut mismatched: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
-        mismatched["billingPairs"][1]["exitEndpoint"]["bindingCandidates"][0]["directedSegments"]
-            [0]["fromNodeId"] = json!("n:0");
+        mismatched["billingPairs"][1]["exitEndpoint"]["directedSegments"][0]["fromNodeId"] =
+            json!("n:0");
         assert!(parse_billing_pairs_seed(&mismatched.to_string()).is_err());
     }
 
@@ -852,7 +904,6 @@ mod tests {
     fn rejects_unknown_fields_in_every_nested_seed_object() {
         let paths: &[&[&str]] = &[
             &["billingPairs", "0", "provenance"],
-            &["billingPairs", "0", "prices", "0"],
             &["billingPairs", "1", "entryEndpoint"],
             &[
                 "billingPairs",
@@ -861,13 +912,7 @@ mod tests {
                 "directedSegments",
                 "0",
             ],
-            &[
-                "billingPairs",
-                "1",
-                "exitEndpoint",
-                "bindingCandidates",
-                "0",
-            ],
+            &["billingPairs", "1", "exitEndpoint", "directedSegments", "0"],
             &["billingPairs", "1", "routePlan"],
             &["billingPairs", "1", "routePlan", "entryCorridor"],
             &["billingPairs", "1", "routePlan", "anchor"],
@@ -957,18 +1002,31 @@ mod tests {
                 .iter()
                 .filter(|pair| pair.status == VerificationStatus::Verified)
                 .count(),
-            2
+            7
         );
         assert_eq!(
             legacy_pairs
                 .iter()
                 .filter(|pair| pair.status == VerificationStatus::Unverified)
                 .count(),
-            6
+            1
         );
+        // 金額と距離の authority は data/od-tariffs.json の assignments だけ。
+        // seed は assignmentId 参照のみで、手書きの金額・距離・price を持たない。
+        assert!(legacy_pairs.iter().all(|pair| pair.prices.is_empty()));
         assert!(legacy_pairs.iter().all(|pair| {
-            pair.prices.len() == 2 && pair.prices.iter().all(|price| price.amount_yen == 300)
+            pair.assignment_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with("assignment:"))
         }));
+        let corrected_pair = legacy_pairs
+            .iter()
+            .find(|pair| pair.id == "bp:c1-outer:kasumigaseki-daikancho")
+            .unwrap();
+        assert_eq!(
+            corrected_pair.assignment_id.as_deref(),
+            Some("assignment:c1-outer:kasumigaseki-daikancho")
+        );
 
         let radial_pairs: Vec<_> = seed
             .billing_pairs
@@ -995,29 +1053,26 @@ mod tests {
             );
             assert_eq!(
                 pair.exit_endpoint.support_state,
-                EndpointSupportState::Unresolved
+                EndpointSupportState::VerifiedBound
             );
             assert_eq!(
                 pair.pair_eligibility.status,
-                PairEligibilityStatus::Unverified
+                PairEligibilityStatus::VerifiedOneSectionAhead
             );
-            assert!(!pair.pair_eligibility.one_section_ahead_verified);
-            assert_eq!(pair.tariff.status, TariffStatus::Unpriced);
+            assert!(pair.pair_eligibility.one_section_ahead_verified);
+            assert_eq!(pair.tariff.status, TariffStatus::Priced);
             assert_eq!(pair.tariff.amount_yen, None);
             assert_eq!(pair.tariff.billing_distance_meters, None);
             assert!(pair.tariff.prices.is_empty());
-            assert_eq!(pair.exit_endpoint.binding_candidates.len(), 1);
-            assert_eq!(
-                pair.exit_endpoint.binding_candidates[0].status,
-                BindingCandidateStatus::Unresolved
-            );
-            let exit_segment = &pair.exit_endpoint.binding_candidates[0].directed_segments[0];
-            assert_eq!(exit_segment.osm_way_ids.len(), 5);
-            assert_eq!(exit_segment.osm_node_ids.len(), 18);
-            assert_eq!(exit_segment.edge_ids.len(), 17);
+            assert_eq!(pair.assignment_id, "assignment:2:meguro-tengenji");
+            assert_eq!(pair.exit_endpoint.binding_candidates.len(), 0);
+            let exit_segment = &pair.exit_endpoint.directed_segments[0];
+            assert_eq!(exit_segment.osm_way_ids.len(), 4);
+            assert_eq!(exit_segment.osm_node_ids.len(), 17);
+            assert_eq!(exit_segment.edge_ids.len(), 16);
             assert_eq!(
                 exit_segment.edge_ids_sha256,
-                "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+                "bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd"
             );
         }
         assert_eq!(
@@ -1066,6 +1121,31 @@ mod tests {
             "billingPairs": [pair, pair]
         });
         assert!(parse_billing_pairs_seed(&schema2.to_string()).is_err());
+    }
+
+    #[test]
+    fn rejects_handwritten_tariff_authority_in_schema_2() {
+        let mut legacy: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+        legacy["billingPairs"][0]["prices"] = json!([{
+            "amountYen": 300,
+            "effectiveFrom": "2022-03-31T15:00:00Z"
+        }]);
+        assert!(parse_billing_pairs_seed(&legacy.to_string()).is_err());
+
+        let mut radial_amount: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+        radial_amount["billingPairs"][1]["tariff"]["amountYen"] = json!(790);
+        assert!(parse_billing_pairs_seed(&radial_amount.to_string()).is_err());
+
+        let mut radial_distance: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+        radial_distance["billingPairs"][1]["tariff"]["billingDistanceMeters"] = json!(19400);
+        assert!(parse_billing_pairs_seed(&radial_distance.to_string()).is_err());
+
+        let mut radial_prices: Value = serde_json::from_str(VALID_DIAGNOSTIC_SEED).unwrap();
+        radial_prices["billingPairs"][1]["tariff"]["prices"] = json!([{
+            "amountYen": 790,
+            "effectiveFrom": "2022-03-31T15:00:00Z"
+        }]);
+        assert!(parse_billing_pairs_seed(&radial_prices.to_string()).is_err());
     }
 
     fn add_unknown_field(value: &mut Value, path: &[&str]) {

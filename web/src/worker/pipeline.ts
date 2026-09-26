@@ -2,6 +2,14 @@
 // fetch と import は引数注入にし、Vitest からモックで決定論的に検証できるようにする。
 
 import { KNOWN_RELEASES } from "./artifact-hashes";
+import {
+  OFFICIAL_DISTANCE_RULE_SOURCE,
+  PRODUCT_FARE_BASIS,
+  PRODUCT_FARE_LABEL,
+  PRODUCT_PAYMENT_METHOD,
+  PRODUCT_VEHICLE_CLASS,
+  TARIFF_MODEL_VERSION,
+} from "./tariff-contract";
 import bundledDeviceVerificationManifest from "../../../data/device-verification-manifest.json?raw";
 import type {
   BenchPayload,
@@ -74,6 +82,36 @@ function graphContractMismatch(message: string): PipelineError {
   return new PipelineError("ARTIFACT_MISMATCH", message);
 }
 
+/** graph.json の検証失敗は ARTIFACT_MISMATCH で落とす（候補側のコードと混ぜない）。 */
+function graphTariffMismatch(message: string): never {
+  throw graphContractMismatch(message);
+}
+
+/**
+ * graph.json の billingPairs[].tariff（料金 v3）を製品スコープと照合する。
+ *
+ * build 時点で確定済みの証拠だけが書かれているので、候補側と同じ規則で
+ * 検査できる。参照する時刻は成果物に無いため、適用期間は読めるかどうかだけを見る。
+ * 適用期間を読む場所は engine と同じ規則にする（top-level か prices[] か）。
+ */
+function validateSchema4PairTariff(value: unknown, index: number): void {
+  const tariff = isRecord(value) ? value.tariff : undefined;
+  if (tariff === undefined) {
+    return;
+  }
+  if (!isRecord(tariff) || !isTariffStatusValue(tariff.status)) {
+    throw graphContractMismatch(`graph.json: billingPairs[${String(index)}].tariff の status が不正`);
+  }
+  validateTariffProvenance(
+    tariff,
+    tariff.status,
+    `graph.json: billingPairs[${String(index)}].tariff`,
+    null,
+    true,
+    graphTariffMismatch,
+  );
+}
+
 function validateSchema4BillingPair(value: unknown, index: number): void {
   if (!isRecord(value) || (value.pairKind !== "legacyRing" && value.pairKind !== "radialReturn")) {
     throw graphContractMismatch(`graph.json: billingPairs[${String(index)}] の pairKind が不正`);
@@ -87,6 +125,7 @@ function validateSchema4BillingPair(value: unknown, index: number): void {
     ) {
       throw graphContractMismatch(`graph.json: billingPairs[${String(index)}] の legacyRing contract が不正`);
     }
+    validateSchema4PairTariff(value, index);
   } else if (
     value.routePlanVersion !== 1 ||
     !isRecord(value.routePlan) ||
@@ -96,6 +135,7 @@ function validateSchema4BillingPair(value: unknown, index: number): void {
   ) {
     throw graphContractMismatch(`graph.json: billingPairs[${String(index)}] の radialReturn contract が不正`);
   }
+  validateSchema4PairTariff(value, index);
 }
 
 export function parseGraphDocument(graphJson: string): GraphDocument {
@@ -379,6 +419,8 @@ interface ManifestLike {
   graphSchemaVersion?: unknown;
   routePlanVersion?: unknown;
   billingPairsVersion?: unknown;
+  /** 料金 v3 を伴う release が記録する。無い release（v2 以前）は後方互換で受け入れる。 */
+  tariffModelVersion?: unknown;
   routeMembershipsSha256?: unknown;
   artifacts?: { path: string; sha256: string; byteLength: number }[];
 }
@@ -449,11 +491,23 @@ async function validateGraphManifestContract(
   if (manifest.graphSchemaVersion !== 4) {
     throw graphContractMismatch("manifest.json: graphSchemaVersion=4 の記録が必要です");
   }
-  if (manifest.billingPairsVersion !== "v2") {
-    throw graphContractMismatch("manifest.json: billingPairsVersion=v2 の記録が必要です");
+  if (manifest.billingPairsVersion !== "v2" && manifest.billingPairsVersion !== "v3") {
+    // v2 は all-real-v3（rollback 先）、v3 は all-real-v4。両方の graph 契約が
+    // 同じ reader（billingPairs / routeMemberships / 料金 v3）で読める。
+    throw graphContractMismatch(
+      `manifest.json: billingPairsVersion は v2 または v3 が必要です（received ${JSON.stringify(manifest.billingPairsVersion)}）`,
+    );
   }
   if (manifest.routePlanVersion !== 1) {
     throw graphContractMismatch("manifest.json: routePlanVersion=1 の記録が必要です");
+  }
+  if (
+    manifest.tariffModelVersion !== undefined &&
+    manifest.tariffModelVersion !== TARIFF_MODEL_VERSION
+  ) {
+    throw graphContractMismatch(
+      `manifest.json: tariffModelVersion が未対応です（expected ${String(TARIFF_MODEL_VERSION)}）`,
+    );
   }
   const expectedHash = requiredString(
     manifest.routeMembershipsSha256,
@@ -615,8 +669,8 @@ export async function loadRelease(
 /** 探索結果が実行時契約に合わないときの error.code（UI の既存エラー導線へ出す）。 */
 export const RESULT_CONTRACT_MISMATCH = "RESULT_CONTRACT_MISMATCH";
 
-function contractMismatch(message: string): PipelineError {
-  return new PipelineError(RESULT_CONTRACT_MISMATCH, message);
+function contractMismatch(message: string): never {
+  throw new PipelineError(RESULT_CONTRACT_MISMATCH, message);
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -902,25 +956,207 @@ function validateEstimatedLegsAndTotals(candidate: Record<string, unknown>, labe
   }
 }
 
+const TARIFF_STATUSES = ["priced", "unpriced", "expired", "not_applicable"] as const;
+
+type TariffStatusValue = (typeof TARIFF_STATUSES)[number];
+
+/** 料金 v3 の証拠フィールド。engine の validate_tariff_contract_fields と同じ組合せで判定する。 */
+const TARIFF_PROVENANCE_FIELDS = [
+  "tollSource",
+  "assignmentId",
+  "ruleId",
+  "evidenceId",
+  "distanceEvidenceId",
+  "fareLabel",
+  "vehicleClass",
+  "paymentMethod",
+  "fareBasis",
+] as const;
+
+/** 金額が確定した候補だけが持ち、確定しない候補では現れないフィールド。 */
+const TARIFF_PRICED_FIELDS = [
+  "amountYen",
+  "billingDistanceMeters",
+  "effectiveFrom",
+  "effectiveTo",
+  "tollSource",
+  "assignmentId",
+  "ruleId",
+  "evidenceId",
+  "distanceEvidenceId",
+] as const;
+
+function isTariffStatusValue(value: unknown): value is TariffStatusValue {
+  return typeof value === "string" && (TARIFF_STATUSES as readonly string[]).includes(value);
+}
+
+function hasAnyTariffProvenance(toll: Record<string, unknown>): boolean {
+  return (
+    TARIFF_PROVENANCE_FIELDS.some((field) => toll[field] !== undefined && toll[field] !== null) ||
+    toll.discountsExcluded === true
+  );
+}
+
+/** 証拠 ID は非空文字列でなければならない（engine も同じことを要求する）。 */
+function requiredId(value: unknown): boolean {
+  return typeof value === "string" && value.length > 0;
+}
+
+/** RFC3339 のタイムスタンプとして読めること（Date.parse が NaN になる形は弾く）。 */
+function isTimestamp(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && !Number.isNaN(Date.parse(value));
+}
+
+/** 適用期間 [effectiveFrom, effectiveTo) を epoch ms で読む。読めなければ null。 */
+function halfOpenInterval(effectiveFrom: unknown, effectiveTo: unknown): [number, number] | null {
+  if (!isTimestamp(effectiveFrom)) {
+    return null;
+  }
+  const from = Date.parse(effectiveFrom);
+  if (effectiveTo === null) {
+    return [from, Number.POSITIVE_INFINITY];
+  }
+  if (!isTimestamp(effectiveTo)) {
+    return null;
+  }
+  const to = Date.parse(effectiveTo);
+  return from < to ? [from, to] : null;
+}
+
+/**
+ * 確定料金に適用期間が示されているかを見る。
+ *
+ * engine は graph.json の tariff について、top-level の `effectiveFrom` /
+ * `effectiveTo` が無いときは `prices[]` の 1 件の期間を使う
+ * （`Tariff::validate_tariff_wire_contract` と tariff override の解決）。
+ * engine が読める graph だけを Worker が落とすことになるため、graph 側は
+ * `fromPrices` で同じ規則にする。候補側は engine が必ず top-level の期間を
+ * 付けるので、`fromPrices` を落として top-level だけを求める。
+ */
+function hasPricedInterval(tariff: Record<string, unknown>, fromPrices: boolean): boolean {
+  if (halfOpenInterval(tariff.effectiveFrom, tariff.effectiveTo) !== null) {
+    return true;
+  }
+  if (!fromPrices || !Array.isArray(tariff.prices) || tariff.prices.length === 0) {
+    return false;
+  }
+  return tariff.prices.every(
+    (price) => isRecord(price) && halfOpenInterval(price.effectiveFrom, price.effectiveTo) !== null,
+  );
+}
+
+/**
+ * 料金 v3 の証拠契約に従うかを検証する。候補の toll と graph.json の
+ * billingPairs[].tariff のどちらにも使う。
+ *
+ * engine 側の `validate_tariff_contract_fields` と同じ規則で、証拠フィールドが
+ * 1 つでも現れるなら製品スコープ（車種・支払方法・料金種別・割引除外）を要求し、
+ * `priced` なら金額・料金距離・適用期間・割当 ID・規則 ID・証拠 ID・出所を
+ * すべて要求する。`priced` でなければそれらのフィールドを一切認めない。
+ *
+ * `intervalFromPrices` は graph.json 側だけ true にする。適用期間を読む場所
+ * （top-level か `prices[]` か）を engine と揃えるための指定で、判断は
+ * `hasPricedInterval` に集約してある。
+ *
+ * `pricingAt` を渡したときだけ、提示する時点が実際の適用期間に入ることも求める。
+ * engine と UI で期間解釈がずれていれば、古い規則の金額をいまの金額として見せる
+ * ことになるため、そこで止める。
+ *
+ * 証拠フィールドが 1 つも無い旧 release の候補は、後方互換のためこの検査を飛ばす。
+ */
+function validateTariffProvenance(
+  tariff: Record<string, unknown>,
+  status: TariffStatusValue,
+  label: string,
+  pricingAt: string | null,
+  intervalFromPrices = false,
+  fail: (message: string) => never = contractMismatch,
+): void {
+  if (!hasAnyTariffProvenance(tariff)) {
+    return;
+  }
+  if (
+    tariff.fareLabel !== PRODUCT_FARE_LABEL ||
+    tariff.vehicleClass !== PRODUCT_VEHICLE_CLASS ||
+    tariff.paymentMethod !== PRODUCT_PAYMENT_METHOD ||
+    tariff.fareBasis !== PRODUCT_FARE_BASIS ||
+    tariff.discountsExcluded !== true
+  ) {
+    fail(`${label} 料金の製品スコープが一致しません`);
+  }
+  if (status === "priced") {
+    const interval = halfOpenInterval(tariff.effectiveFrom, tariff.effectiveTo);
+    if (
+      !hasPricedInterval(tariff, intervalFromPrices) ||
+      !isNonNegativeSafeInteger(tariff.amountYen) ||
+      !isNonNegativeSafeInteger(tariff.billingDistanceMeters) ||
+      !requiredId(tariff.assignmentId) ||
+      !requiredId(tariff.ruleId) ||
+      !requiredId(tariff.evidenceId) ||
+      !requiredId(tariff.distanceEvidenceId) ||
+      tariff.tollSource !== OFFICIAL_DISTANCE_RULE_SOURCE
+    ) {
+      fail(`${label} 確定料金の証拠と適用期間がそろっていません`);
+    }
+    if (interval === null || pricingAt === null) {
+      return;
+    }
+    const at = isTimestamp(pricingAt) ? Date.parse(pricingAt) : Number.NaN;
+    if (!(interval[0] <= at && at < interval[1])) {
+      fail(`${label} 提示された金額が適用期間の外にあります`);
+    }
+    return;
+  }
+  for (const field of TARIFF_PRICED_FIELDS) {
+    if (tariff[field] !== undefined && tariff[field] !== null) {
+      fail(`${label} 確定でない料金に確定した項目が残っています（${field}）`);
+    }
+  }
+}
+
+/**
+ * 候補の tariffStatus と toll の金額、そして料金 v3 の証拠をまとめて検証する。
+ *
+ * `statusOptional` は旧 engine の LegacyCandidate 専用で、`tariffStatus` を付けない
+ * 作法に合わせる。証拠が 1 つでも現れるなら、状態と金額の突き合わせも行う。
+ */
 function validateTariffStatus(
   candidate: Record<string, unknown>,
   label: string,
   unpricedBillingMustBeNull: boolean,
+  statusOptional = false,
 ): void {
   const toll = candidate.toll;
-  const amountYen = isRecord(toll) ? toll.amountYen : undefined;
-  const amountValid = amountYen === null || isNonNegativeSafeInteger(amountYen);
+  if (!isRecord(toll)) {
+    throw contractMismatch(`${label} toll が不正です`);
+  }
+  const amountYen = toll.amountYen;
+  if (amountYen !== null && !isNonNegativeSafeInteger(amountYen)) {
+    throw contractMismatch(`${label} tariffStatus が toll と一致しません`);
+  }
+  const status = candidate.tariffStatus;
+  if (status === undefined) {
+    if (!statusOptional) {
+      throw contractMismatch(`${label} tariffStatus がありません`);
+    }
+    // 証拠があれば、金額の状態と提示時刻の期間も突き合わせる。
+    const derived: TariffStatusValue = amountYen === null ? "unpriced" : "priced";
+    validateTariffProvenance(
+      toll,
+      derived,
+      label,
+      isTimestamp(toll.pricingAt) ? toll.pricingAt : null,
+    );
+    return;
+  }
   if (
-    !isRecord(toll) ||
-    !["priced", "unpriced", "expired", "not_applicable"].includes(String(candidate.tariffStatus)) ||
-    !amountValid ||
-    (candidate.tariffStatus === "priced" ? amountYen === null : amountYen !== null) ||
-    (unpricedBillingMustBeNull &&
-      candidate.tariffStatus === "unpriced" &&
-      toll.billingDistanceMeters != null)
+    !isTariffStatusValue(status) ||
+    (status === "priced" ? amountYen === null : amountYen !== null) ||
+    (unpricedBillingMustBeNull && status === "unpriced" && toll.billingDistanceMeters != null)
   ) {
     throw contractMismatch(`${label} tariffStatus が toll と一致しません`);
   }
+  validateTariffProvenance(toll, status, label, isTimestamp(toll.pricingAt) ? toll.pricingAt : null);
 }
 
 async function validateRadialHandoff(value: unknown): Promise<void> {
@@ -1003,6 +1239,8 @@ async function validateLegacyCandidate(candidate: Record<string, unknown>): Prom
   assertStringArray(candidate.loop.edgeIds, "legacy loop.edgeIds");
   assertFiniteNonNegative(candidate.loop.durationSeconds, "legacy loop.durationSeconds");
   assertFiniteNonNegative(candidate.loop.distanceMeters, "legacy loop.distanceMeters");
+  // 旧 engine の LegacyCandidate には tariffStatus が無いので、その場合だけ任意扱いにする。
+  validateTariffStatus(candidate, "legacy", false, true);
   await validateSingleMapsHandoff(candidate.handoff, "legacy handoff");
 }
 

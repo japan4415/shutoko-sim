@@ -4,6 +4,7 @@
 //! Defined in `docs/interfaces.md`. Provides cryptographic integrity, metadata,
 //! vehicle profile, attribution, and coverage specifications for downstream consumers.
 
+use crate::billing::{PairDerivationInputHashes, PairDerivationSummary};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -57,6 +58,12 @@ pub struct Manifest {
     /// Billing pairs tariff specification identifier (e.g. "v1").
     pub billing_pairs_version: String,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tariff_model_version: Option<u32>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pair_derivation: Option<ManifestPairDerivation>,
+
     /// Attribution notice required by OpenStreetMap Open Database License (ODbL).
     pub attribution: String,
 
@@ -91,6 +98,15 @@ pub struct BillingPairProvenance {
     /// Optional verification notes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ManifestPairDerivation {
+    pub schema_version: u32,
+    pub rule: String,
+    pub input_hashes: PairDerivationInputHashes,
+    pub summary: PairDerivationSummary,
 }
 
 /// Coverage scope and list of verified entry/exit points.
@@ -266,6 +282,8 @@ pub fn build_manifest(
         vehicle_profile: config.vehicle_profile.clone(),
         time_model_version: config.time_model_version.clone(),
         billing_pairs_version: config.billing_pairs_version.clone(),
+        tariff_model_version: None,
+        pair_derivation: None,
         attribution: "© OpenStreetMap contributors".into(),
         odbl_license_url: "https://www.openstreetmap.org/copyright".into(),
         unverified_sections: sorted_unverified,

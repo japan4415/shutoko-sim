@@ -126,7 +126,47 @@ pub struct GraphSchemaV4 {
     pub ramps: Vec<Ramp>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub od_tariffs: Vec<OdTariff>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub od_tariffs_v3: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_pairs_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tariff_model_version: Option<u32>,
     pub route_memberships: Vec<RouteMembershipIndex>,
+}
+
+fn clear_incomplete_v3_tariff_metadata(tariff: &mut shutoko_routing_core::Tariff) {
+    let has_v3_metadata = tariff.assignment_id.is_some()
+        || tariff.rule_id.is_some()
+        || tariff.evidence_id.is_some()
+        || tariff.distance_evidence_id.is_some()
+        || tariff.fare_label.is_some()
+        || tariff.vehicle_class.is_some()
+        || tariff.payment_method.is_some()
+        || tariff.fare_basis.is_some()
+        || tariff.toll_source.is_some();
+    let has_complete_priced_metadata = tariff.assignment_id.is_some()
+        && tariff.rule_id.is_some()
+        && tariff.evidence_id.is_some()
+        && tariff.distance_evidence_id.is_some()
+        && tariff.fare_label.is_some()
+        && tariff.vehicle_class.is_some()
+        && tariff.payment_method.is_some()
+        && tariff.fare_basis.is_some()
+        && tariff.discounts_excluded
+        && tariff.toll_source.is_some();
+    if has_v3_metadata && !has_complete_priced_metadata {
+        tariff.assignment_id = None;
+        tariff.rule_id = None;
+        tariff.evidence_id = None;
+        tariff.distance_evidence_id = None;
+        tariff.fare_label = None;
+        tariff.vehicle_class = None;
+        tariff.payment_method = None;
+        tariff.fare_basis = None;
+        tariff.discounts_excluded = false;
+        tariff.toll_source = None;
+    }
 }
 
 impl GraphSchemaV4 {
@@ -147,24 +187,66 @@ impl GraphSchemaV4 {
         route_memberships: Vec<RouteMembershipIndex>,
         radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
     ) -> Result<Self, RouteMembershipError> {
+        Self::try_from_graph_with_radial_and_catalog(
+            graph,
+            route_memberships,
+            radial_billing_pairs,
+            None,
+            HashMap::new(),
+        )
+    }
+
+    pub fn try_from_graph_with_radial_and_catalog(
+        graph: &Graph,
+        route_memberships: Vec<RouteMembershipIndex>,
+        radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+        od_tariffs_v3: Option<serde_json::Value>,
+        tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+    ) -> Result<Self, RouteMembershipError> {
+        Self::try_from_graph_with_radial_and_catalog_wire(
+            graph,
+            route_memberships,
+            radial_billing_pairs,
+            od_tariffs_v3,
+            tariff_overrides,
+            None,
+            None,
+        )
+    }
+
+    fn try_from_graph_with_radial_and_catalog_wire(
+        graph: &Graph,
+        route_memberships: Vec<RouteMembershipIndex>,
+        radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+        od_tariffs_v3: Option<serde_json::Value>,
+        tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+        billing_pairs_version: Option<String>,
+        tariff_model_version: Option<u32>,
+    ) -> Result<Self, RouteMembershipError> {
         let mut billing_pairs = graph
             .billing_pairs
             .iter()
             .map(|pair| {
-                shutoko_routing_core::LegacyRingBillingPair::from_legacy(
+                let mut pair = shutoko_routing_core::LegacyRingBillingPair::from_legacy(
                     pair,
                     graph,
                     &route_memberships,
                 )
-                .map(|pair| GraphSchemaV4BillingPair::LegacyRing(Box::new(pair)))
-                .map_err(|error| RouteMembershipError::InvalidInput(error.to_string()))
+                .map_err(|error| RouteMembershipError::InvalidInput(error.to_string()))?;
+                if let Some(tariff) = tariff_overrides.get(&pair.id) {
+                    pair.tariff = tariff.clone();
+                }
+                clear_incomplete_v3_tariff_metadata(&mut pair.tariff);
+                Ok(GraphSchemaV4BillingPair::LegacyRing(Box::new(pair)))
             })
-            .collect::<Result<Vec<_>, _>>()?;
-        billing_pairs.extend(
-            radial_billing_pairs
-                .into_iter()
-                .map(|pair| GraphSchemaV4BillingPair::RadialReturn(Box::new(pair))),
-        );
+            .collect::<Result<Vec<_>, RouteMembershipError>>()?;
+        billing_pairs.extend(radial_billing_pairs.into_iter().map(|mut pair| {
+            if let Some(tariff) = tariff_overrides.get(&pair.id) {
+                pair.tariff = tariff.clone();
+            }
+            clear_incomplete_v3_tariff_metadata(&mut pair.tariff);
+            GraphSchemaV4BillingPair::RadialReturn(Box::new(pair))
+        }));
         Ok(Self {
             schema_version: 4,
             release_id: graph.release_id.clone(),
@@ -175,6 +257,9 @@ impl GraphSchemaV4 {
             forbidden_transitions: graph.forbidden_transitions.clone(),
             ramps: graph.ramps.clone(),
             od_tariffs: graph.od_tariffs.clone(),
+            od_tariffs_v3,
+            billing_pairs_version,
+            tariff_model_version,
             route_memberships,
         })
     }
@@ -192,10 +277,68 @@ pub fn graph_schema_v4_to_deterministic_json_with_radial(
     route_memberships: &[RouteMembershipIndex],
     radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
 ) -> Result<String, serde_json::Error> {
-    let document = GraphSchemaV4::try_from_graph_with_radial(
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
+        graph,
+        route_memberships,
+        radial_billing_pairs,
+        None,
+        HashMap::new(),
+    )
+}
+
+pub fn graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+    od_tariffs_v3: Option<serde_json::Value>,
+    tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+) -> Result<String, serde_json::Error> {
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog_wire(
+        graph,
+        route_memberships,
+        radial_billing_pairs,
+        od_tariffs_v3,
+        tariff_overrides,
+        None,
+        None,
+    )
+}
+
+pub fn graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+    od_tariffs_v3: Option<serde_json::Value>,
+    tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+) -> Result<String, serde_json::Error> {
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog_wire(
+        graph,
+        route_memberships,
+        radial_billing_pairs,
+        od_tariffs_v3,
+        tariff_overrides,
+        Some("v3".to_string()),
+        Some(shutoko_routing_core::tariff::TARIFF_MODEL_VERSION),
+    )
+}
+
+fn graph_schema_v4_to_deterministic_json_with_radial_and_catalog_wire(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+    od_tariffs_v3: Option<serde_json::Value>,
+    tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+    billing_pairs_version: Option<String>,
+    tariff_model_version: Option<u32>,
+) -> Result<String, serde_json::Error> {
+    let document = GraphSchemaV4::try_from_graph_with_radial_and_catalog_wire(
         graph,
         route_memberships.to_vec(),
         radial_billing_pairs,
+        od_tariffs_v3,
+        tariff_overrides,
+        billing_pairs_version,
+        tariff_model_version,
     )
     .map_err(|error| serde_json::Error::io(std::io::Error::other(error.to_string())))?;
     let mut output = serde_json::to_string_pretty(&document)?;
@@ -1006,15 +1149,11 @@ fn merge_membership(indices: &mut Vec<RouteMembershipIndex>, incoming: RouteMemb
     }
 }
 
-pub fn build_relation_memberships(
-    response: &OverpassResponse,
-    graph: &Graph,
-    source_snapshot_sha256: &str,
+fn selected_route_relations<'a>(
+    response: &'a OverpassResponse,
     relation_ids: Option<&[i64]>,
-) -> Result<Vec<RouteMembershipIndex>, RouteMembershipError> {
-    validate_sha256(source_snapshot_sha256, "source_snapshot_sha256")?;
+) -> Vec<&'a OsmElement> {
     let selected_ids = relation_ids.map(|ids| ids.iter().copied().collect::<HashSet<_>>());
-    let mut result = Vec::new();
     let mut relations = response
         .elements
         .iter()
@@ -1026,33 +1165,288 @@ pub fn build_relation_memberships(
         })
         .collect::<Vec<_>>();
     relations.sort_by_key(|relation| relation.id);
+    relations
+}
 
-    for relation in relations {
-        let route_id = relation_route_id(relation)?;
-        for direction in relation_directions(relation)? {
-            let segments = build_relation_segments(
-                relation,
-                response,
-                graph,
-                &direction,
-                source_snapshot_sha256,
-            )?;
-            if segments.is_empty() {
-                continue;
-            }
-            merge_membership(
-                &mut result,
-                RouteMembershipIndex {
-                    membership_id: format!("route:{}:{}", route_id, direction),
-                    route_id: route_id.clone(),
-                    direction,
-                    direction_mapping_version: ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION.into(),
-                    segments,
-                },
-            );
+fn build_relation_memberships_for_relation(
+    relation: &OsmElement,
+    response: &OverpassResponse,
+    graph: &Graph,
+    source_snapshot_sha256: &str,
+) -> Result<Vec<RouteMembershipIndex>, RouteMembershipError> {
+    let route_id = relation_route_id(relation)?;
+    let mut result = Vec::new();
+    for direction in relation_directions(relation)? {
+        let segments = build_relation_segments(
+            relation,
+            response,
+            graph,
+            &direction,
+            source_snapshot_sha256,
+        )?;
+        if segments.is_empty() {
+            continue;
+        }
+        merge_membership(
+            &mut result,
+            RouteMembershipIndex {
+                membership_id: format!("route:{}:{}", route_id, direction),
+                route_id: route_id.clone(),
+                direction,
+                direction_mapping_version: ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION.into(),
+                segments,
+            },
+        );
+    }
+    Ok(result)
+}
+
+pub fn build_relation_memberships(
+    response: &OverpassResponse,
+    graph: &Graph,
+    source_snapshot_sha256: &str,
+    relation_ids: Option<&[i64]>,
+) -> Result<Vec<RouteMembershipIndex>, RouteMembershipError> {
+    validate_sha256(source_snapshot_sha256, "source_snapshot_sha256")?;
+    let mut result = Vec::new();
+    for relation in selected_route_relations(response, relation_ids) {
+        for membership in build_relation_memberships_for_relation(
+            relation,
+            response,
+            graph,
+            source_snapshot_sha256,
+        )? {
+            merge_membership(&mut result, membership);
         }
     }
     Ok(result)
+}
+
+/// Per-relation expansion outcome used by the full-coverage release mode.
+///
+/// A relation that cannot be expanded is recorded as `Fail` together with the
+/// fail-closed reason instead of aborting the whole build, so that a release
+/// artifact can account for every route relation in the OSM snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RouteRelationCoverageStatus {
+    Pass,
+    Fail,
+}
+
+/// Coverage record for one OSM route relation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RouteRelationCoverage {
+    pub relation_id: i64,
+    pub route_id: Option<String>,
+    pub status: RouteRelationCoverageStatus,
+    pub membership_ids: Vec<String>,
+    pub reason_code: Option<String>,
+    pub reason: Option<String>,
+}
+
+/// Reason code used when a relation expands without error but contributes no
+/// mainline route membership to the index.
+pub const ROUTE_RELATION_NO_MEMBERSHIP_CODE: &str = "ROUTE_RELATION_NO_MEMBERSHIP";
+
+impl RouteRelationCoverage {
+    pub fn failed(relation: &OsmElement, error: &RouteMembershipError) -> Self {
+        Self {
+            relation_id: relation.id,
+            route_id: relation_route_id(relation).ok(),
+            status: RouteRelationCoverageStatus::Fail,
+            membership_ids: Vec::new(),
+            reason_code: Some(error.code().to_string()),
+            reason: Some(error.to_string()),
+        }
+    }
+}
+
+/// Every selected route relation in the OSM snapshot, expanded or fail-closed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RouteRelationCoverageReport {
+    pub relations: Vec<RouteRelationCoverage>,
+}
+
+impl RouteRelationCoverageReport {
+    pub fn failed_relations(&self) -> impl Iterator<Item = &RouteRelationCoverage> {
+        self.relations
+            .iter()
+            .filter(|relation| relation.status == RouteRelationCoverageStatus::Fail)
+    }
+
+    pub fn expanded_relation_count(&self) -> usize {
+        self.relations.len() - self.failed_relations().count()
+    }
+}
+
+/// Route membership indices expanded from the selected route relations plus the
+/// per-relation coverage report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RouteRelationMembershipBuild {
+    pub membership_indices: Vec<RouteMembershipIndex>,
+    pub coverage: RouteRelationCoverageReport,
+}
+
+/// Every route relation in the OSM snapshot, ascending by relation id.
+///
+/// Full-coverage releases hash this whole set into the pair derivation input
+/// ledger, so the set must be stable and complete.
+pub fn all_route_relation_ids(response: &OverpassResponse) -> Vec<i64> {
+    let mut ids = response
+        .elements
+        .iter()
+        .filter(|element| is_route_relation(element))
+        .map(|element| element.id)
+        .collect::<Vec<_>>();
+    ids.sort_unstable();
+    ids.dedup();
+    ids
+}
+
+/// Legacy default relation subset (C1 and route 2), ascending by relation id.
+pub fn default_route_relation_ids(response: &OverpassResponse) -> Option<Vec<i64>> {
+    let mut ids = response
+        .elements
+        .iter()
+        .filter(|element| is_route_relation(element))
+        .filter(|element| {
+            matches!(
+                element.get_tag("ref").or_else(|| element.get_tag("route")),
+                Some("C1") | Some("2")
+            )
+        })
+        .map(|element| element.id)
+        .collect::<Vec<_>>();
+    ids.sort_unstable();
+    ids.dedup();
+    (!ids.is_empty()).then_some(ids)
+}
+
+/// Validate explicitly requested route relation ids against the OSM snapshot.
+///
+/// Fails closed for absent ids, non-relation elements, relations that are not
+/// `type=route`, and relations without a non-empty `ref` or `route` tag. The
+/// returned ids are sorted and de-duplicated so the selection stays stable.
+pub fn validate_requested_route_relation_ids(
+    response: &OverpassResponse,
+    requested: &[i64],
+) -> Result<Vec<i64>, String> {
+    let mut ids = requested.to_vec();
+    ids.sort_unstable();
+    ids.dedup();
+    if ids.iter().any(|id| *id <= 0) {
+        return Err("--relation-id values must be positive integers".into());
+    }
+    for id in &ids {
+        let Some(element) = response.elements.iter().find(|element| element.id == *id) else {
+            return Err(format!("route relation {id} is absent from the OSM input"));
+        };
+        if !element.is_relation() {
+            return Err(format!(
+                "--relation-id {id} is an OSM {} element, not a route relation",
+                element.element_type
+            ));
+        }
+        if element.get_tag("type") != Some("route") {
+            return Err(format!(
+                "--relation-id {id} is not an OSM type=route relation (type={})",
+                element.get_tag("type").unwrap_or("<none>")
+            ));
+        }
+        if element
+            .get_tag("ref")
+            .or_else(|| element.get_tag("route"))
+            .is_none_or(|value| value.is_empty())
+        {
+            return Err(format!(
+                "--relation-id {id} has no non-empty ref or route tag"
+            ));
+        }
+    }
+    Ok(ids)
+}
+
+/// Fail closed unless every explicitly requested relation was expanded.
+pub fn validate_requested_route_relations_expanded(
+    requested: &[i64],
+    coverage: &RouteRelationCoverageReport,
+) -> Result<(), String> {
+    for id in requested {
+        let Some(relation) = coverage
+            .relations
+            .iter()
+            .find(|relation| relation.relation_id == *id)
+        else {
+            return Err(format!(
+                "route relation {id} produced no route membership coverage record"
+            ));
+        };
+        if relation.status != RouteRelationCoverageStatus::Pass {
+            return Err(format!(
+                "route relation {id} produced no route membership: {}",
+                relation.reason.as_deref().unwrap_or_default()
+            ));
+        }
+        if relation.membership_ids.is_empty() {
+            return Err(format!(
+                "route relation {id} produced an empty route membership"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Expand the selected route relations and record a pass/fail record for each one.
+pub fn build_route_relation_coverage(
+    response: &OverpassResponse,
+    graph: &Graph,
+    source_snapshot_sha256: &str,
+    relation_ids: Option<&[i64]>,
+) -> Result<RouteRelationMembershipBuild, RouteMembershipError> {
+    validate_sha256(source_snapshot_sha256, "source_snapshot_sha256")?;
+    let mut membership_indices: Vec<RouteMembershipIndex> = Vec::new();
+    let mut relations = Vec::new();
+    for relation in selected_route_relations(response, relation_ids) {
+        match build_relation_memberships_for_relation(
+            relation,
+            response,
+            graph,
+            source_snapshot_sha256,
+        ) {
+            Ok(memberships) => {
+                let membership_ids = memberships
+                    .iter()
+                    .map(|membership| membership.membership_id.clone())
+                    .collect::<Vec<_>>();
+                for membership in memberships {
+                    merge_membership(&mut membership_indices, membership);
+                }
+                relations.push(RouteRelationCoverage {
+                    relation_id: relation.id,
+                    route_id: relation_route_id(relation).ok(),
+                    status: RouteRelationCoverageStatus::Pass,
+                    reason_code: membership_ids
+                        .is_empty()
+                        .then(|| ROUTE_RELATION_NO_MEMBERSHIP_CODE.to_string()),
+                    reason: membership_ids.is_empty().then(|| {
+                        format!(
+                            "relation {} expanded without a usable mainline route membership",
+                            relation.id
+                        )
+                    }),
+                    membership_ids,
+                });
+            }
+            Err(error) => relations.push(RouteRelationCoverage::failed(relation, &error)),
+        }
+    }
+    Ok(RouteRelationMembershipBuild {
+        membership_indices,
+        coverage: RouteRelationCoverageReport { relations },
+    })
 }
 
 fn validate_ordered_edges<'a>(
@@ -1415,9 +1809,12 @@ pub fn build_bound_ramp_memberships(
                 item.ramp_id
             )));
         }
-        if edges.first().map(|edge| edge.id.as_str()) != Some(ramp.edge_id.as_str()) {
+        let endpoint_edge_matches = edges.first().map(|edge| edge.id.as_str())
+            == Some(ramp.edge_id.as_str())
+            || edges.last().map(|edge| edge.id.as_str()) == Some(ramp.edge_id.as_str());
+        if !endpoint_edge_matches {
             return Err(RouteMembershipError::RampBinding(format!(
-                "ramp {} exact graph edge {} is not the first edge of its evidence",
+                "ramp {} exact graph edge {} is not an endpoint edge of its evidence",
                 item.ramp_id, ramp.edge_id
             )));
         }
@@ -1487,9 +1884,69 @@ pub fn bound_ramp_evidence_from_inventory(
         .iter()
         .map(|binding| (binding.ramp_id.as_str(), binding))
         .collect();
+    let verified_candidate_by_ramp: HashMap<&str, &crate::inventory::OsmRampBindingCandidate> =
+        bindings
+            .binding_candidates
+            .iter()
+            .filter(|candidate| candidate.status == "verified_bound")
+            .map(|candidate| (candidate.ramp_id.as_str(), candidate))
+            .collect();
     let mut result = Vec::new();
     for item in &inventory.ramps {
         if !is_verified_general_ramp(item) {
+            continue;
+        }
+        if let Some(candidate) = verified_candidate_by_ramp
+            .get(item.ramp_id.as_str())
+            .copied()
+        {
+            let [segment] = candidate.directed_segments.as_slice() else {
+                return Err(RouteMembershipError::RampBinding(format!(
+                    "ramp {} verified candidate must have exactly one directed segment",
+                    item.ramp_id
+                )));
+            };
+            let edges = segment
+                .edge_ids
+                .iter()
+                .map(|edge_id| {
+                    graph
+                        .edges
+                        .iter()
+                        .find(|edge| edge.id == *edge_id)
+                        .ok_or_else(|| {
+                            RouteMembershipError::RampBinding(format!(
+                                "ramp {} candidate references missing graph edge {}",
+                                item.ramp_id, edge_id
+                            ))
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            if edges.first().map(|edge| edge.from.as_str()) != Some(segment.from_node_id.as_str())
+                || edges.last().map(|edge| edge.to.as_str()) != Some(segment.to_node_id.as_str())
+                || edges.windows(2).any(|pair| pair[0].to != pair[1].from)
+                || segment.osm_node_ids.len() != edges.len() + 1
+            {
+                return Err(RouteMembershipError::RampBinding(format!(
+                    "ramp {} candidate segment is not an ordered graph path",
+                    item.ramp_id
+                )));
+            }
+            result.push(BoundRampEvidence {
+                binding_evidence_id: format!(
+                    "osm-ramp-binding-candidate:{}",
+                    candidate.candidate_id
+                ),
+                ramp_id: item.ramp_id.clone(),
+                route_id: item.route.clone(),
+                direction: item.direction.clone(),
+                osm_way_ids: segment.osm_way_ids.clone(),
+                osm_node_ids: segment.osm_node_ids.clone(),
+                edge_ids: segment.edge_ids.clone(),
+                from_node_id: segment.from_node_id.clone(),
+                to_node_id: segment.to_node_id.clone(),
+                edge_ids_sha256: segment.edge_ids_sha256.clone(),
+            });
             continue;
         }
         let binding = binding_by_ramp.get(item.ramp_id.as_str()).ok_or_else(|| {
@@ -1598,12 +2055,32 @@ pub fn build_route_membership_indices(
     graph: &Graph,
     options: &RouteMembershipBuildOptions,
 ) -> Result<Vec<RouteMembershipIndex>, RouteMembershipError> {
-    let mut result = build_relation_memberships(
+    let built = build_route_membership_indices_with_coverage(response, graph, options)?;
+    if let Some(failed) = built.route_relations.failed_relations().next() {
+        return Err(RouteMembershipError::Relation(format!(
+            "route relation {} ({}) could not be expanded: {}",
+            failed.relation_id,
+            failed.route_id.as_deref().unwrap_or("unknown route"),
+            failed.reason.as_deref().unwrap_or_default()
+        )));
+    }
+    Ok(built.route_memberships)
+}
+
+/// Build the schema 4 route membership indices together with a pass/fail record
+/// for every selected route relation.
+pub fn build_route_membership_indices_with_coverage(
+    response: &OverpassResponse,
+    graph: &Graph,
+    options: &RouteMembershipBuildOptions,
+) -> Result<RouteMembershipCoverage, RouteMembershipError> {
+    let coverage = build_route_relation_coverage(
         response,
         graph,
         &options.source_snapshot_sha256,
         options.relation_ids.as_deref(),
     )?;
+    let mut result = coverage.membership_indices;
     let bound = build_bound_ramp_memberships(
         graph,
         &options.source_snapshot_sha256,
@@ -1619,7 +2096,17 @@ pub fn build_route_membership_indices(
         &options.source_snapshot_sha256,
         &options.bound_ramp_evidence,
     )?;
-    Ok(result)
+    Ok(RouteMembershipCoverage {
+        route_memberships: result,
+        route_relations: coverage.coverage,
+    })
+}
+
+/// Route membership indices plus the per-relation expansion coverage report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RouteMembershipCoverage {
+    pub route_memberships: Vec<RouteMembershipIndex>,
+    pub route_relations: RouteRelationCoverageReport,
 }
 
 fn relation_from_source_id<'a>(
@@ -2256,6 +2743,47 @@ fn source_segment_by_id<'a>(
         })
 }
 
+fn entry_approach_source_sequences_match(
+    source_segments: &[&RouteMembershipSegment],
+    edge_ids: &[String],
+) -> bool {
+    let relation_segments = source_segments
+        .iter()
+        .copied()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+        .collect::<Vec<_>>();
+    let relation_edge_ids = relation_segments
+        .iter()
+        .flat_map(|segment| segment.ordered_edge_ids.iter())
+        .collect::<HashSet<_>>();
+    let Some(relation_start) = edge_ids
+        .iter()
+        .position(|edge_id| relation_edge_ids.contains(edge_id))
+    else {
+        return source_sequences_match(source_segments, 0, edge_ids, 0);
+    };
+    if relation_start == 0 {
+        return source_sequences_match(source_segments, 0, edge_ids, 0);
+    }
+    let bound_segments = source_segments
+        .iter()
+        .copied()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::BoundRamp)
+        .collect::<Vec<_>>();
+    let [bound_segment] = bound_segments.as_slice() else {
+        return source_sequences_match(source_segments, 0, edge_ids, 0);
+    };
+    if edge_ids.get(..bound_segment.ordered_edge_ids.len())
+        != Some(bound_segment.ordered_edge_ids.as_slice())
+        || edge_ids[relation_start..]
+            .iter()
+            .any(|edge_id| !relation_edge_ids.contains(edge_id))
+    {
+        return false;
+    }
+    source_sequences_match(&relation_segments, 0, &edge_ids[relation_start..], 0)
+}
+
 pub fn validate_resolved_route_plan_segments(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
@@ -2314,7 +2842,12 @@ pub fn validate_resolved_route_plan_segments(
         for source in &source_segments {
             validate_segment_hash(source)?;
         }
-        if !source_sequences_match(&source_segments, 0, &resolved.edge_ids, 0) {
+        let source_sequences_match = if resolved.role == RoutePlanSegmentRole::EntryApproach {
+            entry_approach_source_sequences_match(&source_segments, &resolved.edge_ids)
+        } else {
+            source_sequences_match(&source_segments, 0, &resolved.edge_ids, 0)
+        };
+        if !source_sequences_match {
             return Err(RouteMembershipError::Segment(format!(
                 "{} is not an ordered subpath of its source segments",
                 resolved.resolved_segment_id
@@ -2399,12 +2932,6 @@ fn bound_ramp_segment_for_exit<'a>(
         )));
     }
     let ramp = ramps[0];
-    if ramp.edge_id != exit_edge_id {
-        return Err(RouteMembershipError::RampBinding(format!(
-            "first exit edge {} does not equal exact ramp edge {}",
-            exit_edge_id, ramp.edge_id
-        )));
-    }
     let segments = route_memberships
         .iter()
         .filter(|candidate| {
@@ -2413,7 +2940,9 @@ fn bound_ramp_segment_for_exit<'a>(
         .flat_map(|candidate| candidate.segments.iter())
         .filter(|segment| {
             segment.source_kind == RouteMembershipSourceKind::BoundRamp
-                && segment.ordered_edge_ids.first() == Some(&ramp.edge_id)
+                && segment.ordered_edge_ids.first().map(String::as_str) == Some(exit_edge_id)
+                && (ramp.edge_id == *exit_edge_id
+                    || segment.ordered_edge_ids.last() == Some(&ramp.edge_id))
         })
         .collect::<Vec<_>>();
     if segments.len() != 1 {
@@ -2856,10 +3385,32 @@ fn exit_ramp_candidates<'a>(
         .filter(|edge| edge.kind == EdgeKind::Exit && edge.from == split_node_id)
         .flat_map(|edge| {
             graph.ramps.iter().filter_map(move |ramp| {
+                let multi_way_binding = membership.segments.iter().any(|segment| {
+                    segment.source_kind == RouteMembershipSourceKind::BoundRamp
+                        && segment.ordered_edge_ids.first() == Some(&edge.id)
+                        && segment
+                            .ordered_edge_ids
+                            .last()
+                            .and_then(|edge_id| {
+                                graph
+                                    .edges
+                                    .iter()
+                                    .find(|candidate| candidate.id == *edge_id)
+                            })
+                            .map(|last_edge| last_edge.to.as_str())
+                            == Some(ramp.node_id.as_str())
+                        && segment.ordered_edge_ids.iter().all(|edge_id| {
+                            graph
+                                .edges
+                                .iter()
+                                .find(|candidate| candidate.id == *edge_id)
+                                .is_some_and(|candidate| candidate.kind == EdgeKind::Exit)
+                        })
+                });
                 (ramp.kind == RampKind::GeneralExit
                     && ramp.edge_id == edge.id
                     && ramp.mainline_node_id == edge.from
-                    && ramp.node_id == edge.to
+                    && (ramp.node_id == edge.to || multi_way_binding)
                     && ramp.route == membership.route_id
                     && ramp.direction == membership.direction)
                     .then_some((edge, ramp))
@@ -3722,8 +4273,17 @@ fn entry_approach_resolved_segment(
             terminal_sources.len()
         )));
     }
-    let mut path = if entry_start_node_id == terminal_edge.from.as_str() {
-        Vec::new()
+    let relation_edge_sources = relation_sequences(membership)
+        .into_iter()
+        .flat_map(|segment| {
+            segment
+                .ordered_edge_ids
+                .iter()
+                .map(move |edge_id| (edge_id.clone(), segment.segment_id.clone()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let relation_path = if entry_start_node_id == terminal_edge.from.as_str() {
+        Ok(Vec::new())
     } else {
         find_relation_path_to_node(
             graph,
@@ -3732,7 +4292,44 @@ fn entry_approach_resolved_segment(
             None,
             &terminal_edge.from,
             CORRIDOR_EXIT_STATE_BUDGET,
-        )?
+        )
+    };
+    let mut path = match relation_path {
+        Ok(path) => path,
+        Err(_) => {
+            let generic_path = crate::billing::find_shutoko_path(
+                graph,
+                entry_start_node_id,
+                &terminal_edge.from,
+                None,
+                None,
+                &HashSet::new(),
+            )
+            .ok_or_else(|| {
+                RouteMembershipError::ExitNotFound(format!(
+                    "entry approach does not reach {} from {}",
+                    terminal_edge.from, entry_start_node_id
+                ))
+            })?;
+            if !generic_path
+                .iter()
+                .any(|edge_id| relation_edge_sources.contains_key(edge_id))
+            {
+                return Err(RouteMembershipError::Relation(
+                    "entry approach does not intersect relationMainline".into(),
+                ));
+            }
+            generic_path
+                .into_iter()
+                .map(|edge_id| RelationPathEdge {
+                    source_segment_id: relation_edge_sources
+                        .get(&edge_id)
+                        .cloned()
+                        .unwrap_or_default(),
+                    edge_id,
+                })
+                .collect()
+        }
     };
     path.push(RelationPathEdge {
         edge_id: terminal_edge.id.clone(),
@@ -3740,7 +4337,9 @@ fn entry_approach_resolved_segment(
     });
     edge_ids.extend(path.iter().map(|edge| edge.edge_id.clone()));
     for edge in &path {
-        if source_segment_ids.last() != Some(&edge.source_segment_id) {
+        if !edge.source_segment_id.is_empty()
+            && source_segment_ids.last() != Some(&edge.source_segment_id)
+        {
             source_segment_ids.push(edge.source_segment_id.clone());
         }
     }
@@ -3981,7 +4580,11 @@ pub fn promote_verified_radial_pair(
                 }
             },
             amount_yen: seed.tariff.amount_yen,
+            observed_base_fare_yen: None,
+            observed_distance_meters: None,
             billing_distance_meters: seed.tariff.billing_distance_meters,
+            effective_from: None,
+            effective_to: None,
             prices: seed
                 .tariff
                 .prices
@@ -3992,6 +4595,16 @@ pub fn promote_verified_radial_pair(
                     effective_to: price.effective_to.clone(),
                 })
                 .collect(),
+            assignment_id: Some(seed.assignment_id.clone()),
+            rule_id: None,
+            evidence_id: None,
+            distance_evidence_id: None,
+            fare_label: None,
+            vehicle_class: None,
+            payment_method: None,
+            fare_basis: None,
+            discounts_excluded: false,
+            toll_source: None,
         },
     })
 }
@@ -4139,7 +4752,7 @@ mod tests {
                     kind: RampKind::GeneralEntry,
                     edge_id: "e:w201:0:f".into(),
                     node_id: "n:7".into(),
-                    mainline_node_id: "n:8".into(),
+                    mainline_node_id: "n:10".into(),
                     restrictions: Vec::new(),
                 },
                 Ramp {
@@ -4448,12 +5061,19 @@ mod tests {
         let promoted =
             promote_verified_radial_pair(&graph, &memberships, &seed, &resolution).unwrap();
         assert_eq!(promoted.resolved_route_segments.len(), 4);
-        assert!(matches!(
+        assert_eq!(
             promoted.tariff.status,
-            shutoko_routing_core::TariffStatus::Unpriced
-        ));
-        assert!(promoted.tariff.amount_yen.is_none());
-        assert!(promoted.tariff.billing_distance_meters.is_none());
+            shutoko_routing_core::TariffStatus::Priced
+        );
+        // seed は assignmentId 参照だけを持つので、昇格段階では金額が未確定のまま。
+        // 金額は data/od-tariffs.json の assignment から tariff_overrides で上書きされる。
+        assert_eq!(promoted.tariff.amount_yen, None);
+        assert_eq!(promoted.tariff.billing_distance_meters, None);
+        assert!(promoted.tariff.prices.is_empty());
+        assert_eq!(
+            promoted.tariff.assignment_id.as_deref(),
+            Some("fixture:assignment:meguro-tengenji")
+        );
         assert_eq!(promoted.entry_id, "e:w201:0:f");
         assert_eq!(promoted.exit_id, "e:w204:0:f");
         assert_eq!(
@@ -4462,12 +5082,32 @@ mod tests {
                 .len(),
             3
         );
-        let json =
-            graph_schema_v4_to_deterministic_json_with_radial(&graph, &memberships, vec![promoted])
-                .unwrap();
+        let mut overrides: HashMap<String, shutoko_routing_core::Tariff> = HashMap::new();
+        let mut override_tariff = promoted.tariff.clone();
+        override_tariff.amount_yen = Some(790);
+        override_tariff.billing_distance_meters = Some(19400);
+        override_tariff.prices = vec![shutoko_routing_core::Price {
+            amount_yen: 790,
+            effective_from: "2022-03-31T15:00:00Z".into(),
+            effective_to: Some("2026-09-30T15:00:00Z".into()),
+        }];
+        overrides.insert(promoted.id.clone(), override_tariff);
+        let json = graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
+            &graph,
+            &memberships,
+            vec![promoted],
+            None,
+            overrides,
+        )
+        .unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(value["billingPairs"].as_array().unwrap().len(), 1);
         assert_eq!(value["billingPairs"][0]["pairKind"], "radialReturn");
+        assert_eq!(value["billingPairs"][0]["tariff"]["amountYen"], 790);
+        assert_eq!(
+            value["billingPairs"][0]["tariff"]["billingDistanceMeters"],
+            19400
+        );
         let prepared = shutoko_routing_core::prepare_json(&json, "{}").unwrap();
         assert_eq!(prepared.radial_billing_pairs().len(), 1);
     }
@@ -5465,5 +6105,215 @@ mod tests {
             "ramp:exit",
         )
         .is_err());
+    }
+
+    fn second_route_relation(id: i64, ref_tag: &str, members: Vec<OsmMember>) -> OsmElement {
+        let mut tags = BTreeMap::new();
+        tags.insert("type".into(), "route".into());
+        tags.insert("route".into(), "road".into());
+        tags.insert("ref".into(), ref_tag.into());
+        tags.insert("direction".into(), "forward".into());
+        OsmElement {
+            element_type: "relation".into(),
+            id,
+            lat: None,
+            lon: None,
+            nodes: None,
+            tags: Some(tags),
+            members: Some(members),
+        }
+    }
+
+    #[test]
+    fn requested_route_relation_ids_reject_every_non_route_input() {
+        let (mut response, _graph, _snapshot) = synthetic();
+        response
+            .elements
+            .push(second_route_relation(11, "", vec![member(101)]));
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[999])
+                .unwrap_err()
+                .as_str(),
+            "route relation 999 is absent from the OSM input"
+        );
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[0]).unwrap_err(),
+            "--relation-id values must be positive integers"
+        );
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[101])
+                .unwrap_err()
+                .as_str(),
+            "--relation-id 101 is an OSM way element, not a route relation"
+        );
+        let mut node_element = way(105, vec![1, 2]);
+        node_element.element_type = "node".into();
+        response.elements.push(node_element);
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[105])
+                .unwrap_err()
+                .as_str(),
+            "--relation-id 105 is an OSM node element, not a route relation"
+        );
+        let mut boundary = relation(12, "forward", vec![member(101)]);
+        boundary
+            .tags
+            .as_mut()
+            .unwrap()
+            .insert("type".to_string(), "boundary".to_string());
+        response.elements.push(boundary);
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[12])
+                .unwrap_err()
+                .as_str(),
+            "--relation-id 12 is not an OSM type=route relation (type=boundary)"
+        );
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[11])
+                .unwrap_err()
+                .as_str(),
+            "--relation-id 11 has no non-empty ref or route tag"
+        );
+        assert_eq!(
+            validate_requested_route_relation_ids(&response, &[10, 10]).unwrap(),
+            vec![10]
+        );
+    }
+
+    #[test]
+    fn full_coverage_records_a_failure_instead_of_aborting_the_build() {
+        let (mut response, mut graph, snapshot) = synthetic();
+        response.elements.push(way(301, vec![1, 2]));
+        response
+            .elements
+            .push(second_route_relation(11, "R2", vec![member(301)]));
+        graph
+            .edges
+            .push(edge("e:w301:0:f", "n:1", "n:2", EdgeKind::Shutoko));
+        graph
+            .edges
+            .push(edge("e:w301:0:r", "n:2", "n:1", EdgeKind::Shutoko));
+        let broken = second_route_relation(12, "R3", vec![member(999)]);
+        response.elements.push(broken);
+
+        let build = build_route_relation_coverage(&response, &graph, &snapshot, None).unwrap();
+        assert_eq!(build.coverage.relations.len(), 3);
+        assert_eq!(build.coverage.expanded_relation_count(), 2);
+        let failed = build
+            .coverage
+            .relations
+            .iter()
+            .find(|relation| relation.relation_id == 12)
+            .unwrap();
+        assert_eq!(failed.status, RouteRelationCoverageStatus::Fail);
+        assert_eq!(
+            failed.reason_code.as_deref(),
+            Some("ROUTE_MEMBERSHIP_RELATION_INVALID")
+        );
+        assert!(failed
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains("references missing way 999"));
+        let expanded = build
+            .coverage
+            .relations
+            .iter()
+            .find(|relation| relation.relation_id == 11)
+            .unwrap();
+        assert_eq!(expanded.status, RouteRelationCoverageStatus::Pass);
+        assert_eq!(
+            expanded.membership_ids,
+            vec!["route:R2:forward".to_string()]
+        );
+        assert!(build
+            .membership_indices
+            .iter()
+            .any(|membership| membership.membership_id == "route:R2:forward"));
+
+        // The strict entry point keeps failing closed on the same input.
+        let strict = build_route_membership_indices(
+            &response,
+            &graph,
+            &RouteMembershipBuildOptions {
+                source_snapshot_sha256: snapshot.clone(),
+                relation_ids: None,
+                bound_ramp_evidence: Vec::new(),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(strict.code(), "ROUTE_MEMBERSHIP_RELATION_INVALID");
+        assert!(strict
+            .to_string()
+            .contains("route relation 12 (R3) could not be expanded"));
+        assert!(validate_requested_route_relations_expanded(&[11], &build.coverage).is_ok());
+        assert!(
+            validate_requested_route_relations_expanded(&[12], &build.coverage)
+                .unwrap_err()
+                .contains("produced no route membership")
+        );
+        assert!(
+            validate_requested_route_relations_expanded(&[13], &build.coverage)
+                .unwrap_err()
+                .contains("produced no route membership coverage record")
+        );
+    }
+
+    #[test]
+    fn full_coverage_hash_binds_relations_outside_the_legacy_default() {
+        let (mut response, mut graph, snapshot) = synthetic();
+        response.elements.push(way(301, vec![1, 2]));
+        response
+            .elements
+            .push(second_route_relation(11, "R2", vec![member(301)]));
+        graph
+            .edges
+            .push(edge("e:w301:0:f", "n:1", "n:2", EdgeKind::Shutoko));
+        graph
+            .edges
+            .push(edge("e:w301:0:r", "n:2", "n:1", EdgeKind::Shutoko));
+
+        let full = build_route_relation_coverage(&response, &graph, &snapshot, None).unwrap();
+        let full_hash = route_memberships_sha256(&full.membership_indices).unwrap();
+        let legacy =
+            build_route_relation_coverage(&response, &graph, &snapshot, Some(&[10])).unwrap();
+        assert_eq!(legacy.coverage.relations.len(), 1);
+        assert!(!legacy
+            .membership_indices
+            .iter()
+            .any(|membership| membership.membership_id == "route:R2:forward"));
+        assert_ne!(
+            full_hash,
+            route_memberships_sha256(&legacy.membership_indices).unwrap()
+        );
+
+        // An OSM change in a relation outside the legacy default selection must
+        // still move the hashed route membership index.
+        response.elements.push(way(302, vec![2, 3]));
+        response.elements.push(second_route_relation(
+            11,
+            "R2",
+            vec![member(301), member(302)],
+        ));
+        graph
+            .edges
+            .push(edge("e:w302:0:f", "n:2", "n:3", EdgeKind::Shutoko));
+        graph
+            .edges
+            .push(edge("e:w302:0:r", "n:3", "n:2", EdgeKind::Shutoko));
+        let extended = build_route_relation_coverage(&response, &graph, &snapshot, None).unwrap();
+        assert_ne!(
+            full_hash,
+            route_memberships_sha256(&extended.membership_indices).unwrap()
+        );
+        assert_eq!(
+            route_memberships_sha256(
+                &build_route_relation_coverage(&response, &graph, &snapshot, Some(&[10]))
+                    .unwrap()
+                    .membership_indices,
+            )
+            .unwrap(),
+            route_memberships_sha256(&legacy.membership_indices).unwrap()
+        );
     }
 }

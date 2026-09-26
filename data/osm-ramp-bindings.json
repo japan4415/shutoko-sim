@@ -1,6 +1,6 @@
 {
   "version": 4,
-  "sourceDate": "2026-09-24",
+  "sourceDate": "2026-09-25",
   "bindings": [
     {
       "rampId": "ramp:c1-inner:takaracho-entry",
@@ -25,6 +25,14 @@
       "motorwayNodeId": 13042475627,
       "direction": "outer",
       "notes": "Verified OSM binding for 銀座 (C1 outer)"
+    },
+    {
+      "rampId": "ramp:c1-inner:shibakoen-entry",
+      "osmWayId": 4853797,
+      "osmNodeId": 254367256,
+      "motorwayNodeId": 8327736736,
+      "direction": "inner",
+      "notes": "Verified C1 inner Shibakoen entry segment"
     },
     {
       "rampId": "ramp:c1-inner:iikura-entry",
@@ -908,19 +916,19 @@
     },
     {
       "rampId": "ramp:c1-outer:shibakoen-exit",
-      "osmWayId": 203873821,
-      "osmNodeId": 266292094,
-      "motorwayNodeId": 4134172818,
+      "osmWayId": 944671542,
+      "osmNodeId": 254360532,
+      "motorwayNodeId": 31296982,
       "direction": "outer",
-      "notes": "Verified OSM binding for 芝公園 (C1 outer)"
+      "notes": "Verified C1 outer Shibakoen exit segment"
     },
     {
       "rampId": "ramp:c1-inner:shibakoen-exit",
-      "osmWayId": 944138315,
-      "osmNodeId": 8741451208,
-      "motorwayNodeId": 31296982,
+      "osmWayId": 203873821,
+      "osmNodeId": 266292094,
+      "motorwayNodeId": 4134172818,
       "direction": "inner",
-      "notes": "Verified OSM binding for 芝公園 (C1 inner)"
+      "notes": "Verified C1 inner Shibakoen exit segment"
     },
     {
       "rampId": "ramp:c1-outer:iikura-exit",
@@ -939,12 +947,28 @@
       "notes": "Verified exact directed segment (G20)"
     },
     {
+      "rampId": "ramp:c1-inner:kasumigaseki-exit",
+      "osmWayId": 1232166619,
+      "osmNodeId": 573233928,
+      "motorwayNodeId": 4366610696,
+      "direction": "inner",
+      "notes": "Verified C1 inner Kasumigaseki exit segment"
+    },
+    {
       "rampId": "ramp:c1-outer:daikancho-exit",
       "osmWayId": 276920911,
       "osmNodeId": 256672387,
       "motorwayNodeId": 6285957242,
       "direction": "outer",
       "notes": "Verified OSM binding for 代官町 (C1 outer)"
+    },
+    {
+      "rampId": "ramp:c1-inner:kandabashi-exit",
+      "osmWayId": 390441534,
+      "osmNodeId": 1070863469,
+      "motorwayNodeId": 4436218907,
+      "direction": "inner",
+      "notes": "Verified C1 inner Kandabashi exit segment"
     },
     {
       "rampId": "ramp:c1-inner:kyobashi-exit",
@@ -1861,16 +1885,13 @@
   ],
   "bindingCandidates": [
     {
-      "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460-172358466",
+      "candidateId": "tengenji:g201:172358461-422023171-931759044-172358460",
       "rampId": "ramp:2-outbound:tengenji-exit",
-      "status": "unresolved",
-      "publicProjection": "excluded_unresolved",
+      "status": "verified_bound",
+      "publicProjection": "included_verified",
       "direction": "outbound",
-      "unresolvedReason": "way 172358461 → 422023171 → 931759044 → 172358460 → 172358466 の有向鎖は2号下りの n:252175582 から明治通りの n:1832672205 へ到達するが、way 172358466 の始点 n:1832672162 も明治通り（OSM way 258834790, highway=secondary）に接続する。地上接続点が2つ存在し、way・名称・公式施設順だけではどちらをexactな地上端点とするか一意に決められないためunresolvedとする。",
-      "unresolvedReasonCodes": [
-        "EARLY_SURFACE_CONNECTION",
-        "MULTIPLE_GROUND_CONNECTION_CANDIDATES"
-      ],
+      "unresolvedReason": "",
+      "unresolvedReasonCodes": [],
       "directedSegments": [
         {
           "segmentId": "ramp:2-outbound:tengenji-exit:segment:0",
@@ -1878,8 +1899,7 @@
             172358461,
             422023171,
             931759044,
-            172358460,
-            172358466
+            172358460
           ],
           "osmNodeIds": [
             252175582,
@@ -1898,8 +1918,7 @@
             1832672105,
             1832672128,
             1832672146,
-            1832672162,
-            1832672205
+            1832672162
           ],
           "edgeIds": [
             "e:w172358461:0:f",
@@ -1917,12 +1936,11 @@
             "e:w172358460:2:f",
             "e:w172358460:3:f",
             "e:w172358460:4:f",
-            "e:w172358460:5:f",
-            "e:w172358466:0:f"
+            "e:w172358460:5:f"
           ],
           "fromNodeId": "n:252175582",
-          "toNodeId": "n:1832672205",
-          "edgeIdsSha256": "06c4971f3e6f5a72b7eb89fc9c51dd1deed3778cdfb13bef1ae89d84f236f93a"
+          "toNodeId": "n:1832672162",
+          "edgeIdsSha256": "bb9114f49d64b952b58b5a2ef53679a6007bea48a51671ade34c56b0325fa7cd"
         }
       ],
       "routeEvidence": {
@@ -1938,7 +1956,7 @@
           "205",
           "207"
         ],
-        "groundWayId": 258834779,
+        "groundWayId": 258834790,
         "groundWayName": "明治通り",
         "firstExitAfterBranch": true
       },
@@ -1947,9 +1965,7 @@
         "fixtures/osm/shutoko-all.json:way/422023171",
         "fixtures/osm/shutoko-all.json:way/931759044",
         "fixtures/osm/shutoko-all.json:way/172358460",
-        "fixtures/osm/shutoko-all.json:way/172358466",
         "fixtures/osm/shutoko-all.json:way/23377599",
-        "fixtures/osm/shutoko-all.json:way/258834779",
         "fixtures/osm/shutoko-all.json:way/258834790",
         "data/official-population-snapshot.json:route/2/outbound",
         "https://www.shutoko.jp/use/network/map/route-2/tengenji/"

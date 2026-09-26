@@ -73,6 +73,24 @@ describe("Releases delivery", () => {
       "releases/all-real-v3/ramps.json",
       JSON.stringify({ schemaVersion: 1, releaseId: "all-real-v3", ramps: [] })
     );
+
+    // all-real-v4 は manifest が結ぶ 5 成果物と WASM 4 点を持つ。
+    await env.ARTIFACTS_BUCKET.put(
+      "releases/all-real-v4/manifest.json",
+      JSON.stringify({ schemaVersion: 1, releaseId: "all-real-v4" })
+    );
+    for (const name of [
+      "ramps.json",
+      "od-tariffs.json",
+      "pair-candidates.json",
+      "graph.json",
+      "snap-index.json",
+    ]) {
+      await env.ARTIFACTS_BUCKET.put(
+        `releases/all-real-v4/${name}`,
+        JSON.stringify({ schemaVersion: 1, releaseId: "all-real-v4", name })
+      );
+    }
   });
 
   it("all-real-v1 の ramps.json を allowlist 経由で配信する", async () => {
@@ -95,6 +113,38 @@ describe("Releases delivery", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
     expect(await res.json()).toMatchObject({ releaseId: "all-real-v3" });
+  });
+
+  // all-real-v4 の manifest は od-tariffs.json と pair-candidates.json も結ぶ。
+  // Worker 側の artifact allowlist が manifests へ追随しているかを固定する。
+  it.each(["ramps.json", "od-tariffs.json", "pair-candidates.json", "graph.json", "snap-index.json"])(
+    "all-real-v4 の %s を allowlist 経由で配信する",
+    async (artifact) => {
+      const ctx = createExecutionContext();
+      const req = new Request(`http://localhost/releases/all-real-v4/${artifact}`);
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+      expect(await res.json()).toMatchObject({ releaseId: "all-real-v4", name: artifact });
+    },
+  );
+
+  // 404 にする機構は 3 つある: 未許可の release、成果物 allowlist に無い名前、
+  // そしてバケットにオブジェクトが無いこと。engine.json は成果物 allowlist に含まれるが
+  // all-real-v4 には配置されていない（= manifest を上げる前に読ませない）ため 404 のまま。
+  it("allowlist に無い成果物と、対象 release に配置されていない成果物は 404 のまま", async () => {
+    const ctx = createExecutionContext();
+    for (const artifact of ["engine.json", "od-tariffs-v2.json"]) {
+      const res = await worker.fetch(
+        new Request(`http://localhost/releases/all-real-v4/${artifact}`),
+        env,
+        ctx,
+      );
+      expect(res.status).toBe(404);
+    }
+    await waitOnExecutionContext(ctx);
   });
 
   it("gets allowed manifest.json with 200, Content-Type, Cache-Control, and ETag", async () => {

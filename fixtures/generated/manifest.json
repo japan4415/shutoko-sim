@@ -1,26 +1,36 @@
 {
   "schemaVersion": 1,
-  "releaseId": "all-real-v3",
+  "releaseId": "all-real-v4",
   "engineVersion": "0.1.0",
   "graphVersion": "1.0.0",
   "graphSchemaVersion": 4,
   "routePlanVersion": 1,
-  "routeMembershipsSha256": "73854f0f6460d0e6d98f10f115f0fa8b1ef39ef3818911db879e30e425dac3fb",
+  "routeMembershipsSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
   "builtAt": "2026-09-24T00:00:00Z",
   "sourceDate": "2026-09-16",
   "coverage": {
     "area": "Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)",
     "verifiedEntries": [
+      "e:w1091280541:0:f",
+      "e:w378284514:0:f",
+      "e:w4848922:0:f",
+      "e:w4853797:0:f",
       "e:w916571610:0:f",
+      "e:w916571615:0:f",
       "e:w92243921:0:f"
     ],
     "verifiedExits": [
+      "e:w1232166619:0:f",
+      "e:w203873821:2:f",
       "e:w276920911:6:f",
-      "e:w297864314:11:f"
+      "e:w297864314:11:f",
+      "e:w390441534:2:f",
+      "e:w45068171:1:f",
+      "e:w944671542:0:f"
     ],
     "endpointCapabilities": {
-      "routableEntryCount": 99,
-      "routableExitCount": 98,
+      "routableEntryCount": 100,
+      "routableExitCount": 101,
       "structuralNoLoopEntryCount": 13,
       "structuralNoLoopExitCount": 22,
       "routableEntryRampIds": [
@@ -82,6 +92,7 @@
         "ramp:c1-inner:iikura-entry",
         "ramp:c1-inner:kandabashi-entry",
         "ramp:c1-inner:kasumigaseki-entry",
+        "ramp:c1-inner:shibakoen-entry",
         "ramp:c1-inner:takaracho-entry",
         "ramp:c1-outer:ginza-entry",
         "ramp:c1-outer:kandabashi-entry",
@@ -132,6 +143,7 @@
         "ramp:1u-outbound:honcho-exit",
         "ramp:1u-outbound:iriya-exit",
         "ramp:2-outbound:meguro-exit",
+        "ramp:2-outbound:tengenji-exit",
         "ramp:3-inbound:shibuya-exit",
         "ramp:3-outbound:shibuya-exit",
         "ramp:3-outbound:takagicho-exit",
@@ -177,6 +189,8 @@
         "ramp:b-west:shinkiba-exit",
         "ramp:b-west:sugita-exit",
         "ramp:b-west:ukishima-exit",
+        "ramp:c1-inner:kandabashi-exit",
+        "ramp:c1-inner:kasumigaseki-exit",
         "ramp:c1-inner:kitanomaru-exit",
         "ramp:c1-inner:kyobashi-exit",
         "ramp:c1-inner:shibakoen-exit",
@@ -267,12 +281,32 @@
   },
   "vehicleProfile": "passenger-car-etc",
   "timeModelVersion": "v1-static-speeds",
-  "billingPairsVersion": "v2",
+  "billingPairsVersion": "v3",
+  "tariffModelVersion": 1,
+  "pairDerivation": {
+    "schemaVersion": 2,
+    "rule": "billingPairDerivation/v2",
+    "inputHashes": {
+      "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
+      "rampLedgerSha256": "97ad8b378f1dcdd7d1c6af95164727860e040635bb821eaee043cb840b0aa5cc",
+      "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
+      "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
+      "odTariffsSha256": "37056d2b46b8c42168fdf54073ef856939c5152cec566de5dfea27ce6b26d763"
+    },
+    "summary": {
+      "candidateTotal": 11,
+      "eligibleForReview": 9,
+      "hold": 2,
+      "relationCoverage": {
+        "relationTotal": 26,
+        "relationExpanded": 11,
+        "relationFailed": 15
+      }
+    }
+  },
   "attribution": "© OpenStreetMap contributors",
   "odblLicenseUrl": "https://www.openstreetmap.org/copyright",
   "unverifiedSections": [
-    "diagnostic-only:bp:2-inbound:meguro:c1-inner:tengenji:exact_directed_binding_unresolved",
-    "diagnostic-only:bp:2-inbound:meguro:c1-outer:tengenji:exact_directed_binding_unresolved",
     "entry:e:w1006338881:0:f (外苑入口)",
     "entry:e:w1021042293:0:f (花之木入口)",
     "entry:e:w1022519232:0:f",
@@ -280,7 +314,6 @@
     "entry:e:w1023817978:0:f (首都高速道路)",
     "entry:e:w1023900268:0:f",
     "entry:e:w1024107817:0:f",
-    "entry:e:w1091280541:0:f (首都高速道路)",
     "entry:e:w128005860:0:f (首都高速道路)",
     "entry:e:w128005861:0:f",
     "entry:e:w135176138:0:f",
@@ -335,7 +368,6 @@
     "entry:e:w333682063:0:f (高井戸入口)",
     "entry:e:w367047850:0:f",
     "entry:e:w378126419:0:f (首都高速道路)",
-    "entry:e:w378284514:0:f (宝町入口)",
     "entry:e:w37838294:0:f (首都高速湾岸線)",
     "entry:e:w38028908:0:f",
     "entry:e:w38028978:0:f",
@@ -376,9 +408,7 @@
     "entry:e:w46876335:0:f",
     "entry:e:w4848755:0:f",
     "entry:e:w4848872:0:f",
-    "entry:e:w4848922:0:f (銀座入口)",
     "entry:e:w4848936:0:f (銀座入口)",
-    "entry:e:w4853797:0:f",
     "entry:e:w4853801:0:f (芝公園入口)",
     "entry:e:w4854228:0:f",
     "entry:e:w4857046:0:f",
@@ -432,7 +462,6 @@
     "entry:e:w904691646:0:f (首都高速埼玉新都心線)",
     "entry:e:w904691651:0:f (首都高速さいたま新都心線)",
     "entry:e:w915743994:0:f",
-    "entry:e:w916571615:0:f (霞が関入口)",
     "entry:e:w93325438:0:f",
     "entry:e:w960810621:0:f",
     "entry:e:w960810623:0:f",
@@ -458,7 +487,6 @@
     "exit:e:w1176489869:4:f",
     "exit:e:w1189558679:2:f",
     "exit:e:w1232083939:0:f",
-    "exit:e:w1232166619:0:f",
     "exit:e:w1287664257:0:f",
     "exit:e:w129647458:0:f",
     "exit:e:w1304022054:3:f (上野出口)",
@@ -473,6 +501,18 @@
     "exit:e:w157249387:3:f",
     "exit:e:w157537728:2:f",
     "exit:e:w157812878:2:f",
+    "exit:e:w172358460:0:f (天現寺出口)",
+    "exit:e:w172358460:1:f (天現寺出口)",
+    "exit:e:w172358460:2:f (天現寺出口)",
+    "exit:e:w172358460:3:f (天現寺出口)",
+    "exit:e:w172358460:4:f (天現寺出口)",
+    "exit:e:w172358460:5:f (天現寺出口)",
+    "exit:e:w172358461:0:f (天現寺出口)",
+    "exit:e:w172358461:1:f (天現寺出口)",
+    "exit:e:w172358461:2:f (天現寺出口)",
+    "exit:e:w172358461:3:f (天現寺出口)",
+    "exit:e:w172358461:4:f (天現寺出口)",
+    "exit:e:w172358461:5:f (天現寺出口)",
     "exit:e:w174490699:4:f",
     "exit:e:w181579910:1:f (飯田橋出口)",
     "exit:e:w182465948:4:f",
@@ -489,7 +529,6 @@
     "exit:e:w203301443:0:f (首都高速8号線)",
     "exit:e:w203832842:4:f (飯倉出口)",
     "exit:e:w203832854:1:f (高樹町出口)",
-    "exit:e:w203873821:2:f (芝公園出口)",
     "exit:e:w205411855:4:f (銀座出口)",
     "exit:e:w205725087:0:f",
     "exit:e:w207535709:0:f",
@@ -532,7 +571,6 @@
     "exit:e:w383238619:0:f",
     "exit:e:w387256794:3:f",
     "exit:e:w390422110:1:f",
-    "exit:e:w390441534:2:f (神田橋出口)",
     "exit:e:w39249793:5:f",
     "exit:e:w39744538:6:f",
     "exit:e:w397724498:5:f",
@@ -540,13 +578,15 @@
     "exit:e:w409106611:1:f",
     "exit:e:w41568462:2:f",
     "exit:e:w420082431:0:f",
+    "exit:e:w422023171:0:f (天現寺出口)",
+    "exit:e:w422023171:1:f (天現寺出口)",
+    "exit:e:w422023171:2:f (天現寺出口)",
     "exit:e:w42752387:9:f",
     "exit:e:w44129865:5:f",
     "exit:e:w44421328:19:f",
     "exit:e:w44421695:4:f",
     "exit:e:w44779775:16:f",
     "exit:e:w44882720:5:f",
-    "exit:e:w45068171:1:f (汐留出口)",
     "exit:e:w45683107:4:f",
     "exit:e:w46876171:2:f",
     "exit:e:w46876336:0:f",
@@ -615,8 +655,8 @@
     "exit:e:w904689118:2:f (首都高速埼玉新都心線)",
     "exit:e:w904691650:0:f (首都高速さいたま新都心線)",
     "exit:e:w915743992:1:f",
+    "exit:e:w931759044:0:f (天現寺出口(信号機あり！))",
     "exit:e:w944138315:0:f (芝公園出口)",
-    "exit:e:w944671542:0:f (芝公園出口)",
     "exit:e:w945962601:0:f (首都高速1号上野線)",
     "exit:e:w996184111:2:f (外苑出口)",
     "unbound-ramp:1H:ramp:1h-inbound:haneda-exit (羽田) outside graph extract",
@@ -636,7 +676,6 @@
     "unbound-ramp:2:ramp:2-inbound:tengenji-entry (天現寺) outside graph extract",
     "unbound-ramp:2:ramp:2-inbound:togoshi-entry (戸越) outside graph extract",
     "unbound-ramp:2:ramp:2-outbound:ebara-exit (荏原) outside graph extract",
-    "unbound-ramp:2:ramp:2-outbound:tengenji-exit (天現寺) outside graph extract",
     "unbound-ramp:2:ramp:2-outbound:togoshi-exit (戸越) outside graph extract",
     "unbound-ramp:3:boundary:3-inbound:tomei-jct-in (東名高速接続用賀) outside graph extract",
     "unbound-ramp:3:boundary:3-outbound:tomei-jct-out (東名高速接続用賀) outside graph extract",
@@ -701,9 +740,6 @@
     "unbound-ramp:C1:ramp:c1-inner:edobashi-entry (江戸橋) outside graph extract",
     "unbound-ramp:C1:ramp:c1-inner:ginza-exit (銀座) outside graph extract",
     "unbound-ramp:C1:ramp:c1-inner:gofukubashi-entry (呉服橋) outside graph extract",
-    "unbound-ramp:C1:ramp:c1-inner:kandabashi-exit (神田橋) outside graph extract",
-    "unbound-ramp:C1:ramp:c1-inner:kasumigaseki-exit (霞が関) outside graph extract",
-    "unbound-ramp:C1:ramp:c1-inner:shibakoen-entry (芝公園) outside graph extract",
     "unbound-ramp:C1:ramp:c1-inner:shintomicho-exit (新富町) outside graph extract",
     "unbound-ramp:C1:ramp:c1-outer:edobashi-exit (江戸橋) outside graph extract",
     "unbound-ramp:C1:ramp:c1-outer:ginza-exit (銀座) outside graph extract",
@@ -789,14 +825,51 @@
     "unsupported-restriction: 16 turn restrictions referencing elements outside graph (outside graph) excluded from static graph",
     "unsupported-restriction: 2 conditional turn restrictions (conditional) excluded from static graph",
     "unsupported-restriction: 2 turn restrictions missing via member (no via) excluded from static graph",
-    "unverified:bp:c1-inner:daikancho-kasumigaseki",
-    "unverified:bp:c1-inner:kasumigaseki-shibakoen",
-    "unverified:bp:c1-inner:shibakoen-shiodome",
-    "unverified:bp:c1-inner:takaracho-kandabashi",
-    "unverified:bp:c1-outer:ginza-shibakoen",
     "unverified:bp:c1-outer:shibakoen-iikura"
   ],
   "provenance": [
+    {
+      "id": "bp:2-inbound:meguro:c1-inner:tengenji",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-25",
+      "notes": "目黒入口、C1 inner の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円、2026-10版公式セルの19.4km/860円。 2号目黒線（内回り/外回り）の路線図は https://www.shutoko.jp/use/network/map/route-2/ 。"
+    },
+    {
+      "id": "bp:2-inbound:meguro:c1-outer:tengenji",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-25",
+      "notes": "目黒入口、C1 outer の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円、2026-10版公式セルの19.4km/860円。 2号目黒線（内回り/外回り）の路線図は https://www.shutoko.jp/use/network/map/route-2/ 。"
+    },
+    {
+      "id": "bp:c1-inner:daikancho-kasumigaseki",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-25",
+      "notes": "firstPublicRoadConnection/v1 のWay 1232166619 監査と C1 inner relation の exit 順により、代官町入口から霞が関出口が最初の一般出口であると確認した。"
+    },
+    {
+      "id": "bp:c1-inner:kasumigaseki-shibakoen",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-25",
+      "notes": "C1 inner relation の arm role により way 203832854 の高樹町出口は C1 corridor の一般出口ではなく、way 203873821 が最初の一般出口芝公園出口であると確認した。"
+    },
+    {
+      "id": "bp:c1-inner:shibakoen-shiodome",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-25",
+      "notes": "C1 inner relation の arm role と branch node から way 4853797 を芝公園入口へ一意に割り当て、汐留出口までの relation 順を確認した。"
+    },
+    {
+      "id": "bp:c1-inner:takaracho-kandabashi",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-25",
+      "notes": "C1 inner relation の exit role を監査し、way 199311811 は一般出口ではない connector、way 390441534 が最初の一般出口神田橋出口であることを確認した。"
+    },
+    {
+      "id": "bp:c1-outer:ginza-shibakoen",
+      "source": "https://www.shutoko.jp/use/network/map/",
+      "sourceDate": "2026-09-25",
+      "notes": "C1 outer relation の exit split 順と way 944671542 の exact binding により、銀座入口から relation mainline 上の最初の一般出口が芝公園出口であることを確認した。"
+    },
     {
       "id": "bp:c1-outer:kandabashi-takaracho",
       "source": "https://www.shutoko.jp/use/network/map/",
@@ -807,23 +880,33 @@
       "id": "bp:c1-outer:kasumigaseki-daikancho",
       "source": "https://www.shutoko.jp/use/network/map/",
       "sourceDate": "2026-09-10",
-      "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff sources (verified 2026-09-10): fee structure and minimum toll (https://www.shutoko.jp/tolls/about/price/ (旧 URL https://www.shutoko.jp/fee/fee-info/about/ は 2026-09-10 時点で /tolls/about/price/ へ 301 リダイレクト)); Kasumigaseki to Daikancho toll distance 2.3km with minimum toll 300 yen applied (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf (旧 URL https://www.shutoko.jp/-/media/pdf/responsive/customer/fee/fee-info/2504_pamphlet_fee_table.pdf は 2026-09-10 時点で 404)); 2026-10-01 tariff revision maintaining 300 yen minimum toll (https://www.shutoko.co.jp/company/press/2026/data/07/31-toll/)."
+      "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff source (re-verified 2026-09-26 against the rendered page image): Kasumigaseki to Daikancho toll distance 2.3km and base ETC fare 300 yen in both editions (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf, page 3, row 霞が関, column 代官町; and the official revision tariff table, page 3, same row and column). The 570 yen / 12.4km figure belongs to the 霞が関 diagonal cell (霞が関 to 霞が関), not to the 代官町 exit."
     }
   ],
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "c8d3b69109d7d26f1a8c383ad1b31927e844655c2fa98c535650a670b509495d",
-      "byteLength": 7286713
+      "sha256": "3c6c421f33bcbc7cd634b586979f0fef455792362c3e7b1559e93408057f03b4",
+      "byteLength": 7606198
+    },
+    {
+      "path": "od-tariffs.json",
+      "sha256": "37056d2b46b8c42168fdf54073ef856939c5152cec566de5dfea27ce6b26d763",
+      "byteLength": 48735
+    },
+    {
+      "path": "pair-candidates.json",
+      "sha256": "007e19804655060e48a565ca0289f469a680b91384080dbc166484b77accd5e9",
+      "byteLength": 75737
     },
     {
       "path": "ramps.json",
-      "sha256": "bb46107ef8b3a5b2db7880277bfc14eae243caf41335051a8af06065aafe4044",
-      "byteLength": 277569
+      "sha256": "3835043405ee6d5e88927ed1623528461537b1b32695bc1b110ffcc2da5ecdd8",
+      "byteLength": 278337
     },
     {
       "path": "snap-index.json",
-      "sha256": "29d59df6aa506cba4eef563812b7699e11804512e4d1c2410090a4a2e0df8f81",
+      "sha256": "e83846c7f80290bbf4718aa643132ecbf0e6ad9d9d10d29d663613eada0ebfab",
       "byteLength": 15244
     }
   ]

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "releaseId": "all-real-v3",
+  "releaseId": "all-real-v4",
   "sourceDate": "2026-09-16",
   "totalRamps": 399,
-  "boundRamps": 232,
+  "boundRamps": 236,
   "ramps": [
     {
       "id": "ramp:c1-inner:takaracho-entry",
@@ -72,11 +72,14 @@
       "lat": 35.654923,
       "lon": 139.744355,
       "status": "active",
-      "supportState": "unsupported",
-      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。",
-      "bound": false
+      "supportState": "verified_bound",
+      "supportReason": "C1 inner relation の arm role と分岐 node から、way 4853797 の有向 entry segment を芝公園入口へ一意に割り当てた。",
+      "routingCapability": "routable",
+      "routingCapabilityReason": "C1 inner の有向周回構成へ接続する。",
+      "bound": true,
+      "edgeId": "e:w4853797:0:f",
+      "nodeId": "n:254367256",
+      "mainlineNodeId": "n:8327736736"
     },
     {
       "id": "ramp:c1-outer:shibakoen-entry",
@@ -88,10 +91,11 @@
       "lat": 35.654923,
       "lon": 139.744355,
       "status": "active",
-      "supportState": "unsupported",
-      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
+      "supportState": "unresolved",
+      "supportReasonCode": "CONDITIONAL_ACCESS_RESTRICTION",
+      "supportReason": "way 4853801 の地表接続 way 40969792 に access:conditional=no @ (08:00-20:00) があり、終日利用可能な公道接続を証明できない。時間帯モデルが無い状態では exact binding を未解決として扱い fail-closed にする。",
       "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。",
+      "routingCapabilityReason": "条件付きアクセスを時間モデルで解決するまで探索端点として拒否する（supportState=unresolved）。",
       "bound": false
     },
     {
@@ -3315,13 +3319,13 @@
       "lon": 139.747842,
       "status": "active",
       "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportReason": "C1 outer relation の exit split 順で、way 944671542 を芝公園出口へ一意に割り当てた。way 944138315 は fallback に用いない。",
       "routingCapability": "routable",
-      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。",
+      "routingCapabilityReason": "C1 outer の有向周回構成へ接続する。",
       "bound": true,
-      "edgeId": "e:w203873821:2:f",
-      "nodeId": "n:266292094",
-      "mainlineNodeId": "n:4134172818"
+      "edgeId": "e:w944671542:0:f",
+      "nodeId": "n:254360532",
+      "mainlineNodeId": "n:31296982"
     },
     {
       "id": "ramp:c1-inner:shibakoen-exit",
@@ -3334,13 +3338,13 @@
       "lon": 139.746886,
       "status": "active",
       "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportReason": "C1 inner relation の exit split 順で、way 203873821 を芝公園出口へ一意に割り当てた。",
       "routingCapability": "routable",
-      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。",
+      "routingCapabilityReason": "C1 inner の有向周回構成へ接続する。",
       "bound": true,
-      "edgeId": "e:w944138315:0:f",
-      "nodeId": "n:8741451208",
-      "mainlineNodeId": "n:31296982"
+      "edgeId": "e:w203873821:2:f",
+      "nodeId": "n:266292094",
+      "mainlineNodeId": "n:4134172818"
     },
     {
       "id": "ramp:c1-outer:iikura-exit",
@@ -3390,11 +3394,14 @@
       "lat": 35.690456,
       "lon": 139.763166,
       "status": "active",
-      "supportState": "unsupported",
-      "supportReason": "G20: 一意な exact replacement がない。way.name=神田橋出口。23は別一意component、24と神田橋方向は複数候補。",
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。",
-      "bound": false
+      "supportState": "verified_bound",
+      "supportReason": "firstPublicRoadConnection/v1 により way 1232166619 の有向 exit segment が霞が関出口へ一意に接続することを監査済み。",
+      "routingCapability": "routable",
+      "routingCapabilityReason": "C1 inner の有向周回構成へ接続する。",
+      "bound": true,
+      "edgeId": "e:w1232166619:0:f",
+      "nodeId": "n:573233928",
+      "mainlineNodeId": "n:4366610696"
     },
     {
       "id": "ramp:c1-outer:daikancho-exit",
@@ -3441,11 +3448,14 @@
       "lat": 35.690456,
       "lon": 139.763166,
       "status": "active",
-      "supportState": "unsupported",
-      "supportReason": "G20: way.name=神田橋出口。23は別一意component、24と神田橋方向は複数候補。",
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。",
-      "bound": false
+      "supportState": "verified_bound",
+      "supportReason": "C1 inner relation の exit role と branch node を監査し、way 390441534 を神田橋出口へ一意に割り当てた。way 199311811 は一般出口ではない。",
+      "routingCapability": "routable",
+      "routingCapabilityReason": "C1 inner の有向周回構成へ接続する。",
+      "bound": true,
+      "edgeId": "e:w390441534:2:f",
+      "nodeId": "n:1070863469",
+      "mainlineNodeId": "n:4436218907"
     },
     {
       "id": "ramp:c1-inner:kyobashi-exit",
@@ -3699,11 +3709,14 @@
       "lat": 35.659293,
       "lon": 139.719534,
       "status": "active",
-      "supportState": "unsupported",
-      "supportReason": "G21: 一意な exact replacement がない。way.name=高樹町出口、301 component一致。",
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。",
-      "bound": false
+      "supportState": "verified_bound",
+      "supportReason": "firstPublicRoadConnection/v1 は 4-way の有向鎖を最初の一般道接続 n:1832672162 で打ち切り、way 172358466 の tail を除外した。ground way は明治通り 258834790。",
+      "routingCapability": "routable",
+      "routingCapabilityReason": "2号下りの有向 return corridor から到達でき、C1 周回を含む radial OD を構成できる。",
+      "bound": true,
+      "edgeId": "e:w172358461:0:f",
+      "nodeId": "n:1832672162",
+      "mainlineNodeId": "n:252175582"
     },
     {
       "id": "ramp:2-outbound:meguro-exit",

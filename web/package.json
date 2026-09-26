@@ -18,7 +18,7 @@
     "@types/node": "^22.20.2",
     "typescript": "7.0.2",
     "vite": "8.3.0",
-    "vitest": "5.0.0"
+    "vitest": "5.0.2"
   },
   "dependencies": {
     "leaflet": "^1.9.4"

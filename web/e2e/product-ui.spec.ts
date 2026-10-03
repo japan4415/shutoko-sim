@@ -1709,34 +1709,47 @@ test("(44) topologyOnly は1区間文言と課金区間のオーバーレイを�
   await expect(page.locator("#map .leaflet-overlay-pane path")).toHaveCount(3);
 });
 
-test("(45) 目黒座標の検証済みradial候補は4区間と商品対象を実結果で固定する", async ({ page }) => {
-  await searchFromCoordinate(page, "35.635681", "139.718489", "15", "60");
+// 目黒→天現寺は 2026-10-01 00:00 JST に 790 円から 860 円へ切り替わる。
+// 旧期間の終了は含まず、新期間の開始は含むことを実 Worker / WASM と画面で検証する。
+for (const { label, pricingAt, amountYen } of [
+  { label: "改定前", pricingAt: "2026-09-16T00:00:00.000Z", amountYen: 790 },
+  { label: "切替1ms前", pricingAt: "2026-09-30T14:59:59.999Z", amountYen: 790 },
+  { label: "切替時刻", pricingAt: "2026-09-30T15:00:00.000Z", amountYen: 860 },
+  { label: "改定後", pricingAt: "2026-10-02T00:00:00.000Z", amountYen: 860 },
+]) {
+  test(`(45) 目黒座標の検証済みradial候補は4区間と商品対象を実結果で固定する（${label}: ${pricingAt}）`, async ({ page }) => {
+    // 検索押下時の new Date() を固定する。探索・描画用のタイマーは通常どおり動かす。
+    await page.clock.setFixedTime(new Date(pricingAt));
+    await searchFromCoordinate(page, "35.635681", "139.718489", "15", "60");
 
-  const card = page.locator("#results .card").first();
-  await expect(card).toBeVisible();
-  await expect(card.locator(".charging")).toHaveText("首都高区間: 入口 → 周回 → 戻り");
-  await expect(card.locator(".toll")).toHaveText("料金額: 790 円（最安順位 1 位）");
-  // 金額は割引適用前の基本料金。円あたり効率も同じ料金での比較だと分かるようにする。
-  await expect(card.locator(".fare-label")).toHaveText("上記は普通車ETC基本料金（割引適用前）です");
-  // 金額は適用期間で変わるため数値そのものは固定せず、効率行の書き方と注記を固定する。
-  await expect(card.locator(".efficiency")).toHaveText(
-    /^1 円あたり 約 [\d.]+ 分（普通車ETC基本料金（割引適用前）で比較）$/,
-  );
-  const routeSteps = card.locator(".route-order-list li");
-  await expect(routeSteps).toHaveCount(4);
-  await expect(routeSteps.nth(0)).toContainText("入口アプローチ");
-  await expect(routeSteps.nth(1)).toContainText("必須周回");
-  await expect(routeSteps.nth(2)).toContainText("戻り経路");
-  await expect(routeSteps.nth(3)).toContainText("出口アプローチ");
-  await expect(card.locator(".estimated-legs li")).toHaveCount(2);
-  await expect(card.locator(".distance--total")).toContainText("総距離:");
-  await expect(card.locator(".distance--shutoko")).toContainText("首都高距離:");
-  await expect(card.locator(".depart")).toHaveCount(0);
-  await expect(card.locator(".maps-handoff-notice")).toHaveText(
-    "Google マップへの引き継ぎは、実機での確認が済むまで利用できません",
-  );
-  await expect(page.locator("#map .leaflet-overlay-pane path")).toHaveCount(8);
-});
+    const card = page.locator("#results .card").first();
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("目黒入口");
+    await expect(card).toContainText("天現寺出口");
+    await expect(card.locator(".charging")).toHaveText("首都高区間: 入口 → 周回 → 戻り");
+    await expect(card.locator(".toll")).toHaveText(`料金額: ${amountYen} 円（最安順位 1 位）`);
+    // 金額は割引適用前の基本料金。円あたり効率も同じ料金での比較だと分かるようにする。
+    await expect(card.locator(".fare-label")).toHaveText("上記は普通車ETC基本料金（割引適用前）です");
+    // 効率の数値は各期間の料金から決まるため、ここでは書き方と注記を固定する。
+    await expect(card.locator(".efficiency")).toHaveText(
+      /^1 円あたり 約 [\d.]+ 分（普通車ETC基本料金（割引適用前）で比較）$/,
+    );
+    const routeSteps = card.locator(".route-order-list li");
+    await expect(routeSteps).toHaveCount(4);
+    await expect(routeSteps.nth(0)).toContainText("入口アプローチ");
+    await expect(routeSteps.nth(1)).toContainText("必須周回");
+    await expect(routeSteps.nth(2)).toContainText("戻り経路");
+    await expect(routeSteps.nth(3)).toContainText("出口アプローチ");
+    await expect(card.locator(".estimated-legs li")).toHaveCount(2);
+    await expect(card.locator(".distance--total")).toContainText("総距離:");
+    await expect(card.locator(".distance--shutoko")).toContainText("首都高距離:");
+    await expect(card.locator(".depart")).toHaveCount(0);
+    await expect(card.locator(".maps-handoff-notice")).toHaveText(
+      "Google マップへの引き継ぎは、実機での確認が済むまで利用できません",
+    );
+    await expect(page.locator("#map .leaflet-overlay-pane path")).toHaveCount(8);
+  });
+}
 
 test("(46) pricedでも商品cohort外のradialは効率と最安順位を表示しない", async ({ page }) => {
   await stubWorkerWithRadialCandidate(page, "pricedIneligible");

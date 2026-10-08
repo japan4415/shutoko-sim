@@ -3515,8 +3515,8 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
         .collect();
     assert_eq!(
         legacy_pairs.len(),
-        8,
-        "seed must retain exactly 8 legacy billing pairs"
+        9,
+        "seed must retain exactly 9 legacy billing pairs (Issue #34 added the inner Ginza-Shintomicho pair)"
     );
 
     let verified_pair_ids = [
@@ -3560,8 +3560,8 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     let graph = generated_legacy_graph();
     assert_eq!(
         graph.billing_pairs.len(),
-        8,
-        "graph.json must retain all 8 audited billing pairs"
+        9,
+        "graph.json must retain all 9 audited billing pairs (8 + Issue #34)"
     );
 
     for expected_id in &verified_pair_ids {
@@ -3641,7 +3641,7 @@ fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
     }
 
     // 3. Billing pair entryName and exitName propagation from seed
-    assert_eq!(legacy_pairs.len(), 8);
+    assert_eq!(legacy_pairs.len(), 9);
     for seed_pair in &legacy_pairs {
         let graph_pair = graph
             .billing_pairs
@@ -4277,13 +4277,13 @@ fn test_cli_with_full_fixtures() {
     let ramps_raw = std::fs::read_to_string(out_dir.join("ramps.json")).unwrap();
     let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
     assert_eq!(ramps_json["totalRamps"], 399);
-    assert_eq!(ramps_json["boundRamps"], 236);
+    assert_eq!(ramps_json["boundRamps"], 238);
 
     let manifest_raw = std::fs::read_to_string(out_dir.join("manifest.json")).unwrap();
     let manifest_json: serde_json::Value = serde_json::from_str(&manifest_raw).unwrap();
     let capabilities = &manifest_json["coverage"]["endpointCapabilities"];
     assert_eq!(capabilities["routableEntryCount"], 100);
-    assert_eq!(capabilities["routableExitCount"], 101);
+    assert_eq!(capabilities["routableExitCount"], 103);
     assert_eq!(capabilities["structuralNoLoopEntryCount"], 13);
     assert_eq!(capabilities["structuralNoLoopExitCount"], 22);
 
@@ -4301,14 +4301,14 @@ fn test_cli_with_full_fixtures() {
             .iter()
             .filter(|r| r["supportState"] == "verified_bound" && r["bound"] == true)
             .count(),
-        236
+        238
     );
     assert_eq!(
         active_general
             .iter()
             .filter(|r| r["supportState"] == "unsupported" && r["bound"] == false)
             .count(),
-        134
+        132
     );
     // 芝公園入口外回りだけは exact binding が未解決（access:conditional）で、
     // 恒久的な利用不可（unsupported）とは区別して reason code 付きで公開する。
@@ -4329,7 +4329,7 @@ fn test_cli_with_full_fixtures() {
             .iter()
             .filter(|r| r["routingCapability"] == "routable")
             .count(),
-        201
+        203
     );
     assert_eq!(
         active_general
@@ -4493,7 +4493,7 @@ fn test_cli_schema2_retains_pair_specific_radial_rejections() {
         serde_json::from_str(&std::fs::read_to_string(out_dir.join("graph.json")).unwrap())
             .unwrap();
     assert_eq!(graph["schemaVersion"], 2);
-    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 8);
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 9);
     let manifest: Value =
         serde_json::from_str(&std::fs::read_to_string(out_dir.join("manifest.json")).unwrap())
             .unwrap();
@@ -4580,7 +4580,7 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
         .collect::<Vec<_>>();
     assert!(diagnostic_only.is_empty());
     assert_eq!(graph_json["schemaVersion"], 4);
-    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 10);
+    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 11);
     let legacy_pairs = graph_json["billingPairs"]
         .as_array()
         .unwrap()
@@ -4593,7 +4593,7 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
         .iter()
         .filter(|pair| pair["pairKind"] == "radialReturn")
         .collect::<Vec<_>>();
-    assert_eq!(legacy_pairs.len(), 8);
+    assert_eq!(legacy_pairs.len(), 9);
     assert_eq!(radial_pairs.len(), 2);
     for pair in legacy_pairs {
         assert_eq!(pair["anchor"]["anchorKind"], "sameNode");
@@ -4625,7 +4625,7 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
     }
     let prepared = shutoko_routing_core::prepare_json(&graph_raw, "{}").unwrap();
     assert_eq!(prepared.graph().schema_version, 4);
-    assert_eq!(prepared.graph().billing_pairs.len(), 8);
+    assert_eq!(prepared.graph().billing_pairs.len(), 9);
     assert_eq!(prepared.radial_billing_pairs().len(), 2);
     let edge_ids = graph_json["edges"]
         .as_array()

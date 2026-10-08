@@ -294,13 +294,13 @@
       "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
       "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
       "routeMembershipIndexSha256": "d0fcb3ff9c2e1bf7e1b4bcb0dfc15910b33732fa0553b58a7ef49dceeb46868b",
-      "billingPairAdjacencySha256": "7ea604c5592e11600fc38fa54a292d25d1eadeece2dc8c934637d5d5747d1252",
+      "billingPairAdjacencySha256": "d748051cbe94627bd54dba23fec44ed57f1213578606897304018e44d636fa44",
       "odTariffsSha256": "48a62e9f7a882b67fa9ed3101e21555cf2d6f11d4197eefeda24592ebefc26cc"
     },
     "summary": {
       "candidateTotal": 11,
-      "eligibleForReview": 9,
-      "hold": 2,
+      "eligibleForReview": 10,
+      "hold": 1,
       "relationCoverage": {
         "relationTotal": 26,
         "relationExpanded": 11,
@@ -902,8 +902,8 @@
     },
     {
       "path": "pair-candidates.json",
-      "sha256": "58beae188105d5ff93395fd26f2843cd4dafff28f4f319ebfcdedd922ed05d6d",
-      "byteLength": 75661
+      "sha256": "fa86604533164f9eeca554e6cc5be391a4005cfda838b64200ddde012cb06ee8",
+      "byteLength": 76095
     },
     {
       "path": "ramps.json",

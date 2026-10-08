@@ -93,13 +93,14 @@ fn real_graph_deserialization_and_schema_validation() {
     let wire: Value = serde_json::from_str(real_graph_str()).unwrap();
     assert_eq!(wire["schemaVersion"], 4);
     assert_eq!(wire["releaseId"], "all-real-v4");
-    assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 10);
+    assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 11);
     assert!(wire["routeMemberships"].as_array().is_some());
     let prepared = prepare_json(real_graph_str(), "{}").expect("schema 4 graph must prepare");
     assert_eq!(prepared.graph().schema_version, 4);
     // all-real-v4 は全 route relation を cover するため、双方向 46 件に 7 件の
     // forward membership が加わる（pair-candidates.json の relationManifest と一致）。
     assert_eq!(prepared.route_memberships().len(), 53);
+    // Issue #34 で内回り銀座入口→新富町出口が verified に加わり 10 件。
     assert_eq!(
         wire["billingPairs"]
             .as_array()
@@ -107,7 +108,7 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .filter(|pair| pair["pairEligibility"]["status"] == json!("verified_one_section_ahead"))
             .count(),
-        9,
+        10,
         "9 verified pairs (7 legacyRing + 2 radialReturn); only bp:c1-outer:shibakoen-iikura stays unverified (conditional public way)"
     );
     let g = real_graph();
@@ -116,10 +117,11 @@ fn real_graph_deserialization_and_schema_validation() {
     assert_eq!(g.vehicle_profile, "passenger-car-etc");
     assert!(!g.nodes.is_empty(), "nodes must not be empty");
     assert!(!g.edges.is_empty(), "edges must not be empty");
+    // Issue #34 で legacy 9 件（schema 2 の legacy adapter は radial を emit しない）。
     assert_eq!(
         g.billing_pairs.len(),
-        8,
-        "exactly 8 billing pairs expected in fixture"
+        9,
+        "exactly 9 billing pairs expected in fixture"
     );
 
     let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
@@ -130,7 +132,7 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .filter(|p| p.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        7
+        8
     );
     assert_eq!(
         g.billing_pairs
@@ -231,7 +233,7 @@ fn radial_seed_is_promoted_after_exact_binding_resolution() {
     let seed: Value =
         serde_json::from_str(include_str!("../../../data/billing-pairs-seed.json")).unwrap();
     assert_eq!(seed["schemaVersion"], 2);
-    assert_eq!(seed["billingPairs"].as_array().unwrap().len(), 10);
+    assert_eq!(seed["billingPairs"].as_array().unwrap().len(), 11);
 
     let radial_pairs = seed["billingPairs"]
         .as_array()
@@ -317,7 +319,7 @@ fn radial_seed_is_promoted_after_exact_binding_resolution() {
     );
 
     let graph: Value = serde_json::from_str(real_graph_str()).unwrap();
-    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 10);
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 11);
     assert_eq!(
         graph["billingPairs"]
             .as_array()

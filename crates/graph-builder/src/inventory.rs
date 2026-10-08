@@ -3386,7 +3386,7 @@ mod tests {
         assert!(res.is_ok(), "bindings validation failed: {:?}", res);
         assert_eq!(
             bindings.bindings.len(),
-            235,
+            237,
             "schema bindings must cover all verified active general ramps except reviewed candidates"
         );
         assert_eq!(bindings.binding_candidates.len(), 1);
@@ -3416,14 +3416,14 @@ mod tests {
                 .iter()
                 .filter(|r| r.support_state.as_deref() == Some("verified_bound"))
                 .count(),
-            236
+            238
         );
         assert_eq!(
             active_general
                 .iter()
                 .filter(|r| r.support_state.as_deref() == Some("unsupported"))
                 .count(),
-            134
+            132
         );
         // 芝公園入口外回りは access:conditional のため恒久的な利用不可ではなく
         // exact binding が未解決という状態で、reason code を持つ。
@@ -3583,7 +3583,10 @@ mod tests {
             .iter()
             .map(|o| o.id.as_str())
             .collect();
-        assert_eq!(override_ids, HashSet::from(["G15", "G27", "G53"]));
+        assert_eq!(
+            override_ids,
+            HashSet::from(["G15", "G27", "G53", "G54"])
+        );
 
         // Regression lockouts for the known false nearest-edge mappings.
         let forbidden = [
@@ -3745,7 +3748,7 @@ mod tests {
         .clone();
         let original_billing_pairs = serde_json::to_value(&graph.billing_pairs).unwrap();
         let (ramps, artifacts, notes) = bind_ramps_to_graph(&mut graph, &inventory, &bindings);
-        assert_eq!(ramps.len(), 236);
+        assert_eq!(ramps.len(), 238);
         assert!(notes.iter().all(|note| !note.contains(&candidate.ramp_id)));
         graph.ramps = ramps;
         let projected = graph

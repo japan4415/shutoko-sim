@@ -6,7 +6,7 @@
     "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
     "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
     "routeMembershipIndexSha256": "d0fcb3ff9c2e1bf7e1b4bcb0dfc15910b33732fa0553b58a7ef49dceeb46868b",
-    "billingPairAdjacencySha256": "7ea604c5592e11600fc38fa54a292d25d1eadeece2dc8c934637d5d5747d1252",
+    "billingPairAdjacencySha256": "d748051cbe94627bd54dba23fec44ed57f1213578606897304018e44d636fa44",
     "odTariffsSha256": "48a62e9f7a882b67fa9ed3101e21555cf2d6f11d4197eefeda24592ebefc26cc"
   },
   "relationCoverage": [
@@ -551,9 +551,9 @@
         "bp:c1-inner:shibakoen-shiodome",
         "bp:c1-inner:takaracho-kandabashi"
       ],
-      "routePlanResolved": 5,
-      "routePlanUnresolved": 1,
-      "status": "fail"
+      "routePlanResolved": 6,
+      "routePlanUnresolved": 0,
+      "status": "pass"
     },
     {
       "membershipId": "route:C1:outer",
@@ -1255,7 +1255,7 @@
       "rejectionReasons": []
     },
     {
-      "candidateId": "candidate:35512554cd2e21f7db66952b287d474a7919438622040da7dd354ebf20fdd3bc",
+      "candidateId": "candidate:5ef548838a1dc364365dee93ae1f5cb4d310bf54b3a52bac31c8c34d1e6f9bd4",
       "pairId": "bp:c1-inner:ginza-shintomicho",
       "pairKind": "legacyRing",
       "routeId": "C1",
@@ -1284,67 +1284,71 @@
       },
       "routePlan": {
         "routePlanId": "route-plan:bp:c1-inner:ginza-shintomicho",
-        "edgeIdsSha256": null,
-        "loopValidationStatus": "unresolved",
-        "sourceSegmentIds": [],
+        "edgeIdsSha256": "7aa10586f77abc184e98fefc9eada7f712edfb2818a0e0a042529b6383ac7b07",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c1-inner:ginza-entry:segment:0",
+          "binding:osm-ramp-binding:ramp:c1-inner:shintomicho-exit:segment:0",
+          "binding:osm-ramp-binding:ramp:c1-outer:shintomicho-exit:segment:0",
+          "relation:4256008:inner:0"
+        ],
         "resolvedRoles": [
           {
             "role": "entry_approach",
-            "status": "unresolved",
-            "edgeIdsSha256": null,
-            "sourceSegmentIds": []
+            "status": "passed",
+            "edgeIdsSha256": "1401b060d72386e9eb6a688f0c88d5c46fc517cadd49a30891ee32dc3f239aae",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-inner:ginza-entry:segment:0",
+              "relation:4256008:inner:0"
+            ]
           },
           {
             "role": "mandatory_lap",
-            "status": "unresolved",
-            "edgeIdsSha256": null,
-            "sourceSegmentIds": []
+            "status": "passed",
+            "edgeIdsSha256": "8370795cfd3e00caa26d8161cb9496e7325802db26be1a4fb8fded0518931e3d",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
           },
           {
             "role": "return_corridor",
-            "status": "unresolved",
-            "edgeIdsSha256": null,
-            "sourceSegmentIds": []
+            "status": "passed",
+            "edgeIdsSha256": "20be1055d6a56dd7265a087b4280e6ef4f15d69097b9016f90dde68dbed89492",
+            "sourceSegmentIds": [
+              "relation:4256008:inner:0"
+            ]
           },
           {
             "role": "exit_approach",
-            "status": "unresolved",
-            "edgeIdsSha256": null,
-            "sourceSegmentIds": []
+            "status": "passed",
+            "edgeIdsSha256": "7b181d7993b520533d071517ea6ef8c5b20e919e39c312a649740a1e092e8903",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c1-inner:shintomicho-exit:segment:0",
+              "binding:osm-ramp-binding:ramp:c1-outer:shintomicho-exit:segment:0"
+            ]
           }
         ]
       },
       "gates": {
         "officialAdjacency": {
-          "status": "unresolved",
-          "reasonCodes": [
-            "EXIT_EXACT_BINDING_UNRESOLVED",
-            "ROUTE_PLAN_EVIDENCE_UNRESOLVED"
-          ]
+          "status": "passed",
+          "reasonCodes": []
         },
         "route": {
-          "status": "failed",
-          "reasonCodes": [
-            "LEGACY_ROUTE_RESOLUTION_FAILED"
-          ]
+          "status": "passed",
+          "reasonCodes": []
         },
         "direction": {
-          "status": "unresolved",
-          "reasonCodes": [
-            "LEGACY_DIRECTION_UNRESOLVED"
-          ]
+          "status": "passed",
+          "reasonCodes": []
         },
         "firstExit": {
-          "status": "unresolved",
-          "reasonCodes": [
-            "FIRST_EXIT_UNRESOLVED"
-          ]
+          "status": "passed",
+          "reasonCodes": []
         },
         "mandatoryLap": {
-          "status": "unresolved",
-          "reasonCodes": [
-            "MANDATORY_LAP_UNRESOLVED"
-          ]
+          "status": "passed",
+          "reasonCodes": []
         },
         "entryBinding": {
           "status": "passed",
@@ -1360,9 +1364,9 @@
         }
       },
       "productEligibility": {
-        "status": "unverified",
+        "status": "verified_one_section_ahead",
         "officialAdjacencyEvidenceId": "adjacency:official-route-map:c1-inner:ginza-shintomicho",
-        "oneSectionAheadVerified": false
+        "oneSectionAheadVerified": true
       },
       "tariff": {
         "status": "priced",
@@ -1391,17 +1395,9 @@
           }
         ]
       },
-      "promotionDecision": "hold",
+      "promotionDecision": "eligible_for_review",
       "automaticSeedWrite": false,
-      "rejectionReasons": [
-        "EXIT_EXACT_BINDING_UNRESOLVED",
-        "FIRST_EXIT_UNRESOLVED",
-        "LEGACY_DIRECTION_UNRESOLVED",
-        "LEGACY_ROUTE_RESOLUTION_FAILED",
-        "MANDATORY_LAP_UNRESOLVED",
-        "ROUTE_PLAN_EVIDENCE_UNRESOLVED",
-        "ROUTE_PLAN_ROLES_UNRESOLVED"
-      ]
+      "rejectionReasons": []
     },
     {
       "candidateId": "candidate:da7dd59667fc69801c5649bf7d5a759d04b4d97ad75dee9c1acfaa4de0b10bdd",
@@ -2405,8 +2401,8 @@
   ],
   "summary": {
     "candidateTotal": 11,
-    "eligibleForReview": 9,
-    "hold": 2,
+    "eligibleForReview": 10,
+    "hold": 1,
     "relationCoverage": {
       "relationTotal": 26,
       "relationExpanded": 11,

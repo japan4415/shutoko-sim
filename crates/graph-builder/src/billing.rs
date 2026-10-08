@@ -2667,10 +2667,12 @@ pub(crate) fn derive_pair_candidates(
         .into_iter()
         .filter(|seed| seed.id.starts_with("bp:c1-"))
         .count();
-    if legacy_c1_seed_count != 8 {
+    // 8 C1 pairs + Issue #34 内回り銀座入口→新富町出口（公式1区間隣接に基づく
+    // アンカー再設定。OSM の分流/合流順序との差は docs/data-pipeline.md 注記）。
+    if legacy_c1_seed_count != 9 {
         return Err(PairDerivationError::new(
             "PAIR_DERIVATION_LEGACY_C1_SEED_COUNT_MISMATCH",
-            format!("expected 8 legacy C1 seed pairs, got {legacy_c1_seed_count}"),
+            format!("expected 9 legacy C1 seed pairs, got {legacy_c1_seed_count}"),
         ));
     }
     let mut ordered = adjacency.pairs.iter().collect::<Vec<_>>();

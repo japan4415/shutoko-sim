@@ -139,6 +139,23 @@
       }
     },
     {
+      "id": "bp:c1-inner:ginza-shintomicho",
+      "entryOsmWayId": 4848936,
+      "entryName": "銀座入口",
+      "exitOsmWayId": 760760233,
+      "exitName": "新富町出口",
+      "anchorOsmNodeId": 31254336,
+      "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c1-inner:ginza-shintomicho",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/route-c1/ginza/",
+        "sourceDate": "2026-09-16",
+        "notes": "C1内回り 銀座入口→新富町出口（0.4km、300円）は公式資料上の1区間先（data/od-tariffs.json assignment:c1-inner:ginza-shintomicho、2025-04/2026-10 両版の distanceEvidence 付き）。OSM では内回り新富町出口の分流点（588391376）が銀座入口の合流点（31254341）より上流にあり、銀座入口をアンカーとした First Exit 検証は機械的に成立しないため、Issue #34 対応案1 に基づきアンカーを分流点の手前の本線ノード 31254336 へ再設定した（再設定により First Exit 検証は機械的に成立し、direct path は OSM 幾何上の内回り周回経由となる。公式区間距離 0.4km との差は docs/data-pipeline.md の注記を参照）。出口ランプは内回り・外回りで最終区間 way 760760233 を共有するため sharedPhysicalOverrides G54 で承認し、exitOsmWayId は共有区間の way を参照する。"
+      }
+    },
+    {
       "id": "bp:2-inbound:meguro:c1-inner:tengenji",
       "pairKind": "radialReturn",
       "routePlanVersion": 1,

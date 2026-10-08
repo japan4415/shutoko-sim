@@ -719,14 +719,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             apply_od_tariffs_to_graph(&mut graph, &tariffs).map_err(std::io::Error::other)?;
         }
 
-        shutoko_graph_builder::validate_verified_billing_pair_endpoints(&graph).map_err(
-            |errs| {
-                format!(
-                    "verified billing pair endpoint validation failed:\n  {}",
-                    errs.join("\n  ")
-                )
-            },
-        )?;
+        shutoko_graph_builder::validate_verified_billing_pair_endpoints(
+            &graph,
+            &bindings_file.shared_physical_overrides,
+        )
+        .map_err(|errs| {
+            format!(
+                "verified billing pair endpoint validation failed:\n  {}",
+                errs.join("\n  ")
+            )
+        })?;
 
         let artifact = RampsArtifact {
             schema_version: 1,

@@ -4,10 +4,10 @@
   "automaticSeedWrite": false,
   "inputHashes": {
     "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
-    "rampLedgerSha256": "97ad8b378f1dcdd7d1c6af95164727860e040635bb821eaee043cb840b0aa5cc",
-    "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
-    "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
-    "odTariffsSha256": "37056d2b46b8c42168fdf54073ef856939c5152cec566de5dfea27ce6b26d763"
+    "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
+    "routeMembershipIndexSha256": "d0fcb3ff9c2e1bf7e1b4bcb0dfc15910b33732fa0553b58a7ef49dceeb46868b",
+    "billingPairAdjacencySha256": "7ea604c5592e11600fc38fa54a292d25d1eadeece2dc8c934637d5d5747d1252",
+    "odTariffsSha256": "48a62e9f7a882b67fa9ed3101e21555cf2d6f11d4197eefeda24592ebefc26cc"
   },
   "relationCoverage": [
     {
@@ -1255,17 +1255,17 @@
       "rejectionReasons": []
     },
     {
-      "candidateId": "candidate:3bf0b00ccbab33968de4f7cb8e2408d21aa1d1f1bdf7d64704e7e854f853b8e3",
+      "candidateId": "candidate:35512554cd2e21f7db66952b287d474a7919438622040da7dd354ebf20fdd3bc",
       "pairId": "bp:c1-inner:ginza-shintomicho",
       "pairKind": "legacyRing",
       "routeId": "C1",
       "direction": "inner",
       "entry": {
-        "rampId": "ramp:c1-outer:ginza-entry",
+        "rampId": "ramp:c1-inner:ginza-entry",
         "name": "銀座",
         "supportState": "verified_bound",
-        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-outer:ginza-entry",
-        "routeMembershipId": "route:C1:outer",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-inner:ginza-entry",
+        "routeMembershipId": "route:C1:inner",
         "gate": {
           "status": "passed",
           "reasonCodes": []
@@ -1274,14 +1274,12 @@
       "exit": {
         "rampId": "ramp:c1-inner:shintomicho-exit",
         "name": "新富町",
-        "supportState": "unsupported",
-        "bindingEvidenceId": null,
-        "routeMembershipId": null,
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c1-inner:shintomicho-exit",
+        "routeMembershipId": "route:C1:inner",
         "gate": {
-          "status": "failed",
-          "reasonCodes": [
-            "EXIT_BINDING_UNSUPPORTED"
-          ]
+          "status": "passed",
+          "reasonCodes": []
         }
       },
       "routePlan": {
@@ -1353,10 +1351,8 @@
           "reasonCodes": []
         },
         "exitBinding": {
-          "status": "failed",
-          "reasonCodes": [
-            "EXIT_BINDING_UNSUPPORTED"
-          ]
+          "status": "passed",
+          "reasonCodes": []
         },
         "tariffAssignment": {
           "status": "passed",
@@ -1398,7 +1394,6 @@
       "promotionDecision": "hold",
       "automaticSeedWrite": false,
       "rejectionReasons": [
-        "EXIT_BINDING_UNSUPPORTED",
         "EXIT_EXACT_BINDING_UNRESOLVED",
         "FIRST_EXIT_UNRESOLVED",
         "LEGACY_DIRECTION_UNRESOLVED",

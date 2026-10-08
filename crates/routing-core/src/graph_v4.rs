@@ -772,6 +772,7 @@ fn relation_segments_match_required(
     let [segment] = segments else {
         return false;
     };
+    let segment_len = segment.ordered_edge_ids.len();
     let positions = segment
         .ordered_edge_ids
         .iter()
@@ -794,10 +795,17 @@ fn relation_segments_match_required(
     let Some(&(last_required, _last_position)) = matches.last() else {
         return false;
     };
+    // Issue #34: a legacy pair whose OSM mainline path traverses the entire ring
+    // wraps the membership segment boundary (the relation mainline segment is
+    // cyclic). Positions are therefore compared modulo the segment length; for
+    // bounded sections (first_position + offset < segment_len) this is
+    // identical to the previous linear comparison.
     if required[first_required..=last_required]
         .iter()
         .enumerate()
-        .any(|(offset, edge_id)| positions.get(edge_id) != Some(&(first_position + offset)))
+        .any(|(offset, edge_id)| {
+            positions.get(edge_id) != Some(&((first_position + offset) % segment_len))
+        })
     {
         return false;
     }

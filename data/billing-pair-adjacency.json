@@ -277,11 +277,11 @@
       "reviewStatus": "blocked",
       "routeId": "C1",
       "direction": "inner",
-      "entryRampId": "ramp:c1-outer:ginza-entry",
+      "entryRampId": "ramp:c1-inner:ginza-entry",
       "exitRampId": "ramp:c1-inner:shintomicho-exit",
       "entryName": "銀座入口",
       "exitName": "新富町出口",
-      "entryOsmWayId": 4848922,
+      "entryOsmWayId": 4848936,
       "unresolvedReasons": [
         "ROUTE_PLAN_EVIDENCE_UNRESOLVED",
         "EXIT_EXACT_BINDING_UNRESOLVED"

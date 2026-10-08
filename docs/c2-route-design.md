@@ -40,6 +40,30 @@ segment 境界間は JCT 連絡路経由でも relation membership 内では到�
 なお OSM 上流の role 付与だけでは不十分（JCT 連絡路の member 追加も必要）で、
 上流修正は大規模編集かつ再取得とデータ鮮度の問題を伴う。
 
+### 2.1 スライス1 の追加要件（実装時に確定した制約）
+
+legacyRing ペアの sameNode route plan は `membership_id == route:{route_id}:{direction}`
+を要求する（`validate.rs` の adjacency 検証）。C2 のペアは公式ランプ ID
+（`ramp:c2-inner:*` / `ramp:c2-outer:*`）から `bp:c2-inner:*` / `bp:c2-outer:*` と
+なるため、合成 lap は **`route:C2:inner` / `route:C2:outer` に置く必要がある**。
+`route:C2:forward` に置いても direction チェックを通らない。
+
+よってスライス1は次の 2 段構成になる:
+
+1. **方向分割**: ロール無し relation の way を carriageway へ割り当てる。
+   方向は way の oneway 向き（環状の2つの周回方向）と、verified_bound な C2 ランプ
+   （`ramp:c2-inner/outer:*`、25 件）の mainline node がどちらの carriageway に
+   接続するかの突き合わせから決定できる。ランプが接続しない成分は未割当のまま
+   fail-closed に落とすか、明示的に forward のまま残すかを契約で固定する。
+2. **環状合成**: 割当済みの成分鎖を JCT 連絡路（Shutoko エッジのみ・距離予算付き・
+   決定論的タイブレーク）で連結し、単一の cyclic relationMainline segment として
+   `route:C2:inner` / `route:C2:outer` を再構築する。合成が失敗する成分は
+   従来どおり fail-closed（relation の expansion 報告に記録）。
+
+この 2 段とも soundness コア（`route_membership.rs`）の改修であり、C1 の membership
+生成を壊さない回帰テスト（C1 はロール付きで現行どおり 1 segment）とセットで
+実装・検証する必要がある。
+
 ## 3. 対処案の比較
 
 | 案 | 内容 | 評価 |

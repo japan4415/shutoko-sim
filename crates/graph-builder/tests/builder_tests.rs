@@ -1955,12 +1955,12 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
     // Almost-even segments are re-derived from their neighbours after their
     // split labels are dropped, so every labelled edge now lands on exactly one
     // carriageway and no segment stays ambiguous.
-    assert_eq!(inner, 1209);
-    assert_eq!(outer, 1088);
-    // 13 of the 2,310 labelled edges sit in a short opposite-direction run at
-    // the end of a segment and are dropped by the boundary trim, so the two
-    // carriageways partition every labelled edge the trim keeps.
-    assert_eq!(split.labelled_edge_ids.len() - (inner + outer), 13);
+    assert_eq!(inner, 1228);
+    assert_eq!(outer, 1068);
+    // 14 of the 2,310 labelled edges are dropped by the boundary trim, so the
+    // two carriageways partition every labelled edge the trim and the exit
+    // reachability filter keep.
+    assert_eq!(split.labelled_edge_ids.len() - (inner + outer), 14);
     assert_eq!(
         split.unassigned_edge_ids.len() + split.labelled_edge_ids.len(),
         2479,

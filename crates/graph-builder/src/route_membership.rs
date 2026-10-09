@@ -886,6 +886,26 @@ pub fn derive_carriageway_direction_split(
 
     let mut labels: HashMap<String, String> = HashMap::new();
     let mut seed_ramp_ids = Vec::new();
+    // Exit ramp attachment nodes per direction: the consistency filter below
+    // keeps only the edges that can still reach one of them.
+    let mut exit_attachments: HashMap<String, BTreeSet<String>> = HashMap::new();
+    for evidence in seeds.iter() {
+        if !is_exit_ramp_evidence(evidence, &edges) {
+            continue;
+        }
+        if let Some(attach) = resolve_ramp_mainline_attachment(
+            &adjacency,
+            &incoming_adjacency,
+            &mainline_by_node,
+            &edges,
+            evidence,
+        ) {
+            exit_attachments
+                .entry(evidence.direction.clone())
+                .or_default()
+                .insert(attach);
+        }
+    }
     for evidence in seeds {
         let Some(attach) = resolve_ramp_mainline_attachment(
             &adjacency,
@@ -918,6 +938,17 @@ pub fn derive_carriageway_direction_split(
     }
 
     grow_carriageway_labels(&edges, &mainline_edge_ids, &mut labels);
+
+    // Consistency filter: a carriageway edge has to stay on one-way edges that
+    // can still reach a verified exit ramp of the same direction. A label on an
+    // edge that cannot (a wrong branch at a JCT fork) would keep the set from
+    // ever forming a cycle, so it is dropped and re-derived by propagation.
+    apply_exit_reachability_filter(
+        &incoming_adjacency,
+        &mainline_edge_ids,
+        &exit_attachments,
+        &mut labels,
+    );
 
     // A segment whose labels are split almost evenly is not "half inner, half
     // outer": the relation order crosses both carriageways inside the segment.
@@ -5465,6 +5496,52 @@ pub fn find_first_exit_on_corridor_from_edge(
         initial_edge_id,
         expected_ramp_id,
     )
+}
+
+/// Keep only labels whose edge can still reach an exit attachment of the same
+/// carriageway along one-way edges that are themselves labelled that way.
+///
+/// The walk is backwards from every exit attachment: an edge is consistent when
+/// it carries the direction and some successor is already known consistent. The
+/// fixpoint is computed per direction, so a mislabelled fork branch is dropped
+/// instead of dragging the whole set out of balance.
+fn apply_exit_reachability_filter(
+    incoming_adjacency: &HashMap<&str, Vec<&Edge>>,
+    mainline_edge_ids: &BTreeSet<String>,
+    exit_attachments: &HashMap<String, BTreeSet<String>>,
+    labels: &mut HashMap<String, String>,
+) {
+    for (direction, attachments) in exit_attachments.iter() {
+        let mut consistent: HashSet<String> = HashSet::new();
+        let mut queue = std::collections::VecDeque::new();
+        for attach in attachments {
+            queue.push_back(attach.as_str());
+        }
+        let mut seen_nodes: HashSet<&str> = HashSet::new();
+        while let Some(node) = queue.pop_front() {
+            if !seen_nodes.insert(node) {
+                continue;
+            }
+            // Every labelled edge whose head is `node` stays consistent.
+            for edge in incoming_adjacency.get(node).into_iter().flatten() {
+                if !mainline_edge_ids.contains(&edge.id)
+                    || labels.get(&edge.id).map(String::as_str) != Some(direction.as_str())
+                {
+                    continue;
+                }
+                if consistent.insert(edge.id.clone()) {
+                    queue.push_back(edge.from.as_str());
+                }
+            }
+        }
+        for edge_id in mainline_edge_ids {
+            if labels.get(edge_id).map(String::as_str) == Some(direction.as_str())
+                && !consistent.contains(edge_id)
+            {
+                labels.remove(edge_id);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

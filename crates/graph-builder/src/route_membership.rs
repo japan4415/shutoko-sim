@@ -5672,32 +5672,31 @@ fn min_cost_carriageway_flow(
         to: usize,
         capacity: i64,
         cost: i64,
-        edge: Option<usize>,
     }
     let mut edge_ids = edges.keys().cloned().collect::<Vec<_>>();
     edge_ids.sort_unstable();
     let mut arcs: Vec<Arc> = Vec::new();
     let mut graph: Vec<Vec<usize>> = vec![Vec::new(); node_count];
+    // Arc index -> the carriageway edge it belongs to, so the net flow can be
+    // accumulated while augmenting (a reverse arc cancels earlier flow).
+    let mut arc_edge: Vec<Option<String>> = Vec::new();
     let push_pair = |arcs: &mut Vec<Arc>,
                      graph: &mut Vec<Vec<usize>>,
+                     arc_edge: &mut Vec<Option<String>>,
                      from: usize,
                      to: usize,
                      capacity: i64,
                      cost: i64,
-                     edge: Option<usize>| {
+                     edge: Option<String>| {
         let forward = arcs.len();
-        arcs.push(Arc {
-            to,
-            capacity,
-            cost,
-            edge,
-        });
+        arcs.push(Arc { to, capacity, cost });
         arcs.push(Arc {
             to: from,
             capacity: 0,
             cost: -cost,
-            edge,
         });
+        arc_edge.push(edge.clone());
+        arc_edge.push(edge);
         graph[from].push(forward);
         graph[to].push(forward + 1);
     };
@@ -5711,14 +5710,16 @@ fn min_cost_carriageway_flow(
         let Some(&to) = node_ids.get(&edge.to) else {
             continue;
         };
+        let _ = index;
         push_pair(
             &mut arcs,
             &mut graph,
+            &mut arc_edge,
             from,
             to,
             CAPACITY,
             edge.distance_meters as i64,
-            Some(index),
+            Some(edge_id.to_string()),
         );
     }
     let mut total_supply = 0_i64;
@@ -5729,10 +5730,28 @@ fn min_cost_carriageway_flow(
         };
         if *value > 0 {
             total_supply += *value;
-            push_pair(&mut arcs, &mut graph, source_index, index, *value, 0, None);
+            push_pair(
+                &mut arcs,
+                &mut graph,
+                &mut arc_edge,
+                source_index,
+                index,
+                *value,
+                0,
+                None,
+            );
         } else if *value < 0 {
             total_demand -= *value;
-            push_pair(&mut arcs, &mut graph, index, sink_index, -value, 0, None);
+            push_pair(
+                &mut arcs,
+                &mut graph,
+                &mut arc_edge,
+                index,
+                sink_index,
+                -value,
+                0,
+                None,
+            );
         }
     }
     if total_supply != total_demand || total_supply == 0 {
@@ -5741,6 +5760,7 @@ fn min_cost_carriageway_flow(
 
     let mut potential = vec![0_i64; node_count];
     let mut flow = 0_i64;
+    let mut net_flow: BTreeMap<String, i64> = BTreeMap::new();
     while flow < total_supply {
         let mut distance = vec![i64::MAX; node_count];
         let mut previous: Vec<Option<usize>> = vec![None; node_count];
@@ -5788,25 +5808,24 @@ fn min_cost_carriageway_flow(
             let arc_index = previous[node]?;
             arcs[arc_index].capacity -= bottleneck;
             arcs[arc_index ^ 1].capacity += bottleneck;
+            if let Some(edge_id) = arc_edge.get(arc_index).and_then(|value| value.clone()) {
+                // A forward arc adds flow, a reverse arc cancels it.
+                let delta = if arc_index % 2 == 0 {
+                    bottleneck
+                } else {
+                    -bottleneck
+                };
+                *net_flow.entry(edge_id).or_default() += delta;
+            }
             node = arcs[arc_index ^ 1].to;
         }
         flow += bottleneck;
     }
 
     let mut shipped: BTreeMap<String, usize> = BTreeMap::new();
-    for (arc_index, arc) in arcs.iter().enumerate() {
-        if arc_index % 2 != 0 {
-            continue;
-        }
-        let Some(edge_index) = arc.edge else {
-            continue;
-        };
-        let used = CAPACITY - arc.capacity;
-        if used <= 0 {
-            continue;
-        }
-        if let Some(edge_id) = edge_ids.get(edge_index) {
-            *shipped.entry(edge_id.to_string()).or_default() += used as usize;
+    for (edge_id, units) in net_flow {
+        if units > 0 {
+            *shipped.entry(edge_id).or_default() = units as usize;
         }
     }
     Some(shipped)

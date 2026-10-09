@@ -998,6 +998,13 @@ pub fn derive_carriageway_direction_split(
         grow_carriageway_labels(&edges, &mainline_edge_ids, &mut labels);
     }
 
+    // Balance the two carriageways globally: the relation order and the ramp
+    // seeds cannot decide every edge, and a one-way ring needs every node to
+    // have equal in and out degree per direction. The local search moves the
+    // few edges whose label is not forced, in a deterministic order, until the
+    // total imbalance stops improving.
+    minimize_carriageway_imbalance(&edges, &mainline_edge_ids, &mut labels);
+
     let mut segment_labels = Vec::with_capacity(ordered_mainline.len());
     let mut ambiguous_segment_ids = Vec::new();
     for (index, ordered) in ordered_mainline.iter().enumerate() {
@@ -5881,6 +5888,95 @@ fn closed_walk(edges: &HashMap<&str, &Edge>, multiset: &[String]) -> Option<Vec<
     walk.reverse();
     let closes = edges.get(walk.last()?.as_str())?.to == edges.get(walk.first()?.as_str())?.from;
     closes.then_some(walk)
+}
+
+/// Reduce the total in/out degree imbalance of the labelled carriageways by
+/// moving single edges between the inner, outer and unused labels.
+///
+/// This is the first step of the global formulation: instead of trusting the
+/// relation order, it optimises the actual cycle constraint (every node must
+/// have in-degree == out-degree per direction). The search is a deterministic
+/// hill climb with a bounded number of sweeps, so the release build cost stays
+/// predictable.
+fn minimize_carriageway_imbalance(
+    edges: &HashMap<&str, &Edge>,
+    mainline_edge_ids: &BTreeSet<String>,
+    labels: &mut HashMap<String, String>,
+) {
+    const DIRECTIONS: [&str; 2] = [CARRIAGEWAY_DIRECTION_INNER, CARRIAGEWAY_DIRECTION_OUTER];
+    const MAX_SWEEPS: usize = 24;
+
+    fn imbalance(
+        ordered_edges: &[&Edge],
+        label_of: &HashMap<String, String>,
+        direction: &str,
+    ) -> u64 {
+        let mut delta: HashMap<&str, i64> = HashMap::new();
+        for edge in ordered_edges {
+            if label_of.get(&edge.id).map(String::as_str) != Some(direction) {
+                continue;
+            }
+            *delta.entry(edge.from.as_str()).or_default() += 1;
+            *delta.entry(edge.to.as_str()).or_default() -= 1;
+        }
+        delta.values().map(|value| value.unsigned_abs()).sum()
+    }
+
+    let ordered_edges = mainline_edge_ids
+        .iter()
+        .filter_map(|edge_id| edges.get(edge_id.as_str()).copied())
+        .collect::<Vec<_>>();
+
+    for _ in 0..MAX_SWEEPS {
+        let mut best: Option<(u64, String, Option<String>)> = None;
+        for edge in &ordered_edges {
+            let current = labels.get(&edge.id).cloned();
+            let mut candidates: Vec<Option<String>> = vec![None];
+            for direction in DIRECTIONS {
+                candidates.push(Some(direction.to_string()));
+            }
+            for candidate in candidates {
+                if candidate == current {
+                    continue;
+                }
+                let mut trial = labels.clone();
+                match &candidate {
+                    Some(value) => {
+                        trial.insert(edge.id.clone(), value.clone());
+                    }
+                    None => {
+                        trial.remove(&edge.id);
+                    }
+                }
+                let score = DIRECTIONS
+                    .iter()
+                    .map(|direction| imbalance(&ordered_edges, &trial, direction))
+                    .sum::<u64>();
+                let key = (score, edge.id.clone(), candidate.clone());
+                if best.as_ref().is_none_or(|current| key < *current) {
+                    best = Some(key);
+                }
+            }
+        }
+        let Some((score, edge_id, candidate)) = best else {
+            return;
+        };
+        let current_score = DIRECTIONS
+            .iter()
+            .map(|direction| imbalance(&ordered_edges, labels, direction))
+            .sum::<u64>();
+        if score >= current_score {
+            return;
+        }
+        match candidate {
+            Some(value) => {
+                labels.insert(edge_id, value);
+            }
+            None => {
+                labels.remove(&edge_id);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

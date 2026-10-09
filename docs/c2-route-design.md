@@ -144,7 +144,12 @@ C1 回帰は `test_real_c2_carriageway_direction_split_from_verified_bound_ramps
 この段は §2.2 の fail-closed 4 セグメント（`forward:6, 8, 13, 14`）の扱いも決める
 必要がある。現状は未割当のままなので、合成はその上を連絡路で跨ぐことになる。
 
-**実装状況（2026-10 時点）: ブロッカーを 1 点に特定**
+**実装状況（2026-10 時点）: 合成器は未実装、ブロッカーを 1 点に特定**
+
+`CarriagewayDirectionSplit` には合成結果を受ける枠（`cycles` /
+`uncomposed_membership_ids`）と、合成できた方向を単一 segment として直列化する
+経路だけを用意してあり、合成器本体は未実装である（現状は全方向が
+`uncomposed_membership_ids` に入り、membership は run のまま）。
 
 合成器（成分分解 → 始点/終点の最小コスト対応付け → 成分間チェーン →
 Hierholzer → 閉路/重複/連続性のゲート）は試作したが、**実データでは両方向とも

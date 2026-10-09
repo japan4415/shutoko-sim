@@ -5591,53 +5591,34 @@ fn balance_carriageway_walk(
     edges: &HashMap<&str, &Edge>,
     runs: &[Vec<String>],
 ) -> Option<Vec<String>> {
+    let _ = adjacency;
     if runs.is_empty() {
         return None;
     }
     let mut multiset: Vec<String> = runs.iter().flatten().cloned().collect();
-
-    // Minimum-cost flow, one augmentation at a time: pair the globally cheapest
-    // source/sink connection, shift the flow, and repeat until no imbalance is
-    // left. The path may re-use an edge (the lap contract allows it), which is
-    // what lets a carriageway that is not a subset of a simple cycle still
-    // become a closed walk.
-    for _ in 0..96 {
-        let (sources, sinks) = degree_imbalance(edges, &multiset);
-        if sources.is_empty() && sinks.is_empty() {
-            break;
-        }
-        let mut best: Option<(u64, Vec<String>)> = None;
-        for source in sources.iter().take(16) {
-            for sink in sinks.iter().take(16) {
-                let Some(path) = cheapest_shutoko_path(adjacency, edges, source, sink) else {
-                    continue;
-                };
-                let key = (path_cost(edges, &path), path);
-                if best.as_ref().is_none_or(|current| key < *current) {
-                    best = Some(key);
-                }
+    let supply = multiset_imbalance_units(edges, &multiset);
+    if supply.values().any(|value| *value != 0) {
+        let shipped = min_cost_carriageway_flow(edges, &supply)?;
+        for (edge_id, count) in shipped {
+            for _ in 0..count {
+                multiset.push(edge_id.clone());
             }
         }
-        let Some((_, path)) = best else {
-            return None;
-        };
-        if path.is_empty() {
-            return None;
-        }
-        multiset.extend(path);
     }
-    let (sources, sinks) = degree_imbalance(edges, &multiset);
-    if !sources.is_empty() || !sinks.is_empty() {
+    if multiset_imbalance_units(edges, &multiset)
+        .values()
+        .any(|value| *value != 0)
+    {
         return None;
     }
     closed_walk(edges, &multiset)
 }
 
-/// In/out degree surplus (sources) and deficit (sinks) of a multiset.
-fn degree_imbalance(
+/// Signed degree imbalance of every node: positive is surplus (supply).
+fn multiset_imbalance_units(
     edges: &HashMap<&str, &Edge>,
     multiset: &[String],
-) -> (BTreeSet<String>, BTreeSet<String>) {
+) -> BTreeMap<String, i64> {
     let mut delta: BTreeMap<String, i64> = BTreeMap::new();
     for edge_id in multiset {
         if let Some(edge) = edges.get(edge_id.as_str()) {
@@ -5645,73 +5626,192 @@ fn degree_imbalance(
             *delta.entry(edge.to.clone()).or_default() -= 1;
         }
     }
-    let sources = delta
-        .iter()
-        .filter(|(_, value)| **value > 0)
-        .map(|(node, _)| node.clone())
-        .collect();
-    let sinks = delta
-        .iter()
-        .filter(|(_, value)| **value < 0)
-        .map(|(node, _)| node.clone())
-        .collect();
-    (sources, sinks)
+    delta
 }
 
-/// Deterministic minimum-distance Shutoko path.
-fn cheapest_shutoko_path(
-    adjacency: &HashMap<&str, Vec<&Edge>>,
+/// Ship every surplus unit to a deficit node along the cheapest Shutoko edges.
+///
+/// Successive shortest paths with potentials. Each round augments the largest
+/// amount that fits on the found path, so a node whose imbalance is larger than
+/// one unit is handled in one round. The returned map counts how often each edge
+/// has to be traversed by the shipped flow.
+fn min_cost_carriageway_flow(
     edges: &HashMap<&str, &Edge>,
-    start: &str,
-    goal: &str,
-) -> Option<Vec<String>> {
-    if start == goal {
-        return Some(Vec::new());
+    supply: &BTreeMap<String, i64>,
+) -> Option<BTreeMap<String, usize>> {
+    const CAPACITY: i64 = 64;
+
+    let mut node_ids: BTreeMap<String, usize> = BTreeMap::new();
+    {
+        let mut sorted = edges.keys().cloned().collect::<Vec<_>>();
+        sorted.sort_unstable();
+        for edge_id in &sorted {
+            let Some(edge) = edges.get(edge_id) else {
+                continue;
+            };
+            for node in [&edge.from, &edge.to] {
+                let next = node_ids.len();
+                node_ids.entry(node.clone()).or_insert(next);
+            }
+        }
     }
-    let mut best: HashMap<&str, u64> = HashMap::new();
-    let mut previous: HashMap<&str, (&str, String)> = HashMap::new();
-    let mut heap = BinaryHeap::new();
-    best.insert(start, 0);
-    heap.push(std::cmp::Reverse((0_u64, start)));
-    while let Some(std::cmp::Reverse((distance, node))) = heap.pop() {
-        if best.get(node).copied().unwrap_or(u64::MAX) < distance {
+    let mut node_count = node_ids.len();
+    let source_index = {
+        let index = node_count;
+        node_count += 1;
+        index
+    };
+    let sink_index = {
+        let index = node_count;
+        node_count += 1;
+        index
+    };
+
+    #[derive(Clone, Copy)]
+    struct Arc {
+        to: usize,
+        capacity: i64,
+        cost: i64,
+        edge: Option<usize>,
+    }
+    let mut edge_ids = edges.keys().cloned().collect::<Vec<_>>();
+    edge_ids.sort_unstable();
+    let mut arcs: Vec<Arc> = Vec::new();
+    let mut graph: Vec<Vec<usize>> = vec![Vec::new(); node_count];
+    let push_pair = |arcs: &mut Vec<Arc>,
+                     graph: &mut Vec<Vec<usize>>,
+                     from: usize,
+                     to: usize,
+                     capacity: i64,
+                     cost: i64,
+                     edge: Option<usize>| {
+        let forward = arcs.len();
+        arcs.push(Arc {
+            to,
+            capacity,
+            cost,
+            edge,
+        });
+        arcs.push(Arc {
+            to: from,
+            capacity: 0,
+            cost: -cost,
+            edge,
+        });
+        graph[from].push(forward);
+        graph[to].push(forward + 1);
+    };
+    for (index, edge_id) in edge_ids.iter().enumerate() {
+        let Some(edge) = edges.get(edge_id) else {
             continue;
+        };
+        let Some(&from) = node_ids.get(&edge.from) else {
+            continue;
+        };
+        let Some(&to) = node_ids.get(&edge.to) else {
+            continue;
+        };
+        push_pair(
+            &mut arcs,
+            &mut graph,
+            from,
+            to,
+            CAPACITY,
+            edge.distance_meters as i64,
+            Some(index),
+        );
+    }
+    let mut total_supply = 0_i64;
+    let mut total_demand = 0_i64;
+    for (node, value) in supply.iter() {
+        let Some(&index) = node_ids.get(node) else {
+            continue;
+        };
+        if *value > 0 {
+            total_supply += *value;
+            push_pair(&mut arcs, &mut graph, source_index, index, *value, 0, None);
+        } else if *value < 0 {
+            total_demand -= *value;
+            push_pair(&mut arcs, &mut graph, index, sink_index, -value, 0, None);
         }
-        if node == goal {
-            break;
-        }
-        for edge in adjacency.get(node).into_iter().flatten() {
-            let next = edge.to.as_str();
-            let candidate = distance.saturating_add(edge_distance_meters(edges, &edge.id));
-            if candidate > CARRIAGEWAY_SEED_REACH_METERS * 40 {
+    }
+    if total_supply != total_demand || total_supply == 0 {
+        return None;
+    }
+
+    let mut potential = vec![0_i64; node_count];
+    let mut flow = 0_i64;
+    while flow < total_supply {
+        let mut distance = vec![i64::MAX; node_count];
+        let mut previous: Vec<Option<usize>> = vec![None; node_count];
+        let mut heap = BinaryHeap::new();
+        distance[source_index] = 0;
+        heap.push(std::cmp::Reverse((0_i64, source_index)));
+        while let Some(std::cmp::Reverse((cost, node))) = heap.pop() {
+            if distance[node] < cost {
                 continue;
             }
-            if candidate < best.get(next).copied().unwrap_or(u64::MAX) {
-                best.insert(next, candidate);
-                previous.insert(next, (node, edge.id.clone()));
-                heap.push(std::cmp::Reverse((candidate, next)));
+            for arc_index in graph[node].iter().copied() {
+                let arc = arcs[arc_index];
+                if arc.capacity <= 0 {
+                    continue;
+                }
+                let reduced = arc.cost + potential[node] - potential[arc.to];
+                let candidate = cost.saturating_add(reduced);
+                if candidate < distance[arc.to] {
+                    distance[arc.to] = candidate;
+                    previous[arc.to] = Some(arc_index);
+                    heap.push(std::cmp::Reverse((candidate, arc.to)));
+                }
             }
         }
+        if previous[sink_index].is_none() {
+            return None;
+        }
+        for (node, value) in distance.iter().enumerate() {
+            if *value < i64::MAX {
+                potential[node] += *value;
+            }
+        }
+        let mut bottleneck = total_supply - flow;
+        let mut node = sink_index;
+        while node != source_index {
+            let arc_index = previous[node]?;
+            bottleneck = bottleneck.min(arcs[arc_index].capacity);
+            node = arcs[arc_index ^ 1].to;
+        }
+        if bottleneck <= 0 {
+            return None;
+        }
+        let mut node = sink_index;
+        while node != source_index {
+            let arc_index = previous[node]?;
+            arcs[arc_index].capacity -= bottleneck;
+            arcs[arc_index ^ 1].capacity += bottleneck;
+            node = arcs[arc_index ^ 1].to;
+        }
+        flow += bottleneck;
     }
-    let mut path = Vec::new();
-    let mut node = goal;
-    while node != start {
-        let (prior, edge_id) = previous.get(node)?.clone();
-        path.push(edge_id);
-        node = prior;
+
+    let mut shipped: BTreeMap<String, usize> = BTreeMap::new();
+    for (arc_index, arc) in arcs.iter().enumerate() {
+        if arc_index % 2 != 0 {
+            continue;
+        }
+        let Some(edge_index) = arc.edge else {
+            continue;
+        };
+        let used = CAPACITY - arc.capacity;
+        if used <= 0 {
+            continue;
+        }
+        if let Some(edge_id) = edge_ids.get(edge_index) {
+            *shipped.entry(edge_id.to_string()).or_default() += used as usize;
+        }
     }
-    path.reverse();
-    Some(path)
+    Some(shipped)
 }
 
-fn path_cost(edges: &HashMap<&str, &Edge>, path: &[String]) -> u64 {
-    path.iter()
-        .map(|edge_id| edge_distance_meters(edges, edge_id))
-        .sum()
-}
-
-/// Hierholzer walk over an edge multiset; accepted only when it is a single
-/// closed walk that consumes every entry.
 fn closed_walk(edges: &HashMap<&str, &Edge>, multiset: &[String]) -> Option<Vec<String>> {
     // A lap may revisit an edge (see docs/c2-route-design.md 2.3), so the walk
     // consumes multiset entries rather than unique edge ids. Without that

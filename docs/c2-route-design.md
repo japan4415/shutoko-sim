@@ -93,14 +93,20 @@ oneway のときだけ発動する（それ以外は `None` を返し、従来�
 | verified_bound シード（接続点解決済み） | 25 / 25（inner 13 / outer 12） |
 | シード衝突 | 0 |
 | ラベル付与エッジ | 2,310 / 2,479 |
-| majority ルール通過 | 1,936（inner 903 / outer 1,033） |
-| fail-closed セグメント | 4（`relation:4256077:forward:6, 8, 13, 14`） |
+| majority ルール通過 | 1,986（inner 953 / outer 1,033） |
+| fail-closed セグメント | 2（`relation:4256077:forward:8, 14`） |
 | 未割当エッジ（ラベル無し） | 169 |
-| 多数派ルールで棄却した少数派ラベル | 374 |
+| 多数派ルールで棄却した少数派ラベル | 324 |
 
-内訳: ラベル付与 2,310 = 採用 1,936 + 少数派棄却 374。未割当 169 は ambiguous セグメント
-4 本のエッジ（ラベルは付くが方向を確定できない）と、どのシードからも到達しなかった
-エッジの合計で、いずれも membership には載せない。
+内訳: ラベル付与 2,310 = 採用 1,986 + 少数派棄却 324。未割当 169 は
+ambiguous セグメント（ラベルは付くが方向を確定できない）と、どのシードからも
+到達しなかったエッジの合計で、いずれも membership には載せない。
+
+セグメント端の 1〜3 エッジの逆方向ランは JCT 境界の走査ノイズとみなして
+切り落とす（`trim_boundary_outliers`）。この処理で `forward:6` と `forward:13`
+（各 1 エッジの逸脱）が確定し、`forward:0` も採用に回った。`forward:8` は
+52/52 のほぼ半々、`forward:14` は長い内周ランを残すため mixed のまま
+fail-closed とする。
 
 C1 回帰は `test_real_c2_carriageway_direction_split_from_verified_bound_ramps`
 が同一テスト内で確認する（C1 inner / outer は relationMainline 各 1 segment のまま）。

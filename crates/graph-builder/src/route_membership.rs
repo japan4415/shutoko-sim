@@ -740,6 +740,72 @@ fn carriageway_segments(
     }
 }
 
+/// Drop short runs of an over-represented direction from the two ends of a
+/// relation-ordered segment.
+///
+/// A one-to-three edge excursion into the other carriageway at a JCT boundary
+/// is traversal noise, not evidence that the whole segment belongs to both
+/// directions. Long excursions are left in place so the segment stays
+/// ambiguous.
+fn trim_boundary_outliers(ordered: &[String], labels: &HashMap<String, String>) -> Vec<String> {
+    const MAX_OUTLIER_RUN: usize = 3;
+    let mut runs: Vec<(Option<String>, Vec<String>)> = Vec::new();
+    for edge_id in ordered {
+        let label = labels.get(edge_id).cloned();
+        if runs.last().is_some_and(|(existing, _)| *existing == label) {
+            runs.last_mut().expect("run").1.push(edge_id.clone());
+        } else {
+            runs.push((label, vec![edge_id.clone()]));
+        }
+    }
+    if runs.len() < 2 {
+        return ordered.to_vec();
+    }
+    loop {
+        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+        for (label, edges_in_run) in runs.iter() {
+            if let Some(label) = label {
+                *counts.entry(label.clone()).or_default() += edges_in_run.len();
+            }
+        }
+        let majority = counts
+            .iter()
+            .max_by_key(|(label, count)| (**count, (*label).clone()))
+            .map(|(label, count)| (label.clone(), *count));
+        let minority = counts
+            .iter()
+            .min_by_key(|(label, count)| (**count, (*label).clone()))
+            .map(|(label, count)| (label.clone(), *count));
+        let (Some((majority_label, majority_count)), Some((minority_label, minority_count))) =
+            (majority, minority)
+        else {
+            break;
+        };
+        if majority_label == minority_label || minority_count >= majority_count || counts.len() < 2
+        {
+            break;
+        }
+        let boundary_outlier = |run: &(Option<String>, Vec<String>)| {
+            run.0.as_deref() == Some(minority_label.as_str()) && run.1.len() <= MAX_OUTLIER_RUN
+        };
+        let mut trimmed = false;
+        if runs.first().is_some_and(boundary_outlier) {
+            runs.remove(0);
+            trimmed = true;
+        }
+        if runs.last().is_some_and(boundary_outlier) {
+            runs.pop();
+            trimmed = true;
+        }
+        if !trimmed || runs.len() < 2 {
+            break;
+        }
+    }
+    runs.into_iter()
+        .flat_map(|(_, edges_in_run)| edges_in_run)
+        .collect()
+}
+
 /// Derive the `inner` / `outer` carriageway split of a role-less ring relation
 /// from its verified-bound ramps.
 ///
@@ -851,16 +917,21 @@ pub fn derive_carriageway_direction_split(
         seed_ramp_ids.push(evidence.ramp_id.clone());
     }
 
-    grow_carriageway_labels(&adjacency, &edges, &mainline_edge_ids, &mut labels);
+    grow_carriageway_labels(&edges, &mainline_edge_ids, &mut labels);
 
     let mut segment_labels = Vec::with_capacity(ordered_mainline.len());
     let mut ambiguous_segment_ids = Vec::new();
     for (index, ordered) in ordered_mainline.iter().enumerate() {
-        let inner = ordered
+        // A short run of the opposing direction sitting at either end of a
+        // segment is junction noise: the relation order crosses the other
+        // carriageway for a few edges. Trimming only those end runs keeps the
+        // long mixed stretches fail-closed.
+        let trimmed = trim_boundary_outliers(ordered, &labels);
+        let inner = trimmed
             .iter()
             .filter(|edge_id| labels.get(*edge_id).map(String::as_str) == Some("inner"))
             .count();
-        let outer = ordered
+        let outer = trimmed
             .iter()
             .filter(|edge_id| labels.get(*edge_id).map(String::as_str) == Some("outer"))
             .count();
@@ -1067,11 +1138,13 @@ fn ramp_reachable_mainline_edges(
 /// successors. An unlabelled edge only takes a direction when every reachable
 /// mainline neighbour on one side already agrees on that direction.
 fn grow_carriageway_labels(
-    adjacency: &HashMap<&str, Vec<&Edge>>,
     edges: &HashMap<&str, &Edge>,
     mainline_edge_ids: &BTreeSet<String>,
     labels: &mut HashMap<String, String>,
 ) {
+    // The propagation result must not depend on HashMap iteration order: the
+    // per-node predecessor lists are sorted so that a round is a pure function
+    // of the previous round's labels.
     let mut incoming: HashMap<&str, Vec<&str>> = HashMap::new();
     for edge_id in mainline_edge_ids {
         if let Some(edge) = edges.get(edge_id.as_str()) {
@@ -1080,6 +1153,21 @@ fn grow_carriageway_labels(
                 .or_default()
                 .push(edge_id.as_str());
         }
+    }
+    for list in incoming.values_mut() {
+        list.sort_unstable();
+    }
+    let mut successors_by_node: HashMap<&str, Vec<&str>> = HashMap::new();
+    for edge_id in mainline_edge_ids {
+        if let Some(edge) = edges.get(edge_id.as_str()) {
+            successors_by_node
+                .entry(edge.from.as_str())
+                .or_default()
+                .push(edge_id.as_str());
+        }
+    }
+    for list in successors_by_node.values_mut() {
+        list.sort_unstable();
     }
     let mut changed = true;
     let mut rounds = 0;
@@ -1100,13 +1188,12 @@ fn grow_carriageway_labels(
                 .copied()
                 .filter(|candidate| *candidate != edge_id.as_str())
                 .collect::<Vec<_>>();
-            let successors = adjacency
+            let successors = successors_by_node
                 .get(edge.to.as_str())
                 .into_iter()
                 .flatten()
-                .map(|candidate| candidate.id.as_str())
+                .copied()
                 .filter(|candidate| *candidate != edge_id.as_str())
-                .filter(|candidate| mainline_edge_ids.contains(*candidate))
                 .collect::<Vec<_>>();
             for candidates in [predecessors, successors] {
                 if candidates.is_empty() {

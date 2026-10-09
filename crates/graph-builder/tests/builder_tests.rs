@@ -1952,16 +1952,17 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
     );
     let inner = split.edge_count("inner");
     let outer = split.edge_count("outer");
-    // 1,936 of the 2,310 labelled edges survive the per-segment majority rule;
-    // the remaining 374 are minority labels that the fail-closed gate drops
-    // together with the four ambiguous junction segments.
-    assert_eq!(inner, 903);
+    // Of the 2,310 labelled edges, the per-segment majority rule (with short
+    // end-of-segment excursions into the other carriageway trimmed) keeps
+    // 1,986; the rest sit in the two segments whose labels are genuinely mixed
+    // (forward:8 is a ~50/50 split, forward:14 keeps a long inner stretch).
+    assert_eq!(inner, 953);
     assert_eq!(outer, 1033);
     assert_eq!(
         inner + outer,
-        split.labelled_edge_ids.len() - 374,
-        "inner and outer must partition every relation mainline edge that the \
-         per-segment majority rule keeps"
+        split.labelled_edge_ids.len() - 324,
+        "inner and outer must partition every relation mainline edge the \
+         majority rule keeps"
     );
     assert_eq!(
         split.unassigned_edge_ids.len() + split.labelled_edge_ids.len(),
@@ -1971,16 +1972,12 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
     assert_eq!(
         split.ambiguous_segment_ids,
         vec![
-            "relation:4256077:forward:6".to_string(),
             "relation:4256077:forward:8".to_string(),
-            "relation:4256077:forward:13".to_string(),
             "relation:4256077:forward:14".to_string(),
         ],
-        "junction-overlapping segments stay fail-closed"
+        "genuinely mixed segments stay fail-closed"
     );
 
-    // Only the relation mainline segments take part in the carriageway split;
-    // the C2 bound-ramp segments are the ramp evidence paths and stay separate.
     let edge_owner: HashMap<&str, &str> = built
         .route_memberships
         .iter()

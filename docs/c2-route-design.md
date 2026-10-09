@@ -64,6 +64,56 @@ legacyRing ペアの sameNode route plan は `membership_id == route:{route_id}:
 生成を壊さない回帰テスト（C1 はロール付きで現行どおり 1 segment）とセットで
 実装・検証する必要がある。
 
+### 2.2 スライス1 前半（方向分割）の実装済み契約
+
+`derive_carriageway_direction_split()` が方向分割を担う。relation に方向ロールが
+無く、同一 route の `verified_bound` ランプが 1 件以上あり、member way が全て
+oneway のときだけ発動する（それ以外は `None` を返し、従来のロール展開を維持する）。
+
+- **接続点の決定**: ランプ evidence の ground 側端点（entry は `to_node_id`、
+  exit は `from_node_id`）から、Shutoko エッジを距離予算
+  `CARRIAGEWAY_SEED_REACH_METERS`（3,000 m）以内で Dijkstra 探索し、最初に
+  到達した relation mainline node を接続点とする。entry は出辺、exit は入辺を
+  たどる（exit は evidence が本線→地上の順に並ぶため逆走になる）。
+- **シードの伝播**: entry は接続点の下流、exit は上流の mainline エッジに
+  ランプ方向を付与する。続いて「mainline の predecessor（または successor）が
+  全て同一方向」の未割当エッジへ固定点まで伝播する。
+- **relation 順セグメント単位の確定**: 各セグメントで多数派方向を取り、
+  少数派の比率が `C2_DIRECTION_MINORITY_SEGMENT_RATIO`（5%）以上ならその
+  セグメント全体を未割当（fail-closed、`ambiguous_segment_ids` に記録）とし、
+  未満なら多数派エッジのみを採用して少数派ラベルを捨てる。
+- **出力**: `route:C2:inner` / `route:C2:outer` を relation 順の連続 run として
+  生成し、`route:C2:forward` は発行しない（all-real-v4 の graph fixture から消える）。
+  relation ロール付きの C1 は対象外で、従来どおり inner / outer 各 1 segment。
+
+#### 実データ検証（release all-real-v4 の OSM スナップショット、relation 4256077）
+
+| 項目 | 値 |
+|---|---|
+| verified_bound シード（接続点解決済み） | 25 / 25（inner 13 / outer 12） |
+| シード衝突 | 0 |
+| ラベル付与エッジ | 2,310 / 2,479 |
+| majority ルール通過 | 1,936（inner 903 / outer 1,033） |
+| fail-closed セグメント | 4（`relation:4256077:forward:6, 8, 13, 14`） |
+| 未割当エッジ（ラベル無し） | 169 |
+| 多数派ルールで棄却した少数派ラベル | 374 |
+
+内訳: ラベル付与 2,310 = 採用 1,936 + 少数派棄却 374。未割当 169 は ambiguous セグメント
+4 本のエッジ（ラベルは付くが方向を確定できない）と、どのシードからも到達しなかった
+エッジの合計で、いずれも membership には載せない。
+
+C1 回帰は `test_real_c2_carriageway_direction_split_from_verified_bound_ramps`
+が同一テスト内で確認する（C1 inner / outer は relationMainline 各 1 segment のまま）。
+
+#### 残るギャップ（スライス1 後半＝環状合成、未実装）
+
+第 2 段の要点は設計当初の想定より強い。`relation_segments_match_required`
+（`crates/routing-core/src/graph_v4.rs`）は解決対象の membership に
+**`relationMainline` segment をちょうど 1 本**しか許さないため、上記の
+複数 run のままでは legacyRing ペアが解決できない。JCT 連絡路で run を連結し、
+方向ごとに単一の cyclic segment へ畳む必要がある。また §2.2 の fail-closed 4
+セグメントは連絡路合成側で回収するか、未対応のまま残すかを契約で決める。
+
 ## 3. 対処案の比較
 
 | 案 | 内容 | 評価 |

@@ -104,6 +104,62 @@ pub struct RouteMembershipBuildOptions {
     pub bound_ramp_evidence: Vec<BoundRampEvidence>,
 }
 
+/// Carriageway direction for a ring route whose OSM relation carries no
+/// direction roles (C2 / relation 4256077).
+pub const CARRIAGEWAY_DIRECTION_INNER: &str = "inner";
+/// Counter-clockwise carriageway direction of a role-less ring relation.
+pub const CARRIAGEWAY_DIRECTION_OUTER: &str = "outer";
+
+/// Deterministic carriageway assignment derived from the verified-bound ramps
+/// of one role-less ring relation.
+///
+/// The OSM relation for C2 has no direction roles and no JCT connector members,
+/// so the relation cannot be split into `inner` / `outer` memberships from role
+/// tags alone. Instead every `verified_bound` ramp of the same route is used as
+/// a direction seed: the C2 mainline edges the ramp can reach along the
+/// one-way carriageway inherit the ramp's direction, and the labels are grown
+/// to a fixed point along mainline predecessors / successors.
+///
+/// The assignment is deliberately fail-closed. `unassigned_edge_ids` holds every
+/// relation mainline edge that stayed unlabelled, and `ambiguous_segment_ids`
+/// holds every relation-ordered segment whose labels disagree beyond
+/// [`C2_DIRECTION_MINORITY_SEGMENT_RATIO`]; both are excluded from the derived
+/// memberships and reported to the caller.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CarriagewayDirectionSplit {
+    pub route_id: String,
+    pub relation_id: i64,
+    pub directions: Vec<String>,
+    /// Membership id -> the ordered, contiguous relation mainline runs that
+    /// make up that carriageway membership.
+    pub segments: BTreeMap<String, Vec<Vec<String>>>,
+    pub labelled_edge_ids: BTreeSet<String>,
+    pub unassigned_edge_ids: BTreeSet<String>,
+    pub ambiguous_segment_ids: Vec<String>,
+    pub seed_ramp_ids: Vec<String>,
+}
+
+impl CarriagewayDirectionSplit {
+    /// Total relation mainline edges assigned to one carriageway, summed over
+    /// every contiguous run that makes up its membership.
+    pub fn edge_count(&self, direction: &str) -> usize {
+        let membership_id = format!("route:{}:{}", self.route_id, direction);
+        self.segments
+            .get(&membership_id)
+            .map_or(0, |runs| runs.iter().map(Vec::len).sum())
+    }
+}
+
+/// A relation-ordered segment may still be claimed by one carriageway when the
+/// opposing direction only leaks into a small fraction of its edges (junction
+/// overlap). Above this ratio the whole segment is treated as ambiguous and
+/// dropped from both carriageways.
+pub const C2_DIRECTION_MINORITY_SEGMENT_RATIO: f64 = 0.05;
+
+/// Maximum length of a single ramp walk while resolving the mainline
+/// attachment point and the edges a ramp can reach on its carriageway.
+pub const CARRIAGEWAY_SEED_REACH_METERS: u64 = 3_000;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GraphSchemaV4BillingPair {
@@ -599,6 +655,467 @@ fn is_route_relation(element: &OsmElement) -> bool {
     element.is_relation()
         && element.get_tag("type") == Some("route")
         && (element.get_tag("route").is_some() || element.get_tag("ref").is_some())
+}
+
+/// Every relation member way is one-way, so the relation cannot be split by
+/// orientation alone; the split needs the verified-bound ramp seeds instead.
+fn relation_ways_are_all_oneway(relation: &OsmElement, response: &OverpassResponse) -> bool {
+    relation.members.iter().flatten().all(|member| {
+        if member.member_type != "way" {
+            return true;
+        }
+        way_by_id_from_response(response, member.ref_id)
+            .and_then(|way| way.get_tag("oneway"))
+            .is_some_and(|value| matches!(normalized(value).as_str(), "yes" | "1" | "true" | "-1"))
+    })
+}
+
+/// Ordered relation mainline edges, keyed by the relation member order that
+/// [`build_relation_segments`] already produces.
+fn relation_ordered_mainline_edges(
+    relation: &OsmElement,
+    response: &OverpassResponse,
+    graph: &Graph,
+    source_snapshot_sha256: &str,
+) -> Result<Vec<Vec<String>>, RouteMembershipError> {
+    Ok(
+        build_relation_segments(relation, response, graph, "forward", source_snapshot_sha256)?
+            .into_iter()
+            .map(|segment| segment.ordered_edge_ids)
+            .collect(),
+    )
+}
+
+/// The segments a role-less ring relation is split into for one carriageway.
+struct CarriagewaySegments {
+    membership_id: String,
+    segments: Vec<Vec<String>>,
+}
+
+fn carriageway_segments(
+    route_id: &str,
+    direction: &str,
+    ordered_mainline: &[Vec<String>],
+    labels: &HashMap<String, String>,
+    segment_labels: &[Option<String>],
+) -> CarriagewaySegments {
+    let mut segments = Vec::new();
+    for (index, ordered) in ordered_mainline.iter().enumerate() {
+        if segment_labels.get(index).and_then(|value| value.as_deref()) != Some(direction) {
+            continue;
+        }
+        let mut current: Vec<String> = Vec::new();
+        for edge_id in ordered {
+            if labels.get(edge_id).map(String::as_str) == Some(direction) {
+                current.push(edge_id.clone());
+            } else {
+                // Unlabelled edges are dropped fail-closed, so a dropped edge
+                // always breaks the run.
+                if !current.is_empty() {
+                    segments.push(std::mem::take(&mut current));
+                }
+            }
+        }
+        if !current.is_empty() {
+            segments.push(current);
+        }
+    }
+    CarriagewaySegments {
+        membership_id: format!("route:{}:{}", route_id, direction),
+        segments,
+    }
+}
+
+/// Derive the `inner` / `outer` carriageway split of a role-less ring relation
+/// from its verified-bound ramps.
+///
+/// Returns `Ok(None)` when the relation already carries direction roles, when
+/// no verified-bound ramp of the same route exists, or when the relation
+/// contains a bidirectional member way (where a carriageway split cannot be
+/// justified from orientation or ramp evidence). The caller then keeps the
+/// existing relation-role behaviour.
+pub fn derive_carriageway_direction_split(
+    relation: &OsmElement,
+    response: &OverpassResponse,
+    graph: &Graph,
+    source_snapshot_sha256: &str,
+    bound_ramp_evidence: &[BoundRampEvidence],
+) -> Result<Option<CarriagewayDirectionSplit>, RouteMembershipError> {
+    let route_id = relation_route_id(relation)?;
+    let members = relation.members.as_ref().ok_or_else(|| {
+        RouteMembershipError::Relation(format!("relation {} has no members", relation.id))
+    })?;
+    let has_role_direction = members
+        .iter()
+        .filter(|member| member.member_type == "way")
+        .any(|member| relation_member_role(&member.role).is_some());
+    if has_role_direction {
+        return Ok(None);
+    }
+    let mut seeds = bound_ramp_evidence
+        .iter()
+        .filter(|evidence| evidence.route_id == route_id)
+        .collect::<Vec<_>>();
+    seeds.sort_by(|left, right| left.ramp_id.cmp(&right.ramp_id));
+    if seeds.is_empty() {
+        return Ok(None);
+    }
+    if !relation_ways_are_all_oneway(relation, response) {
+        return Ok(None);
+    }
+
+    let ordered_mainline =
+        relation_ordered_mainline_edges(relation, response, graph, source_snapshot_sha256)?;
+    let mainline_edge_ids = ordered_mainline
+        .iter()
+        .flat_map(|segment| segment.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    if mainline_edge_ids.is_empty() {
+        return Ok(None);
+    }
+
+    let edges = edge_map(graph);
+    let mut adjacency: HashMap<&str, Vec<&Edge>> = HashMap::new();
+    let mut incoming_adjacency: HashMap<&str, Vec<&Edge>> = HashMap::new();
+    let mut mainline_by_node: HashMap<&str, Vec<&str>> = HashMap::new();
+    for edge in graph.edges.iter() {
+        if matches!(
+            edge.kind,
+            EdgeKind::Shutoko | EdgeKind::Entry | EdgeKind::Exit
+        ) {
+            adjacency.entry(edge.from.as_str()).or_default().push(edge);
+            incoming_adjacency
+                .entry(edge.to.as_str())
+                .or_default()
+                .push(edge);
+        }
+    }
+    for edge_id in &mainline_edge_ids {
+        let Some(edge) = edges.get(edge_id.as_str()) else {
+            continue;
+        };
+        mainline_by_node
+            .entry(edge.from.as_str())
+            .or_default()
+            .push(edge_id.as_str());
+        mainline_by_node
+            .entry(edge.to.as_str())
+            .or_default()
+            .push(edge_id.as_str());
+    }
+
+    let mut labels: HashMap<String, String> = HashMap::new();
+    let mut seed_ramp_ids = Vec::new();
+    for evidence in seeds {
+        let Some(attach) = resolve_ramp_mainline_attachment(
+            &adjacency,
+            &incoming_adjacency,
+            &mainline_by_node,
+            &edges,
+            evidence,
+        ) else {
+            continue;
+        };
+        // An entry ramp joins the carriageway that runs in its direction, so
+        // its attach point and everything downstream is that direction. An exit
+        // ramp leaves the carriageway that runs in its direction, so its attach
+        // point and everything upstream is that direction.
+        let reverse = is_exit_ramp_evidence(evidence, &edges);
+        let reachable = ramp_reachable_mainline_edges(
+            &adjacency,
+            &incoming_adjacency,
+            &mainline_by_node,
+            &edges,
+            &attach,
+            reverse,
+        );
+        for edge_id in reachable {
+            labels
+                .entry(edge_id)
+                .or_insert_with(|| evidence.direction.clone());
+        }
+        seed_ramp_ids.push(evidence.ramp_id.clone());
+    }
+
+    grow_carriageway_labels(&adjacency, &edges, &mainline_edge_ids, &mut labels);
+
+    let mut segment_labels = Vec::with_capacity(ordered_mainline.len());
+    let mut ambiguous_segment_ids = Vec::new();
+    for (index, ordered) in ordered_mainline.iter().enumerate() {
+        let inner = ordered
+            .iter()
+            .filter(|edge_id| labels.get(*edge_id).map(String::as_str) == Some("inner"))
+            .count();
+        let outer = ordered
+            .iter()
+            .filter(|edge_id| labels.get(*edge_id).map(String::as_str) == Some("outer"))
+            .count();
+        let total = inner + outer;
+        if total == 0 {
+            segment_labels.push(None);
+            continue;
+        }
+        let (majority, minority) = if inner >= outer {
+            ("inner", outer)
+        } else {
+            ("outer", inner)
+        };
+        if minority as f64 / total as f64 >= C2_DIRECTION_MINORITY_SEGMENT_RATIO {
+            ambiguous_segment_ids.push(format!("relation:{}:forward:{}", relation.id, index));
+            segment_labels.push(None);
+            continue;
+        }
+        segment_labels.push(Some(majority.to_string()));
+    }
+
+    let inner = carriageway_segments(
+        &route_id,
+        CARRIAGEWAY_DIRECTION_INNER,
+        &ordered_mainline,
+        &labels,
+        &segment_labels,
+    );
+    let outer = carriageway_segments(
+        &route_id,
+        CARRIAGEWAY_DIRECTION_OUTER,
+        &ordered_mainline,
+        &labels,
+        &segment_labels,
+    );
+
+    let mut segments: BTreeMap<String, Vec<Vec<String>>> = BTreeMap::new();
+    let mut directions = Vec::new();
+    for carriageway in [inner, outer] {
+        if carriageway.segments.is_empty() {
+            continue;
+        }
+        let direction = carriageway
+            .membership_id
+            .rsplit(':')
+            .next()
+            .unwrap_or_default()
+            .to_string();
+        if !directions.contains(&direction) {
+            directions.push(direction);
+        }
+        segments.insert(carriageway.membership_id, carriageway.segments);
+    }
+    let unassigned_edge_ids = mainline_edge_ids
+        .iter()
+        .filter(|edge_id| !labels.contains_key(*edge_id))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    Ok(Some(CarriagewayDirectionSplit {
+        route_id,
+        relation_id: relation.id,
+        directions,
+        segments,
+        labelled_edge_ids: labels.keys().cloned().collect(),
+        unassigned_edge_ids,
+        ambiguous_segment_ids,
+        seed_ramp_ids,
+    }))
+}
+
+/// Walk from the ramp evidence path towards the relation mainline.
+///
+/// The evidence path is ground-first for a general entry ramp and
+/// motorway-first for a general exit ramp, so the walk always continues away
+/// from the ramp's ground node: entries follow outgoing edges from
+/// `to_node_id`, exits follow incoming edges from `from_node_id`. The stop
+/// condition is the first node incident to a mainline edge.
+fn resolve_ramp_mainline_attachment(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    incoming_adjacency: &HashMap<&str, Vec<&Edge>>,
+    mainline_by_node: &HashMap<&str, Vec<&str>>,
+    edges: &HashMap<&str, &Edge>,
+    evidence: &BoundRampEvidence,
+) -> Option<String> {
+    let reverse = is_exit_ramp_evidence(evidence, edges);
+    let start = if reverse {
+        evidence.from_node_id.as_str()
+    } else {
+        evidence.to_node_id.as_str()
+    };
+    let mut best: HashMap<&str, u64> = HashMap::new();
+    let mut heap = BinaryHeap::new();
+    best.insert(start, 0);
+    heap.push(std::cmp::Reverse((0_u64, start)));
+    while let Some(std::cmp::Reverse((distance, node))) = heap.pop() {
+        if best.get(node).copied().unwrap_or(u64::MAX) < distance {
+            continue;
+        }
+        if mainline_by_node.contains_key(node) {
+            return Some(node.to_string());
+        }
+        let incident = if reverse {
+            incoming_adjacency.get(node)
+        } else {
+            adjacency.get(node)
+        };
+        for edge in incident.into_iter().flatten() {
+            // The ramp's own entry / exit ways are part of the walk: a bound
+            // exit ramp starts on the Exit edge whose `from` node is the
+            // mainline attachment. Walking an exit binding backwards therefore
+            // follows incoming edges and steps to `edge.from`.
+            let next = if reverse {
+                edge.from.as_str()
+            } else {
+                edge.to.as_str()
+            };
+            let candidate = distance.saturating_add(edge.distance_meters);
+            if candidate > CARRIAGEWAY_SEED_REACH_METERS {
+                continue;
+            }
+            if candidate < best.get(next).copied().unwrap_or(u64::MAX) {
+                best.insert(next, candidate);
+                heap.push(std::cmp::Reverse((candidate, next)));
+            }
+        }
+    }
+    None
+}
+
+/// A bound ramp evidence path starts with an `exit` edge exactly when the ramp
+/// leaves the mainline.
+fn is_exit_ramp_evidence(evidence: &BoundRampEvidence, edges: &HashMap<&str, &Edge>) -> bool {
+    evidence
+        .edge_ids
+        .first()
+        .and_then(|edge_id| edges.get(edge_id.as_str()))
+        .is_some_and(|edge| edge.kind == EdgeKind::Exit)
+}
+
+fn edge_distance_meters(edges: &HashMap<&str, &Edge>, edge_id: &str) -> u64 {
+    edges
+        .get(edge_id)
+        .map(|edge| edge.distance_meters)
+        .unwrap_or_default()
+}
+
+/// Every relation mainline edge reachable from the ramp attachment while
+/// travelling in the ramp's direction.
+fn ramp_reachable_mainline_edges(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    incoming_adjacency: &HashMap<&str, Vec<&Edge>>,
+    mainline_by_node: &HashMap<&str, Vec<&str>>,
+    edges: &HashMap<&str, &Edge>,
+    attach: &str,
+    reverse: bool,
+) -> Vec<String> {
+    let mut visited: HashMap<&str, u64> = HashMap::new();
+    let mut heap = BinaryHeap::new();
+    let mut reachable = BTreeSet::new();
+    visited.insert(attach, 0);
+    heap.push(std::cmp::Reverse((0_u64, attach)));
+    while let Some(std::cmp::Reverse((distance, node))) = heap.pop() {
+        if visited.get(node).copied().unwrap_or(u64::MAX) < distance {
+            continue;
+        }
+        for edge_id in mainline_by_node.get(node).into_iter().flatten() {
+            reachable.insert((*edge_id).to_string());
+        }
+        let incident = if reverse {
+            incoming_adjacency.get(node)
+        } else {
+            adjacency.get(node)
+        };
+        for edge in incident.into_iter().flatten() {
+            let next = if reverse {
+                edge.from.as_str()
+            } else {
+                edge.to.as_str()
+            };
+            let candidate = distance.saturating_add(edge_distance_meters(edges, &edge.id));
+            if candidate > CARRIAGEWAY_SEED_REACH_METERS {
+                continue;
+            }
+            if candidate < visited.get(next).copied().unwrap_or(u64::MAX) {
+                visited.insert(next, candidate);
+                heap.push(std::cmp::Reverse((candidate, next)));
+            }
+        }
+    }
+    reachable.into_iter().collect()
+}
+
+/// Grow the seed labels to a fixed point along mainline predecessors and
+/// successors. An unlabelled edge only takes a direction when every reachable
+/// mainline neighbour on one side already agrees on that direction.
+fn grow_carriageway_labels(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    edges: &HashMap<&str, &Edge>,
+    mainline_edge_ids: &BTreeSet<String>,
+    labels: &mut HashMap<String, String>,
+) {
+    let mut incoming: HashMap<&str, Vec<&str>> = HashMap::new();
+    for edge_id in mainline_edge_ids {
+        if let Some(edge) = edges.get(edge_id.as_str()) {
+            incoming
+                .entry(edge.to.as_str())
+                .or_default()
+                .push(edge_id.as_str());
+        }
+    }
+    let mut changed = true;
+    let mut rounds = 0;
+    while changed && rounds < mainline_edge_ids.len().max(1) {
+        changed = false;
+        rounds += 1;
+        for edge_id in mainline_edge_ids {
+            if labels.contains_key(edge_id) {
+                continue;
+            }
+            let Some(edge) = edges.get(edge_id.as_str()) else {
+                continue;
+            };
+            let predecessors = incoming
+                .get(edge.from.as_str())
+                .into_iter()
+                .flatten()
+                .copied()
+                .filter(|candidate| *candidate != edge_id.as_str())
+                .collect::<Vec<_>>();
+            let successors = adjacency
+                .get(edge.to.as_str())
+                .into_iter()
+                .flatten()
+                .map(|candidate| candidate.id.as_str())
+                .filter(|candidate| *candidate != edge_id.as_str())
+                .filter(|candidate| mainline_edge_ids.contains(*candidate))
+                .collect::<Vec<_>>();
+            for candidates in [predecessors, successors] {
+                if candidates.is_empty() {
+                    continue;
+                }
+                let mut agreed: Option<&str> = None;
+                let mut consistent = true;
+                for candidate in candidates {
+                    match labels.get(candidate) {
+                        Some(value) => match agreed {
+                            None => agreed = Some(value.as_str()),
+                            Some(existing) if existing == value.as_str() => {}
+                            Some(_) => {
+                                consistent = false;
+                                break;
+                            }
+                        },
+                        None => {
+                            consistent = false;
+                            break;
+                        }
+                    }
+                }
+                if consistent {
+                    if let Some(value) = agreed {
+                        labels.insert(edge_id.clone(), value.to_string());
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn relation_route_id(relation: &OsmElement) -> Result<String, RouteMembershipError> {
@@ -1173,8 +1690,17 @@ fn build_relation_memberships_for_relation(
     response: &OverpassResponse,
     graph: &Graph,
     source_snapshot_sha256: &str,
+    split: Option<&CarriagewayDirectionSplit>,
 ) -> Result<Vec<RouteMembershipIndex>, RouteMembershipError> {
     let route_id = relation_route_id(relation)?;
+    if let Some(split) = split {
+        return carriageway_memberships_for_relation(
+            relation,
+            graph,
+            source_snapshot_sha256,
+            split,
+        );
+    }
     let mut result = Vec::new();
     for direction in relation_directions(relation)? {
         let segments = build_relation_segments(
@@ -1201,6 +1727,54 @@ fn build_relation_memberships_for_relation(
     Ok(result)
 }
 
+/// Serialize a derived carriageway split into route memberships.
+///
+/// Every split segment is a maximal, graph-contiguous run of relation mainline
+/// edges that carry one carriageway direction, so each one becomes a single
+/// `relationMainline` membership segment.
+fn carriageway_memberships_for_relation(
+    relation: &OsmElement,
+    graph: &Graph,
+    source_snapshot_sha256: &str,
+    split: &CarriagewayDirectionSplit,
+) -> Result<Vec<RouteMembershipIndex>, RouteMembershipError> {
+    let mut result = Vec::new();
+    for direction in &split.directions {
+        let membership_id = format!("route:{}:{}", split.route_id, direction);
+        let Some(edge_runs) = split.segments.get(&membership_id) else {
+            continue;
+        };
+        let mut segments = Vec::with_capacity(edge_runs.len());
+        for (index, run) in edge_runs.iter().enumerate() {
+            validate_ordered_edges(graph, run, &format!("{}:{}", membership_id, index))?;
+            let run_sha256 = ordered_edge_ids_sha256(run)
+                .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
+            segments.push(RouteMembershipSegment {
+                segment_id: format!("relation:{}:{}:split:{}", relation.id, direction, index),
+                source_kind: RouteMembershipSourceKind::RelationMainline,
+                source_relation_id: Some(relation.id.to_string()),
+                source_snapshot_sha256: source_snapshot_sha256.to_string(),
+                binding_evidence_id: None,
+                ordered_edge_ids: run.clone(),
+                ordered_edge_ids_sha256: run_sha256,
+                member_indexes: Some(vec![index]),
+                member_order_matches_relation: Some(true),
+            });
+        }
+        if segments.is_empty() {
+            continue;
+        }
+        result.push(RouteMembershipIndex {
+            membership_id,
+            route_id: split.route_id.clone(),
+            direction: direction.clone(),
+            direction_mapping_version: ROUTE_MEMBERSHIP_DIRECTION_MAPPING_VERSION.into(),
+            segments,
+        });
+    }
+    Ok(result)
+}
+
 pub fn build_relation_memberships(
     response: &OverpassResponse,
     graph: &Graph,
@@ -1215,6 +1789,7 @@ pub fn build_relation_memberships(
             response,
             graph,
             source_snapshot_sha256,
+            None,
         )? {
             merge_membership(&mut result, membership);
         }
@@ -1406,15 +1981,67 @@ pub fn build_route_relation_coverage(
     source_snapshot_sha256: &str,
     relation_ids: Option<&[i64]>,
 ) -> Result<RouteRelationMembershipBuild, RouteMembershipError> {
+    build_route_relation_coverage_with_splits(
+        response,
+        graph,
+        source_snapshot_sha256,
+        relation_ids,
+        &[],
+    )
+}
+
+/// Carriageway direction splits, keyed by relation id, that replace the
+/// relation-role expansion of a role-less ring relation.
+type CarriagewayDirectionSplitMap<'a> = HashMap<i64, &'a CarriagewayDirectionSplit>;
+
+/// Derive the carriageway direction split of every selected role-less ring
+/// relation that has verified-bound ramp seeds.
+fn derive_selected_carriageway_direction_splits(
+    response: &OverpassResponse,
+    graph: &Graph,
+    options: &RouteMembershipBuildOptions,
+) -> Result<Vec<CarriagewayDirectionSplit>, RouteMembershipError> {
+    if options.bound_ramp_evidence.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut splits = Vec::new();
+    for relation in selected_route_relations(response, options.relation_ids.as_deref()) {
+        if let Some(split) = derive_carriageway_direction_split(
+            relation,
+            response,
+            graph,
+            &options.source_snapshot_sha256,
+            &options.bound_ramp_evidence,
+        )? {
+            splits.push(split);
+        }
+    }
+    Ok(splits)
+}
+
+/// [`build_route_relation_coverage`] with derived carriageway direction splits.
+pub fn build_route_relation_coverage_with_splits(
+    response: &OverpassResponse,
+    graph: &Graph,
+    source_snapshot_sha256: &str,
+    relation_ids: Option<&[i64]>,
+    splits: &[CarriagewayDirectionSplit],
+) -> Result<RouteRelationMembershipBuild, RouteMembershipError> {
+    let split_by_relation = splits
+        .iter()
+        .map(|split| (split.relation_id, split))
+        .collect::<HashMap<_, _>>();
     validate_sha256(source_snapshot_sha256, "source_snapshot_sha256")?;
     let mut membership_indices: Vec<RouteMembershipIndex> = Vec::new();
     let mut relations = Vec::new();
     for relation in selected_route_relations(response, relation_ids) {
+        let split = split_by_relation.get(&relation.id).copied();
         match build_relation_memberships_for_relation(
             relation,
             response,
             graph,
             source_snapshot_sha256,
+            split,
         ) {
             Ok(memberships) => {
                 let membership_ids = memberships
@@ -2074,11 +2701,13 @@ pub fn build_route_membership_indices_with_coverage(
     graph: &Graph,
     options: &RouteMembershipBuildOptions,
 ) -> Result<RouteMembershipCoverage, RouteMembershipError> {
-    let coverage = build_route_relation_coverage(
+    let splits = derive_selected_carriageway_direction_splits(response, graph, options)?;
+    let coverage = build_route_relation_coverage_with_splits(
         response,
         graph,
         &options.source_snapshot_sha256,
         options.relation_ids.as_deref(),
+        &splits,
     )?;
     let mut result = coverage.membership_indices;
     let bound = build_bound_ramp_memberships(
@@ -2089,16 +2718,18 @@ pub fn build_route_membership_indices_with_coverage(
     for membership in bound {
         merge_membership(&mut result, membership);
     }
-    validate_route_memberships(
+    validate_route_memberships_with_splits(
         &result,
         graph,
         response,
         &options.source_snapshot_sha256,
         &options.bound_ramp_evidence,
+        &splits,
     )?;
     Ok(RouteMembershipCoverage {
         route_memberships: result,
         route_relations: coverage.coverage,
+        carriageway_direction_splits: splits,
     })
 }
 
@@ -2107,6 +2738,9 @@ pub fn build_route_membership_indices_with_coverage(
 pub struct RouteMembershipCoverage {
     pub route_memberships: Vec<RouteMembershipIndex>,
     pub route_relations: RouteRelationCoverageReport,
+    /// Derived carriageway splits of role-less ring relations (empty unless
+    /// verified-bound ramp evidence asked for one).
+    pub carriageway_direction_splits: Vec<CarriagewayDirectionSplit>,
 }
 
 fn relation_from_source_id<'a>(
@@ -2130,7 +2764,21 @@ fn relation_expected_segments(
     graph: &Graph,
     direction: &str,
     source_snapshot_sha256: &str,
+    split: Option<&CarriagewayDirectionSplit>,
 ) -> Result<Vec<RouteMembershipSegment>, RouteMembershipError> {
+    if let Some(split) = split {
+        let membership_id = format!("route:{}:{}", split.route_id, direction);
+        return Ok(carriageway_memberships_for_relation(
+            relation,
+            graph,
+            source_snapshot_sha256,
+            split,
+        )?
+        .into_iter()
+        .find(|membership| membership.membership_id == membership_id)
+        .map(|membership| membership.segments)
+        .unwrap_or_default());
+    }
     build_relation_segments(relation, response, graph, direction, source_snapshot_sha256)
 }
 
@@ -2239,6 +2887,38 @@ pub fn validate_route_memberships(
     source_snapshot_sha256: &str,
     bound_ramp_evidence: &[BoundRampEvidence],
 ) -> Result<(), RouteMembershipError> {
+    let splits = derive_selected_carriageway_direction_splits(
+        response,
+        graph,
+        &RouteMembershipBuildOptions {
+            source_snapshot_sha256: source_snapshot_sha256.to_string(),
+            relation_ids: None,
+            bound_ramp_evidence: bound_ramp_evidence.to_vec(),
+        },
+    )?;
+    validate_route_memberships_with_splits(
+        route_memberships,
+        graph,
+        response,
+        source_snapshot_sha256,
+        bound_ramp_evidence,
+        &splits,
+    )
+}
+
+/// [`validate_route_memberships`] with precomputed carriageway direction splits.
+pub fn validate_route_memberships_with_splits(
+    route_memberships: &[RouteMembershipIndex],
+    graph: &Graph,
+    response: &OverpassResponse,
+    source_snapshot_sha256: &str,
+    bound_ramp_evidence: &[BoundRampEvidence],
+    splits: &[CarriagewayDirectionSplit],
+) -> Result<(), RouteMembershipError> {
+    let split_by_relation = splits
+        .iter()
+        .map(|split| (split.relation_id, split))
+        .collect::<CarriagewayDirectionSplitMap<'_>>();
     validate_route_membership_structure(graph, route_memberships, source_snapshot_sha256)?;
     let expected_bound =
         build_bound_ramp_memberships(graph, source_snapshot_sha256, bound_ramp_evidence)?;
@@ -2282,11 +2962,17 @@ pub fn validate_route_memberships(
                             source_relation_id
                         ))
                     })?;
-                if relation_route_id(relation)? != membership.route_id
-                    || !relation_directions(relation)?
+                let split = split_by_relation.get(&relation.id).copied();
+                let direction_matches = match split {
+                    Some(split) => split
+                        .directions
                         .iter()
-                        .any(|direction| direction == &membership.direction)
-                {
+                        .any(|direction| direction == &membership.direction),
+                    None => relation_directions(relation)?
+                        .iter()
+                        .any(|direction| direction == &membership.direction),
+                };
+                if relation_route_id(relation)? != membership.route_id || !direction_matches {
                     return Err(RouteMembershipError::Relation(format!(
                         "membership {} does not match relation {} route/direction",
                         membership.membership_id, source_relation_id
@@ -2298,6 +2984,7 @@ pub fn validate_route_memberships(
                     graph,
                     &membership.direction,
                     source_snapshot_sha256,
+                    split,
                 )?;
                 let expected_keys: Vec<(String, Vec<String>)> = expected
                     .iter()

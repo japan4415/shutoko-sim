@@ -1886,6 +1886,208 @@ fn test_real_c1_first_exit_and_benchmark() {
     );
 }
 
+/// Issue #44 slice 1: C2 (relation 4256077) carries no direction roles and no
+/// JCT connector members, so its `inner` / `outer` carriageways are derived from
+/// the verified-bound C2 ramps instead of relation roles.
+///
+/// The contract this test pins down:
+/// - C2 no longer publishes an undirected `route:C2:forward` membership,
+/// - `route:C2:inner` and `route:C2:outer` partition the relation mainline edges
+///   without overlapping,
+/// - every emitted split segment is graph-contiguous and hash-consistent,
+/// - C1 keeps its role-derived memberships (regression guard).
+#[test]
+fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
+    use shutoko_graph_builder::{
+        bind_ramps_to_graph, build_route_membership_indices_with_coverage,
+        validate_osm_ramp_bindings, validate_ramp_inventory, validate_route_membership_structure,
+        RampInventoryFile,
+    };
+    use shutoko_routing_core::RouteMembershipSourceKind;
+
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let osm_path = manifest_dir.join("../../fixtures/osm/shutoko-all.json");
+    if !osm_path.exists() {
+        return;
+    }
+    let osm_raw = std::fs::read(&osm_path).unwrap();
+    let osm: OverpassResponse = serde_json::from_slice(&osm_raw).unwrap();
+    let (mut graph, _snap) = build_topology(&osm, &TopologyConfig::default()).unwrap();
+    let inventory: RampInventoryFile = serde_json::from_str(
+        &std::fs::read_to_string(manifest_dir.join("../../data/ramp-inventory.json")).unwrap(),
+    )
+    .unwrap();
+    let bindings: shutoko_graph_builder::OsmRampBindingsFile = serde_json::from_str(
+        &std::fs::read_to_string(manifest_dir.join("../../data/osm-ramp-bindings.json")).unwrap(),
+    )
+    .unwrap();
+    validate_ramp_inventory(&inventory).unwrap();
+    validate_osm_ramp_bindings(&bindings, &inventory).unwrap();
+    let (ramps, _artifact, _notes) = bind_ramps_to_graph(&mut graph, &inventory, &bindings);
+    graph.ramps = ramps;
+    let evidence = bound_ramp_evidence_from_inventory(&graph, &inventory, &bindings).unwrap();
+    let source_snapshot_sha256 = compute_sha256(&osm_raw);
+    // Expanding every route relation in the all-route snapshot would record
+    // unrelated fail-closed relations, so select C2 plus the C1 / route 2
+    // regression pair explicitly.
+    let options = RouteMembershipBuildOptions {
+        source_snapshot_sha256: source_snapshot_sha256.clone(),
+        relation_ids: Some(vec![4256077, 4256008, 4256339]),
+        bound_ramp_evidence: evidence.clone(),
+    };
+    let built = build_route_membership_indices_with_coverage(&osm, &graph, &options).unwrap();
+    validate_route_membership_structure(&graph, &built.route_memberships, &source_snapshot_sha256)
+        .unwrap();
+
+    let split = built
+        .carriageway_direction_splits
+        .iter()
+        .find(|split| split.relation_id == 4256077)
+        .expect("relation 4256077 must produce a derived carriageway split");
+    assert_eq!(split.route_id, "C2");
+    assert_eq!(split.seed_ramp_ids.len(), 25, "25 verified_bound C2 ramps");
+    assert_eq!(
+        split.directions,
+        vec!["inner".to_string(), "outer".to_string()]
+    );
+    let inner = split.edge_count("inner");
+    let outer = split.edge_count("outer");
+    // 1,936 of the 2,310 labelled edges survive the per-segment majority rule;
+    // the remaining 374 are minority labels that the fail-closed gate drops
+    // together with the four ambiguous junction segments.
+    assert_eq!(inner, 903);
+    assert_eq!(outer, 1033);
+    assert_eq!(
+        inner + outer,
+        split.labelled_edge_ids.len() - 374,
+        "inner and outer must partition every relation mainline edge that the \
+         per-segment majority rule keeps"
+    );
+    assert_eq!(
+        split.unassigned_edge_ids.len() + split.labelled_edge_ids.len(),
+        2479,
+        "the split must account for every C2 relation mainline edge"
+    );
+    assert_eq!(
+        split.ambiguous_segment_ids,
+        vec![
+            "relation:4256077:forward:6".to_string(),
+            "relation:4256077:forward:8".to_string(),
+            "relation:4256077:forward:13".to_string(),
+            "relation:4256077:forward:14".to_string(),
+        ],
+        "junction-overlapping segments stay fail-closed"
+    );
+
+    // Only the relation mainline segments take part in the carriageway split;
+    // the C2 bound-ramp segments are the ramp evidence paths and stay separate.
+    let edge_owner: HashMap<&str, &str> = built
+        .route_memberships
+        .iter()
+        .filter(|membership| membership.route_id == "C2")
+        .flat_map(|membership| {
+            membership
+                .segments
+                .iter()
+                .filter(|segment| {
+                    segment.source_kind == RouteMembershipSourceKind::RelationMainline
+                })
+                .flat_map(move |segment| {
+                    segment
+                        .ordered_edge_ids
+                        .iter()
+                        .map(move |edge_id| (edge_id.as_str(), membership.direction.as_str()))
+                })
+        })
+        .collect();
+    assert!(
+        !built
+            .route_memberships
+            .iter()
+            .any(|membership| membership.membership_id == "route:C2:forward"),
+        "C2 must not publish an undirected forward membership once the split exists"
+    );
+    assert_eq!(
+        edge_owner.len(),
+        inner + outer,
+        "a C2 relation mainline edge must belong to exactly one carriageway"
+    );
+    assert!(built.route_memberships.iter().any(|membership| {
+        membership.membership_id == "route:C2:inner" && !membership.segments.is_empty()
+    }));
+    assert!(built.route_memberships.iter().any(|membership| {
+        membership.membership_id == "route:C2:outer" && !membership.segments.is_empty()
+    }));
+    assert!(inner > 0 && outer > 0);
+    for membership in built
+        .route_memberships
+        .iter()
+        .filter(|membership| membership.route_id == "C2")
+    {
+        let mut seen = std::collections::HashSet::new();
+        for segment in membership
+            .segments
+            .iter()
+            .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+        {
+            assert_eq!(segment.source_relation_id.as_deref(), Some("4256077"));
+            for window in segment.ordered_edge_ids.windows(2) {
+                assert_eq!(
+                    graph
+                        .edges
+                        .iter()
+                        .find(|edge| edge.id == window[0])
+                        .map(|edge| edge.to.as_str()),
+                    graph
+                        .edges
+                        .iter()
+                        .find(|edge| edge.id == window[1])
+                        .map(|edge| edge.from.as_str()),
+                    "split segment {} must stay graph-contiguous",
+                    segment.segment_id
+                );
+            }
+            for edge_id in &segment.ordered_edge_ids {
+                assert!(
+                    seen.insert(edge_id.clone()),
+                    "edge {} appears twice in {}",
+                    edge_id,
+                    membership.membership_id
+                );
+            }
+        }
+    }
+
+    // C1 regression: the role-derived inner / outer memberships stay intact.
+    let c1_relation_ids = Some(vec![4256008]);
+    let c1_options = RouteMembershipBuildOptions {
+        source_snapshot_sha256,
+        relation_ids: c1_relation_ids,
+        bound_ramp_evidence: evidence,
+    };
+    let c1 = build_route_membership_indices_with_coverage(&osm, &graph, &c1_options).unwrap();
+    let c1_inner = c1
+        .route_memberships
+        .iter()
+        .find(|membership| membership.membership_id == "route:C1:inner")
+        .expect("C1 inner membership must stay role-derived");
+    let c1_outer = c1
+        .route_memberships
+        .iter()
+        .find(|membership| membership.membership_id == "route:C1:outer")
+        .expect("C1 outer membership must stay role-derived");
+    let c1_relation_segments = |membership: &RouteMembershipIndex| {
+        membership
+            .segments
+            .iter()
+            .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+            .count()
+    };
+    assert_eq!(c1_relation_segments(c1_inner), 1);
+    assert_eq!(c1_relation_segments(c1_outer), 1);
+    assert!(c1.carriageway_direction_splits.is_empty());
+}
+
 #[test]
 fn test_refutation_first_exit_mismatch_shintomicho() {
     let osm_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))

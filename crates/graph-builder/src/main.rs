@@ -140,6 +140,29 @@ fn print_route_relation_coverage(built: &RouteMembershipCoverage) {
             relation.reason.as_deref().unwrap_or_default()
         );
     }
+    // A role-less ring relation (C2) is split into its carriageways from the
+    // verified-bound ramp seeds instead of relation roles, so the release log
+    // has to account for the relation mainline edges that stayed unassigned.
+    for split in &built.carriageway_direction_splits {
+        let assigned = split
+            .directions
+            .iter()
+            .map(|direction| split.edge_count(direction))
+            .sum::<usize>();
+        println!(
+            "  - carriageway split route {} (relation {}): {} seeds, {} edges assigned, \
+             {} unassigned, {} ambiguous segments",
+            split.route_id,
+            split.relation_id,
+            split.seed_ramp_ids.len(),
+            assigned,
+            split.unassigned_edge_ids.len(),
+            split.ambiguous_segment_ids.len()
+        );
+        for segment_id in &split.ambiguous_segment_ids {
+            println!("    ! {segment_id} stays fail-closed (mixed carriageway labels)");
+        }
+    }
 }
 
 struct CliArgs {

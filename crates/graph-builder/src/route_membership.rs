@@ -5606,10 +5606,14 @@ fn balance_carriageway_walk(
         .collect();
     let initial =
         multiset_imbalance_units(edges, &runs.iter().flatten().cloned().collect::<Vec<_>>());
+    // `min_cost_carriageway_flow` reads a positive demand as "this node needs
+    // that much net inflow", which is exactly the signed run imbalance: a node
+    // whose runs leave one more edge than they enter has to receive one more
+    // correction edge than it sends.
     let demand = initial
         .iter()
         .filter(|(_, value)| **value != 0)
-        .map(|(node, value)| (node.clone(), -*value))
+        .map(|(node, value)| (node.clone(), *value))
         .collect::<BTreeMap<String, i64>>();
     let mut multiset: Vec<String> = runs.iter().flatten().cloned().collect();
     if demand.values().any(|value| *value != 0) {
@@ -5872,24 +5876,35 @@ fn closed_walk(edges: &HashMap<&str, &Edge>, multiset: &[String]) -> Option<Vec<
         list.sort_by(|left, right| multiset[*left].cmp(&multiset[*right]));
     }
     let start = outgoing.keys().next().copied()?;
-    let mut stack = vec![start];
-    let mut walk = Vec::new();
-    while let Some(node) = stack.last().copied() {
+    // Hierholzer's algorithm: a node only gives up its incoming edge once all of
+    // its outgoing edges are used, so the edges come out in post-order and have
+    // to be reversed at the end. Collecting them when the edge is first taken
+    // (pre-order) instead would splice a dead-end branch into the middle of the
+    // sequence and produce a non-contiguous "walk".
+    let mut stack = vec![(start, None)];
+    let mut order: Vec<usize> = Vec::new();
+    while let Some((node, incoming)) = stack.pop() {
         match outgoing.get_mut(node).and_then(|list| list.pop()) {
             Some(index) => {
                 let edge = edges.get(multiset[index].as_str())?;
-                stack.push(edge.to.as_str());
-                walk.push(multiset[index].clone());
+                stack.push((node, incoming));
+                stack.push((edge.to.as_str(), Some(index)));
             }
             None => {
-                stack.pop();
+                if let Some(index) = incoming {
+                    order.push(index);
+                }
             }
         }
     }
-    if walk.len() != multiset.len() {
+    if order.len() != multiset.len() {
         return None;
     }
-    walk.reverse();
+    order.reverse();
+    let walk = order
+        .into_iter()
+        .map(|index| multiset[index].clone())
+        .collect::<Vec<_>>();
     let closes = edges.get(walk.last()?.as_str())?.to == edges.get(walk.first()?.as_str())?.from;
     closes.then_some(walk)
 }
@@ -7662,5 +7677,74 @@ mod tests {
             .unwrap(),
             route_memberships_sha256(&legacy.membership_indices).unwrap()
         );
+    }
+
+    /// A four-node one-way ring with both carriageways available, so a run trail
+    /// can always be closed by shipping the correction flow the other way round.
+    fn ring_edges() -> Vec<Edge> {
+        vec![
+            edge("e:inner:1", "n:1", "n:2", EdgeKind::Shutoko),
+            edge("e:inner:2", "n:2", "n:3", EdgeKind::Shutoko),
+            edge("e:inner:3", "n:3", "n:4", EdgeKind::Shutoko),
+            edge("e:inner:4", "n:4", "n:1", EdgeKind::Shutoko),
+            edge("e:outer:1", "n:2", "n:1", EdgeKind::Shutoko),
+            edge("e:outer:2", "n:3", "n:2", EdgeKind::Shutoko),
+            edge("e:outer:3", "n:4", "n:3", EdgeKind::Shutoko),
+            edge("e:outer:4", "n:1", "n:4", EdgeKind::Shutoko),
+        ]
+    }
+
+    fn assert_closed_walk(edges: &HashMap<&str, &Edge>, walk: &[String]) {
+        assert!(!walk.is_empty(), "walk must not be empty");
+        for window in walk.windows(2) {
+            assert_eq!(
+                edges[window[0].as_str()].to,
+                edges[window[1].as_str()].from,
+                "walk must stay graph-contiguous at {window:?}"
+            );
+        }
+        assert_eq!(
+            edges[walk.last().unwrap().as_str()].to,
+            edges[walk.first().unwrap().as_str()].from,
+            "walk must return to its start"
+        );
+        assert!(
+            multiset_imbalance_units(edges, walk)
+                .values()
+                .all(|value| *value == 0),
+            "walk must balance every node"
+        );
+    }
+
+    #[test]
+    fn closed_walk_orders_a_branching_eulerian_multiset() {
+        let owned = ring_edges();
+        let edges: HashMap<&str, &Edge> = owned.iter().map(|e| (e.id.as_str(), e)).collect();
+        let multiset = vec![
+            "e:inner:1".to_string(),
+            "e:inner:2".to_string(),
+            "e:outer:2".to_string(),
+            "e:outer:1".to_string(),
+        ];
+        let walk = closed_walk(&edges, &multiset).expect("a balanced multiset must close");
+        assert_eq!(walk.len(), multiset.len());
+        assert_closed_walk(&edges, &walk);
+    }
+
+    #[test]
+    fn balance_carriageway_walk_closes_a_run_trail_on_the_ring() {
+        let owned = ring_edges();
+        let edges: HashMap<&str, &Edge> = owned.iter().map(|e| (e.id.as_str(), e)).collect();
+        let adjacency: HashMap<&str, Vec<&Edge>> = HashMap::new();
+        let runs = vec![vec!["e:inner:1".to_string(), "e:inner:2".to_string()]];
+        let walk = balance_carriageway_walk(&adjacency, &edges, &runs)
+            .expect("the correction flow must close the run trail");
+        for run_edge in runs.iter().flatten() {
+            assert!(
+                walk.contains(run_edge),
+                "run edge {run_edge} must stay in the walk"
+            );
+        }
+        assert_closed_walk(&edges, &walk);
     }
 }

@@ -5595,12 +5595,28 @@ fn balance_carriageway_walk(
     if runs.is_empty() {
         return None;
     }
+    // Each run edge already carries one unit of flow. The correction flow is
+    // what the minimum-cost flow adds on top, so the walk is the run set plus
+    // the correction (an edge may therefore appear more than once, which the
+    // lap contract allows).
+    let run_edges: BTreeSet<&str> = runs
+        .iter()
+        .flat_map(|run| run.iter())
+        .map(String::as_str)
+        .collect();
+    let initial =
+        multiset_imbalance_units(edges, &runs.iter().flatten().cloned().collect::<Vec<_>>());
+    let demand = initial
+        .iter()
+        .filter(|(_, value)| **value != 0)
+        .map(|(node, value)| (node.clone(), -*value))
+        .collect::<BTreeMap<String, i64>>();
     let mut multiset: Vec<String> = runs.iter().flatten().cloned().collect();
-    let supply = multiset_imbalance_units(edges, &multiset);
-    if supply.values().any(|value| *value != 0) {
-        let shipped = min_cost_carriageway_flow(edges, &supply)?;
-        for (edge_id, count) in shipped {
-            for _ in 0..count {
+    if demand.values().any(|value| *value != 0) {
+        let flow = min_cost_carriageway_flow(edges, &demand, &run_edges)?;
+        multiset.clear();
+        for (edge_id, units) in flow {
+            for _ in 0..units {
                 multiset.push(edge_id.clone());
             }
         }
@@ -5637,7 +5653,8 @@ fn multiset_imbalance_units(
 /// has to be traversed by the shipped flow.
 fn min_cost_carriageway_flow(
     edges: &HashMap<&str, &Edge>,
-    supply: &BTreeMap<String, i64>,
+    demand: &BTreeMap<String, i64>,
+    run_edges: &BTreeSet<&str>,
 ) -> Option<BTreeMap<String, usize>> {
     const CAPACITY: i64 = 64;
 
@@ -5711,43 +5728,47 @@ fn min_cost_carriageway_flow(
             continue;
         };
         let _ = index;
+        // A run edge starts with one unit of flow, so it only has room for
+        // additional correction units up to the capacity.
+        let carried = i64::from(run_edges.contains(edge_id));
         push_pair(
             &mut arcs,
             &mut graph,
             &mut arc_edge,
             from,
             to,
-            CAPACITY,
+            CAPACITY - carried,
             edge.distance_meters as i64,
             Some(edge_id.to_string()),
         );
     }
     let mut total_supply = 0_i64;
     let mut total_demand = 0_i64;
-    for (node, value) in supply.iter() {
+    for (node, value) in demand.iter() {
         let Some(&index) = node_ids.get(node) else {
             continue;
         };
         if *value > 0 {
-            total_supply += *value;
-            push_pair(
-                &mut arcs,
-                &mut graph,
-                &mut arc_edge,
-                source_index,
-                index,
-                *value,
-                0,
-                None,
-            );
-        } else if *value < 0 {
-            total_demand -= *value;
+            // Positive demand means the node needs this much net inflow.
+            total_demand += *value;
             push_pair(
                 &mut arcs,
                 &mut graph,
                 &mut arc_edge,
                 index,
                 sink_index,
+                *value,
+                0,
+                None,
+            );
+        } else if *value < 0 {
+            total_supply -= *value;
+            push_pair(
+                &mut arcs,
+                &mut graph,
+                &mut arc_edge,
+                source_index,
+                index,
                 -value,
                 0,
                 None,
@@ -5823,9 +5844,14 @@ fn min_cost_carriageway_flow(
     }
 
     let mut shipped: BTreeMap<String, usize> = BTreeMap::new();
-    for (edge_id, units) in net_flow {
-        if units > 0 {
-            *shipped.entry(edge_id).or_default() = units as usize;
+    let mut all_ids = edges.keys().copied().collect::<Vec<&str>>();
+    all_ids.sort_unstable();
+    for edge_id in all_ids {
+        let carried = usize::from(run_edges.contains(edge_id));
+        let correction = net_flow.get(edge_id).copied().unwrap_or(0).max(0) as usize;
+        let total = carried + correction;
+        if total > 0 {
+            shipped.insert(edge_id.to_string(), total);
         }
     }
     Some(shipped)

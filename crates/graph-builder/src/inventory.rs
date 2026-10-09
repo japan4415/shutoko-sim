@@ -2702,17 +2702,15 @@ pub fn apply_od_tariffs_to_graph(graph: &mut Graph, tariffs: &OdTariffsFile) -> 
                         .iter()
                         .find(|ramp| ramp.id == entry_ramp_id)
                         .map(|ramp| ramp.direction.as_str());
-                    let direction_matches: Vec<&str> = rids
-                        .iter()
-                        .copied()
-                        .filter(|rid| {
-                            graph
-                                .ramps
-                                .iter()
-                                .find(|ramp| ramp.id == *rid)
-                                .is_some_and(|ramp| Some(ramp.direction.as_str()) == entry_direction)
-                        })
-                        .collect();
+                    let direction_matches: Vec<&str> =
+                        rids.iter()
+                            .copied()
+                            .filter(|rid| {
+                                graph.ramps.iter().find(|ramp| ramp.id == *rid).is_some_and(
+                                    |ramp| Some(ramp.direction.as_str()) == entry_direction,
+                                )
+                            })
+                            .collect();
                     if let [rid] = direction_matches.as_slice() {
                         pair.exit_ramp_id = Some((*rid).to_string());
                     }
@@ -3120,7 +3118,11 @@ pub fn validate_verified_billing_pair_endpoints(
             let override_sanctioned = way_id.is_some_and(|way| {
                 shared_physical_overrides.iter().any(|override_| {
                     override_.osm_way_id == way
-                        && override_.ramp_ids.iter().map(String::as_str).collect::<HashSet<_>>()
+                        && override_
+                            .ramp_ids
+                            .iter()
+                            .map(String::as_str)
+                            .collect::<HashSet<_>>()
                             == reverse_mapped
                                 .iter()
                                 .map(|ramp| ramp.id.as_str())
@@ -3583,10 +3585,7 @@ mod tests {
             .iter()
             .map(|o| o.id.as_str())
             .collect();
-        assert_eq!(
-            override_ids,
-            HashSet::from(["G15", "G27", "G53", "G54"])
-        );
+        assert_eq!(override_ids, HashSet::from(["G15", "G27", "G53", "G54"]));
 
         // Regression lockouts for the known false nearest-edge mappings.
         let forbidden = [

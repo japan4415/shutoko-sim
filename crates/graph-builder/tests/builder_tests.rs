@@ -2086,9 +2086,7 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
         let relation_segments = membership
             .segments
             .iter()
-            .filter(|segment| {
-                segment.source_kind == RouteMembershipSourceKind::RelationMainline
-            })
+            .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
             .collect::<Vec<_>>();
         assert_eq!(
             relation_segments.len(),

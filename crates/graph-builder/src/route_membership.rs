@@ -1050,12 +1050,19 @@ pub fn derive_carriageway_direction_split(
         .cloned()
         .collect::<BTreeSet<_>>();
 
-    // Cyclic composition is not implemented yet, so no carriageway has a single
-    // closed walk and every membership stays on its runs. The seam lives here so
-    // that a composer can fill `cycles` without touching serialization or
-    // validation.
-    let cycles: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    let uncomposed_membership_ids = segments.keys().cloned().collect::<Vec<_>>();
+    // Try to close each carriageway into one walk over its runs plus the
+    // cheapest balancing edges. A carriageway that cannot close stays on its
+    // runs and is reported as uncomposed.
+    let mut cycles: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut uncomposed_membership_ids = Vec::new();
+    for (membership_id, runs) in segments.iter() {
+        match balance_carriageway_walk(&adjacency, &edges, runs) {
+            Some(walk) => {
+                cycles.insert(membership_id.clone(), walk);
+            }
+            None => uncomposed_membership_ids.push(membership_id.clone()),
+        }
+    }
 
     Ok(Some(CarriagewayDirectionSplit {
         route_id,
@@ -5542,6 +5549,187 @@ fn apply_exit_reachability_filter(
             }
         }
     }
+}
+
+/// Balance the in/out degree of a carriageway edge set by adding the cheapest
+/// extra Shutoko edges, then emit the closed walk they form.
+///
+/// The relation-ordered runs are trails of a one-way ring, but they are not a
+/// subset of a simple cycle: at JCT forks the relation order drops the edge the
+/// carriageway actually takes. Closing the set therefore needs extra edges
+/// (which appear twice in the resulting walk), so the walk is only accepted
+/// when it is a single closed sequence over the runs plus those extra edges.
+fn balance_carriageway_walk(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    edges: &HashMap<&str, &Edge>,
+    runs: &[Vec<String>],
+) -> Option<Vec<String>> {
+    if runs.is_empty() {
+        return None;
+    }
+    let mut multiset: Vec<String> = runs.iter().flatten().cloned().collect();
+    let mut delta: BTreeMap<&str, i64> = BTreeMap::new();
+    for edge_id in multiset.iter() {
+        let edge = edges.get(edge_id.as_str())?;
+        *delta.entry(edge.from.as_str()).or_default() += 1;
+        *delta.entry(edge.to.as_str()).or_default() -= 1;
+    }
+    let mut sources = delta
+        .iter()
+        .filter(|(_, value)| **value > 0)
+        .map(|(node, value)| (*node, *value))
+        .collect::<Vec<_>>();
+    let mut sinks = delta
+        .iter()
+        .filter(|(_, value)| **value < 0)
+        .map(|(node, value)| (*node, -*value))
+        .collect::<Vec<_>>();
+    sources.sort();
+    sinks.sort();
+    let total_sources = sources.iter().map(|(_, count)| *count).sum::<i64>();
+    let total_sinks = sinks.iter().map(|(_, count)| *count).sum::<i64>();
+    if total_sources != total_sinks || total_sources > 64 {
+        return None;
+    }
+
+    // Greedily pair the globally cheapest source/sink connection until the set
+    // is balanced. Source and sink multiplicities above one are supported.
+    let mut remaining_sources = sources.clone();
+    let mut remaining_sinks = sinks.clone();
+    let mut guard = 0;
+    while remaining_sources.iter().any(|(_, count)| *count > 0)
+        && remaining_sinks.iter().any(|(_, count)| *count > 0)
+    {
+        guard += 1;
+        if guard > 64 {
+            return None;
+        }
+        let mut best: Option<(u64, Vec<String>, usize, usize)> = None;
+        for (source_index, (source, count)) in remaining_sources.iter().enumerate() {
+            if *count <= 0 {
+                continue;
+            }
+            for (sink_index, (sink, sink_count)) in remaining_sinks.iter().enumerate() {
+                if *sink_count <= 0 {
+                    continue;
+                }
+                let Some(path) = cheapest_shutoko_path(adjacency, edges, source, sink) else {
+                    continue;
+                };
+                let key = (
+                    path_cost(edges, &path),
+                    path.clone(),
+                    source_index,
+                    sink_index,
+                );
+                if best.as_ref().is_none_or(|current| key < *current) {
+                    best = Some(key);
+                }
+            }
+        }
+        let (_, path, source_index, sink_index) = best?;
+        multiset.extend(path);
+        remaining_sources[source_index].1 -= 1;
+        remaining_sinks[sink_index].1 -= 1;
+    }
+    if remaining_sources.iter().any(|(_, count)| *count != 0)
+        || remaining_sinks.iter().any(|(_, count)| *count != 0)
+    {
+        return None;
+    }
+    closed_walk(edges, &multiset)
+}
+
+/// Deterministic minimum-distance Shutoko path.
+fn cheapest_shutoko_path(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    edges: &HashMap<&str, &Edge>,
+    start: &str,
+    goal: &str,
+) -> Option<Vec<String>> {
+    if start == goal {
+        return Some(Vec::new());
+    }
+    let mut best: HashMap<&str, u64> = HashMap::new();
+    let mut previous: HashMap<&str, (&str, String)> = HashMap::new();
+    let mut heap = BinaryHeap::new();
+    best.insert(start, 0);
+    heap.push(std::cmp::Reverse((0_u64, start)));
+    while let Some(std::cmp::Reverse((distance, node))) = heap.pop() {
+        if best.get(node).copied().unwrap_or(u64::MAX) < distance {
+            continue;
+        }
+        if node == goal {
+            break;
+        }
+        for edge in adjacency.get(node).into_iter().flatten() {
+            let next = edge.to.as_str();
+            let candidate = distance.saturating_add(edge_distance_meters(edges, &edge.id));
+            if candidate > CARRIAGEWAY_SEED_REACH_METERS * 40 {
+                continue;
+            }
+            if candidate < best.get(next).copied().unwrap_or(u64::MAX) {
+                best.insert(next, candidate);
+                previous.insert(next, (node, edge.id.clone()));
+                heap.push(std::cmp::Reverse((candidate, next)));
+            }
+        }
+    }
+    let mut path = Vec::new();
+    let mut node = goal;
+    while node != start {
+        let (prior, edge_id) = previous.get(node)?.clone();
+        path.push(edge_id);
+        node = prior;
+    }
+    path.reverse();
+    Some(path)
+}
+
+fn path_cost(edges: &HashMap<&str, &Edge>, path: &[String]) -> u64 {
+    path.iter()
+        .map(|edge_id| edge_distance_meters(edges, edge_id))
+        .sum()
+}
+
+/// Hierholzer walk over an edge multiset; accepted only when it is a single
+/// closed walk that consumes every entry.
+fn closed_walk(edges: &HashMap<&str, &Edge>, multiset: &[String]) -> Option<Vec<String>> {
+    let mut outgoing: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for (index, edge_id) in multiset.iter().enumerate() {
+        let edge = edges.get(edge_id.as_str())?;
+        outgoing.entry(edge.from.as_str()).or_default().push(index);
+    }
+    for list in outgoing.values_mut() {
+        list.sort_by(|left, right| multiset[*left].cmp(&multiset[*right]));
+    }
+    let start = outgoing.keys().next().copied()?;
+    let mut stack = vec![start];
+    let mut used = vec![false; multiset.len()];
+    let mut walk = Vec::new();
+    while let Some(node) = stack.last().copied() {
+        let next = outgoing
+            .get_mut(node)
+            .and_then(|list| list.pop())
+            .filter(|index| !used[*index]);
+        match next {
+            Some(index) => {
+                used[index] = true;
+                let edge = edges.get(multiset[index].as_str())?;
+                stack.push(edge.to.as_str());
+                walk.push(multiset[index].clone());
+            }
+            None => {
+                stack.pop();
+            }
+        }
+    }
+    if walk.len() != multiset.len() {
+        return None;
+    }
+    walk.reverse();
+    let closes = edges.get(walk.last()?.as_str())?.to == edges.get(walk.first()?.as_str())?.from;
+    closes.then_some(walk)
 }
 
 #[cfg(test)]

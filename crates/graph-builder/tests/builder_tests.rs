@@ -2048,10 +2048,15 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
         }
     }
 
-    // Cyclic composition is not implemented yet: the runs are the membership
-    // segments and the seam reports every carriageway as uncomposed. When the
-    // composer lands, this assertion flips to requiring one cyclic segment.
+    // Degree balancing now equalises every node, but the balanced multigraph is
+    // still not weakly connected in one piece, so the closed walk cannot cover
+    // all of it yet: both carriageways stay uncomposed and keep their runs.
+    assert_eq!(
+        split.uncomposed_membership_ids,
+        vec!["route:C2:inner".to_string(), "route:C2:outer".to_string()]
+    );
     for direction in ["inner", "outer"] {
+        assert!(split.cycle(direction).is_none());
         assert!(
             split
                 .segments
@@ -2059,15 +2064,7 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
                 .is_some_and(|runs| !runs.is_empty()),
             "{direction} runs stay available for coverage reporting"
         );
-        assert!(
-            split.cycle(direction).is_none(),
-            "no composed cycle exists yet for {direction}"
-        );
     }
-    assert_eq!(
-        split.uncomposed_membership_ids,
-        vec!["route:C2:inner".to_string(), "route:C2:outer".to_string()]
-    );
 
     // C1 regression: the role-derived inner / outer memberships stay intact.
     let c1_relation_ids = Some(vec![4256008]);

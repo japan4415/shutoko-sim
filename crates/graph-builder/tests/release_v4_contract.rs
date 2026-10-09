@@ -399,7 +399,8 @@ fn all_real_v4_manifest_binds_every_artifact_and_input_hash() {
             id
         })
         .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(verified_pair_ids.len(), 9);
+    // 10 verified legacy pairs after the Ginza-Shintomicho registration.
+    assert_eq!(verified_pair_ids.len(), 10);
     assert_eq!(provenance_ids, verified_pair_ids);
     let _ = fs::remove_dir_all(dir);
 }
@@ -481,9 +482,10 @@ fn all_real_v4_pair_derivation_covers_every_route_relation_and_membership() {
         assert!(!record["candidatePairIds"].as_array().unwrap().is_empty());
     }
     let summary = &candidates["summary"];
+    // 10 legacy pairs (8 original C1 + Ginza-Shintomicho) are candidates.
     assert_eq!(summary["candidateTotal"], 11);
-    assert_eq!(summary["eligibleForReview"], 9);
-    assert_eq!(summary["hold"], 2);
+    assert_eq!(summary["eligibleForReview"], 10);
+    assert_eq!(summary["hold"], 1);
     let _ = fs::remove_dir_all(dir);
 }
 

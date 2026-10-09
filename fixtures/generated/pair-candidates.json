@@ -5,7 +5,7 @@
   "inputHashes": {
     "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
     "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
-    "routeMembershipIndexSha256": "d0fcb3ff9c2e1bf7e1b4bcb0dfc15910b33732fa0553b58a7ef49dceeb46868b",
+    "routeMembershipIndexSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
     "billingPairAdjacencySha256": "d748051cbe94627bd54dba23fec44ed57f1213578606897304018e44d636fa44",
     "odTariffsSha256": "48a62e9f7a882b67fa9ed3101e21555cf2d6f11d4197eefeda24592ebefc26cc"
   },
@@ -26,7 +26,8 @@
       "routeId": "C2",
       "status": "pass",
       "membershipIds": [
-        "route:C2:forward"
+        "route:C2:inner",
+        "route:C2:outer"
       ],
       "reasonCode": null,
       "reason": null
@@ -574,9 +575,9 @@
       "status": "pass"
     },
     {
-      "membershipId": "route:C2:forward",
+      "membershipId": "route:C2:inner",
       "routeId": "C2",
-      "direction": "forward",
+      "direction": "inner",
       "relationIds": [
         4256077
       ],
@@ -586,20 +587,12 @@
       "status": "pass"
     },
     {
-      "membershipId": "route:C2:inner",
-      "routeId": "C2",
-      "direction": "inner",
-      "relationIds": [],
-      "candidatePairIds": [],
-      "routePlanResolved": 0,
-      "routePlanUnresolved": 0,
-      "status": "pass"
-    },
-    {
       "membershipId": "route:C2:outer",
       "routeId": "C2",
       "direction": "outer",
-      "relationIds": [],
+      "relationIds": [
+        4256077
+      ],
       "candidatePairIds": [],
       "routePlanResolved": 0,
       "routePlanUnresolved": 0,

@@ -721,9 +721,9 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
-| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 11件（legacy 9 + radial 2）、route memberships 53件、ramps 238件 | 7,625,868 bytes |
+| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 11件（legacy 9 + radial 2）、route memberships 52件、ramps 238件 | 7,618,337 bytes |
 | `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 20 件、assignment 10 件、deprecated 2 件） | 48,735 bytes |
-| `pair-candidates.json` | 2 | 導出レポート（候補 11 件 = eligible 10 / hold 1、relation coverage 26 件 = pass 11 / fail 15） | 76,095 bytes |
+| `pair-candidates.json` | 2 | 導出レポート（候補 11 件 = eligible 10 / hold 1、relation coverage 26 件 = pass 11 / fail 15） | 75,894 bytes |
 | `ramps.json` | 1 | 正規台帳399件、うちbound 238件 | 278,803 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
 | `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 9件 | 46,772 bytes |

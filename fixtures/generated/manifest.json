@@ -5,7 +5,7 @@
   "graphVersion": "1.0.0",
   "graphSchemaVersion": 4,
   "routePlanVersion": 1,
-  "routeMembershipsSha256": "d0fcb3ff9c2e1bf7e1b4bcb0dfc15910b33732fa0553b58a7ef49dceeb46868b",
+  "routeMembershipsSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
   "builtAt": "2026-09-24T00:00:00Z",
   "sourceDate": "2026-09-16",
   "coverage": {
@@ -293,7 +293,7 @@
     "inputHashes": {
       "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
       "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
-      "routeMembershipIndexSha256": "d0fcb3ff9c2e1bf7e1b4bcb0dfc15910b33732fa0553b58a7ef49dceeb46868b",
+      "routeMembershipIndexSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
       "billingPairAdjacencySha256": "d748051cbe94627bd54dba23fec44ed57f1213578606897304018e44d636fa44",
       "odTariffsSha256": "48a62e9f7a882b67fa9ed3101e21555cf2d6f11d4197eefeda24592ebefc26cc"
     },
@@ -892,8 +892,8 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "daacb7d5e7b9790848d30bbab0d8d486c3c06d72bf63452a76ac01947d3f1a05",
-      "byteLength": 7625868
+      "sha256": "96d4bacbfccd7a0d64dc81a450f438d6765c882c0c46403e3ca0e888d0eb5b26",
+      "byteLength": 7618337
     },
     {
       "path": "od-tariffs.json",
@@ -902,8 +902,8 @@
     },
     {
       "path": "pair-candidates.json",
-      "sha256": "fa86604533164f9eeca554e6cc5be391a4005cfda838b64200ddde012cb06ee8",
-      "byteLength": 76095
+      "sha256": "269b86a4b80a6a84af26266e578a50f691b0eeaed6d07f18d24b7414e5df5297",
+      "byteLength": 75894
     },
     {
       "path": "ramps.json",

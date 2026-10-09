@@ -97,9 +97,10 @@ fn real_graph_deserialization_and_schema_validation() {
     assert!(wire["routeMemberships"].as_array().is_some());
     let prepared = prepare_json(real_graph_str(), "{}").expect("schema 4 graph must prepare");
     assert_eq!(prepared.graph().schema_version, 4);
-    // all-real-v4 は全 route relation を cover するため、双方向 46 件に 7 件の
-    // forward membership が加わる（pair-candidates.json の relationManifest と一致）。
-    assert_eq!(prepared.route_memberships().len(), 53);
+    // all-real-v4 は全 route relation を cover する。C2 は方向ロールを持たないため
+    // forward 1 件が inner / outer の 2 件に分割され、合計 52 件になる
+    // （pair-candidates.json の relationManifest と一致）。
+    assert_eq!(prepared.route_memberships().len(), 52);
     // Issue #34 で内回り銀座入口→新富町出口が verified に加わり 10 件。
     assert_eq!(
         wire["billingPairs"]

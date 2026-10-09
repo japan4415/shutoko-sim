@@ -5695,6 +5695,11 @@ fn path_cost(edges: &HashMap<&str, &Edge>, path: &[String]) -> u64 {
 /// Hierholzer walk over an edge multiset; accepted only when it is a single
 /// closed walk that consumes every entry.
 fn closed_walk(edges: &HashMap<&str, &Edge>, multiset: &[String]) -> Option<Vec<String>> {
+    // A lap may revisit an edge (see docs/c2-route-design.md 2.3), so the walk
+    // consumes multiset entries rather than unique edge ids. Without that
+    // relaxation the balancing edges would be unusable, because the cheapest
+    // connection between two imbalance nodes is usually a carriageway edge
+    // itself.
     let mut outgoing: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
     for (index, edge_id) in multiset.iter().enumerate() {
         let edge = edges.get(edge_id.as_str())?;
@@ -5705,16 +5710,10 @@ fn closed_walk(edges: &HashMap<&str, &Edge>, multiset: &[String]) -> Option<Vec<
     }
     let start = outgoing.keys().next().copied()?;
     let mut stack = vec![start];
-    let mut used = vec![false; multiset.len()];
     let mut walk = Vec::new();
     while let Some(node) = stack.last().copied() {
-        let next = outgoing
-            .get_mut(node)
-            .and_then(|list| list.pop())
-            .filter(|index| !used[*index]);
-        match next {
+        match outgoing.get_mut(node).and_then(|list| list.pop()) {
             Some(index) => {
-                used[index] = true;
                 let edge = edges.get(multiset[index].as_str())?;
                 stack.push(edge.to.as_str());
                 walk.push(multiset[index].clone());

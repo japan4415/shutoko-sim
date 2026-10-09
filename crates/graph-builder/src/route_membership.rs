@@ -3341,16 +3341,15 @@ pub fn validate_mandatory_lap(
     Ok(())
 }
 
-pub fn validate_directed_junction_mandatory_lap(
+/// Shared preconditions of every mandatory lap: distinct M/B, a single lap, and
+/// a membership that matches the anchor route/direction with terminal edges
+/// that really meet M and B.
+fn validate_lap_anchor_boundaries<'a>(
     graph: &Graph,
-    route_memberships: &[RouteMembershipIndex],
+    route_memberships: &'a [RouteMembershipIndex],
     anchor: &DirectedJunctionAnchor,
     mandatory_lap: &MandatoryLap,
-) -> Result<(), RouteMembershipError> {
-    if let Some(explicit) = mandatory_lap.explicit_arc.as_ref() {
-        resolve_explicit_lap_arc(graph, route_memberships, anchor, mandatory_lap, explicit)?;
-        return Ok(());
-    }
+) -> Result<&'a RouteMembershipIndex, RouteMembershipError> {
     if anchor.merge_node_id == anchor.branch_node_id {
         return Err(RouteMembershipError::Validation(
             "directed junction M and B must be different nodes".into(),
@@ -3405,6 +3404,21 @@ pub fn validate_directed_junction_mandatory_lap(
             "directed junction M/B boundaries do not match their terminal edges".into(),
         ));
     }
+    Ok(membership)
+}
+
+pub fn validate_directed_junction_mandatory_lap(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    anchor: &DirectedJunctionAnchor,
+    mandatory_lap: &MandatoryLap,
+) -> Result<(), RouteMembershipError> {
+    if let Some(explicit) = mandatory_lap.explicit_arc.as_ref() {
+        resolve_explicit_lap_arc(graph, route_memberships, anchor, mandatory_lap, explicit)?;
+        return Ok(());
+    }
+    let membership =
+        validate_lap_anchor_boundaries(graph, route_memberships, anchor, mandatory_lap)?;
 
     let connector_edge_ids = resolve_excluded_short_connector(
         graph,
@@ -3493,60 +3507,7 @@ fn resolve_explicit_lap_arc(
     mandatory_lap: &MandatoryLap,
     explicit: &ExplicitLapArc,
 ) -> Result<RoutePlanLapV1, RouteMembershipError> {
-    if anchor.merge_node_id == anchor.branch_node_id {
-        return Err(RouteMembershipError::Validation(
-            "directed junction M and B must be different nodes".into(),
-        ));
-    }
-    if mandatory_lap.lap_count != 1 {
-        return Err(RouteMembershipError::Validation(
-            "directed mandatory lap must have lapCount=1".into(),
-        ));
-    }
-    let membership = route_memberships
-        .iter()
-        .find(|membership| membership.membership_id == mandatory_lap.membership_id)
-        .ok_or_else(|| {
-            RouteMembershipError::Validation(format!(
-                "unknown mandatory lap membership {}",
-                mandatory_lap.membership_id
-            ))
-        })?;
-    if membership.route_id != anchor.route_id || membership.direction != anchor.direction {
-        return Err(RouteMembershipError::Validation(format!(
-            "mandatory lap membership {} does not match anchor {}/{}",
-            mandatory_lap.membership_id, anchor.route_id, anchor.direction
-        )));
-    }
-    let merge_terminal = graph
-        .edges
-        .iter()
-        .find(|edge| edge.id == anchor.merge_terminal_edge_id)
-        .ok_or_else(|| {
-            RouteMembershipError::Validation(format!(
-                "merge terminal edge {} is absent from graph",
-                anchor.merge_terminal_edge_id
-            ))
-        })?;
-    let branch_initial = graph
-        .edges
-        .iter()
-        .find(|edge| edge.id == anchor.branch_initial_edge_id)
-        .ok_or_else(|| {
-            RouteMembershipError::Validation(format!(
-                "branch initial edge {} is absent from graph",
-                anchor.branch_initial_edge_id
-            ))
-        })?;
-    if merge_terminal.kind != EdgeKind::Shutoko
-        || branch_initial.kind != EdgeKind::Shutoko
-        || merge_terminal.to != anchor.merge_node_id
-        || branch_initial.from != anchor.branch_node_id
-    {
-        return Err(RouteMembershipError::Validation(
-            "directed junction M/B boundaries do not match their terminal edges".into(),
-        ));
-    }
+    validate_lap_anchor_boundaries(graph, route_memberships, anchor, mandatory_lap)?;
     validate_sha256(&explicit.edge_ids_sha256, "explicitLapArc.edgeIdsSha256")?;
     let expected = ordered_edge_ids_sha256(&explicit.edge_ids)
         .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;

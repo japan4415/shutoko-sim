@@ -174,10 +174,13 @@ C2 の周回は単純閉路にならない（§2.2 で実測）ため、**lap �
   適用する。開始 `first_edge_id` と終了 `last_edge_id` は従来どおり必須。
 - **relation membership segment**: 従来どおり**重複禁止**（単一通過の区間表現）。
   周回の重複は lap 側で表現し、membership には載せない。
-- **routing-core**: `validate_ordered_graph_edges(..., reject_repeats)` は既に
-  フラグで重複可否を切り替えられる。resolved mandatory lap は `false` で呼び、
-  relation segment 検証（`crates/graph-builder/src/route_membership.rs`）は
-  現行のまま重複を拒否する。
+- **routing-core の現状確認**: resolved mandatory lap は `ordered_edges`
+  （`crates/routing-core/src/graph_v4.rs`）で検証され、これは
+  `validate_ordered_graph_edges(..., reject_repeats = false)` を呼ぶ。
+  つまり **lap の重複は現行コードでも既に許容されている**。重複を拒否するのは
+  relation membership segment（`crates/graph-builder/src/route_membership.rs` の
+  `validate_ordered_edges`）と `reject_repeats = true` で呼ばれる端点・短絡区間の
+  検証だけであり、契約上の追加改修は不要。
 - **意味論**: 同一エッジの再通過は「同じ物理区間を 2 度走る」ことを表す。
   候補生成と時間計算は lap のエッジ列をそのまま距離・所要時間に積算するため、
   追加の仮定は不要。

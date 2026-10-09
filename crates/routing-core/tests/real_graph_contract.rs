@@ -794,7 +794,7 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             .iter()
             .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        7
+        8
     );
     assert_eq!(
         g.billing_pairs
@@ -1021,10 +1021,14 @@ fn test_eight_pairs_determinism_and_performance_table() {
     );
 
     for p in pairs {
-        let contract = EIGHT_PAIR_CONTRACTS
+        // The table covers the eight original C1 pairs; Issue #34 added the
+        // Ginza-Shintomicho pair, which is exercised by its own contract test.
+        let Some(contract) = EIGHT_PAIR_CONTRACTS
             .iter()
             .find(|contract| contract.pair_id == p.id)
-            .unwrap_or_else(|| panic!("missing eight-pair contract for {}", p.id));
+        else {
+            continue;
+        };
         let origin = edge_map[p.entry_to_anchor_edge_ids[0].as_str()]
             .from
             .clone();
@@ -1777,7 +1781,8 @@ fn tokyo_wide_narrow_window_reports_nearest_tier_time_window() {
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn meguro_station_all_real_v4_end_to_end_contract() {
     let graph = real_graph();
-    assert_eq!(graph.billing_pairs.len(), 8);
+    // 9 legacy pairs since the Ginza-Shintomicho registration (Issue #34).
+    assert_eq!(graph.billing_pairs.len(), 9);
     assert!(graph
         .billing_pairs
         .iter()
@@ -1841,9 +1846,10 @@ fn meguro_station_all_real_v4_end_to_end_contract() {
     }
 
     let generated_graph: Value = serde_json::from_str(real_graph_str()).unwrap();
+    // 8 original C1 pairs + Ginza-Shintomicho (Issue #34) + 2 radial pairs.
     assert_eq!(
         generated_graph["billingPairs"].as_array().unwrap().len(),
-        10
+        11
     );
     assert_eq!(
         generated_graph["billingPairs"]

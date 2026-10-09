@@ -2048,22 +2048,54 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
         }
     }
 
-    // Degree balancing now equalises every node, but the balanced multigraph is
-    // still not weakly connected in one piece, so the closed walk cannot cover
-    // all of it yet: both carriageways stay uncomposed and keep their runs.
-    assert_eq!(
-        split.uncomposed_membership_ids,
-        vec!["route:C2:inner".to_string(), "route:C2:outer".to_string()]
+    // Both carriageways must close into one walk over their runs plus the
+    // cheapest balancing edges, and publish that walk as a single cyclic
+    // relationMainline segment.
+    assert!(
+        split.uncomposed_membership_ids.is_empty(),
+        "both carriageways must close: {:?}",
+        split.uncomposed_membership_ids
     );
     for direction in ["inner", "outer"] {
-        assert!(split.cycle(direction).is_none());
+        let cycle = split
+            .cycle(direction)
+            .unwrap_or_else(|| panic!("{direction} carriageway must close"));
+        assert!(!cycle.is_empty(), "{direction} walk must not be empty");
         assert!(
-            split
-                .segments
-                .get(&format!("route:C2:{}", direction))
-                .is_some_and(|runs| !runs.is_empty()),
-            "{direction} runs stay available for coverage reporting"
+            cycle.len() >= split.edge_count(direction),
+            "{direction} walk must cover its runs"
         );
+        assert_eq!(
+            graph
+                .edges
+                .iter()
+                .find(|edge| edge.id == cycle[cycle.len() - 1])
+                .map(|edge| edge.to.as_str()),
+            graph
+                .edges
+                .iter()
+                .find(|edge| edge.id == cycle[0])
+                .map(|edge| edge.from.as_str()),
+            "{direction} walk must close on itself"
+        );
+        let membership = built
+            .route_memberships
+            .iter()
+            .find(|membership| membership.membership_id == format!("route:C2:{}", direction))
+            .expect("carriageway membership must exist");
+        let relation_segments = membership
+            .segments
+            .iter()
+            .filter(|segment| {
+                segment.source_kind == RouteMembershipSourceKind::RelationMainline
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            relation_segments.len(),
+            1,
+            "{direction} must publish exactly one relationMainline segment"
+        );
+        assert_eq!(relation_segments[0].ordered_edge_ids, *cycle);
     }
 
     // C1 regression: the role-derived inner / outer memberships stay intact.

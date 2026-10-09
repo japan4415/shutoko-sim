@@ -5568,76 +5568,208 @@ fn balance_carriageway_walk(
         return None;
     }
     let mut multiset: Vec<String> = runs.iter().flatten().cloned().collect();
-    let mut delta: BTreeMap<&str, i64> = BTreeMap::new();
-    for edge_id in multiset.iter() {
-        let edge = edges.get(edge_id.as_str())?;
-        *delta.entry(edge.from.as_str()).or_default() += 1;
-        *delta.entry(edge.to.as_str()).or_default() -= 1;
-    }
-    let mut sources = delta
-        .iter()
-        .filter(|(_, value)| **value > 0)
-        .map(|(node, value)| (*node, *value))
-        .collect::<Vec<_>>();
-    let mut sinks = delta
-        .iter()
-        .filter(|(_, value)| **value < 0)
-        .map(|(node, value)| (*node, -*value))
-        .collect::<Vec<_>>();
-    sources.sort();
-    sinks.sort();
-    let total_sources = sources.iter().map(|(_, count)| *count).sum::<i64>();
-    let total_sinks = sinks.iter().map(|(_, count)| *count).sum::<i64>();
-    if total_sources != total_sinks || total_sources > 64 {
-        return None;
-    }
 
-    // Greedily pair the globally cheapest source/sink connection until the set
-    // is balanced. Source and sink multiplicities above one are supported.
-    let mut remaining_sources = sources.clone();
-    let mut remaining_sinks = sinks.clone();
-    let mut guard = 0;
-    while remaining_sources.iter().any(|(_, count)| *count > 0)
-        && remaining_sinks.iter().any(|(_, count)| *count > 0)
-    {
-        guard += 1;
-        if guard > 64 {
-            return None;
+    // One greedy pass that improves connectivity first and degree balance
+    // second. Doing them in separate passes was measured to blow up: every
+    // connection edge added for one goal made the search for the other heavier.
+    for _ in 0..48 {
+        let (sources, sinks) = degree_imbalance(edges, &multiset);
+        let components = edge_components(edges, &multiset);
+        if sources.is_empty() && components <= 1 {
+            break;
         }
-        let mut best: Option<(u64, Vec<String>, usize, usize)> = None;
-        for (source_index, (source, count)) in remaining_sources.iter().enumerate() {
-            if *count <= 0 {
-                continue;
-            }
-            for (sink_index, (sink, sink_count)) in remaining_sinks.iter().enumerate() {
-                if *sink_count <= 0 {
-                    continue;
-                }
-                let Some(path) = cheapest_shutoko_path(adjacency, edges, source, sink) else {
-                    continue;
-                };
-                let key = (
-                    path_cost(edges, &path),
-                    path.clone(),
-                    source_index,
-                    sink_index,
-                );
+        let mut best: Option<(u8, u64, Vec<String>)> = None;
+        // (a) connectors between two components
+        if components > 1 {
+            for path in component_connectors(adjacency, edges, &multiset)? {
+                let key = (0_u8, path_cost(edges, &path), path);
                 if best.as_ref().is_none_or(|current| key < *current) {
                     best = Some(key);
                 }
             }
         }
-        let (_, path, source_index, sink_index) = best?;
+        // (b) connectors that reduce the degree imbalance
+        for path in imbalance_connectors(adjacency, edges, &sources, &sinks) {
+            let key = (1_u8, path_cost(edges, &path), path);
+            if best.as_ref().is_none_or(|current| key < *current) {
+                best = Some(key);
+            }
+        }
+        let Some((_, _, path)) = best else {
+            break;
+        };
+        if path.is_empty() {
+            break;
+        }
         multiset.extend(path);
-        remaining_sources[source_index].1 -= 1;
-        remaining_sinks[sink_index].1 -= 1;
     }
-    if remaining_sources.iter().any(|(_, count)| *count != 0)
-        || remaining_sinks.iter().any(|(_, count)| *count != 0)
-    {
+
+    let (sources, sinks) = degree_imbalance(edges, &multiset);
+    if !sources.is_empty() || !sinks.is_empty() {
         return None;
     }
     closed_walk(edges, &multiset)
+}
+
+/// In/out degree surplus (sources) and deficit (sinks) of a multiset.
+fn degree_imbalance(
+    edges: &HashMap<&str, &Edge>,
+    multiset: &[String],
+) -> (BTreeSet<String>, BTreeSet<String>) {
+    let mut delta: BTreeMap<String, i64> = BTreeMap::new();
+    for edge_id in multiset {
+        if let Some(edge) = edges.get(edge_id.as_str()) {
+            *delta.entry(edge.from.clone()).or_default() += 1;
+            *delta.entry(edge.to.clone()).or_default() -= 1;
+        }
+    }
+    let sources = delta
+        .iter()
+        .filter(|(_, value)| **value > 0)
+        .map(|(node, _)| node.clone())
+        .collect();
+    let sinks = delta
+        .iter()
+        .filter(|(_, value)| **value < 0)
+        .map(|(node, _)| node.clone())
+        .collect();
+    (sources, sinks)
+}
+
+/// Number of weakly connected components over the multiset's edge endpoints.
+fn edge_components(edges: &HashMap<&str, &Edge>, multiset: &[String]) -> usize {
+    let mut parent: HashMap<String, String> = HashMap::new();
+    fn find(parent: &mut HashMap<String, String>, node: &str) -> String {
+        let entry = parent
+            .entry(node.to_string())
+            .or_insert_with(|| node.to_string())
+            .clone();
+        if entry == node {
+            return entry;
+        }
+        let root = find(parent, &entry);
+        parent.insert(node.to_string(), root.clone());
+        root
+    }
+    let mut nodes = Vec::new();
+    for edge_id in multiset {
+        let Some(edge) = edges.get(edge_id.as_str()) else {
+            continue;
+        };
+        let left = find(&mut parent, edge.from.as_str());
+        let right = find(&mut parent, edge.to.as_str());
+        if left != right {
+            parent.insert(left, right);
+        }
+        nodes.push(edge.from.clone());
+    }
+    let mut roots = BTreeSet::new();
+    for node in nodes {
+        roots.insert(find(&mut parent, node.as_str()));
+    }
+    roots.len()
+}
+
+/// Cheapest connectors between distinct components of the multiset.
+fn component_connectors(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    edges: &HashMap<&str, &Edge>,
+    multiset: &[String],
+) -> Option<Vec<Vec<String>>> {
+    const REPRESENTATIVES: usize = 4;
+    let mut parent: HashMap<String, String> = HashMap::new();
+    fn find(parent: &mut HashMap<String, String>, node: &str) -> String {
+        let entry = parent
+            .entry(node.to_string())
+            .or_insert_with(|| node.to_string())
+            .clone();
+        if entry == node {
+            return entry;
+        }
+        let root = find(parent, &entry);
+        parent.insert(node.to_string(), root.clone());
+        root
+    }
+    for edge_id in multiset {
+        let Some(edge) = edges.get(edge_id.as_str()) else {
+            continue;
+        };
+        let left = find(&mut parent, edge.from.as_str());
+        let right = find(&mut parent, edge.to.as_str());
+        if left != right {
+            parent.insert(left, right);
+        }
+    }
+    let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for edge_id in multiset {
+        let Some(edge) = edges.get(edge_id.as_str()) else {
+            continue;
+        };
+        let root = find(&mut parent, edge.from.as_str());
+        groups.entry(root).or_default().push(edge_id.clone());
+    }
+    if groups.len() <= 1 {
+        return Some(Vec::new());
+    }
+    let mut ordered = groups.values().cloned().collect::<Vec<_>>();
+    ordered.sort_by_key(|group| std::cmp::Reverse(group.len()));
+    let anchor = ordered.remove(0);
+    let mut paths = Vec::new();
+    for group in ordered.iter() {
+        let mut best: Option<(u64, Vec<String>)> = None;
+        for from_edge in anchor.iter().take(REPRESENTATIVES) {
+            let Some(from) = edges.get(from_edge.as_str()) else {
+                continue;
+            };
+            for to_edge in group.iter().take(REPRESENTATIVES) {
+                let Some(to) = edges.get(to_edge.as_str()) else {
+                    continue;
+                };
+                for (start, goal) in [
+                    (from.to.as_str(), to.from.as_str()),
+                    (to.to.as_str(), from.from.as_str()),
+                ] {
+                    let Some(path) = cheapest_shutoko_path(adjacency, edges, start, goal) else {
+                        continue;
+                    };
+                    let key = (path_cost(edges, &path), path);
+                    if best.as_ref().is_none_or(|current| key < *current) {
+                        best = Some(key);
+                    }
+                }
+            }
+        }
+        if let Some((_, path)) = best {
+            paths.push(path);
+        }
+    }
+    Some(paths)
+}
+
+/// Cheapest connectors between a degree surplus and deficit node.
+fn imbalance_connectors(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    edges: &HashMap<&str, &Edge>,
+    sources: &BTreeSet<String>,
+    sinks: &BTreeSet<String>,
+) -> Vec<Vec<String>> {
+    let mut paths = Vec::new();
+    for source in sources.iter().take(8) {
+        let mut best: Option<(u64, Vec<String>)> = None;
+        for sink in sinks.iter().take(8) {
+            let Some(path) = cheapest_shutoko_path(adjacency, edges, source, sink) else {
+                continue;
+            };
+            let key = (path_cost(edges, &path), path);
+            if best.as_ref().is_none_or(|current| key < *current) {
+                best = Some(key);
+            }
+        }
+        if let Some((_, path)) = best {
+            paths.push(path);
+        }
+    }
+    paths
 }
 
 /// Deterministic minimum-distance Shutoko path.

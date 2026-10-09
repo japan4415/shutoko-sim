@@ -1886,6 +1886,218 @@ fn test_real_c1_first_exit_and_benchmark() {
     );
 }
 
+/// Issue #44 slice 1: C2 (relation 4256077) carries no direction roles and no
+/// JCT connector members, so its `inner` / `outer` carriageways are derived from
+/// the verified-bound C2 ramps instead of relation roles.
+///
+/// The contract this test pins down:
+/// - C2 no longer publishes an undirected `route:C2:forward` membership,
+/// - `route:C2:inner` and `route:C2:outer` partition the relation mainline edges
+///   without overlapping,
+/// - every emitted split segment is graph-contiguous and hash-consistent,
+/// - C1 keeps its role-derived memberships (regression guard).
+#[test]
+fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
+    use shutoko_graph_builder::{
+        bind_ramps_to_graph, build_route_membership_indices_with_coverage,
+        validate_osm_ramp_bindings, validate_ramp_inventory, validate_route_membership_structure,
+        RampInventoryFile,
+    };
+    use shutoko_routing_core::RouteMembershipSourceKind;
+
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let osm_path = manifest_dir.join("../../fixtures/osm/shutoko-all.json");
+    if !osm_path.exists() {
+        return;
+    }
+    let osm_raw = std::fs::read(&osm_path).unwrap();
+    let osm: OverpassResponse = serde_json::from_slice(&osm_raw).unwrap();
+    let (mut graph, _snap) = build_topology(&osm, &TopologyConfig::default()).unwrap();
+    let inventory: RampInventoryFile = serde_json::from_str(
+        &std::fs::read_to_string(manifest_dir.join("../../data/ramp-inventory.json")).unwrap(),
+    )
+    .unwrap();
+    let bindings: shutoko_graph_builder::OsmRampBindingsFile = serde_json::from_str(
+        &std::fs::read_to_string(manifest_dir.join("../../data/osm-ramp-bindings.json")).unwrap(),
+    )
+    .unwrap();
+    validate_ramp_inventory(&inventory).unwrap();
+    validate_osm_ramp_bindings(&bindings, &inventory).unwrap();
+    let (ramps, _artifact, _notes) = bind_ramps_to_graph(&mut graph, &inventory, &bindings);
+    graph.ramps = ramps;
+    let evidence = bound_ramp_evidence_from_inventory(&graph, &inventory, &bindings).unwrap();
+    let source_snapshot_sha256 = compute_sha256(&osm_raw);
+    // Expanding every route relation in the all-route snapshot would record
+    // unrelated fail-closed relations, so select C2 plus the C1 / route 2
+    // regression pair explicitly.
+    let options = RouteMembershipBuildOptions {
+        source_snapshot_sha256: source_snapshot_sha256.clone(),
+        relation_ids: Some(vec![4256077, 4256008, 4256339]),
+        bound_ramp_evidence: evidence.clone(),
+    };
+    let built = build_route_membership_indices_with_coverage(&osm, &graph, &options).unwrap();
+    validate_route_membership_structure(&graph, &built.route_memberships, &source_snapshot_sha256)
+        .unwrap();
+
+    let split = built
+        .carriageway_direction_splits
+        .iter()
+        .find(|split| split.relation_id == 4256077)
+        .expect("relation 4256077 must produce a derived carriageway split");
+    assert_eq!(split.route_id, "C2");
+    assert_eq!(split.seed_ramp_ids.len(), 25, "25 verified_bound C2 ramps");
+    assert_eq!(
+        split.directions,
+        vec!["inner".to_string(), "outer".to_string()]
+    );
+    let inner = split.edge_count("inner");
+    let outer = split.edge_count("outer");
+    // Almost-even segments are re-derived from their neighbours after their
+    // split labels are dropped, so every labelled edge now lands on exactly one
+    // carriageway and no segment stays ambiguous.
+    assert_eq!(inner, 1228);
+    assert_eq!(outer, 1068);
+    // 14 of the 2,310 labelled edges are dropped by the boundary trim, so the
+    // two carriageways partition every labelled edge the trim and the exit
+    // reachability filter keep.
+    assert_eq!(split.labelled_edge_ids.len() - (inner + outer), 14);
+    assert_eq!(
+        split.unassigned_edge_ids.len() + split.labelled_edge_ids.len(),
+        2479,
+        "the split must account for every C2 relation mainline edge"
+    );
+    assert!(
+        split.ambiguous_segment_ids.is_empty(),
+        "re-propagation must resolve the evenly split segments"
+    );
+
+    let edge_owner: HashMap<&str, &str> = built
+        .route_memberships
+        .iter()
+        .filter(|membership| membership.route_id == "C2")
+        .flat_map(|membership| {
+            membership
+                .segments
+                .iter()
+                .filter(|segment| {
+                    segment.source_kind == RouteMembershipSourceKind::RelationMainline
+                })
+                .flat_map(move |segment| {
+                    segment
+                        .ordered_edge_ids
+                        .iter()
+                        .map(move |edge_id| (edge_id.as_str(), membership.direction.as_str()))
+                })
+        })
+        .collect();
+    assert!(
+        !built
+            .route_memberships
+            .iter()
+            .any(|membership| membership.membership_id == "route:C2:forward"),
+        "C2 must not publish an undirected forward membership once the split exists"
+    );
+    assert_eq!(
+        edge_owner.len(),
+        inner + outer,
+        "a C2 relation mainline edge must belong to exactly one carriageway"
+    );
+    assert!(built.route_memberships.iter().any(|membership| {
+        membership.membership_id == "route:C2:inner" && !membership.segments.is_empty()
+    }));
+    assert!(built.route_memberships.iter().any(|membership| {
+        membership.membership_id == "route:C2:outer" && !membership.segments.is_empty()
+    }));
+    assert!(inner > 0 && outer > 0);
+    for membership in built
+        .route_memberships
+        .iter()
+        .filter(|membership| membership.route_id == "C2")
+    {
+        let mut seen = std::collections::HashSet::new();
+        for segment in membership
+            .segments
+            .iter()
+            .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+        {
+            assert_eq!(segment.source_relation_id.as_deref(), Some("4256077"));
+            for window in segment.ordered_edge_ids.windows(2) {
+                assert_eq!(
+                    graph
+                        .edges
+                        .iter()
+                        .find(|edge| edge.id == window[0])
+                        .map(|edge| edge.to.as_str()),
+                    graph
+                        .edges
+                        .iter()
+                        .find(|edge| edge.id == window[1])
+                        .map(|edge| edge.from.as_str()),
+                    "split segment {} must stay graph-contiguous",
+                    segment.segment_id
+                );
+            }
+            for edge_id in &segment.ordered_edge_ids {
+                assert!(
+                    seen.insert(edge_id.clone()),
+                    "edge {} appears twice in {}",
+                    edge_id,
+                    membership.membership_id
+                );
+            }
+        }
+    }
+
+    // The single greedy pass keeps the runtime bounded but still cannot make a
+    // carriageway both balanced and weakly connected, even though laps may
+    // revisit edges. Both carriageways therefore stay uncomposed and keep their
+    // runs; docs/c2-route-design.md records the global formulation that the
+    // next stage needs.
+    assert_eq!(
+        split.uncomposed_membership_ids,
+        vec!["route:C2:inner".to_string(), "route:C2:outer".to_string()]
+    );
+    for direction in ["inner", "outer"] {
+        assert!(split.cycle(direction).is_none());
+        assert!(
+            split
+                .segments
+                .get(&format!("route:C2:{}", direction))
+                .is_some_and(|runs| !runs.is_empty()),
+            "{direction} runs stay available for coverage reporting"
+        );
+    }
+
+    // C1 regression: the role-derived inner / outer memberships stay intact.
+    let c1_relation_ids = Some(vec![4256008]);
+    let c1_options = RouteMembershipBuildOptions {
+        source_snapshot_sha256,
+        relation_ids: c1_relation_ids,
+        bound_ramp_evidence: evidence,
+    };
+    let c1 = build_route_membership_indices_with_coverage(&osm, &graph, &c1_options).unwrap();
+    let c1_inner = c1
+        .route_memberships
+        .iter()
+        .find(|membership| membership.membership_id == "route:C1:inner")
+        .expect("C1 inner membership must stay role-derived");
+    let c1_outer = c1
+        .route_memberships
+        .iter()
+        .find(|membership| membership.membership_id == "route:C1:outer")
+        .expect("C1 outer membership must stay role-derived");
+    let c1_relation_segments = |membership: &RouteMembershipIndex| {
+        membership
+            .segments
+            .iter()
+            .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+            .count()
+    };
+    assert_eq!(c1_relation_segments(c1_inner), 1);
+    assert_eq!(c1_relation_segments(c1_outer), 1);
+    assert!(c1.carriageway_direction_splits.is_empty());
+}
+
 #[test]
 fn test_refutation_first_exit_mismatch_shintomicho() {
     let osm_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -3515,8 +3727,8 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
         .collect();
     assert_eq!(
         legacy_pairs.len(),
-        8,
-        "seed must retain exactly 8 legacy billing pairs"
+        9,
+        "seed must retain exactly 9 legacy billing pairs (Issue #34 added the inner Ginza-Shintomicho pair)"
     );
 
     let verified_pair_ids = [
@@ -3560,8 +3772,8 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     let graph = generated_legacy_graph();
     assert_eq!(
         graph.billing_pairs.len(),
-        8,
-        "graph.json must retain all 8 audited billing pairs"
+        9,
+        "graph.json must retain all 9 audited billing pairs (8 + Issue #34)"
     );
 
     for expected_id in &verified_pair_ids {
@@ -3641,7 +3853,7 @@ fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
     }
 
     // 3. Billing pair entryName and exitName propagation from seed
-    assert_eq!(legacy_pairs.len(), 8);
+    assert_eq!(legacy_pairs.len(), 9);
     for seed_pair in &legacy_pairs {
         let graph_pair = graph
             .billing_pairs
@@ -4277,13 +4489,13 @@ fn test_cli_with_full_fixtures() {
     let ramps_raw = std::fs::read_to_string(out_dir.join("ramps.json")).unwrap();
     let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
     assert_eq!(ramps_json["totalRamps"], 399);
-    assert_eq!(ramps_json["boundRamps"], 236);
+    assert_eq!(ramps_json["boundRamps"], 238);
 
     let manifest_raw = std::fs::read_to_string(out_dir.join("manifest.json")).unwrap();
     let manifest_json: serde_json::Value = serde_json::from_str(&manifest_raw).unwrap();
     let capabilities = &manifest_json["coverage"]["endpointCapabilities"];
     assert_eq!(capabilities["routableEntryCount"], 100);
-    assert_eq!(capabilities["routableExitCount"], 101);
+    assert_eq!(capabilities["routableExitCount"], 103);
     assert_eq!(capabilities["structuralNoLoopEntryCount"], 13);
     assert_eq!(capabilities["structuralNoLoopExitCount"], 22);
 
@@ -4301,14 +4513,14 @@ fn test_cli_with_full_fixtures() {
             .iter()
             .filter(|r| r["supportState"] == "verified_bound" && r["bound"] == true)
             .count(),
-        236
+        238
     );
     assert_eq!(
         active_general
             .iter()
             .filter(|r| r["supportState"] == "unsupported" && r["bound"] == false)
             .count(),
-        134
+        132
     );
     // 芝公園入口外回りだけは exact binding が未解決（access:conditional）で、
     // 恒久的な利用不可（unsupported）とは区別して reason code 付きで公開する。
@@ -4329,7 +4541,7 @@ fn test_cli_with_full_fixtures() {
             .iter()
             .filter(|r| r["routingCapability"] == "routable")
             .count(),
-        201
+        203
     );
     assert_eq!(
         active_general
@@ -4493,7 +4705,7 @@ fn test_cli_schema2_retains_pair_specific_radial_rejections() {
         serde_json::from_str(&std::fs::read_to_string(out_dir.join("graph.json")).unwrap())
             .unwrap();
     assert_eq!(graph["schemaVersion"], 2);
-    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 8);
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 9);
     let manifest: Value =
         serde_json::from_str(&std::fs::read_to_string(out_dir.join("manifest.json")).unwrap())
             .unwrap();
@@ -4580,7 +4792,7 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
         .collect::<Vec<_>>();
     assert!(diagnostic_only.is_empty());
     assert_eq!(graph_json["schemaVersion"], 4);
-    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 10);
+    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 11);
     let legacy_pairs = graph_json["billingPairs"]
         .as_array()
         .unwrap()
@@ -4593,7 +4805,7 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
         .iter()
         .filter(|pair| pair["pairKind"] == "radialReturn")
         .collect::<Vec<_>>();
-    assert_eq!(legacy_pairs.len(), 8);
+    assert_eq!(legacy_pairs.len(), 9);
     assert_eq!(radial_pairs.len(), 2);
     for pair in legacy_pairs {
         assert_eq!(pair["anchor"]["anchorKind"], "sameNode");
@@ -4625,7 +4837,7 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
     }
     let prepared = shutoko_routing_core::prepare_json(&graph_raw, "{}").unwrap();
     assert_eq!(prepared.graph().schema_version, 4);
-    assert_eq!(prepared.graph().billing_pairs.len(), 8);
+    assert_eq!(prepared.graph().billing_pairs.len(), 9);
     assert_eq!(prepared.radial_billing_pairs().len(), 2);
     let edge_ids = graph_json["edges"]
         .as_array()

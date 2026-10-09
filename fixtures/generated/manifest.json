@@ -5,7 +5,7 @@
   "graphVersion": "1.0.0",
   "graphSchemaVersion": 4,
   "routePlanVersion": 1,
-  "routeMembershipsSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
+  "routeMembershipsSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
   "builtAt": "2026-09-24T00:00:00Z",
   "sourceDate": "2026-09-16",
   "coverage": {
@@ -14,6 +14,7 @@
       "e:w1091280541:0:f",
       "e:w378284514:0:f",
       "e:w4848922:0:f",
+      "e:w4848936:0:f",
       "e:w4853797:0:f",
       "e:w916571610:0:f",
       "e:w916571615:0:f",
@@ -26,11 +27,12 @@
       "e:w297864314:11:f",
       "e:w390441534:2:f",
       "e:w45068171:1:f",
+      "e:w760760233:11:f",
       "e:w944671542:0:f"
     ],
     "endpointCapabilities": {
       "routableEntryCount": 100,
-      "routableExitCount": 101,
+      "routableExitCount": 103,
       "structuralNoLoopEntryCount": 13,
       "structuralNoLoopExitCount": 22,
       "routableEntryRampIds": [
@@ -194,11 +196,13 @@
         "ramp:c1-inner:kitanomaru-exit",
         "ramp:c1-inner:kyobashi-exit",
         "ramp:c1-inner:shibakoen-exit",
+        "ramp:c1-inner:shintomicho-exit",
         "ramp:c1-inner:shiodome-exit",
         "ramp:c1-outer:daikancho-exit",
         "ramp:c1-outer:iikura-exit",
         "ramp:c1-outer:kasumigaseki-exit",
         "ramp:c1-outer:shibakoen-exit",
+        "ramp:c1-outer:shintomicho-exit",
         "ramp:c1-outer:takaracho-exit",
         "ramp:c2-inner:chukan-oiminami-exit",
         "ramp:c2-inner:gotanda-exit",
@@ -288,15 +292,15 @@
     "rule": "billingPairDerivation/v2",
     "inputHashes": {
       "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
-      "rampLedgerSha256": "97ad8b378f1dcdd7d1c6af95164727860e040635bb821eaee043cb840b0aa5cc",
-      "routeMembershipIndexSha256": "6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5",
-      "billingPairAdjacencySha256": "ad5d09e5eea8cebdbd11d6e910ec51acf4f7f0f0674f32eeb6f71d4a4b0eba11",
-      "odTariffsSha256": "37056d2b46b8c42168fdf54073ef856939c5152cec566de5dfea27ce6b26d763"
+      "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
+      "routeMembershipIndexSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
+      "billingPairAdjacencySha256": "d748051cbe94627bd54dba23fec44ed57f1213578606897304018e44d636fa44",
+      "odTariffsSha256": "48a62e9f7a882b67fa9ed3101e21555cf2d6f11d4197eefeda24592ebefc26cc"
     },
     "summary": {
       "candidateTotal": 11,
-      "eligibleForReview": 9,
-      "hold": 2,
+      "eligibleForReview": 10,
+      "hold": 1,
       "relationCoverage": {
         "relationTotal": 26,
         "relationExpanded": 11,
@@ -408,7 +412,6 @@
     "entry:e:w46876335:0:f",
     "entry:e:w4848755:0:f",
     "entry:e:w4848872:0:f",
-    "entry:e:w4848936:0:f (銀座入口)",
     "entry:e:w4853801:0:f (芝公園入口)",
     "entry:e:w4854228:0:f",
     "entry:e:w4857046:0:f",
@@ -634,7 +637,6 @@
     "exit:e:w760713445:2:f",
     "exit:e:w760718687:1:f (花之木出口)",
     "exit:e:w760748024:7:f",
-    "exit:e:w760760233:11:f (新富町出口)",
     "exit:e:w762093201:1:f",
     "exit:e:w762093203:2:f",
     "exit:e:w777265599:7:f",
@@ -740,14 +742,12 @@
     "unbound-ramp:C1:ramp:c1-inner:edobashi-entry (江戸橋) outside graph extract",
     "unbound-ramp:C1:ramp:c1-inner:ginza-exit (銀座) outside graph extract",
     "unbound-ramp:C1:ramp:c1-inner:gofukubashi-entry (呉服橋) outside graph extract",
-    "unbound-ramp:C1:ramp:c1-inner:shintomicho-exit (新富町) outside graph extract",
     "unbound-ramp:C1:ramp:c1-outer:edobashi-exit (江戸橋) outside graph extract",
     "unbound-ramp:C1:ramp:c1-outer:ginza-exit (銀座) outside graph extract",
     "unbound-ramp:C1:ramp:c1-outer:gofukubashi-exit (呉服橋) outside graph extract",
     "unbound-ramp:C1:ramp:c1-outer:kandabashi-exit (神田橋) outside graph extract",
     "unbound-ramp:C1:ramp:c1-outer:kyobashi-entry (京橋) outside graph extract",
     "unbound-ramp:C1:ramp:c1-outer:shibakoen-entry (芝公園) outside graph extract",
-    "unbound-ramp:C1:ramp:c1-outer:shintomicho-exit (新富町) outside graph extract",
     "unbound-ramp:C2:ramp:c2-inner:funaboribashi-exit (船堀橋) outside graph extract",
     "unbound-ramp:C2:ramp:c2-inner:hatsudai-minami-entry (初台南) outside graph extract",
     "unbound-ramp:C2:ramp:c2-inner:nishi-ikebukuro-exit (西池袋) outside graph extract",
@@ -847,6 +847,12 @@
       "notes": "firstPublicRoadConnection/v1 のWay 1232166619 監査と C1 inner relation の exit 順により、代官町入口から霞が関出口が最初の一般出口であると確認した。"
     },
     {
+      "id": "bp:c1-inner:ginza-shintomicho",
+      "source": "https://www.shutoko.jp/use/network/map/route-c1/ginza/",
+      "sourceDate": "2026-09-16",
+      "notes": "C1内回り 銀座入口→新富町出口（0.4km、300円）は公式資料上の1区間先（data/od-tariffs.json assignment:c1-inner:ginza-shintomicho、2025-04/2026-10 両版の distanceEvidence 付き）。OSM では内回り新富町出口の分流点（588391376）が銀座入口の合流点（31254341）より上流にあり、銀座入口をアンカーとした First Exit 検証は機械的に成立しないため、Issue #34 対応案1 に基づきアンカーを分流点の手前の本線ノード 31254336 へ再設定した（再設定により First Exit 検証は機械的に成立し、direct path は OSM 幾何上の内回り周回経由となる。公式区間距離 0.4km との差は docs/data-pipeline.md の注記を参照）。出口ランプは内回り・外回りで最終区間 way 760760233 を共有するため sharedPhysicalOverrides G54 で承認し、exitOsmWayId は共有区間の way を参照する。"
+    },
+    {
       "id": "bp:c1-inner:kasumigaseki-shibakoen",
       "source": "https://www.shutoko.jp/use/network/map/",
       "sourceDate": "2026-09-25",
@@ -886,23 +892,23 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "3c6c421f33bcbc7cd634b586979f0fef455792362c3e7b1559e93408057f03b4",
-      "byteLength": 7606198
+      "sha256": "96d4bacbfccd7a0d64dc81a450f438d6765c882c0c46403e3ca0e888d0eb5b26",
+      "byteLength": 7618337
     },
     {
       "path": "od-tariffs.json",
-      "sha256": "37056d2b46b8c42168fdf54073ef856939c5152cec566de5dfea27ce6b26d763",
+      "sha256": "48a62e9f7a882b67fa9ed3101e21555cf2d6f11d4197eefeda24592ebefc26cc",
       "byteLength": 48735
     },
     {
       "path": "pair-candidates.json",
-      "sha256": "007e19804655060e48a565ca0289f469a680b91384080dbc166484b77accd5e9",
-      "byteLength": 75737
+      "sha256": "269b86a4b80a6a84af26266e578a50f691b0eeaed6d07f18d24b7414e5df5297",
+      "byteLength": 75894
     },
     {
       "path": "ramps.json",
-      "sha256": "3835043405ee6d5e88927ed1623528461537b1b32695bc1b110ffcc2da5ecdd8",
-      "byteLength": 278337
+      "sha256": "d6da2a95e8a41c703b1ba0bf125a569a48e1341c37ec629196721cfc56ecc170",
+      "byteLength": 278803
     },
     {
       "path": "snap-index.json",

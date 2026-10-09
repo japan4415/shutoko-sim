@@ -217,8 +217,9 @@ fn pair_derivation_reports_every_membership_and_route_relation() {
     assert_eq!(report.schema_version, PAIR_DERIVATION_REPORT_SCHEMA_VERSION);
     assert_eq!(report.rule, PAIR_DERIVATION_RULE);
     assert_eq!(report.summary.candidate_total, 11);
-    assert_eq!(report.summary.eligible_for_review, 9);
-    assert_eq!(report.summary.hold, 2);
+    // 10 legacy pairs are eligible after the Ginza-Shintomicho registration.
+    assert_eq!(report.summary.eligible_for_review, 10);
+    assert_eq!(report.summary.hold, 1);
 
     // Every expanded membership has a manifest record, including the ones that
     // no candidate pair references.
@@ -257,8 +258,10 @@ fn pair_derivation_reports_every_membership_and_route_relation() {
         .iter()
         .find(|record| record.membership_id == "route:C1:inner")
         .unwrap();
-    assert_eq!(c1_inner.status, "fail");
-    assert_eq!(c1_inner.route_plan_unresolved, 1);
+    // Issue #34 resolved the inner Ginza-Shintomicho pair through a sameNode
+    // route plan, so the inner membership no longer reports an unresolved plan.
+    assert_eq!(c1_inner.status, "pass");
+    assert_eq!(c1_inner.route_plan_unresolved, 0);
     let c1_outer = report
         .relation_manifest
         .iter()

@@ -145,7 +145,23 @@
   - 参照日: `2026-09-10`
 
 > **注記（内回り銀座入口の 1 区間先について）**:
-> 内回り銀座入口 → 新富町出口（0.4km、300 円）は公式資料上の 1 区間先だが、OSM の分流点・合流点の順序（内回り新富町出口の分流点が銀座入口の合流点より上流にある）により relation 制約つきの First Exit 検証が通らないため**商品ペアとしては未登録**のままである。京橋出口は 2 区間先なので登録しない。料金表 v3 には `assignment:c1-inner:ginza-shintomicho`（0.4km / 300円）を証拠つきで保持するが、これは公式セルに料金があることのみを意味し、1 区間先として公開できることを意味しない。隣接関係証跡 `data/billing-pair-adjacency.json` は `bp:c1-inner:ginza-shintomicho` を `reviewStatus: blocked` で保持し、自動導出レポート（`pair-candidates.json`）でも `hold` として出力する。
+> 内回り銀座入口 → 新富町出口（0.4km、300 円）は公式資料上の 1 区間先であり、Issue #34 で
+> `bp:c1-inner:ginza-shintomicho` として登録した（Issue #34 対応案1: アンカー再設定）。
+> OSM 上は内回り新富町出口の分流点（ノード 588391376）が銀座入口の合流点（ノード 31254341）
+> より上流にあり、銀座入口をアンカーとした First Exit 検証は機械的に成立しないため、
+> seed の `anchorOsmNodeId` を分流点の手前の本線ノード 31254336 へ再設定した。これにより
+> First Exit 検証（アンカーから最初の Exit エッジが新富町出口）は機械的に成立する。ただし
+> OSM 幾何のままでは銀座入口から新富町出口への有向経路が C1 を一周するため、graph 上の
+> direct path は周回形状（約 14.3km）となり、公式区間距離 0.4km とは一致しない。課金額は
+> `assignment:c1-inner:ginza-shintomicho`（0.4km / 300円、2025-04・2026-10 両版の証拠付き）
+> を authority とするため表示料金は公式どおり 300 円で、経路形状と公式区間距離の差は
+> OSM データ起因（ランプの分岐点が本線合流点より上流に描かれている）である。京橋出口は
+> 2 区間先なので登録しない。
+> 出口ランプは内回り・外回りで最終区間 way 760760233（地表 佃大橋通り）を共有する物理構造
+> （G3 加平と同型）のため、`sharedPhysicalOverrides` G54 で方向別公式ランプの共有を承認し、
+> 両ランプとも `verified_bound` として exact binding を立証している。隣接関係証跡
+> `data/billing-pair-adjacency.json` は `bp:c1-inner:ginza-shintomicho` を `reviewStatus: reviewed`
+> の sameNode route plan 付きへ更新した。
 
 ### 3.1 `schemaVersion: 2` の混在 seed（parser実装済み）
 
@@ -705,12 +721,12 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
-| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 10件（legacy 8 + radial 2）、route memberships 53件、ramps 236件 | 7,606,198 bytes |
+| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 11件（legacy 9 + radial 2）、route memberships 52件、ramps 238件 | 7,618,337 bytes |
 | `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 20 件、assignment 10 件、deprecated 2 件） | 48,735 bytes |
-| `pair-candidates.json` | 2 | 導出レポート（候補 11 件 = eligible 9 / hold 2、relation coverage 26 件 = pass 11 / fail 15） | 75,737 bytes |
-| `ramps.json` | 1 | 正規台帳399件、うちbound 236件 | 278,337 bytes |
+| `pair-candidates.json` | 2 | 導出レポート（候補 11 件 = eligible 10 / hold 1、relation coverage 26 件 = pass 11 / fail 15） | 75,894 bytes |
+| `ramps.json` | 1 | 正規台帳399件、うちbound 238件 | 278,803 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
-| `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 9件 | 45,773 bytes |
+| `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 9件 | 46,772 bytes |
 
 `graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は 5 成果物（`graph.json` / `od-tariffs.json` / `pair-candidates.json` / `ramps.json` / `snap-index.json`）の path・SHA-256・byte length を固定し、manifest 自身のサイズと schema は別情報として扱う。`all-real-v4` の `routeMembershipsSha256` は `6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5` であり、同一入力の2回の生成で一致する。3 世代分のバイト一致は `cargo test --release -p shutoko-graph-builder --test release_v4_contract --locked -- --ignored` の `all_real_v4_artifacts_are_byte_identical_across_three_generations` が担保する。
 

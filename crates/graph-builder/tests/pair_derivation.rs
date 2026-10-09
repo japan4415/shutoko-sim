@@ -138,8 +138,8 @@ fn derives_all_official_candidates_with_independent_gates() {
     assert!(!report.automatic_seed_write);
     assert_eq!(report.candidates.len(), 11);
     assert_eq!(report.summary.candidate_total, 11);
-    assert_eq!(report.summary.eligible_for_review, 9, "{report:#?}");
-    assert_eq!(report.summary.hold, 2);
+    assert_eq!(report.summary.eligible_for_review, 10, "{report:#?}");
+    assert_eq!(report.summary.hold, 1);
     assert_eq!(
         report
             .candidates
@@ -246,31 +246,22 @@ fn derives_all_official_candidates_with_independent_gates() {
         ]
     );
 
-    let blocked_shintomicho = pair("bp:c1-inner:ginza-shintomicho");
+    // Issue #34: 内回り銀座入口→新富町出口はアンカー再設定と G54 共有物理
+    // セグメント承認により全 gate が通るようになった（旧 blocked 状態の
+    // rejection reasons 固定は解消）。
+    let resolved_shintomicho = pair("bp:c1-inner:ginza-shintomicho");
     assert_eq!(
-        blocked_shintomicho.promotion_decision,
-        PairDerivationPromotionDecision::Hold
+        resolved_shintomicho.promotion_decision,
+        PairDerivationPromotionDecision::EligibleForReview
+    );
+    assert!(resolved_shintomicho.rejection_reasons.is_empty());
+    assert_eq!(
+        resolved_shintomicho.gates.first_exit.status,
+        PairDerivationGateStatus::Passed
     );
     assert_eq!(
-        blocked_shintomicho.gates.official_adjacency.status,
-        PairDerivationGateStatus::Unresolved
-    );
-    assert!(blocked_shintomicho
-        .rejection_reasons
-        .contains(&"ROUTE_PLAN_EVIDENCE_UNRESOLVED".to_string()));
-    // #34 が持つ全 rejection reason を完全固定する（1 本だけ contains で検査しない）。
-    assert_eq!(
-        blocked_shintomicho.rejection_reasons,
-        vec![
-            "EXIT_BINDING_UNSUPPORTED".to_string(),
-            "EXIT_EXACT_BINDING_UNRESOLVED".to_string(),
-            "FIRST_EXIT_UNRESOLVED".to_string(),
-            "LEGACY_DIRECTION_UNRESOLVED".to_string(),
-            "LEGACY_ROUTE_RESOLUTION_FAILED".to_string(),
-            "MANDATORY_LAP_UNRESOLVED".to_string(),
-            "ROUTE_PLAN_EVIDENCE_UNRESOLVED".to_string(),
-            "ROUTE_PLAN_ROLES_UNRESOLVED".to_string(),
-        ]
+        resolved_shintomicho.gates.official_adjacency.status,
+        PairDerivationGateStatus::Passed
     );
     for pair_id in [
         "bp:2-inbound:meguro:c1-inner:tengenji",
@@ -303,8 +294,9 @@ fn derives_all_official_candidates_with_independent_gates() {
         .iter()
         .find(|manifest| manifest.membership_id == "route:C1:inner")
         .unwrap();
-    assert_eq!(c1_inner.status, "fail");
-    assert_eq!(c1_inner.route_plan_unresolved, 1);
+    // Issue #34 で内回り銀座入口→新富町出口の route plan が解決された。
+    assert_eq!(c1_inner.status, "pass");
+    assert_eq!(c1_inner.route_plan_unresolved, 0);
     assert!(c1_inner
         .candidate_pair_ids
         .contains(&"bp:c1-inner:ginza-shintomicho".to_string()));

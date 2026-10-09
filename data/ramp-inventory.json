@@ -125,8 +125,8 @@
       "sourceDate": "2026-09-16",
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "unresolved",
       "supportReasonCode": "CONDITIONAL_ACCESS_RESTRICTION",
+      "supportState": "unresolved",
       "supportReason": "way 4853801 の地表接続 way 40969792 に access:conditional=no @ (08:00-20:00) があり、終日利用可能な公道接続を証明できない。時間帯モデルが無い状態では exact binding を未解決として扱い fail-closed にする。",
       "supportEvidence": [
         "https://www.openstreetmap.org/way/4853801",
@@ -5029,15 +5029,15 @@
       "sourceDate": "2026-09-16",
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "unsupported",
-      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
+      "supportState": "verified_bound",
+      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。内回り・外回りの新富町出口が最終区間 way 760760233 を共有する物理構造は sharedPhysicalOverrides G54 で承認済み。",
       "supportEvidence": [
-        "directed-segment:760760233:31254357:11915135708",
-        "duplicate-members:ramp:c1-inner:shintomicho-exit, ramp:c1-outer:shintomicho-exit",
-        "verify-core-r2-opus.json:F1"
+        "analyze-duplicate-bindings-001.json:G54",
+        "https://www.shutoko.jp/use/network/map/route-c1/shintomicho/",
+        "https://www.openstreetmap.org/way/760760233"
       ],
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-inner:shintomicho-exit",
@@ -5055,15 +5055,15 @@
       "sourceDate": "2026-09-16",
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "unsupported",
-      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
+      "supportState": "verified_bound",
+      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。内回り・外回りの新富町出口が最終区間 way 760760233 を共有する物理構造は sharedPhysicalOverrides G54 で承認済み。",
       "supportEvidence": [
-        "directed-segment:760760233:31254357:11915135708",
-        "duplicate-members:ramp:c1-inner:shintomicho-exit, ramp:c1-outer:shintomicho-exit",
-        "verify-core-r2-opus.json:F1"
+        "analyze-duplicate-bindings-001.json:G54",
+        "https://www.shutoko.jp/use/network/map/route-c1/shintomicho/",
+        "https://www.openstreetmap.org/way/760760233"
       ],
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"
     },
     {
       "rampId": "ramp:c1-inner:kitanomaru-exit",

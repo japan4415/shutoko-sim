@@ -283,7 +283,7 @@ def main():
         if decision is None:
             raise SystemExit(f"unclassified official ramp: {ramp_id}")
         support_state = decision["supportState"]
-        if support_state not in ("verified_bound", "unsupported"):
+        if support_state not in ("verified_bound", "unresolved", "unsupported"):
             raise SystemExit(f"invalid supportState for {ramp_id}: {support_state}")
 
         canonical_ramps.append({
@@ -302,6 +302,10 @@ def main():
             "sourceDate": "2026-09-16",
             "coordinateSource": decision["coordinateSource"],
             "coordinateStatus": decision["coordinateStatus"],
+            # Unresolved records carry a reason code (e.g. CONDITIONAL_ACCESS_RESTRICTION)
+            # that downstream gates and the UI surface; keep it attached to the ramp.
+            **({"supportReasonCode": decision["supportReasonCode"]}
+               if "supportReasonCode" in decision else {}),
             "supportState": support_state,
             "supportReason": decision["supportReason"],
             "supportEvidence": decision["supportEvidence"],
@@ -310,9 +314,9 @@ def main():
         })
 
         binding = decision.get("binding")
-        if support_state == "unsupported":
+        if support_state in ("unsupported", "unresolved"):
             if binding is not None:
-                raise SystemExit(f"unsupported ramp unexpectedly has binding: {ramp_id}")
+                raise SystemExit(f"{support_state} ramp unexpectedly has binding: {ramp_id}")
             continue
         if binding is None and ramp_id in candidate_ramp_ids:
             continue

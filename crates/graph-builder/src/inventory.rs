@@ -2691,6 +2691,29 @@ pub fn apply_od_tariffs_to_graph(graph: &mut Graph, tariffs: &OdTariffsFile) -> 
             if let Some(rids) = edge_to_ramps.get(pair.exit_id.as_str()) {
                 if let [rid] = rids.as_slice() {
                     pair.exit_ramp_id = Some((*rid).to_string());
+                } else if let Some(entry_ramp_id) = pair.entry_ramp_id.as_deref() {
+                    // sharedPhysicalOverrides の承認済み共有 exit segment では、内回り・外回り
+                    // の方向別公式ランプが同一 exit-kind エッジへ投影される（例: G54 新富町、
+                    // G27 加平）。exit ランプは billing pair の entry ランプと同じ方向のものを
+                    // 採用して曖昧性を解消する。方向が一意に定まらない場合は未解決のまま
+                    // fail-closed を維持する。
+                    let entry_direction = graph
+                        .ramps
+                        .iter()
+                        .find(|ramp| ramp.id == entry_ramp_id)
+                        .map(|ramp| ramp.direction.as_str());
+                    let direction_matches: Vec<&str> =
+                        rids.iter()
+                            .copied()
+                            .filter(|rid| {
+                                graph.ramps.iter().find(|ramp| ramp.id == *rid).is_some_and(
+                                    |ramp| Some(ramp.direction.as_str()) == entry_direction,
+                                )
+                            })
+                            .collect();
+                    if let [rid] = direction_matches.as_slice() {
+                        pair.exit_ramp_id = Some((*rid).to_string());
+                    }
                 }
             }
         }
@@ -2976,8 +2999,14 @@ pub fn validate_endpoint_capability_contract(
 
 /// Ensures every verified billing pair resolves both endpoint edges to exactly
 /// one verified-bound ramp and that declared endpoint names match the official
-/// facility names. Unverified seeds remain diagnostic-only.
-pub fn validate_verified_billing_pair_endpoints(graph: &Graph) -> Result<(), Vec<String>> {
+/// facility names. Endpoint edges whose reverse map covers the exact member set
+/// of a `sharedPhysicalOverrides` entry (e.g. G54 新富町) are exempt: the
+/// override is the audited sanction for direction-specific official ramps
+/// sharing one physical exit segment. Unverified seeds remain diagnostic-only.
+pub fn validate_verified_billing_pair_endpoints(
+    graph: &Graph,
+    shared_physical_overrides: &[SharedPhysicalOverride],
+) -> Result<(), Vec<String>> {
     let mut errors = Vec::new();
     let ramps_by_id: HashMap<&str, &Ramp> =
         graph.ramps.iter().map(|r| (r.id.as_str(), r)).collect();
@@ -3081,6 +3110,29 @@ pub fn validate_verified_billing_pair_endpoints(graph: &Graph) -> Result<(), Vec
                 .get(edge_id)
                 .map(Vec::as_slice)
                 .unwrap_or_default();
+            let way_id = edge_id
+                .split(':')
+                .nth(1)
+                .and_then(|way| way.strip_prefix('w'))
+                .and_then(|way| way.parse::<i64>().ok());
+            let override_sanctioned = way_id.is_some_and(|way| {
+                shared_physical_overrides.iter().any(|override_| {
+                    override_.osm_way_id == way
+                        && override_
+                            .ramp_ids
+                            .iter()
+                            .map(String::as_str)
+                            .collect::<HashSet<_>>()
+                            == reverse_mapped
+                                .iter()
+                                .map(|ramp| ramp.id.as_str())
+                                .collect::<HashSet<_>>()
+                        && reverse_mapped.iter().any(|ramp| ramp.id == ramp_id)
+                })
+            });
+            if override_sanctioned {
+                continue;
+            }
             if reverse_mapped.len() != 1 || reverse_mapped[0].id != ramp_id {
                 let candidates: Vec<&str> =
                     reverse_mapped.iter().map(|ramp| ramp.id.as_str()).collect();
@@ -3336,7 +3388,7 @@ mod tests {
         assert!(res.is_ok(), "bindings validation failed: {:?}", res);
         assert_eq!(
             bindings.bindings.len(),
-            235,
+            237,
             "schema bindings must cover all verified active general ramps except reviewed candidates"
         );
         assert_eq!(bindings.binding_candidates.len(), 1);
@@ -3366,14 +3418,14 @@ mod tests {
                 .iter()
                 .filter(|r| r.support_state.as_deref() == Some("verified_bound"))
                 .count(),
-            236
+            238
         );
         assert_eq!(
             active_general
                 .iter()
                 .filter(|r| r.support_state.as_deref() == Some("unsupported"))
                 .count(),
-            134
+            132
         );
         // 芝公園入口外回りは access:conditional のため恒久的な利用不可ではなく
         // exact binding が未解決という状態で、reason code を持つ。
@@ -3533,7 +3585,7 @@ mod tests {
             .iter()
             .map(|o| o.id.as_str())
             .collect();
-        assert_eq!(override_ids, HashSet::from(["G15", "G27", "G53"]));
+        assert_eq!(override_ids, HashSet::from(["G15", "G27", "G53", "G54"]));
 
         // Regression lockouts for the known false nearest-edge mappings.
         let forbidden = [
@@ -3695,7 +3747,7 @@ mod tests {
         .clone();
         let original_billing_pairs = serde_json::to_value(&graph.billing_pairs).unwrap();
         let (ramps, artifacts, notes) = bind_ramps_to_graph(&mut graph, &inventory, &bindings);
-        assert_eq!(ramps.len(), 236);
+        assert_eq!(ramps.len(), 238);
         assert!(notes.iter().all(|note| !note.contains(&candidate.ramp_id)));
         graph.ramps = ramps;
         let projected = graph

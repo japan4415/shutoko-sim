@@ -1006,8 +1006,8 @@ fn test_existing_binding_diagnostics_are_deterministic_and_non_blocking() {
         serde_json::to_string(&second).unwrap()
     );
     assert_eq!(first.rule, FIRST_PUBLIC_ROAD_CONNECTION_RULE);
-    assert_eq!(first.schema_binding_total, 235);
-    assert_eq!(first.schema_binding_matched, 235);
+    assert_eq!(first.schema_binding_total, 237);
+    assert_eq!(first.schema_binding_matched, 237);
     assert_eq!(first.schema_binding_mismatched, 0);
     assert_eq!(
         first

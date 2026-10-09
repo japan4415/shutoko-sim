@@ -4053,15 +4053,23 @@
       "lon": 139.774704,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "unsupported",
-      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
+      "supportState": "verified_bound",
+      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。内回り・外回りの新富町出口が最終区間 way 760760233 を共有する物理構造は sharedPhysicalOverrides G54 で承認済み。",
       "supportEvidence": [
-        "directed-segment:760760233:31254357:11915135708",
-        "duplicate-members:ramp:c1-inner:shintomicho-exit, ramp:c1-outer:shintomicho-exit",
-        "verify-core-r2-opus.json:F1"
+        "analyze-duplicate-bindings-001.json:G54",
+        "https://www.shutoko.jp/use/network/map/route-c1/shintomicho/",
+        "https://www.openstreetmap.org/way/760760233"
       ],
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。",
+      "binding": {
+        "rampId": "ramp:c1-outer:shintomicho-exit",
+        "osmWayId": 760760233,
+        "osmNodeId": 31254357,
+        "motorwayNodeId": 11915135708,
+        "direction": "outer",
+        "notes": "Verified OSM binding for 新富町 (C1 outer)。外回り本線ノード 31254353 で分流したランプ 4848942 が内回り系とノード 588391115 で合流し、最終区間 way 760760233（地表 佃大橋通り）を共有する物理構造は sharedPhysicalOverrides G54 で承認。G54 契約により方向別 binding は同一 (osmWayId, osmNodeId, motorwayNodeId) 三つ組 = 共有exit-kindエッジ e:w760760233:11:f（11915135708 → 31254357、地表 佃大橋通り）を参照する。"
+      }
     },
     {
       "rampId": "ramp:c1-inner:shintomicho-exit",
@@ -4069,15 +4077,23 @@
       "lon": 139.774704,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
-      "supportState": "unsupported",
-      "supportReason": "同一有向OSM segmentを別directionの公式ランプと共有し、方向別の一意性を立証できないため未対応。",
+      "supportState": "verified_bound",
+      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。内回り・外回りの新富町出口が最終区間 way 760760233 を共有する物理構造は sharedPhysicalOverrides G54 で承認済み。",
       "supportEvidence": [
-        "directed-segment:760760233:31254357:11915135708",
-        "duplicate-members:ramp:c1-inner:shintomicho-exit, ramp:c1-outer:shintomicho-exit",
-        "verify-core-r2-opus.json:F1"
+        "analyze-duplicate-bindings-001.json:G54",
+        "https://www.shutoko.jp/use/network/map/route-c1/shintomicho/",
+        "https://www.openstreetmap.org/way/760760233"
       ],
-      "routingCapability": "unsupported",
-      "routingCapabilityReason": "exact bindingを立証できないため探索端点として拒否する。"
+      "routingCapability": "routable",
+      "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。",
+      "binding": {
+        "rampId": "ramp:c1-inner:shintomicho-exit",
+        "osmWayId": 760760233,
+        "osmNodeId": 31254357,
+        "motorwayNodeId": 11915135708,
+        "direction": "inner",
+        "notes": "Verified OSM binding for 新富町 (C1 inner)。内回り本線ノード 588391376 で分流したランプ 4848941→205411849→172598654→172598656 が外回り系ランプ 4848942 とノード 588391115 で合流し、最終区間 way 760760233（地表 佃大橋通り）を共有する物理構造は sharedPhysicalOverrides G54 で承認。"
+      }
     },
     {
       "rampId": "ramp:c1-inner:kitanomaru-exit",
@@ -7934,6 +7950,22 @@
         "analyze-duplicate-bindings-001.json:G53",
         "data/official-population-snapshot.json",
         "https://www.openstreetmap.org/way/964191633"
+      ]
+    },
+    {
+      "id": "G54",
+      "osmWayId": 760760233,
+      "osmNodeId": 31254357,
+      "motorwayNodeId": 11915135708,
+      "rampIds": [
+        "ramp:c1-inner:shintomicho-exit",
+        "ramp:c1-outer:shintomicho-exit"
+      ],
+      "reason": "公式同一施設「新富町」の方向別ID（C1内回り/C1外回り）が、内回り・外回り各ランプの合流ノード 588391115 の下流で同一physical exit segment（共有exit-kindエッジ e:w760760233:11:f = 11915135708 → 31254357、地表 佃大橋通り）を共有する。",
+      "evidence": [
+        "analyze-duplicate-bindings-001.json:G54",
+        "data/official-population-snapshot.json",
+        "https://www.openstreetmap.org/way/760760233"
       ]
     }
   ]

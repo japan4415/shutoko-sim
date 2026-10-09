@@ -1231,7 +1231,7 @@ test("(32) 成果物不一致の再読み込み案内は条件変更では消え
 
 // --- 全首都高ランプ選択 UI（R2）の E2E 検証 ---
 
-test("(33) 明示指定モード切替、全399件確認、201件選択可能（入口100/出口101）、探索ボタン制御", async ({ page }) => {
+test("(33) 明示指定モード切替、全399件確認、203件選択可能（入口100/出口103）、探索ボタン制御", async ({ page }) => {
   let rampRequests = 0;
   await page.route("**/releases/*/ramps.json*", async (route) => {
     rampRequests += 1;
@@ -1268,18 +1268,18 @@ test("(33) 明示指定モード切替、全399件確認、201件選択可能（
   await expect(entryDisabled).toHaveCount(299);
   await expect(page.locator("#entry-count-info")).toContainText("全 399 件（選択可能 100 件）");
 
-  // 出口: 全399件表示、101件が選択可能
+  // 出口: 全399件表示、103件が選択可能
   const exitItems = page.locator("#exit-ramp-list .ramp-item");
   await expect(exitItems).toHaveCount(399);
   expect(await page.locator("#exit-ramp-list").getAttribute("tabindex")).toBeNull();
   const exitSelectable = page.locator('#exit-ramp-list input[type="radio"]:not([disabled])');
-  await expect(exitSelectable).toHaveCount(101);
+  await expect(exitSelectable).toHaveCount(103);
   const exitDisabled = page.locator('#exit-ramp-list input[type="radio"][disabled]');
-  await expect(exitDisabled).toHaveCount(298);
-  await expect(page.locator("#exit-count-info")).toContainText("全 399 件（選択可能 101 件）");
+  await expect(exitDisabled).toHaveCount(296);
+  await expect(page.locator("#exit-count-info")).toContainText("全 399 件（選択可能 103 件）");
 
-  // 合計選択可能件数は 201 (100 + 101)
-  expect((await entrySelectable.count()) + (await exitSelectable.count())).toBe(201);
+  // 合計選択可能件数は 203 (100 + 103)
+  expect((await entrySelectable.count()) + (await exitSelectable.count())).toBe(203);
 
   // 入口・出口が未選択なので探索ボタンは無効化されている
   const searchBtn = page.locator("#search-btn");

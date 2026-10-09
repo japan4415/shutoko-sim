@@ -3582,6 +3582,210 @@ fn resolve_explicit_lap_arc(
     })
 }
 
+/// Boundary nodes of the relationMainline edges of one carriageway membership.
+///
+/// A fragmented ring leaves the membership as several chains, and an explicit
+/// lap arc can only be declared from a chain start (or any interior node) to a
+/// downstream node of the same chain. The boundaries tell an author which M/B
+/// pairs are available before running [`generate_explicit_lap_arc`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CarriagewayLapBoundaries {
+    pub membership_id: String,
+    pub edge_count: usize,
+    /// Nodes with outgoing but no incoming membership edge.
+    pub start_node_ids: Vec<String>,
+    /// Nodes with incoming but no outgoing membership edge.
+    pub end_node_ids: Vec<String>,
+    /// Nodes with more than one outgoing membership edge. The arc generator
+    /// resolves them with the requested B unless two options both reach it.
+    pub branch_node_ids: Vec<String>,
+    /// Nodes with more than one incoming membership edge (chain merge).
+    pub merge_node_ids: Vec<String>,
+    /// True when every node has in-degree and out-degree one, so the whole
+    /// membership is one closed sequence.
+    pub cyclic: bool,
+}
+
+/// Boundary nodes of one carriageway membership, ordered so the result is
+/// deterministic.
+pub fn carriageway_lap_boundaries(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+) -> Result<CarriagewayLapBoundaries, RouteMembershipError> {
+    let edges = carriageway_membership_edges(graph, route_memberships, membership_id)?;
+    let mut in_degree: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut out_degree: BTreeMap<&str, usize> = BTreeMap::new();
+    for edge in &edges {
+        *out_degree.entry(edge.from.as_str()).or_default() += 1;
+        *in_degree.entry(edge.to.as_str()).or_default() += 1;
+    }
+    let nodes = in_degree
+        .keys()
+        .chain(out_degree.keys())
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let degree = |map: &BTreeMap<&str, usize>, node: &str| map.get(node).copied().unwrap_or(0);
+    let start_node_ids = nodes
+        .iter()
+        .filter(|node| degree(&out_degree, node) > 0 && degree(&in_degree, node) == 0)
+        .map(|node| node.to_string())
+        .collect::<Vec<_>>();
+    let end_node_ids = nodes
+        .iter()
+        .filter(|node| degree(&in_degree, node) > 0 && degree(&out_degree, node) == 0)
+        .map(|node| node.to_string())
+        .collect::<Vec<_>>();
+    let branch_node_ids = nodes
+        .iter()
+        .filter(|node| degree(&out_degree, node) > 1)
+        .map(|node| node.to_string())
+        .collect::<Vec<_>>();
+    let merge_node_ids = nodes
+        .iter()
+        .filter(|node| degree(&in_degree, node) > 1)
+        .map(|node| node.to_string())
+        .collect::<Vec<_>>();
+    Ok(CarriagewayLapBoundaries {
+        membership_id: membership_id.to_string(),
+        edge_count: edges.len(),
+        cyclic: start_node_ids.is_empty() && end_node_ids.is_empty(),
+        start_node_ids,
+        end_node_ids,
+        branch_node_ids,
+        merge_node_ids,
+    })
+}
+
+/// The distinct relationMainline edges of one carriageway membership, in
+/// segment order.
+fn carriageway_membership_edges<'a>(
+    graph: &'a Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+) -> Result<Vec<&'a Edge>, RouteMembershipError> {
+    let membership = route_memberships
+        .iter()
+        .find(|membership| membership.membership_id == membership_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!("unknown route membership {membership_id}"))
+        })?;
+    let mut edges = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for segment in membership
+        .segments
+        .iter()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+    {
+        validate_segment_hash(segment)?;
+        for edge_id in &segment.ordered_edge_ids {
+            if !seen.insert(edge_id.as_str()) {
+                continue;
+            }
+            let edge = graph
+                .edges
+                .iter()
+                .find(|edge| edge.id == *edge_id)
+                .ok_or_else(|| {
+                    RouteMembershipError::Segment(format!(
+                        "{membership_id} references missing graph edge {edge_id}"
+                    ))
+                })?;
+            edges.push(edge);
+        }
+    }
+    if edges.is_empty() {
+        return Err(RouteMembershipError::Validation(format!(
+            "{membership_id} has no relationMainline edges"
+        )));
+    }
+    Ok(edges)
+}
+
+/// Extract the explicit M-to-B lap arc of one carriageway membership.
+///
+/// The arc is the sub-chain from M to B: at every node the walk takes the
+/// membership edge that can still reach B. A fork is therefore resolved by the
+/// requested B, and only a genuine ambiguity (two distinct M-to-B paths) or an
+/// unreachable B fails closed. Fragmented and composed rings both work.
+pub fn generate_explicit_lap_arc(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+    merge_node_id: &str,
+    branch_node_id: &str,
+) -> Result<ExplicitLapArc, RouteMembershipError> {
+    if merge_node_id == branch_node_id {
+        return Err(RouteMembershipError::Validation(
+            "explicit lap arc needs distinct M and B nodes".into(),
+        ));
+    }
+    let edges = carriageway_membership_edges(graph, route_memberships, membership_id)?;
+    let mut successors: HashMap<&str, Vec<&Edge>> = HashMap::new();
+    let mut predecessors: HashMap<&str, Vec<&Edge>> = HashMap::new();
+    for edge in &edges {
+        successors.entry(edge.from.as_str()).or_default().push(edge);
+        predecessors.entry(edge.to.as_str()).or_default().push(edge);
+    }
+    // Nodes from which B is still reachable along membership edges.
+    let mut reaches_branch: HashSet<&str> = HashSet::new();
+    reaches_branch.insert(branch_node_id);
+    let mut stack = vec![branch_node_id];
+    while let Some(node) = stack.pop() {
+        for edge in predecessors.get(node).into_iter().flatten() {
+            if reaches_branch.insert(edge.from.as_str()) {
+                stack.push(edge.from.as_str());
+            }
+        }
+    }
+    if !reaches_branch.contains(merge_node_id) {
+        return Err(RouteMembershipError::Validation(format!(
+            "{membership_id} cannot reach {branch_node_id} from {merge_node_id} along the membership"
+        )));
+    }
+    let mut node = merge_node_id;
+    let mut edge_ids: Vec<String> = Vec::new();
+    while node != branch_node_id {
+        let candidates = successors.get(node).ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "{membership_id} has no option leaving {node} on the way to {branch_node_id}"
+            ))
+        })?;
+        let onward = candidates
+            .iter()
+            .filter(|edge| reaches_branch.contains(edge.to.as_str()))
+            .collect::<Vec<_>>();
+        if onward.is_empty() {
+            return Err(RouteMembershipError::Validation(format!(
+                "{membership_id} cannot reach {branch_node_id} from {node}"
+            )));
+        }
+        if onward.len() > 1 {
+            return Err(RouteMembershipError::Validation(format!(
+                "{membership_id} has {count} distinct M-to-B options at {node}; \
+                 a lap arc must be unambiguous",
+                count = onward.len()
+            )));
+        }
+        let edge = onward[0];
+        edge_ids.push(edge.id.clone());
+        node = edge.to.as_str();
+        if edge_ids.len() > edges.len() {
+            return Err(RouteMembershipError::Validation(format!(
+                "{membership_id} cannot reach {branch_node_id} from {merge_node_id} \
+                 along the membership"
+            )));
+        }
+    }
+    let edge_ids_sha256 = ordered_edge_ids_sha256(&edge_ids)
+        .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
+    Ok(ExplicitLapArc {
+        edge_ids,
+        edge_ids_sha256,
+    })
+}
+
 pub fn generate_route_plan_lap_v1(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
@@ -6536,6 +6740,42 @@ mod tests {
         assert_eq!(
             resolution.lap.source_segment_id,
             "explicit:route:R1:forward"
+        );
+    }
+
+    #[test]
+    fn explicit_lap_arc_generator_cuts_the_chain_between_m_and_b() {
+        let (seed, graph, memberships) = fragmented_radial_fixture();
+        let boundaries =
+            carriageway_lap_boundaries(&graph, &memberships, "route:R1:forward").unwrap();
+        assert!(boundaries.edge_count >= 4);
+        assert!(!boundaries.cyclic);
+        assert!(!boundaries.start_node_ids.is_empty());
+
+        let arc = generate_explicit_lap_arc(&graph, &memberships, "route:R1:forward", "n:2", "n:4")
+            .unwrap();
+        assert_eq!(arc.edge_ids.last().unwrap(), "e:w103:0:f");
+        assert_eq!(
+            arc.edge_ids_sha256,
+            ordered_edge_ids_sha256(&arc.edge_ids).unwrap()
+        );
+
+        // The generated arc resolves the pair whose membership cannot derive it.
+        let mut declared = seed.clone();
+        declared.route_plan.mandatory_lap.explicit_arc = Some(arc.clone());
+        declared.validate().unwrap();
+        let resolution =
+            resolve_diagnostic_radial_route_plan(&graph, &memberships, &declared).unwrap();
+        assert_eq!(resolution.lap.edge_ids, arc.edge_ids);
+
+        // Backwards or cross-chain boundaries cannot be cut.
+        assert!(
+            generate_explicit_lap_arc(&graph, &memberships, "route:R1:forward", "n:4", "n:2")
+                .is_err()
+        );
+        assert!(
+            generate_explicit_lap_arc(&graph, &memberships, "route:R1:forward", "n:2", "n:1")
+                .is_err()
         );
     }
 

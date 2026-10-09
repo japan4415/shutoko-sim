@@ -366,11 +366,31 @@ run エッジの分だけずれる。
     （`explicit_lap_arc_composes_a_pair_whose_membership_is_fragmented`）。
   - 改ざん（hash 不一致・非連結・B 終端不一致）は拒否する
     （`explicit_lap_arc_rejects_tampering`）。
-- **残る作業は lap エッジ列の作製**: C2 の片側車線は relation 上 5 本の chain に
-  分かれているため、pair の M/B に対応する実際の arc を seed に記入する必要が
-  ある。C2 料金ペアはまだ seed に無いので、ペアを追加する時点で arc を書く。
-  chain は source から sink への連続パスなので、そのまま `explicitArc` として
-  宣言できる。
+- **arc 生成を実装した**: `generate_explicit_lap_arc(graph, memberships,
+  membershipId, M, B)` が membership の relationMainline 辺だけを使って M→B の
+  arc を切り出し、sha256 を付けて返す。分岐は「B に到達できる辺」で解決するので、
+  fork があっても M→B が一意なら成功し、2 本以上の経路があるときだけ fail-closed
+  になる。`carriageway_lap_boundaries` は membership ごとの start / end / branch /
+  merge ノードを返すので、どの M/B が宣言可能かを先に確認できる。CLI からも
+  実行できる（どちらも schema 4 専用、membership id に `:` を含むため arc の
+  3 引数はカンマ区切り）。
+  ```
+  --emit-lap-boundaries route:C2:outer
+  --emit-lap-arc route:C2:outer,n:7160486512,n:1686031888
+  ```
+- **実データでの arc 生成結果**:
+  - 外周: 5 starts / 3 ends。一意な chain が 3 本あり、`n:309603951→n:31330124`
+    （322 辺）、`n:564683280→n:31330124`（202 辺）、
+    `n:7160486512→n:1686031888`（428 辺）はそのまま `explicitArc` にできる。
+  - 内周: 5 starts / 3 ends / branch 2 / merge 4。`n:263988137→n:263988138`
+    （3 辺）と `n:263988137→n:8283617226`（101 辺）は一意に切り出せる。一方
+    `n:31330142→n:3804571875` などは **n:7549622953 で 2 通りの経路が同じ end に
+    達する**ため fail-closed。これは labelling が同一ノードから内周辺を 2 本
+    出している（どちらかが誤り）ためで、arc 側では解決できない。内周の残りは
+    大域割当かラベル修正でこの fork を解消する必要がある。
+- **残る作業は pair への記入**: C2 料金ペアはまだ seed に無いので、ペアを追加する
+  時点で上の arc を `explicitArc` に記入する。外周の 3 本と内周の 2 本はそのまま
+  使える。
 - **未対応**: `explicitArc` は 1 本の arc 内での同一エッジ再訪をまだ許さない
   （`validate_ordered_edges` と `validate_resolved_route_plan` が単純列を前提に
   している）。「往復を含む明示エッジ列」が必要になった時点で、lap 専用の

@@ -1,10 +1,11 @@
 use serde_json::{json, Value};
 use shutoko_graph_builder::{
     bound_ramp_evidence_from_inventory, build_route_membership_indices, build_topology,
-    build_topology_with_report, generate_route_plan_lap_v1, haversine_distance_meters,
-    ordered_edge_ids_sha256, route_memberships_sha256, to_deterministic_json, EdgeKind, Graph,
-    OverpassResponse, RouteMembershipBuildOptions, RouteMembershipIndex, TopologyConfig,
-    LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
+    build_topology_with_report, carriageway_lap_boundaries, generate_explicit_lap_arc,
+    generate_route_plan_lap_v1, haversine_distance_meters, ordered_edge_ids_sha256,
+    route_memberships_sha256, to_deterministic_json, EdgeKind, Graph, OverpassResponse,
+    RouteMembershipBuildOptions, RouteMembershipIndex, TopologyConfig, LOCAL_SPEED_KMH,
+    RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
 };
 use std::collections::HashMap;
 
@@ -2066,6 +2067,43 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
                 .is_some_and(|runs| !runs.is_empty()),
             "{direction} runs stay available for coverage reporting"
         );
+
+        // The fragmented carriageway still yields explicit lap arcs: a pair can
+        // declare the chain between one of its starts and a reachable end
+        // instead of relying on ring composition.
+        let membership_id = format!("route:C2:{direction}");
+        let boundaries =
+            carriageway_lap_boundaries(&graph, &built.route_memberships, &membership_id).unwrap();
+        assert!(
+            boundaries.start_node_ids.len() > 1,
+            "{membership_id} must stay fragmented: {boundaries:?}"
+        );
+        let mut generated = None;
+        for start in &boundaries.start_node_ids {
+            for end in &boundaries.end_node_ids {
+                if let Ok(arc) = generate_explicit_lap_arc(
+                    &graph,
+                    &built.route_memberships,
+                    &membership_id,
+                    start,
+                    end,
+                ) {
+                    assert_eq!(
+                        arc.edge_ids_sha256,
+                        ordered_edge_ids_sha256(&arc.edge_ids).unwrap()
+                    );
+                    generated = Some(arc);
+                    break;
+                }
+            }
+            if generated.is_some() {
+                break;
+            }
+        }
+        let arc = generated.unwrap_or_else(|| {
+            panic!("{membership_id} must expose at least one explicit lap arc: {boundaries:?}")
+        });
+        assert!(!arc.edge_ids.is_empty());
     }
 
     // C1 regression: the role-derived inner / outer memberships stay intact.

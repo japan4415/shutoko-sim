@@ -7,9 +7,9 @@ use shutoko_graph_builder::{
     all_route_relation_ids, apply_od_tariffs_to_graph, audit_first_public_road_connections,
     bind_ramps_to_graph, bound_ramp_evidence_from_inventory, build_manifest,
     build_route_membership_indices_with_coverage, build_topology_with_report,
-    default_route_relation_ids, derive_pair_candidates_from_source_bytes,
-    generate_diagnostic_radial_route_plans,
-    graph_schema_v4_to_deterministic_json_with_radial_and_catalog,
+    carriageway_lap_boundaries, default_route_relation_ids,
+    derive_pair_candidates_from_source_bytes, generate_diagnostic_radial_route_plans,
+    generate_explicit_lap_arc, graph_schema_v4_to_deterministic_json_with_radial_and_catalog,
     graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3,
     manifest_to_deterministic_json, pair_derivation_report_to_deterministic_json,
     parse_billing_pairs_seed, promote_verified_radial_pair, ramps_artifact_to_deterministic_json,
@@ -57,6 +57,12 @@ OPTIONS:
     --graph-version <VER>   Graph dataset version [default: "1.0.0"]
     --graph-schema <2|4>     Graph JSON schema [default: 4]
     --unverified-section <S> Unverified section to record in manifest (can be specified multiple times)
+    --emit-lap-boundaries <membershipId>
+                            Print the relationMainline chain boundaries of one carriageway
+                            membership as JSON and exit (schema 4 only)
+    --emit-lap-arc <membershipId>,<mergeNodeId>,<branchNodeId>
+                            Print the explicit M-to-B lap arc of one carriageway membership as
+                            JSON and exit (schema 4 only)
     --strict                Fail with non-zero exit code if no verified billing pairs are generated
     -h, --help              Print help information
     -V, --version           Print version information
@@ -184,6 +190,8 @@ struct CliArgs {
     graph_version: String,
     graph_schema: u32,
     unverified_sections: Vec<String>,
+    lap_boundaries_query: Option<String>,
+    lap_arc_query: Option<String>,
     strict: bool,
 }
 
@@ -204,6 +212,8 @@ fn parse_args() -> Result<CliArgs, String> {
     let mut support_decisions_path: Option<PathBuf> = None;
     let mut relation_ids: Option<Vec<i64>> = None;
     let mut all_route_relations = false;
+    let mut lap_boundaries_query: Option<String> = None;
+    let mut lap_arc_query: Option<String> = None;
     let mut release_id = "default-release".to_string();
     let mut vehicle_profile = "passenger-car-etc".to_string();
     let mut built_at =
@@ -295,6 +305,23 @@ fn parse_args() -> Result<CliArgs, String> {
             }
             "--all-route-relations" => {
                 all_route_relations = true;
+            }
+            "--emit-lap-boundaries" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err("--emit-lap-boundaries requires a membership id".into());
+                }
+                lap_boundaries_query = Some(raw_args[i].clone());
+            }
+            "--emit-lap-arc" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err(
+                        "--emit-lap-arc requires <membershipId>,<mergeNodeId>,<branchNodeId>"
+                            .into(),
+                    );
+                }
+                lap_arc_query = Some(raw_args[i].clone());
             }
             "--release-id" => {
                 i += 1;
@@ -389,6 +416,8 @@ fn parse_args() -> Result<CliArgs, String> {
         graph_version,
         graph_schema,
         unverified_sections,
+        lap_boundaries_query,
+        lap_arc_query,
         strict,
     })
 }
@@ -403,6 +432,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // The lap-arc emit modes write a single JSON document, so the build report
+    // is suppressed to keep stdout machine readable.
+    let emit_query = args.lap_boundaries_query.is_some() || args.lap_arc_query.is_some();
     let is_v4_release = args.release_id == "all-real-v4";
     if is_v4_release {
         if args.graph_schema != 4 {
@@ -613,11 +645,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 )
             })?;
             let diagnostics = audit_first_public_road_connections(&b, &inv, &overpass_resp);
-            println!(
-                "{}",
-                serde_json::to_string(&diagnostics)
-                    .map_err(|error| format!("binding diagnostic serialization failed: {error}"))?
-            );
+            if !emit_query {
+                println!(
+                    "{}",
+                    serde_json::to_string(&diagnostics).map_err(|error| format!(
+                        "binding diagnostic serialization failed: {error}"
+                    ))?
+                );
+            }
             b
         } else {
             OsmRampBindingsFile {
@@ -785,12 +820,37 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             validate_requested_route_relations_expanded(requested, &built.route_relations)
                 .map_err(|error| format!("route membership build failed: {}", error))?;
         }
-        print_route_relation_coverage(&built);
+        if !emit_query {
+            print_route_relation_coverage(&built);
+        }
         route_relation_coverage = Some(built.route_relations);
         built.route_memberships
     } else {
         Vec::new()
     };
+    if let Some(membership_id) = args.lap_boundaries_query.as_deref() {
+        if args.graph_schema != 4 {
+            return Err("--emit-lap-boundaries requires --graph-schema 4".into());
+        }
+        let boundaries = carriageway_lap_boundaries(&graph, &route_memberships, membership_id)?;
+        print!("{}", serde_json::to_string_pretty(&boundaries)?);
+        return Ok(());
+    }
+    if let Some(query) = args.lap_arc_query.as_deref() {
+        if args.graph_schema != 4 {
+            return Err("--emit-lap-arc requires --graph-schema 4".into());
+        }
+        let parts = query.split(',').collect::<Vec<_>>();
+        if parts.len() != 3 {
+            return Err(
+                "--emit-lap-arc requires <membershipId>,<mergeNodeId>,<branchNodeId>".into(),
+            );
+        }
+        let arc =
+            generate_explicit_lap_arc(&graph, &route_memberships, parts[0], parts[1], parts[2])?;
+        print!("{}", serde_json::to_string_pretty(&arc)?);
+        return Ok(());
+    }
     if args.graph_schema == 4
         && !is_v4_release
         && (args.inventory_path.is_some() || args.bindings_path.is_some())

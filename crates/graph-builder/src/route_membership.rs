@@ -919,6 +919,34 @@ pub fn derive_carriageway_direction_split(
 
     grow_carriageway_labels(&edges, &mainline_edge_ids, &mut labels);
 
+    // A segment whose labels are split almost evenly is not "half inner, half
+    // outer": the relation order crosses both carriageways inside the segment.
+    // Drop those labels and let propagation re-derive them from the segments
+    // either side, which is where the graph evidence is unambiguous.
+    let mut undecided = Vec::with_capacity(ordered_mainline.len());
+    for ordered in ordered_mainline.iter() {
+        let inner = ordered
+            .iter()
+            .filter(|edge_id| labels.get(*edge_id).map(String::as_str) == Some("inner"))
+            .count();
+        let outer = ordered
+            .iter()
+            .filter(|edge_id| labels.get(*edge_id).map(String::as_str) == Some("outer"))
+            .count();
+        let total = inner + outer;
+        let undecided_segment = total > 0
+            && (inner.min(outer) as f64) / (total as f64) >= C2_DIRECTION_MINORITY_SEGMENT_RATIO;
+        undecided.push(undecided_segment);
+        if undecided_segment {
+            for edge_id in ordered {
+                labels.remove(edge_id);
+            }
+        }
+    }
+    if undecided.iter().any(|value| *value) {
+        grow_carriageway_labels(&edges, &mainline_edge_ids, &mut labels);
+    }
+
     let mut segment_labels = Vec::with_capacity(ordered_mainline.len());
     let mut ambiguous_segment_ids = Vec::new();
     for (index, ordered) in ordered_mainline.iter().enumerate() {

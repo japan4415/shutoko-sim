@@ -1952,30 +1952,23 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
     );
     let inner = split.edge_count("inner");
     let outer = split.edge_count("outer");
-    // Of the 2,310 labelled edges, the per-segment majority rule (with short
-    // end-of-segment excursions into the other carriageway trimmed) keeps
-    // 1,986; the rest sit in the two segments whose labels are genuinely mixed
-    // (forward:8 is a ~50/50 split, forward:14 keeps a long inner stretch).
-    assert_eq!(inner, 953);
-    assert_eq!(outer, 1033);
-    assert_eq!(
-        inner + outer,
-        split.labelled_edge_ids.len() - 324,
-        "inner and outer must partition every relation mainline edge the \
-         majority rule keeps"
-    );
+    // Almost-even segments are re-derived from their neighbours after their
+    // split labels are dropped, so every labelled edge now lands on exactly one
+    // carriageway and no segment stays ambiguous.
+    assert_eq!(inner, 1209);
+    assert_eq!(outer, 1088);
+    // 13 of the 2,310 labelled edges sit in a short opposite-direction run at
+    // the end of a segment and are dropped by the boundary trim, so the two
+    // carriageways partition every labelled edge the trim keeps.
+    assert_eq!(split.labelled_edge_ids.len() - (inner + outer), 13);
     assert_eq!(
         split.unassigned_edge_ids.len() + split.labelled_edge_ids.len(),
         2479,
         "the split must account for every C2 relation mainline edge"
     );
-    assert_eq!(
-        split.ambiguous_segment_ids,
-        vec![
-            "relation:4256077:forward:8".to_string(),
-            "relation:4256077:forward:14".to_string(),
-        ],
-        "genuinely mixed segments stay fail-closed"
+    assert!(
+        split.ambiguous_segment_ids.is_empty(),
+        "re-propagation must resolve the evenly split segments"
     );
 
     let edge_owner: HashMap<&str, &str> = built

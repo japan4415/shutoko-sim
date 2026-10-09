@@ -133,6 +133,12 @@ pub struct CarriagewayDirectionSplit {
     /// Membership id -> the ordered, contiguous relation mainline runs that
     /// make up that carriageway membership.
     pub segments: BTreeMap<String, Vec<Vec<String>>>,
+    /// Membership id -> the single cyclic sequence the runs were composed
+    /// into: run edges plus the JCT connector bridges between them. Empty when
+    /// the composition could not close the cycle (fail-closed).
+    pub cycles: BTreeMap<String, Vec<String>>,
+    /// Membership ids whose runs could not be composed into one cycle.
+    pub uncomposed_membership_ids: Vec<String>,
     pub labelled_edge_ids: BTreeSet<String>,
     pub unassigned_edge_ids: BTreeSet<String>,
     pub ambiguous_segment_ids: Vec<String>,
@@ -141,12 +147,20 @@ pub struct CarriagewayDirectionSplit {
 
 impl CarriagewayDirectionSplit {
     /// Total relation mainline edges assigned to one carriageway, summed over
-    /// every contiguous run that makes up its membership.
+    /// every contiguous run that makes up its membership (connector bridges
+    /// are not counted).
     pub fn edge_count(&self, direction: &str) -> usize {
         let membership_id = format!("route:{}:{}", self.route_id, direction);
         self.segments
             .get(&membership_id)
             .map_or(0, |runs| runs.iter().map(Vec::len).sum())
+    }
+
+    /// The composed cyclic segment of one carriageway, when the composition
+    /// closed.
+    pub fn cycle(&self, direction: &str) -> Option<&Vec<String>> {
+        self.cycles
+            .get(&format!("route:{}:{}", self.route_id, direction))
     }
 }
 
@@ -905,11 +919,27 @@ pub fn derive_carriageway_direction_split(
         .filter(|edge_id| !labels.contains_key(*edge_id))
         .cloned()
         .collect::<BTreeSet<_>>();
+
+    // Compose each carriageway into one cyclic segment so that a legacyRing
+    // pair can resolve through a single relationMainline segment.
+    let mut cycles: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut uncomposed_membership_ids = Vec::new();
+    for carriageway in segments.iter() {
+        match compose_cyclic_carriageway(&adjacency, &edges, carriageway.1) {
+            Some(cycle) => {
+                cycles.insert(carriageway.0.clone(), cycle);
+            }
+            None => uncomposed_membership_ids.push(carriageway.0.clone()),
+        }
+    }
+
     Ok(Some(CarriagewayDirectionSplit {
         route_id,
         relation_id: relation.id,
         directions,
         segments,
+        cycles,
+        uncomposed_membership_ids,
         labelled_edge_ids: labels.keys().cloned().collect(),
         unassigned_edge_ids,
         ambiguous_segment_ids,
@@ -1729,9 +1759,10 @@ fn build_relation_memberships_for_relation(
 
 /// Serialize a derived carriageway split into route memberships.
 ///
-/// Every split segment is a maximal, graph-contiguous run of relation mainline
-/// edges that carry one carriageway direction, so each one becomes a single
-/// `relationMainline` membership segment.
+/// When the carriageway runs were composed into one cyclic sequence, that
+/// sequence becomes the single `relationMainline` segment a legacyRing pair
+/// needs. Otherwise the runs are emitted separately, so the membership stays
+/// usable for coverage reporting but cannot resolve a lap.
 fn carriageway_memberships_for_relation(
     relation: &OsmElement,
     graph: &Graph,
@@ -1744,8 +1775,12 @@ fn carriageway_memberships_for_relation(
         let Some(edge_runs) = split.segments.get(&membership_id) else {
             continue;
         };
-        let mut segments = Vec::with_capacity(edge_runs.len());
-        for (index, run) in edge_runs.iter().enumerate() {
+        let sequences: Vec<Vec<String>> = match split.cycles.get(&membership_id) {
+            Some(cycle) => vec![cycle.clone()],
+            None => edge_runs.clone(),
+        };
+        let mut segments = Vec::with_capacity(sequences.len());
+        for (index, run) in sequences.iter().enumerate() {
             validate_ordered_edges(graph, run, &format!("{}:{}", membership_id, index))?;
             let run_sha256 = ordered_edge_ids_sha256(run)
                 .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
@@ -7003,4 +7038,408 @@ mod tests {
             route_memberships_sha256(&legacy.membership_indices).unwrap()
         );
     }
+}
+
+/// Compose the ordered carriageway runs into one cyclic edge sequence.
+///
+/// A carriageway is a one-way ring, but the relation-ordered runs only cover
+/// the edges the ramp seeds could label, so the runs are joined through JCT
+/// connectors:
+///
+/// 1. every run is a directed trail; weak components of the run set are closed
+///    into trails by a minimum-cost pairing of their in/out unbalanced nodes,
+/// 2. the trails are chained into one sequence by repeatedly jumping to the
+///    nearest remaining trail start,
+/// 3. the result is accepted only when it is a single closed walk that uses
+///    every run edge exactly once (Hierholzer); otherwise the composition is
+///    fail-closed and reported through `uncomposed_membership_ids`.
+fn compose_cyclic_carriageway(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    edges: &HashMap<&str, &Edge>,
+    runs: &[Vec<String>],
+) -> Option<Vec<String>> {
+    if runs.is_empty() {
+        return None;
+    }
+    let mut trails = Vec::new();
+    for component in weak_components(edges, runs) {
+        trails.push(close_trail(adjacency, edges, &component)?);
+    }
+    let circuit = chain_trails(adjacency, edges, trails)?;
+    let expected = runs.iter().map(Vec::len).sum::<usize>();
+    let run_edges = runs
+        .iter()
+        .flat_map(|run| run.iter().cloned())
+        .collect::<HashSet<_>>();
+    let used_run_edges = circuit
+        .iter()
+        .filter(|edge_id| run_edges.contains(*edge_id))
+        .count();
+    if used_run_edges != expected
+        || circuit.iter().collect::<HashSet<_>>().len() != circuit.len()
+    {
+        return None;
+    }
+    let closes = circuit.last().and_then(|edge_id| edges.get(edge_id.as_str()))
+        .zip(circuit.first().and_then(|edge_id| edges.get(edge_id.as_str())))
+        .is_some_and(|(last, first)| last.to == first.from);
+    if !closes || !is_graph_contiguous(edges, &circuit) {
+        return None;
+    }
+    Some(circuit)
+}
+
+/// Weakly connected components over the run edges, in relation order.
+fn weak_components(
+    edges: &HashMap<&str, &Edge>,
+    runs: &[Vec<String>],
+) -> Vec<Vec<Vec<String>>> {
+    let mut parent: HashMap<String, String> = HashMap::new();
+    fn find(parent: &mut HashMap<String, String>, node: &str) -> String {
+        let entry = parent
+            .entry(node.to_string())
+            .or_insert_with(|| node.to_string())
+            .clone();
+        if entry == node {
+            return entry;
+        }
+        let root = find(parent, &entry);
+        parent.insert(node.to_string(), root.clone());
+        root
+    }
+    for run in runs {
+        for edge_id in run {
+            let Some(edge) = edges.get(edge_id.as_str()) else {
+                continue;
+            };
+            let left = find(&mut parent, edge.from.as_str());
+            let right = find(&mut parent, edge.to.as_str());
+            if left != right {
+                parent.insert(left, right);
+            }
+        }
+    }
+    let mut order: Vec<(String, Vec<Vec<String>>)> = Vec::new();
+    for run in runs {
+        let Some(first) = run.first().and_then(|edge_id| edges.get(edge_id.as_str())) else {
+            continue;
+        };
+        let root = find(&mut parent, first.from.as_str());
+        match order.iter_mut().find(|(key, _)| *key == root) {
+            Some((_, component)) => component.push(run.clone()),
+            None => order.push((root, vec![run.clone()])),
+        }
+    }
+    order.into_iter().map(|(_, component)| component).collect()
+}
+
+/// Close one weak component of runs into a directed trail.
+///
+/// The component's in/out degree imbalance has to be evened out by connectors
+/// that only use edges outside the component (so no run edge is duplicated).
+/// The pairing that minimises the total connector distance wins; ties are
+/// broken by the connector edge id sequence.
+fn close_trail(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    edges: &HashMap<&str, &Edge>,
+    component: &[Vec<String>],
+) -> Option<Vec<String>> {
+    let mut delta: BTreeMap<String, i64> = BTreeMap::new();
+    for run in component {
+        for edge_id in run {
+            let edge = edges.get(edge_id.as_str())?;
+            *delta.entry(edge.from.clone()).or_default() += 1;
+            *delta.entry(edge.to.clone()).or_default() -= 1;
+        }
+    }
+    let component_edges = component
+        .iter()
+        .flat_map(|run| run.iter().cloned())
+        .collect::<HashSet<_>>();
+    let mut sources = delta
+        .iter()
+        .filter(|(_, value)| **value > 0)
+        .map(|(node, value)| (node.clone(), *value as usize))
+        .collect::<Vec<_>>();
+    let mut sinks = delta
+        .iter()
+        .filter(|(_, value)| **value < 0)
+        .map(|(node, value)| (node.clone(), (-*value) as usize))
+        .collect::<Vec<_>>();
+    sources.sort();
+    sinks.sort();
+    if sources.iter().map(|(_, count)| count).sum::<usize>()
+        != sinks.iter().map(|(_, count)| count).sum::<usize>()
+    {
+        return None;
+    }
+
+    // Connector candidates between every source and every sink.
+    let mut options: Vec<Vec<Vec<String>>> = Vec::new();
+    for (source, source_count) in &sources {
+        for _ in 0..*source_count {
+            let mut per_sink = Vec::new();
+            for (sink, sink_count) in &sinks {
+                for _ in 0..*sink_count {
+                    let mut path = cheapest_path_excluding(
+                        adjacency,
+                        edges,
+                        source,
+                        sink,
+                        &component_edges,
+                    )?;
+                    if path.is_empty() && source != sink {
+                        return None;
+                    }
+                    per_sink.push(std::mem::take(&mut path));
+                }
+            }
+            options.push(per_sink);
+        }
+    }
+    let connectors = pick_connectors(edges, &options)?;
+
+    // Walk the component plus its connectors with Hierholzer so the emitted
+    // trail is a single sequence.
+    let mut multigraph: Vec<(String, String, String)> = Vec::new();
+    for run in component {
+        for edge_id in run {
+            let edge = edges.get(edge_id.as_str())?;
+            multigraph.push((edge.from.clone(), edge.to.clone(), edge_id.clone()));
+        }
+    }
+    for path in &connectors {
+        for edge_id in path {
+            let edge = edges.get(edge_id.as_str())?;
+            multigraph.push((edge.from.clone(), edge.to.clone(), edge_id.clone()));
+        }
+    }
+    hierholzer(edges, multigraph)
+}
+
+/// Minimum-cost connector pairing over a small bipartite candidate matrix.
+fn pick_connectors(
+    edges: &HashMap<&str, &Edge>,
+    options: &[Vec<Vec<String>>],
+) -> Option<Vec<Vec<String>>> {
+    if options.is_empty() {
+        return Some(Vec::new());
+    }
+    let mut best: Option<(u64, Vec<Vec<String>>)> = None;
+    let mut used = vec![false; options[0].len()];
+    let mut current = Vec::new();
+    search_connectors(edges, options, 0, &mut used, &mut current, &mut best);
+    best.map(|(_, pairing)| pairing)
+}
+
+fn search_connectors(
+    edges: &HashMap<&str, &Edge>,
+    options: &[Vec<Vec<String>>],
+    index: usize,
+    used: &mut Vec<bool>,
+    current: &mut Vec<Vec<String>>,
+    best: &mut Option<(u64, Vec<Vec<String>>)>,
+) {
+    if index == options.len() {
+        let cost = current.iter().map(|path| path_cost(edges, path)).sum::<u64>();
+        let candidate = (cost, current.clone());
+        if best
+            .as_ref()
+            .is_none_or(|existing| candidate < *existing)
+        {
+            *best = Some(candidate);
+        }
+        return;
+    }
+    for (option_index, path) in options[index].iter().enumerate() {
+        if used[option_index] {
+            continue;
+        }
+        used[option_index] = true;
+        current.push(path.clone());
+        search_connectors(edges, options, index + 1, used, current, best);
+        current.pop();
+        used[option_index] = false;
+    }
+}
+
+/// Cheapest Shutoko path that avoids `banned` edges.
+fn cheapest_path_excluding(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    edges: &HashMap<&str, &Edge>,
+    start: &str,
+    goal: &str,
+    banned: &HashSet<String>,
+) -> Option<Vec<String>> {
+    if start == goal {
+        return Some(Vec::new());
+    }
+    let mut best: HashMap<&str, u64> = HashMap::new();
+    let mut previous: HashMap<&str, (&str, String)> = HashMap::new();
+    let mut heap = BinaryHeap::new();
+    best.insert(start, 0);
+    heap.push(std::cmp::Reverse((0_u64, start)));
+    while let Some(std::cmp::Reverse((distance, node))) = heap.pop() {
+        if best.get(node).copied().unwrap_or(u64::MAX) < distance {
+            continue;
+        }
+        if node == goal {
+            break;
+        }
+        for edge in adjacency.get(node).into_iter().flatten() {
+            if banned.contains(&edge.id) {
+                continue;
+            }
+            let next = edge.to.as_str();
+            let candidate = distance.saturating_add(edge_distance_meters(edges, &edge.id));
+            if candidate > CARRIAGEWAY_SEED_REACH_METERS * 10 {
+                continue;
+            }
+            if candidate < best.get(next).copied().unwrap_or(u64::MAX) {
+                best.insert(next, candidate);
+                previous.insert(next, (node, edge.id.clone()));
+                heap.push(std::cmp::Reverse((candidate, next)));
+            }
+        }
+    }
+    let mut path = Vec::new();
+    let mut node = goal;
+    while node != start {
+        let (prior, edge_id) = previous.get(node)?.clone();
+        path.push(edge_id);
+        node = prior;
+    }
+    path.reverse();
+    Some(path)
+}
+
+/// Deterministic Hierholzer traversal over a balanced, strongly-connected
+/// multigraph, preferring the lexicographically smallest outgoing edge.
+fn hierholzer(
+    edges: &HashMap<&str, &Edge>,
+    multigraph: Vec<(String, String, String)>,
+) -> Option<Vec<String>> {
+    let mut outgoing: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for (from, _, edge_id) in &multigraph {
+        outgoing
+            .entry(from.as_str())
+            .or_default()
+            .push(edge_id.as_str());
+    }
+    for list in outgoing.values_mut() {
+        list.sort_unstable();
+    }
+    let start = outgoing.keys().next().copied()?;
+    let mut stack = vec![start];
+    let mut circuit = Vec::new();
+    while let Some(node) = stack.last().copied() {
+        match outgoing.get_mut(node).and_then(|list| list.pop()) {
+            Some(edge_id) => {
+                let edge = edges.get(edge_id)?;
+                stack.push(edge.to.as_str());
+                circuit.push(edge_id.to_string());
+            }
+            None => {
+                stack.pop();
+            }
+        }
+    }
+    circuit.reverse();
+    if circuit.len() != multigraph.len() {
+        return None;
+    }
+    Some(circuit)
+}
+
+/// Deterministic cheapest Shutoko path between two nodes.
+fn cheapest_path(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    edges: &HashMap<&str, &Edge>,
+    start: &str,
+    goal: &str,
+) -> Option<Vec<String>> {
+    if start == goal {
+        return Some(Vec::new());
+    }
+    let mut best: HashMap<&str, u64> = HashMap::new();
+    let mut previous: HashMap<&str, (&str, String)> = HashMap::new();
+    let mut heap = BinaryHeap::new();
+    best.insert(start, 0);
+    heap.push(std::cmp::Reverse((0_u64, start)));
+    while let Some(std::cmp::Reverse((distance, node))) = heap.pop() {
+        if best.get(node).copied().unwrap_or(u64::MAX) < distance {
+            continue;
+        }
+        if node == goal {
+            break;
+        }
+        for edge in adjacency.get(node).into_iter().flatten() {
+            let next = edge.to.as_str();
+            let candidate = distance.saturating_add(edge_distance_meters(edges, &edge.id));
+            if candidate > CARRIAGEWAY_SEED_REACH_METERS * 10 {
+                continue;
+            }
+            if candidate < best.get(next).copied().unwrap_or(u64::MAX) {
+                best.insert(next, candidate);
+                previous.insert(next, (node, edge.id.clone()));
+                heap.push(std::cmp::Reverse((candidate, next)));
+            }
+        }
+    }
+    let mut path = Vec::new();
+    let mut node = goal;
+    while node != start {
+        let (prior, edge_id) = previous.get(node)?.clone();
+        path.push(edge_id);
+        node = prior;
+    }
+    path.reverse();
+    Some(path)
+}
+
+fn path_cost(edges: &HashMap<&str, &Edge>, path: &[String]) -> u64 {
+    path.iter()
+        .map(|edge_id| edge_distance_meters(edges, edge_id))
+        .sum()
+}
+
+/// Chain the closed trails into one sequence by always jumping to the nearest
+/// remaining trail start.
+fn chain_trails(
+    adjacency: &HashMap<&str, Vec<&Edge>>,
+    edges: &HashMap<&str, &Edge>,
+    mut trails: Vec<Vec<String>>,
+) -> Option<Vec<String>> {
+    let mut chain = trails.remove(0);
+    while !trails.is_empty() {
+        let tail = edges.get(chain.last()?.as_str())?.to.clone();
+        let mut best: Option<(u64, Vec<String>, usize, Vec<String>)> = None;
+        for (index, trail) in trails.iter().enumerate() {
+            let goal = edges.get(trail.first()?.as_str())?.from.clone();
+            let Some(path) = cheapest_path(adjacency, edges, &tail, &goal) else {
+                continue;
+            };
+            let key = (path_cost(edges, &path), path.clone(), index, trail.clone());
+            if best.as_ref().is_none_or(|current| key < *current) {
+                best = Some(key);
+            }
+        }
+        let (_, path, index, trail) = best?;
+        chain.extend(path);
+        chain.extend(trail);
+        trails.remove(index);
+    }
+    let start = edges.get(chain.first()?.as_str())?.from.clone();
+    let closing = cheapest_path(adjacency, edges, edges.get(chain.last()?.as_str())?.to.as_str(), &start)?;
+    chain.extend(closing);
+    Some(chain)
+}
+
+fn is_graph_contiguous(edges: &HashMap<&str, &Edge>, edge_ids: &[String]) -> bool {
+    edge_ids.windows(2).all(|pair| {
+        edges
+            .get(pair[0].as_str())
+            .zip(edges.get(pair[1].as_str()))
+            .is_some_and(|(left, right)| left.to == right.from)
+    })
 }

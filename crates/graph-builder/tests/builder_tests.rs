@@ -2058,6 +2058,62 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
         }
     }
 
+    // Each carriageway must collapse into exactly one cyclic relationMainline
+    // segment: that is what `relation_segments_match_required` accepts.
+    for direction in ["inner", "outer"] {
+        let cycle = split
+            .cycle(direction)
+            .unwrap_or_else(|| panic!("{direction} carriageway must compose into a cycle"));
+        assert!(
+            !cycle.is_empty(),
+            "{direction} cycle must not be empty"
+        );
+        assert_eq!(
+            cycle.iter().collect::<std::collections::HashSet<_>>().len(),
+            cycle.len(),
+            "{direction} cycle must not repeat an edge"
+        );
+        assert_eq!(
+            graph
+                .edges
+                .iter()
+                .find(|edge| edge.id == cycle[cycle.len() - 1])
+                .map(|edge| edge.to.as_str()),
+            graph
+                .edges
+                .iter()
+                .find(|edge| edge.id == cycle[0])
+                .map(|edge| edge.from.as_str()),
+            "{direction} cycle must close on itself"
+        );
+        assert!(
+            split
+                .segments
+                .get(&format!("route:C2:{}", direction))
+                .is_some_and(|runs| !runs.is_empty()),
+            "{direction} runs stay available for coverage reporting"
+        );
+        let membership = built
+            .route_memberships
+            .iter()
+            .find(|membership| membership.membership_id == format!("route:C2:{}", direction))
+            .expect("composed carriageway membership must exist");
+        let relation_segments = membership
+            .segments
+            .iter()
+            .filter(|segment| {
+                segment.source_kind == RouteMembershipSourceKind::RelationMainline
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            relation_segments.len(),
+            1,
+            "{direction} must publish exactly one relationMainline segment"
+        );
+        assert_eq!(relation_segments[0].ordered_edge_ids, *cycle);
+    }
+    assert!(split.uncomposed_membership_ids.is_empty());
+
     // C1 regression: the role-derived inner / outer memberships stay intact.
     let c1_relation_ids = Some(vec![4256008]);
     let c1_options = RouteMembershipBuildOptions {

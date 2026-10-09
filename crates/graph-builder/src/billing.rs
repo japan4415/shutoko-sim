@@ -24,7 +24,7 @@ use crate::seed::{
     AnchorKind, ArcPolicy, BillingPairSeed, BillingPairSeedEntry, BillingPairsSeedFile,
     BindingCandidate, BindingCandidateStatus, DiagnosticEndpoint, DiagnosticRoutePlan,
     DirectedEndpointSegment, DirectedJunctionAnchor, EndpointSupportState, EntryCorridor,
-    ExcludedShortConnector, FirstGeneralExit, FirstGeneralExitRule, LoopValidation,
+    ExcludedShortConnector, ExplicitLapArc, FirstGeneralExit, FirstGeneralExitRule, LoopValidation,
     LoopValidationStatus, MandatoryLap, PairEligibility, PairEligibilityStatus, PairKind,
     ParsedBillingPairsSeed, ReturnCorridor, RoutingCapability, SeedPrice, SeedProvenance,
     TariffStatus,
@@ -823,6 +823,8 @@ pub struct BillingPairAdjacencyMandatoryLap {
     pub first_edge_id: String,
     pub last_edge_id: String,
     pub lap_count: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub explicit_arc: Option<ExplicitLapArc>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1657,6 +1659,7 @@ fn radial_seed(
             first_edge_id: mandatory_lap.first_edge_id.clone(),
             last_edge_id: mandatory_lap.last_edge_id.clone(),
             lap_count: mandatory_lap.lap_count,
+            explicit_arc: mandatory_lap.explicit_arc.clone(),
         },
         return_corridor: ReturnCorridor {
             membership_id: return_corridor.membership_id.clone(),

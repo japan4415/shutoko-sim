@@ -5,7 +5,7 @@ use crate::model::{Edge, EdgeKind, Graph, Node, OdTariff, Ramp, RampKind};
 use crate::osm::{OsmElement, OsmMember, OverpassResponse};
 use crate::seed::{
     DiagnosticEndpoint, DiagnosticRoutePlan, DirectedEndpointSegment, DirectedJunctionAnchor,
-    EndpointSupportState, MandatoryLap, RadialReturnBillingPairSeed,
+    EndpointSupportState, ExplicitLapArc, MandatoryLap, RadialReturnBillingPairSeed,
 };
 use crate::validate::contains_forbidden_transition;
 use serde::{Deserialize, Serialize};
@@ -3347,6 +3347,10 @@ pub fn validate_directed_junction_mandatory_lap(
     anchor: &DirectedJunctionAnchor,
     mandatory_lap: &MandatoryLap,
 ) -> Result<(), RouteMembershipError> {
+    if let Some(explicit) = mandatory_lap.explicit_arc.as_ref() {
+        resolve_explicit_lap_arc(graph, route_memberships, anchor, mandatory_lap, explicit)?;
+        return Ok(());
+    }
     if anchor.merge_node_id == anchor.branch_node_id {
         return Err(RouteMembershipError::Validation(
             "directed junction M and B must be different nodes".into(),
@@ -3475,6 +3479,148 @@ pub fn validate_directed_junction_mandatory_lap(
     Ok(())
 }
 
+/// Materialise a seed-declared explicit M-to-B lap arc.
+///
+/// [`generate_route_plan_lap_v1`] derives the arc from one relationMainline
+/// segment, which never works for a ring whose OSM relation is fragmented: the
+/// arc spans several runs and the connectors between them are not one segment.
+/// The explicit arc is validated against the graph exactly like a derived one,
+/// but it does not have to live inside one membership segment.
+fn resolve_explicit_lap_arc(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    anchor: &DirectedJunctionAnchor,
+    mandatory_lap: &MandatoryLap,
+    explicit: &ExplicitLapArc,
+) -> Result<RoutePlanLapV1, RouteMembershipError> {
+    if anchor.merge_node_id == anchor.branch_node_id {
+        return Err(RouteMembershipError::Validation(
+            "directed junction M and B must be different nodes".into(),
+        ));
+    }
+    if mandatory_lap.lap_count != 1 {
+        return Err(RouteMembershipError::Validation(
+            "directed mandatory lap must have lapCount=1".into(),
+        ));
+    }
+    let membership = route_memberships
+        .iter()
+        .find(|membership| membership.membership_id == mandatory_lap.membership_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "unknown mandatory lap membership {}",
+                mandatory_lap.membership_id
+            ))
+        })?;
+    if membership.route_id != anchor.route_id || membership.direction != anchor.direction {
+        return Err(RouteMembershipError::Validation(format!(
+            "mandatory lap membership {} does not match anchor {}/{}",
+            mandatory_lap.membership_id, anchor.route_id, anchor.direction
+        )));
+    }
+    let merge_terminal = graph
+        .edges
+        .iter()
+        .find(|edge| edge.id == anchor.merge_terminal_edge_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "merge terminal edge {} is absent from graph",
+                anchor.merge_terminal_edge_id
+            ))
+        })?;
+    let branch_initial = graph
+        .edges
+        .iter()
+        .find(|edge| edge.id == anchor.branch_initial_edge_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "branch initial edge {} is absent from graph",
+                anchor.branch_initial_edge_id
+            ))
+        })?;
+    if merge_terminal.kind != EdgeKind::Shutoko
+        || branch_initial.kind != EdgeKind::Shutoko
+        || merge_terminal.to != anchor.merge_node_id
+        || branch_initial.from != anchor.branch_node_id
+    {
+        return Err(RouteMembershipError::Validation(
+            "directed junction M/B boundaries do not match their terminal edges".into(),
+        ));
+    }
+    validate_sha256(&explicit.edge_ids_sha256, "explicitLapArc.edgeIdsSha256")?;
+    let expected = ordered_edge_ids_sha256(&explicit.edge_ids)
+        .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
+    if expected != explicit.edge_ids_sha256 {
+        return Err(RouteMembershipError::Segment(
+            "explicit mandatory lap edgeIdsSha256 does not match the ordered edge list".into(),
+        ));
+    }
+    let edges = validate_ordered_edges(graph, &explicit.edge_ids, "explicit mandatory lap")?;
+    if edges.iter().any(|edge| edge.kind != EdgeKind::Shutoko) {
+        return Err(RouteMembershipError::Segment(
+            "explicit mandatory lap contains a non-Shutoko edge".into(),
+        ));
+    }
+    if edges.first().map(|edge| edge.from.as_str()) != Some(anchor.merge_node_id.as_str())
+        || edges.last().map(|edge| edge.to.as_str()) != Some(anchor.branch_node_id.as_str())
+    {
+        return Err(RouteMembershipError::Validation(
+            "explicit mandatory lap does not run from M to B".into(),
+        ));
+    }
+    if mandatory_lap.first_edge_id != explicit.edge_ids[0]
+        || mandatory_lap.last_edge_id != explicit.edge_ids[explicit.edge_ids.len() - 1]
+    {
+        return Err(RouteMembershipError::Validation(
+            "explicit mandatory lap boundaries do not match firstEdgeId/lastEdgeId".into(),
+        ));
+    }
+    let connector_edge_ids = resolve_excluded_short_connector(
+        graph,
+        &anchor.excluded_short_connector,
+        &anchor.branch_node_id,
+        &anchor.merge_node_id,
+    )?;
+    let connector_set: HashSet<&str> = connector_edge_ids.iter().map(String::as_str).collect();
+    if explicit
+        .edge_ids
+        .iter()
+        .any(|edge_id| connector_set.contains(edge_id.as_str()))
+    {
+        return Err(RouteMembershipError::Segment(
+            "mandatory lap uses an excluded short connector".into(),
+        ));
+    }
+    if explicit.edge_ids.len() <= connector_edge_ids.len() {
+        return Err(RouteMembershipError::Segment(
+            "ordinary long arc is not longer than the excluded short connector".into(),
+        ));
+    }
+    let lap_distance = edges.iter().map(|edge| edge.distance_meters).sum::<u64>();
+    if lap_distance <= anchor.excluded_short_connector.distance_meters {
+        return Err(RouteMembershipError::Segment(
+            "ordinary long arc is not longer than the excluded short connector".into(),
+        ));
+    }
+    if contains_forbidden_transition(&explicit.edge_ids, &graph.forbidden_transitions) {
+        return Err(RouteMembershipError::Validation(
+            "mandatory lap contains a forbidden transition".into(),
+        ));
+    }
+    Ok(RoutePlanLapV1 {
+        merge_node_id: anchor.merge_node_id.clone(),
+        branch_node_id: anchor.branch_node_id.clone(),
+        route_id: anchor.route_id.clone(),
+        direction: anchor.direction.clone(),
+        first_edge_id: mandatory_lap.first_edge_id.clone(),
+        last_edge_id: mandatory_lap.last_edge_id.clone(),
+        lap_count: 1,
+        source_segment_id: format!("explicit:{}", mandatory_lap.membership_id),
+        edge_ids: explicit.edge_ids.clone(),
+        edge_ids_sha256: explicit.edge_ids_sha256.clone(),
+    })
+}
+
 pub fn generate_route_plan_lap_v1(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
@@ -3567,6 +3713,7 @@ pub fn generate_route_plan_lap_v1(
         first_edge_id: edge_ids.first().cloned().unwrap_or_default(),
         last_edge_id: edge_ids.last().cloned().unwrap_or_default(),
         lap_count: 1,
+        explicit_arc: None,
     };
     validate_directed_junction_mandatory_lap(graph, route_memberships, anchor, &mandatory_lap)?;
     let edge_ids_sha256 = ordered_edge_ids_sha256(edge_ids)
@@ -4798,7 +4945,16 @@ fn resolve_directed_route_plan_with_candidates(
 ) -> Result<DirectedRoutePlanResolution, RouteMembershipError> {
     let source_snapshot_sha256 = route_membership_source_snapshot_sha256(route_memberships)?;
     validate_route_membership_structure(graph, route_memberships, source_snapshot_sha256)?;
-    let lap = generate_route_plan_lap_v1(graph, route_memberships, &route_plan.anchor)?;
+    let lap = match route_plan.mandatory_lap.explicit_arc.as_ref() {
+        Some(explicit) => resolve_explicit_lap_arc(
+            graph,
+            route_memberships,
+            &route_plan.anchor,
+            &route_plan.mandatory_lap,
+            explicit,
+        )?,
+        None => generate_route_plan_lap_v1(graph, route_memberships, &route_plan.anchor)?,
+    };
     if route_plan.mandatory_lap.membership_id
         != route_memberships
             .iter()
@@ -6358,6 +6514,105 @@ mod tests {
         ));
     }
 
+    /// Split the single relationMainline run in two so no membership segment
+    /// spans the anchor merge node M to the branch node B.
+    fn fragmented_radial_fixture() -> (
+        RadialReturnBillingPairSeed,
+        Graph,
+        Vec<RouteMembershipIndex>,
+    ) {
+        let (seed, graph, mut memberships) = verified_diagnostic_radial_fixture();
+        let membership = memberships
+            .iter_mut()
+            .find(|membership| membership.membership_id == "route:R1:forward")
+            .unwrap();
+        let index = membership
+            .segments
+            .iter()
+            .position(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+            .unwrap();
+        let split_index = membership.segments[index]
+            .ordered_edge_ids
+            .iter()
+            .position(|edge_id| edge_id == "e:w102:0:f")
+            .unwrap()
+            + 1;
+        let tail = membership.segments[index]
+            .ordered_edge_ids
+            .split_off(split_index);
+        let mut second = membership.segments[index].clone();
+        membership.segments[index].ordered_edge_ids_sha256 =
+            ordered_edge_ids_sha256(&membership.segments[index].ordered_edge_ids).unwrap();
+        second.segment_id = format!("{}:tail", second.segment_id);
+        second.ordered_edge_ids = tail;
+        second.ordered_edge_ids_sha256 = ordered_edge_ids_sha256(&second.ordered_edge_ids).unwrap();
+        second.member_indexes = Some(vec![1]);
+        second.member_order_matches_relation = Some(true);
+        membership.segments.push(second);
+        (seed, graph, memberships)
+    }
+
+    #[test]
+    fn explicit_lap_arc_composes_a_pair_whose_membership_is_fragmented() {
+        let (seed, graph, memberships) = fragmented_radial_fixture();
+        let edge_ids = vec!["e:w102:0:f".to_string(), "e:w103:0:f".to_string()];
+
+        // The fragmented membership cannot derive the M-to-B arc on its own.
+        let derived_error =
+            resolve_diagnostic_radial_route_plan(&graph, &memberships, &seed).unwrap_err();
+        assert!(matches!(derived_error, RouteMembershipError::Validation(_)));
+
+        // Declared explicitly, the same pair resolves.
+        let mut declared = seed.clone();
+        declared.route_plan.mandatory_lap.explicit_arc = Some(ExplicitLapArc {
+            edge_ids: edge_ids.clone(),
+            edge_ids_sha256: ordered_edge_ids_sha256(&edge_ids).unwrap(),
+        });
+        declared.validate().unwrap();
+        let resolution =
+            resolve_diagnostic_radial_route_plan(&graph, &memberships, &declared).unwrap();
+        assert_eq!(resolution.lap.edge_ids, edge_ids);
+        assert_eq!(
+            resolution.lap.source_segment_id,
+            "explicit:route:R1:forward"
+        );
+    }
+
+    #[test]
+    fn explicit_lap_arc_rejects_tampering() {
+        let (seed, graph, memberships) = fragmented_radial_fixture();
+        let edge_ids = vec!["e:w102:0:f".to_string(), "e:w103:0:f".to_string()];
+        let mut declared = seed.clone();
+        let explicit = ExplicitLapArc {
+            edge_ids: edge_ids.clone(),
+            edge_ids_sha256: ordered_edge_ids_sha256(&edge_ids).unwrap(),
+        };
+        declared.route_plan.mandatory_lap.explicit_arc = Some(explicit.clone());
+        let anchor = declared.route_plan.anchor.clone();
+        let lap = declared.route_plan.mandatory_lap.clone();
+        validate_directed_junction_mandatory_lap(&graph, &memberships, &anchor, &lap).unwrap();
+
+        let mut wrong_hash = explicit.clone();
+        wrong_hash.edge_ids_sha256 = "0".repeat(64);
+        assert!(
+            resolve_explicit_lap_arc(&graph, &memberships, &anchor, &lap, &wrong_hash).is_err()
+        );
+
+        let mut non_contiguous = explicit.clone();
+        non_contiguous.edge_ids = vec!["e:w102:0:f".into(), "e:w101:0:f".into()];
+        non_contiguous.edge_ids_sha256 = ordered_edge_ids_sha256(&non_contiguous.edge_ids).unwrap();
+        assert!(
+            resolve_explicit_lap_arc(&graph, &memberships, &anchor, &lap, &non_contiguous).is_err()
+        );
+
+        let mut wrong_branch = explicit.clone();
+        wrong_branch.edge_ids = vec!["e:w102:0:f".into()];
+        wrong_branch.edge_ids_sha256 = ordered_edge_ids_sha256(&wrong_branch.edge_ids).unwrap();
+        assert!(
+            resolve_explicit_lap_arc(&graph, &memberships, &anchor, &lap, &wrong_branch).is_err()
+        );
+    }
+
     #[test]
     fn resolves_a_corridor_across_relation_segment_boundaries() {
         let (_response, graph, snapshot) = synthetic();
@@ -6827,6 +7082,7 @@ mod tests {
             first_edge_id: "e:w102:0:f".into(),
             last_edge_id: "e:w103:0:f".into(),
             lap_count: 1,
+            explicit_arc: None,
         };
         validate_directed_junction_mandatory_lap(&graph, &memberships, &anchor, &lap).unwrap();
         let mut wrong_arm = anchor.clone();
@@ -6906,6 +7162,7 @@ mod tests {
             first_edge_id: "e:w102:0:f".into(),
             last_edge_id: "e:w103:0:f".into(),
             lap_count: 2,
+            explicit_arc: None,
         };
         assert!(validate_directed_junction_mandatory_lap(
             &graph,
@@ -6994,6 +7251,7 @@ mod tests {
             first_edge_id: "e:w900:0:f".into(),
             last_edge_id: "e:w904:0:f".into(),
             lap_count: 1,
+            explicit_arc: None,
         };
         let error =
             validate_directed_junction_mandatory_lap(&graph, &memberships, &anchor, &declared_lap)

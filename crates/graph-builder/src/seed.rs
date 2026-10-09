@@ -247,6 +247,21 @@ pub struct MandatoryLap {
     pub first_edge_id: String,
     pub last_edge_id: String,
     pub lap_count: u8,
+    /// Seed-declared M-to-B arc, used when the route membership cannot derive
+    /// one. A role-less ring whose OSM relation does not close into a cycle has
+    /// no single relationMainline segment spanning M to B, so the arc is
+    /// declared explicitly instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub explicit_arc: Option<ExplicitLapArc>,
+}
+
+/// An explicit mandatory-lap arc from the anchor merge node M to the branch
+/// node B, as a contiguous ordered Shutoko edge sequence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExplicitLapArc {
+    pub edge_ids: Vec<String>,
+    pub edge_ids_sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -525,6 +540,35 @@ impl RadialReturnBillingPairSeed {
                 "radial pair {} must declare mandatory lap lapCount=1",
                 self.id
             ));
+        }
+        if let Some(explicit) = &self.route_plan.mandatory_lap.explicit_arc {
+            if explicit.edge_ids.is_empty() {
+                return Err(format!(
+                    "radial pair {} explicit lap arc requires non-empty edgeIds",
+                    self.id
+                ));
+            }
+            if explicit.edge_ids.first() != Some(&self.route_plan.mandatory_lap.first_edge_id)
+                || explicit.edge_ids.last() != Some(&self.route_plan.mandatory_lap.last_edge_id)
+            {
+                return Err(format!(
+                    "radial pair {} explicit lap arc boundaries do not match firstEdgeId/lastEdgeId",
+                    self.id
+                ));
+            }
+            let encoded = serde_json::to_vec(&explicit.edge_ids).map_err(|error| {
+                format!(
+                    "radial pair {} explicit lap arc could not be hashed: {}",
+                    self.id, error
+                )
+            })?;
+            let expected_hash = format!("{:x}", Sha256::digest(encoded));
+            if explicit.edge_ids_sha256 != expected_hash {
+                return Err(format!(
+                    "radial pair {} explicit lap arc edgeIdsSha256 does not match edgeIds",
+                    self.id
+                ));
+            }
         }
         Ok(())
     }

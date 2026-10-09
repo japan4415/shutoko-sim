@@ -94,7 +94,7 @@ pub use seed::{
     BillingPairsSeedFile, BillingPairsSeedFileV2, BillingPairsSeedParseError, BindingCandidate,
     BindingCandidateStatus, DiagnosticEndpoint, DiagnosticRoutePlan, DiagnosticTariff,
     DirectedEndpointSegment, DirectedJunctionAnchor, EndpointSupportState, EntryCorridor,
-    ExcludedShortConnector, FirstGeneralExit, FirstGeneralExitRule, LoopValidation,
+    ExcludedShortConnector, ExplicitLapArc, FirstGeneralExit, FirstGeneralExitRule, LoopValidation,
     LoopValidationStatus, MandatoryLap, PairEligibility, PairEligibilityStatus, PairKind,
     ParsedBillingPairsSeed, ReturnCorridor, RoutePlanVersion, RoutingCapability, SeedPrice,
     SeedProvenance, TariffStatus,

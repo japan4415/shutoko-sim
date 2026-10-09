@@ -832,12 +832,32 @@ pub fn derive_carriageway_direction_split(
     if has_role_direction {
         return Ok(None);
     }
+    // Only a relation that has no direction information at all needs a derived
+    // carriageway split. `relation_directions` returns `["forward"]` exactly for
+    // those role-less relations; anything else already has inbound / outbound /
+    // inner / outer roles and must keep the relation-role expansion.
+    if relation_directions(relation)? != vec!["forward".to_string()] {
+        return Ok(None);
+    }
     let mut seeds = bound_ramp_evidence
         .iter()
         .filter(|evidence| evidence.route_id == route_id)
         .collect::<Vec<_>>();
     seeds.sort_by(|left, right| left.ramp_id.cmp(&right.ramp_id));
     if seeds.is_empty() {
+        return Ok(None);
+    }
+    // A derived split only makes sense for a ring whose ramps are themselves
+    // labelled inner / outer (C2). Other role-less relations (for example the
+    // Harumi line, ref 10) carry inbound / outbound ramps and must keep the
+    // relation-role expansion.
+    let has_inner_ramp = seeds
+        .iter()
+        .any(|evidence| normalized(&evidence.direction) == CARRIAGEWAY_DIRECTION_INNER);
+    let has_outer_ramp = seeds
+        .iter()
+        .any(|evidence| normalized(&evidence.direction) == CARRIAGEWAY_DIRECTION_OUTER);
+    if !has_inner_ramp || !has_outer_ramp {
         return Ok(None);
     }
     if !relation_ways_are_all_oneway(relation, response) {

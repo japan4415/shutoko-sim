@@ -1059,7 +1059,19 @@ pub(crate) fn validate_relation_constrained_legacy_first_exit(
                 == crate::route_membership::RouteMembershipSourceKind::RelationMainline
         })
         .collect::<Vec<_>>();
-    let [relation_segment] = relation_segments.as_slice() else {
+    // A composed ring has one cyclic relationMainline segment; a fragmented ring
+    // (C2) keeps one segment per run. Either way the initial mainline edge must
+    // belong to exactly one of them.
+    let initial_segments = relation_segments
+        .iter()
+        .filter(|segment| {
+            segment
+                .ordered_edge_ids
+                .iter()
+                .any(|edge_id| edge_id == initial_edge_id)
+        })
+        .collect::<Vec<_>>();
+    let [relation_segment] = initial_segments.as_slice() else {
         return Err(vec!["RELATION_MAINLINE_NOT_UNIQUE".to_string()]);
     };
     if exit_approach_edge_ids.is_empty() {
@@ -1091,6 +1103,66 @@ pub(crate) fn validate_relation_constrained_legacy_first_exit(
                 .ok_or_else(|| vec!["RELATION_EXIT_APPROACH_EDGE_NOT_FOUND".to_string()])
         })
         .collect::<Result<Vec<_>, Vec<String>>>()?;
+    let split_node = approach
+        .first()
+        .map(|edge| edge.from.as_str())
+        .unwrap_or_default();
+    let reaches_split = |order: &[String]| {
+        order.iter().any(|edge_id| {
+            edge_map.get(edge_id.as_str()).map(|edge| edge.to.as_str()) == Some(split_node)
+        })
+    };
+    // A composed ring is one cyclic relationMainline segment, so its run from the
+    // initial edge already covers the whole traversal. A fragmented ring (C2)
+    // keeps one segment per run, so order the mainline the pair actually travels
+    // by walking from the initial edge along the membership edges that can still
+    // reach the exit split node.
+    if !split_node.is_empty() && !reaches_split(&relation_order) {
+        let mut successors: std::collections::HashMap<&str, Vec<&crate::model::Edge>> =
+            std::collections::HashMap::new();
+        let mut predecessors: std::collections::HashMap<&str, Vec<&crate::model::Edge>> =
+            std::collections::HashMap::new();
+        for segment in &relation_segments {
+            for edge_id in &segment.ordered_edge_ids {
+                if let Some(edge) = edge_map.get(edge_id.as_str()) {
+                    successors.entry(edge.from.as_str()).or_default().push(edge);
+                    predecessors.entry(edge.to.as_str()).or_default().push(edge);
+                }
+            }
+        }
+        let mut can_reach: HashSet<&str> = HashSet::new();
+        can_reach.insert(split_node);
+        let mut stack = vec![split_node];
+        while let Some(node) = stack.pop() {
+            for edge in predecessors.get(node).into_iter().flatten() {
+                if can_reach.insert(edge.from.as_str()) {
+                    stack.push(edge.from.as_str());
+                }
+            }
+        }
+        let mut walked = vec![initial_edge_id.to_string()];
+        let mut node = edge_map.get(initial_edge_id).map(|edge| edge.to.clone());
+        while let Some(current) = node.as_deref() {
+            if current == split_node {
+                break;
+            }
+            let candidates = successors
+                .get(current)
+                .into_iter()
+                .flatten()
+                .filter(|edge| can_reach.contains(edge.to.as_str()))
+                .collect::<Vec<_>>();
+            if candidates.len() != 1 || walked.len() > graph.edges.len() {
+                break;
+            }
+            let edge = candidates[0];
+            walked.push(edge.id.clone());
+            node = Some(edge.to.clone());
+        }
+        if reaches_split(&walked) {
+            relation_order = walked;
+        }
+    }
     let split_node_reached = approach.first().is_some_and(|approach_edge| {
         relation_order.iter().any(|edge_id| {
             edge_map.get(edge_id.as_str()).map(|edge| edge.to.as_str())

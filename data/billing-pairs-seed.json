@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "description": "Shutoko C1 legacy billing pairs and diagnostic Route 2 radial pairs",
+  "description": "Shutoko C1 legacy billing pairs, diagnostic Route 2 radial pairs, and C2 central circular pairs",
   "billingPairs": [
     {
       "id": "bp:c1-outer:kandabashi-takaracho",
@@ -471,6 +471,23 @@
         "source": "https://www.shutoko.jp/use/network/map/route-c2/takinogawa/",
         "sourceDate": "2026-10-11",
         "notes": "C2 inner 滝野川入口 -> 中野長者橋出口. Both bindings are verified_bound in data/osm-ramp-bindings.json (ways 464736087 entry / 381950208 exit). Official fare tables page 25 row 滝野川 column 中野長者橋 = 410 yen / 7.6 km (2025-04, sha256 dc2d80ee0c8f215f...) and 440 yen / 7.6 km (2026-10, sha256 1dd86cf7946deb28...); the 2022-04 and 2026-10 rule formulas both reproduce those amounts at 7,600 m. The C2 inner mainline arc between the two attachments (n:4597822558 -> n:3851530202) is 142 edges / 7,230 m, the first inner-carriageway C2 pair. No other C2 inner general exit attaches along that arc (中野長者橋 is the first)."
+      }
+    },
+    {
+      "id": "bp:c2-outer:kosuge-hirai-ohashi",
+      "entryOsmWayId": 60870186,
+      "entryName": "小菅入口",
+      "exitOsmWayId": 55555913,
+      "exitName": "平井大橋出口",
+      "anchorOsmNodeId": 370270147,
+      "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c2-outer:kosuge-hirai-ohashi",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/route-c2/kosuge/",
+        "sourceDate": "2026-10-11",
+        "notes": "C2 outer 小菅入口 -> 平井大橋出口. Both bindings are verified_bound in data/osm-ramp-bindings.json (ways 60870186 entry / 55555913 exit). Official fare tables page 25: the grid cell for 小菅入口 against 平井大橋出口 (row 平井大橋, column 小菅) reads 320 yen / 4.8 km (2025-04, sha256 dc2d80ee0c8f215f...) and 340 yen / 4.8 km (2026-10, sha256 1dd86cf7946deb28...); the 2022-04 and 2026-10 rule formulas reproduce both amounts at 4,800 m. The C2 outer mainline arc between the two attachments (n:370270147 -> n:698279318) is 67 edges / 4,444 m, and 平井大橋 is the first general exit after 小菅 (清新町 is 10,344 m further along the outer carriageway)."
       }
     }
   ]

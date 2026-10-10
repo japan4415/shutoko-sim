@@ -504,19 +504,118 @@ initial Edge から巡回列を回して境界（first の from / last の to �
 も arc は一意に取れる。ただし弧の上に別の出口がある OD は first exit 条件で
 落ちるため、追加するなら「弧の上に他の出口がない」ことを先に確認する。
 
-- **未対応**: `explicitArc` は 1 本の arc 内での同一エッジ再訪をまだ許さない
-  （`validate_ordered_edges` と `validate_resolved_route_plan` が単純列を前提に
-  している）。「往復を含む明示エッジ列」が必要になった時点で、lap 専用の
-  検証（`validate_ordered_edge_sequence_allowing_repeats` の適用）に切り替える。
+**段9（3 件目: 小菅入口 → 平井大橋出口と、却下した西池袋→富ヶ谷）**
+
+段8 の候補のうち、弧の上に他の一般出口がない OD を実データで確定して 1 件追加
+した。
+
+- 採用: **小菅入口 → 平井大橋出口（C2 外周）**。弧は `n:370270147 → n:698279318`
+  の 67 辺 / 4,444 m で、`firstExitInitialEdgeId = e:w32898851:1:f`、exit approach は
+  `e:w383231007:0..2` + `e:w55555913:0..3` の 7 辺。公式表 page 25 の
+  小菅入口 × 平井大橋出口セル（PDF の grid では行 平井大橋・列 小菅）は
+  2025-04 が 320 円 / 4.8 km、2026-10 改定が 340 円 / 4.8 km で、いずれも
+  4,800 m に対する規則式（弧との差 +356 m）と一致する。導出レポートは 8 ゲート
+  すべて `passed`（候補 14 件 = eligible 13 / hold 1）。
+- **却下: 西池袋入口 → 富ヶ谷出口（C2 内周）**。弧は一意（`n:1075239275 →
+  n:3851577677`、117 辺 / 6,828 m、公式 7.1 km = +272 m）だが、弧の途中
+  `n:3851530202` に **中野長者橋出口**の分流点があり、first exit ゲートの
+  `RELATION_FIRST_EXIT_MISMATCH` で落ちる。滝野川→富ヶ谷（+89 m）も同じ理由で
+  落ちる。全 OD 組み合わせの監査結果は「弧が一意 = 27 件、うち first exit を
+  満たす = 11 件」で、商品化できるのはその 11 件のうち公式表にセルがあるものだけ
+  である。監査は `.cache/match_c2_pairs.py` と `.cache/c2-arc-audit.py`
+  （どちらも git 管理外の作業用スクリプト）で再現できる。
+
+- **対応済み（段10 で実装）**: `explicitArc` の同一エッジ再訪。lap は 1 本の arc
+  内で同じエッジを 2 回以上通ってよい。
 - **authoring 用ツール（実装済み）**: seed に貼る値は CLI で生成できる。
   `--emit-lap-boundaries <membershipId>`、`--emit-lap-arc
   <membershipId>,<M>,<B>`、`--emit-ramp-endpoint <rampId>`（いずれも
   `--graph-schema 4 --inventory … --bindings …` と併用、出力は JSON 単体）。
-- 併せて **案 (a)（OSM 上流修正）** を調査項目として残す: relation 4256077 に
-  欠落メンバーを補い、内周・外周が閉じるようにする。C1 は同じ graph で閉じて
-  いるので、relation 編集で解決する見込みがある。
+- 併せて **案 (a)（OSM 上流修正）** を段11 で実測した。結論は「member の削除・
+  分割だけでは run はつながらず、方向ロール付与と分岐ノードの解消が必要」である。
 - 大域最適化（min-cost flow / 整数計画）は、上記いずれかで閉路が用意できた後の
   「割当の最適化」としてのみ意味を持つ。閉路そのものの生成には使えない。
+
+**段10（`explicitArc` の同一エッジ再訪を実装した）**
+
+段5 で残していた「lap が同じエッジを 2 回通る明示エッジ列」を解禁した。周回の
+契約は段2.3 のとおりで、変更点は次の 3 か所である。
+
+1. `resolve_explicit_lap_arc`（graph-builder）が `validate_ordered_edges` では
+   なく `validate_ordered_edge_sequence_allowing_repeats` で arc を検証する。
+   連続性・Shutoko 限定・M 始点/B 終点・`firstEdgeId`/`lastEdgeId` 一致・
+   sha256 一致・除外ショートコネクタ不使用・コネクタより長い・forbidden
+   transition なし、の各条件は変わらない。
+2. `validate_resolved_route_plan(_segments)` は mandatory lap の leg だけ repeat を
+   許し、他の leg（entry approach / return corridor / exit approach）は従来どおり
+   単純列を要求する。
+3. **routing-core 側の wire 検証**も同じ契約へ揃えた。`validate_radial_return_pair`
+   は lap の leg だけ `reject_repeats = false` とし、lap の source binding に明示
+   マーカー `explicit:<membershipId>` を許可する。明示 arc は 1 本の membership
+   segment の部分列ではないため、従来の source segment 照合
+   （`validate_resolved_segment_sources`）は適用できない。マーカーは mandatory lap
+   にのみ許され、M/B 境界・除外ショートコネクタ・連結性の検証は引き続き効く。
+
+回帰テストは builder 側の `explicit_lap_arc_allows_a_repeated_edge`
+（`n:2 → n:3 → n:2 → n:3 → n:4` の往復を受理し、非連結な列は拒否）と
+`promotes_an_explicit_lap_that_revisits_an_edge`（schema 4 へ昇格し、routing-core の
+`prepare_json` が同じ lap を受理する）。
+
+**段11（案 (a) の実測: 上流 relation 修正は何を直す必要があるか）**
+
+上流 OSM を編集できないため、提案した relation 修正を**スナップショットのコピーに
+適用して検証する道具**を追加した。
+
+```
+python3 scripts/apply-osm-relation-repairs.py --osm fixtures/osm/shutoko-all.json \
+    --repairs data/osm-relation-repairs.json --out /tmp/shutoko-repaired.json
+```
+
+`data/osm-relation-repairs.json` は 3 種類の編集（`removeMemberWay` /
+`splitMemberWayAtNode` / `setMemberRole`）を表現でき、適用後は通常どおり
+graph-builder に読ませる。検証は builder 自身の診断メッセージで行う。
+
+実測（すべて `all-real-v4` の入力で、relation 4256077 だけを差し替えた build）:
+
+| 修正 | 結果 |
+| --- | --- |
+| なし（現行） | inner 9 run / 1,228 辺、outer 7 run / 1,068 辺。分割は 2,296 辺採用 / 169 辺未割当。一意に取れる弧は 27 件（first exit を満たすのは 11 件） |
+| JCT リンク member の削除（28127318 / 541983769 / 331922702 / 331922695） | member walk が `n:8283617223` で止まり、build が `relation 4256077 direction forward would traverse a way outside the relation after member 44211094 at node n:8283617223 via edge e:w891237687:2:f to member way 44180278` で fail-closed。**診断が次の修正対象（node・edge・member way）をそのまま指す** |
+| 内部継続の分割（891237687@n:8283617223、44130240@n:370270234） | build は成功するが membership は同一（inner 9 run / 1,228 辺、outer 7 run / 1,068 辺、距離も同じ）。C2 の run は**辺ラベルで切られており**、member 鎖の接続では変わらない |
+| 削除 + 分割 | 派生ラベリングが悪化（2,296 → 1,424 辺採用 / 947 辺未割当）し、既存ペアも `legacy billing pair bp:c2-outer:kosuge-hirai-ohashi must resolve through an ordered mainline segment sequence (matches=0)` で解決不能になる |
+| 方向ロール付与（現行ラベルから導出した 103 member、証拠の無い 12 member は削除） | build は成功し inner 1,237 辺 / outer 1,089 辺（+30 辺）になるが、run 数は 9 / 7 のまま、一意な弧も 27 件のまま |
+| **`data/osm-relation-repairs.json`（roles 100 + 削除 15 + 分割 2）** | build は成功し **inner 7 run / 1,223 辺、outer 6 run / 1,087 辺**。run 端と run 始点の個数が inner 7 / 7、outer 6 / 6 で揃い（現行は 7 / 9、6 / 7）、**一意に取れる弧は 27 → 32 件に増える**（first exit を満たす 11 件は変わらない） |
+
+`data/osm-relation-repairs.json` は上記 3 種の編集を 1 つの候補 changeset として
+まとめたもので、`status: proposed_upstream_not_applied` と
+`humanReviewRequired`（ロールは現行ラベル由来なので測量の裏付けが要る、証拠の
+無い member は削除より方向付与を優先する）を明記している。release fixture は
+このファイルを読まない。
+
+**結論**: 案 (a) は段8 が挙げた 2 点（大橋JCT の fork と way 891237687 の内部継続）
+だけでは足りない。run がつながらない本当の理由は、**member 鎖が JCT の fork /
+merge と「続きの member が無いノード」で切れていること**で、上流には次の 3 つが
+必要になる。
+
+1. **方向ロール**: C1 relation 4256008 と同じ `Inner directions` / `Outer directions`
+   を mainline member に付与する（role 無しのままだと builder は派生分割に頼り、
+   2,296 辺しか採用できない）。方向の証拠は verified_bound ランプの接続点だが、
+   現行ラベルでも 103 member は一意に決まり、12 member（大半が JCT リンク・
+   ランプ・短い本線片）は人手判断が要る。
+2. **fork / merge の解消**: relation 4256077 には 17 ノードで入出次数が 2 以上ある
+   （例: `n:7549622953` 大橋JCT 内周 = 本線 331692348 とリンク 331922702、
+   `n:263988137` = 本線 44209387 とリンク 28127318、`n:3387909578` = 本線
+   331922708 と五反田出口ランプ 541983769）。どちらが同じ carriageway の続きかを
+   relation 側で確定する必要がある。
+3. **欠落 member の追加**: 方向ロール付与後の run 端（start に一致しないもの）へ
+   有向に到達できる relation 外の道は、外周の `n:31330124 → n:6534476215`
+   （22 way / 88 辺 / 10,376 m）を除いて見つからない。残りの区間は member 順・
+   向きの問題か、片方向の行き止まりであり、単純な member 追加では閉じない。
+
+したがって run を 1 本の環状列に畳む作業は引き続き上流の編集待ちであり、
+graph 側で合成する案 (b) は段2.2〜段5 のとおり実測で否定されている。今回の
+道具は、その編集が filed されたときに「どのノードがまだ切れているか」を同じ
+診断で確認するために使う。
 
 0-a. **出口到達フィルタ（段1、実装済み）**: 各方向について、verified_bound な
    出口ランプの接続点から one-way を逆向きにたどり、その方向にラベルされた

@@ -368,7 +368,7 @@ fn all_real_v4_manifest_binds_every_artifact_and_input_hash() {
     assert_eq!(candidates["rule"], "billingPairDerivation/v2");
     assert_eq!(candidates["automaticSeedWrite"], false);
 
-    // 9 件の verified pair すべてが一次資料への trace を持つ。legacy 7 + radial 2。
+    // 13 件の verified pair すべてが一次資料への trace を持つ。legacy 11 + radial 2。
     let verified_pair_ids = graph["billingPairs"]
         .as_array()
         .unwrap()
@@ -399,9 +399,9 @@ fn all_real_v4_manifest_binds_every_artifact_and_input_hash() {
             id
         })
         .collect::<std::collections::BTreeSet<_>>();
-    // 12 verified legacy pairs after the Ginza-Shintomicho registration and the
-    // two C2 pairs.
-    assert_eq!(verified_pair_ids.len(), 12);
+    // 13 verified legacy pairs after the Ginza-Shintomicho registration and the
+    // three C2 pairs.
+    assert_eq!(verified_pair_ids.len(), 13);
     assert_eq!(provenance_ids, verified_pair_ids);
     let _ = fs::remove_dir_all(dir);
 }
@@ -483,12 +483,12 @@ fn all_real_v4_pair_derivation_covers_every_route_relation_and_membership() {
         assert!(!record["candidatePairIds"].as_array().unwrap().is_empty());
     }
     let summary = &candidates["summary"];
-    // 12 legacy pairs (8 original C1 + Ginza-Shintomicho + the C2 outer and
-    // inner pairs) plus the 2 radial pairs produce 13 candidates, and the C2
-    // pairs resolve their mandatory lap across the split runs, so only the
-    // conditional Shibakoen pair stays on hold.
-    assert_eq!(summary["candidateTotal"], 13);
-    assert_eq!(summary["eligibleForReview"], 12);
+    // 12 legacy pairs (8 original C1 + Ginza-Shintomicho + the three C2 pairs)
+    // plus the 2 radial pairs produce 14 candidates, and the C2 pairs resolve
+    // their mandatory lap across the split runs, so only the conditional
+    // Shibakoen pair stays on hold.
+    assert_eq!(summary["candidateTotal"], 14);
+    assert_eq!(summary["eligibleForReview"], 13);
     assert_eq!(summary["hold"], 1);
     let _ = fs::remove_dir_all(dir);
 }

@@ -4072,6 +4072,15 @@ mod tests {
                 410,
                 "p25:row-c2-takinogawa:column-c2-nakano-chojabashi:base-etc:410yen:7.6km",
             ),
+            (
+                "c2-outer:kosuge-hirai-ohashi",
+                25,
+                "小菅",
+                "平井大橋",
+                4_800,
+                320,
+                "p25:row-c2-hirai-ohashi:column-c2-kosuge:base-etc:320yen:4.8km",
+            ),
         ];
         assert_eq!(tariffs.assignments.len(), expected.len());
         for (od_key, page, row, column, distance_meters, amount_yen, cell) in expected {
@@ -4132,6 +4141,7 @@ mod tests {
             ("2:meguro-tengenji", 19_400, 860),
             ("c2-outer:gotanda-hatsudai-minami", 5_800, 370),
             ("c2-inner:takinogawa-nakano-chojabashi", 7_600, 440),
+            ("c2-outer:kosuge-hirai-ohashi", 4_800, 340),
         ];
         // A pending 2026-10 PDF review legitimately carries no value for that
         // rule, so the golden table covers the priced assignments only.
@@ -4163,7 +4173,9 @@ mod tests {
                 .unwrap();
             let expected_page = match od_key {
                 "2:meguro-tengenji" => 4,
-                "c2-outer:gotanda-hatsudai-minami" | "c2-inner:takinogawa-nakano-chojabashi" => 25,
+                "c2-outer:gotanda-hatsudai-minami"
+                | "c2-inner:takinogawa-nakano-chojabashi"
+                | "c2-outer:kosuge-hirai-ohashi" => 25,
                 _ => 3,
             };
             assert_eq!(evidence.page, expected_page);

@@ -93,7 +93,7 @@ fn real_graph_deserialization_and_schema_validation() {
     let wire: Value = serde_json::from_str(real_graph_str()).unwrap();
     assert_eq!(wire["schemaVersion"], 4);
     assert_eq!(wire["releaseId"], "all-real-v4");
-    assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 13);
+    assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 14);
     assert!(wire["routeMemberships"].as_array().is_some());
     let prepared = prepare_json(real_graph_str(), "{}").expect("schema 4 graph must prepare");
     assert_eq!(prepared.graph().schema_version, 4);
@@ -101,8 +101,8 @@ fn real_graph_deserialization_and_schema_validation() {
     // forward 1 件が inner / outer の 2 件に分割され、合計 52 件になる
     // （pair-candidates.json の relationManifest と一致）。
     assert_eq!(prepared.route_memberships().len(), 52);
-    // Issue #34 の内回り銀座入口→新富町出口と、C2 五反田入口→初台南出口が
-    // verified に加わり 11 件（未検証は春日部条件付きの 1 件のみ）。
+    // Issue #34 の内回り銀座入口→新富町出口と、C2 の 3 ペアが verified に
+    // 加わり 13 件（未検証は芝公園入口の条件付き 1 件のみ）。
     assert_eq!(
         wire["billingPairs"]
             .as_array()
@@ -110,8 +110,8 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .filter(|pair| pair["pairEligibility"]["status"] == json!("verified_one_section_ahead"))
             .count(),
-        12,
-        "12 verified pairs (9 legacyRing + 2 radialReturn + the C2 inner/outer Ring pairs); only bp:c1-outer:shibakoen-iikura stays unverified (conditional public way)"
+        13,
+        "13 verified pairs (11 legacyRing + 2 radialReturn); only bp:c1-outer:shibakoen-iikura stays unverified (conditional public way)"
     );
     let g = real_graph();
     assert_eq!(g.schema_version, 2);
@@ -119,12 +119,12 @@ fn real_graph_deserialization_and_schema_validation() {
     assert_eq!(g.vehicle_profile, "passenger-car-etc");
     assert!(!g.nodes.is_empty(), "nodes must not be empty");
     assert!(!g.edges.is_empty(), "edges must not be empty");
-    // Issue #34 と C2 の 2 件（五反田→初台南、滝野川→中野長者橋）で legacy 11 件
-    // （schema 2 の legacy adapter は radial を emit しない）。
+    // Issue #34 と C2 の 3 件（五反田→初台南、滝野川→中野長者橋、小菅→平井大橋）
+    // で legacy 12 件（schema 2 の legacy adapter は radial を emit しない）。
     assert_eq!(
         g.billing_pairs.len(),
-        11,
-        "exactly 11 billing pairs expected in fixture"
+        12,
+        "exactly 12 billing pairs expected in fixture"
     );
 
     let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
@@ -135,7 +135,7 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .filter(|p| p.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        10
+        11
     );
     assert_eq!(
         g.billing_pairs
@@ -152,10 +152,12 @@ fn real_graph_deserialization_and_schema_validation() {
             .map(|price| price.amount_yen)
             .collect::<Vec<_>>();
         // 2022-04 と 2026-10 改定の 2 期間。C1 は 300 円、C2 五反田→初台南 は
-        // 350/370 円、C2 滝野川→中野長者橋 は 410/440 円。
+        // 350/370 円、C2 滝野川→中野長者橋 は 410/440 円、C2 小菅→平井大橋 は
+        // 320/340 円。
         let expected_amounts = match pair.id.as_str() {
             "bp:c2-outer:gotanda-hatsudai-minami" => vec![350, 370],
             "bp:c2-inner:takinogawa-nakano-chojabashi" => vec![410, 440],
+            "bp:c2-outer:kosuge-hirai-ohashi" => vec![320, 340],
             _ => vec![300, 300],
         };
         assert_eq!(
@@ -172,6 +174,7 @@ fn real_graph_deserialization_and_schema_validation() {
             let expected_second = match pair.id.as_str() {
                 "bp:c2-outer:gotanda-hatsudai-minami" => 370,
                 "bp:c2-inner:takinogawa-nakano-chojabashi" => 440,
+                "bp:c2-outer:kosuge-hirai-ohashi" => 340,
                 _ => 300,
             };
             assert_eq!(pair.prices[1].amount_yen, expected_second);
@@ -251,7 +254,7 @@ fn radial_seed_is_promoted_after_exact_binding_resolution() {
     let seed: Value =
         serde_json::from_str(include_str!("../../../data/billing-pairs-seed.json")).unwrap();
     assert_eq!(seed["schemaVersion"], 2);
-    assert_eq!(seed["billingPairs"].as_array().unwrap().len(), 13);
+    assert_eq!(seed["billingPairs"].as_array().unwrap().len(), 14);
 
     let radial_pairs = seed["billingPairs"]
         .as_array()
@@ -337,7 +340,7 @@ fn radial_seed_is_promoted_after_exact_binding_resolution() {
     );
 
     let graph: Value = serde_json::from_str(real_graph_str()).unwrap();
-    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 13);
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 14);
     assert_eq!(
         graph["billingPairs"]
             .as_array()
@@ -812,7 +815,7 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             .iter()
             .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        10
+        11
     );
     assert_eq!(
         g.billing_pairs
@@ -834,6 +837,7 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         let expected_amounts = match pair.id.as_str() {
             "bp:c2-outer:gotanda-hatsudai-minami" => vec![350, 370],
             "bp:c2-inner:takinogawa-nakano-chojabashi" => vec![410, 440],
+            "bp:c2-outer:kosuge-hirai-ohashi" => vec![320, 340],
             _ => vec![300, 300],
         };
         assert_eq!(
@@ -1805,10 +1809,10 @@ fn tokyo_wide_narrow_window_reports_nearest_tier_time_window() {
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn meguro_station_all_real_v4_end_to_end_contract() {
     let graph = real_graph();
-    // 11 legacy pairs: 9 C1 pairs since the Ginza-Shintomicho registration
-    // (Issue #34) plus the C2 outer Gotanda-Hatsudai and inner
-    // Takinogawa-Nakano-Chojabashi pairs.
-    assert_eq!(graph.billing_pairs.len(), 11);
+    // 12 legacy pairs: 9 C1 pairs since the Ginza-Shintomicho registration
+    // (Issue #34) plus the C2 outer Gotanda-Hatsudai, inner
+    // Takinogawa-Nakano-Chojabashi, and outer Kosuge-Hirai-Ohashi pairs.
+    assert_eq!(graph.billing_pairs.len(), 12);
     assert_eq!(
         graph
             .billing_pairs
@@ -1876,11 +1880,11 @@ fn meguro_station_all_real_v4_end_to_end_contract() {
     }
 
     let generated_graph: Value = serde_json::from_str(real_graph_str()).unwrap();
-    // 8 original C1 pairs + Ginza-Shintomicho (Issue #34) + the C2 outer and
-    // inner pairs + 2 radial pairs.
+    // 8 original C1 pairs + Ginza-Shintomicho (Issue #34) + the three C2 pairs
+    // + 2 radial pairs.
     assert_eq!(
         generated_graph["billingPairs"].as_array().unwrap().len(),
-        13
+        14
     );
     assert_eq!(
         generated_graph["billingPairs"]

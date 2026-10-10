@@ -25,7 +25,7 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
 
 `data/od-tariffs.json` に記録するのは `documentSha256` と `documents[].cachePath`・ページ・行・列であり、**パスは参考情報**である。PDF とページ画像はどちらも commit しない。
 
-併せて `fixtures/generated/pair-candidates.json` を開き、候補 12 件の内訳が想定どおりかを確認する。内訳は `eligible_for_review` 10 件、`hold` 2 件（`bp:c1-outer:shibakoen-iikura` と `bp:c2-outer:gotanda-hatsudai-minami`。後者は run をまたぐ lap の mainline 列が導出側でまだ一意に決まらないため）で、`relationCoverage[]` に 26 relation のうち 11 件が pass・15 件が reason code 付きで fail していることが分かる。`hold` 2 件を人手レビューで強制的に昇格させず、理由付きの未検証として残す。導出レポートは seed を変更しないので、`data/billing-pairs-seed.json` と `data/billing-pair-adjacency.json` の更新はレビュー済みの PR で行う。
+併せて `fixtures/generated/pair-candidates.json` を開き、候補 14 件の内訳が想定どおりかを確認する。内訳は `eligible_for_review` 13 件、`hold` 1 件（`bp:c1-outer:shibakoen-iikura`。public way が `access:conditional` のため）で、`relationCoverage[]` に 26 relation のうち 11 件が pass・15 件が reason code 付きで fail していることが分かる。`hold` 1 件を人手レビューで強制的に昇格させず、理由付きの未検証として残す。導出レポートは seed を変更しないので、`data/billing-pairs-seed.json` と `data/billing-pair-adjacency.json` の更新はレビュー済みの PR で行う。C2 のように relation の run が分断されている路線では、mandatory lap が「M→B の通常長弧」として一意に取れる OD だけが候補になり、弧の上に別の一般出口がある OD は first exit ゲートで落ちる（`docs/c2-route-design.md` 段8・段9）。
 
 ### 2. 同一入力で成果物を再生成し、決定性を確認してから R2 へ投入して read-back する
 

@@ -139,10 +139,10 @@ fn derives_all_official_candidates_with_independent_gates() {
     assert_eq!(report.schema_version, PAIR_DERIVATION_REPORT_SCHEMA_VERSION);
     assert_eq!(report.rule, PAIR_DERIVATION_RULE);
     assert!(!report.automatic_seed_write);
-    assert_eq!(report.candidates.len(), 13);
-    assert_eq!(report.summary.candidate_total, 13);
+    assert_eq!(report.candidates.len(), 14);
+    assert_eq!(report.summary.candidate_total, 14);
     assert_eq!(report.summary.eligible_for_review, 10, "{report:#?}");
-    assert_eq!(report.summary.hold, 3);
+    assert_eq!(report.summary.hold, 4);
     assert_eq!(
         report
             .candidates
@@ -158,7 +158,7 @@ fn derives_all_official_candidates_with_independent_gates() {
             .iter()
             .filter(|candidate| !candidate.automatic_seed_write)
             .count(),
-        13
+        14
     );
     for hash in [
         &report.input_hashes.osm_snapshot_sha256,

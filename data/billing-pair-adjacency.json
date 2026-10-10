@@ -462,6 +462,35 @@
           "e:w381950208:0:f"
         ]
       }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c2-outer:kosuge-hirai-ohashi",
+      "pairId": "bp:c2-outer:kosuge-hirai-ohashi",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C2",
+      "direction": "outer",
+      "entryRampId": "ramp:c2-outer:kosuge-entry",
+      "exitRampId": "ramp:c2-outer:hirai-ohashi-exit",
+      "entryName": "小菅入口",
+      "exitName": "平井大橋出口",
+      "entryOsmWayId": 60870186,
+      "exitOsmWayId": 55555913,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C2:outer",
+        "anchorNodeId": "n:370270147",
+        "firstExitInitialEdgeId": "e:w32898851:1:f",
+        "exitApproachEdgeIds": [
+          "e:w383231007:0:f",
+          "e:w383231007:1:f",
+          "e:w383231007:2:f",
+          "e:w55555913:0:f",
+          "e:w55555913:1:f",
+          "e:w55555913:2:f",
+          "e:w55555913:3:f"
+        ]
+      }
     }
   ]
 }

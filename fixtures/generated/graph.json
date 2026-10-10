@@ -316816,6 +316816,164 @@
       }
     },
     {
+      "id": "bp:c2-outer:kosuge-hirai-ohashi",
+      "pairKind": "legacyRing",
+      "vehicleProfile": "passenger-car-etc",
+      "entryId": "e:w60870186:0:f",
+      "exitId": "e:w55555913:4:f",
+      "entryRampId": "ramp:c2-outer:kosuge-entry",
+      "exitRampId": "ramp:c2-outer:hirai-ohashi-exit",
+      "entryName": "小菅入口",
+      "exitName": "平井大橋出口",
+      "anchor": {
+        "anchorKind": "sameNode",
+        "nodeId": "n:370270147",
+        "routeId": "C2",
+        "direction": "outer",
+        "arcPolicy": "sameNodeLoop"
+      },
+      "entryToAnchorEdgeIds": [
+        "e:w60870186:0:f",
+        "e:w60870186:1:f",
+        "e:w60870186:2:f",
+        "e:w60867235:0:f",
+        "e:w60867235:1:f",
+        "e:w60867235:2:f",
+        "e:w60867235:3:f",
+        "e:w60867235:4:f",
+        "e:w60867235:5:f",
+        "e:w60867235:6:f",
+        "e:w60867235:7:f",
+        "e:w60867235:8:f",
+        "e:w60867235:9:f",
+        "e:w60867235:10:f",
+        "e:w60867235:11:f",
+        "e:w60867235:12:f",
+        "e:w60867235:13:f",
+        "e:w60867235:14:f",
+        "e:w60867235:15:f",
+        "e:w60867235:16:f",
+        "e:w60867235:17:f",
+        "e:w60867235:18:f",
+        "e:w60867235:19:f"
+      ],
+      "anchorToExitEdgeIds": [
+        "e:w32898851:1:f",
+        "e:w32898851:2:f",
+        "e:w32898851:3:f",
+        "e:w32898851:4:f",
+        "e:w32898851:5:f",
+        "e:w32898851:6:f",
+        "e:w32898851:7:f",
+        "e:w32898851:8:f",
+        "e:w32898851:9:f",
+        "e:w44130133:0:f",
+        "e:w44130133:1:f",
+        "e:w44130133:2:f",
+        "e:w44130240:0:f",
+        "e:w44130240:1:f",
+        "e:w44130240:2:f",
+        "e:w44130240:3:f",
+        "e:w44130240:4:f",
+        "e:w44130240:5:f",
+        "e:w44130240:6:f",
+        "e:w44130240:7:f",
+        "e:w44130240:8:f",
+        "e:w44130240:9:f",
+        "e:w44130240:10:f",
+        "e:w44130240:11:f",
+        "e:w44130240:12:f",
+        "e:w44130240:13:f",
+        "e:w44130240:14:f",
+        "e:w44130240:15:f",
+        "e:w44130240:16:f",
+        "e:w44130240:17:f",
+        "e:w44130240:18:f",
+        "e:w44130240:19:f",
+        "e:w44130240:20:f",
+        "e:w44130240:21:f",
+        "e:w44130240:22:f",
+        "e:w44130240:23:f",
+        "e:w44130240:24:f",
+        "e:w44130240:25:f",
+        "e:w44130240:26:f",
+        "e:w44130240:27:f",
+        "e:w44130240:28:f",
+        "e:w44130240:29:f",
+        "e:w44130240:30:f",
+        "e:w44130240:31:f",
+        "e:w44130240:32:f",
+        "e:w44130240:33:f",
+        "e:w44130240:34:f",
+        "e:w44130240:35:f",
+        "e:w44130240:36:f",
+        "e:w44130240:37:f",
+        "e:w184872021:0:f",
+        "e:w184872021:1:f",
+        "e:w184872021:2:f",
+        "e:w184872021:3:f",
+        "e:w184872021:4:f",
+        "e:w184872021:5:f",
+        "e:w184872021:6:f",
+        "e:w184872021:7:f",
+        "e:w184872021:8:f",
+        "e:w184872021:9:f",
+        "e:w184872021:10:f",
+        "e:w184872021:11:f",
+        "e:w184872021:12:f",
+        "e:w184872021:13:f",
+        "e:w184872023:0:f",
+        "e:w184872023:1:f",
+        "e:w184872023:2:f",
+        "e:w383231007:0:f",
+        "e:w383231007:1:f",
+        "e:w383231007:2:f",
+        "e:w55555913:0:f",
+        "e:w55555913:1:f",
+        "e:w55555913:2:f",
+        "e:w55555913:3:f",
+        "e:w55555913:4:f"
+      ],
+      "pairEligibility": {
+        "status": "verified_one_section_ahead",
+        "oneSectionAheadVerified": true
+      },
+      "loopValidation": {
+        "status": "declared_route_validated"
+      },
+      "tariff": {
+        "status": "priced",
+        "amountYen": 320,
+        "observedBaseFareYen": 320,
+        "observedDistanceMeters": 4800,
+        "billingDistanceMeters": 4800,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "prices": [
+          {
+            "amountYen": 320,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z"
+          },
+          {
+            "amountYen": 340,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null
+          }
+        ],
+        "assignmentId": "assignment:c2-outer:kosuge-hirai-ohashi",
+        "ruleId": "shutoko-etc-ordinary-2022-04",
+        "evidenceId": "evidence:2025-04:p25:c2-kosuge-hirai-ohashi",
+        "distanceEvidenceId": "evidence:2025-04:p25:c2-kosuge-hirai-ohashi",
+        "fareLabel": "普通車ETC基本料金（割引適用前）",
+        "vehicleClass": "ordinary",
+        "paymentMethod": "etc",
+        "fareBasis": "base_toll_excluding_discounts",
+        "discountsExcluded": true,
+        "tollSource": "official_distance_rule"
+      }
+    },
+    {
       "id": "bp:2-inbound:meguro:c1-inner:tengenji",
       "pairKind": "radialReturn",
       "routePlanVersion": 1,
@@ -321569,6 +321727,14 @@
       "amountYen": 410,
       "effectiveFrom": "2022-03-31T15:00:00Z",
       "effectiveTo": "2026-09-30T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c2-outer:kosuge-entry",
+      "exitRampId": "ramp:c2-outer:hirai-ohashi-exit",
+      "billingDistanceMeters": 4800,
+      "amountYen": 320,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
     }
   ],
   "odTariffsV3": {
@@ -322117,6 +322283,52 @@
             "evidenceId": "evidence:2026-10:p25:c2-takinogawa-nakano-chojabashi",
             "observedBaseFareYen": 440,
             "observedDistanceMeters": 7600,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "status": "priced",
+            "tariffStatus": "priced"
+          }
+        ],
+        "vehicleClass": "ordinary",
+        "vehicleProfile": "passenger-car-etc",
+        "verificationStatus": "verified"
+      },
+      {
+        "assignmentId": "assignment:c2-outer:kosuge-hirai-ohashi",
+        "billingDistanceMeters": 4800,
+        "distanceEvidenceId": "evidence:2025-04:p25:c2-kosuge-hirai-ohashi",
+        "endpointBindingReason": null,
+        "endpointBindingStatus": null,
+        "entryName": "小菅入口",
+        "entryRampId": "ramp:c2-outer:kosuge-entry",
+        "exitName": "平井大橋出口",
+        "exitRampId": "ramp:c2-outer:hirai-ohashi-exit",
+        "fareBasis": "base_toll_excluding_discounts",
+        "odKey": "c2-outer:kosuge-hirai-ohashi",
+        "pairIds": [
+          "bp:c2-outer:kosuge-hirai-ohashi"
+        ],
+        "paymentMethod": "etc",
+        "prices": [
+          {
+            "amountYen": 320,
+            "distanceEvidenceId": "evidence:2025-04:p25:c2-kosuge-hirai-ohashi",
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "evidenceId": "evidence:2025-04:p25:c2-kosuge-hirai-ohashi",
+            "observedBaseFareYen": 320,
+            "observedDistanceMeters": 4800,
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "status": "priced",
+            "tariffStatus": "priced"
+          },
+          {
+            "amountYen": 340,
+            "distanceEvidenceId": "evidence:2026-10:p25:c2-kosuge-hirai-ohashi",
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "evidenceId": "evidence:2026-10:p25:c2-kosuge-hirai-ohashi",
+            "observedBaseFareYen": 340,
+            "observedDistanceMeters": 4800,
             "ruleId": "shutoko-etc-ordinary-2026-10",
             "status": "priced",
             "tariffStatus": "priced"
@@ -322752,6 +322964,54 @@
         "routeLabel": "中央環状線",
         "rowLabel": "滝野川",
         "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin_kaitei_toll_rates.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 320,
+        "cell": "p25:row-c2-hirai-ohashi:column-c2-kosuge:base-etc:320yen:4.8km",
+        "columnLabel": "平井大橋",
+        "distanceLabel": "4.8km",
+        "distanceMeters": 4800,
+        "documentId": "shutoko-2025-04-od-fare-table",
+        "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+        "edition": "2025-04",
+        "entryRampId": "ramp:c2-outer:kosuge-entry",
+        "evidenceId": "evidence:2025-04:p25:c2-kosuge-hirai-ohashi",
+        "exitRampId": "ramp:c2-outer:hirai-ohashi-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 320,
+        "page": 25,
+        "reviewMethod": [
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-10-11T00:00:00Z",
+        "routeLabel": "中央環状線",
+        "rowLabel": "小菅",
+        "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf"
+      },
+      {
+        "calculatedBaseFareYen": 340,
+        "cell": "p25:row-c2-hirai-ohashi:column-c2-kosuge:base-etc:340yen:4.8km",
+        "columnLabel": "平井大橋",
+        "distanceLabel": "4.8km",
+        "distanceMeters": 4800,
+        "documentId": "shutoko-2026-10-od-fare-table",
+        "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+        "edition": "2026-10",
+        "entryRampId": "ramp:c2-outer:kosuge-entry",
+        "evidenceId": "evidence:2026-10:p25:c2-kosuge-hirai-ohashi",
+        "exitRampId": "ramp:c2-outer:hirai-ohashi-exit",
+        "fareVariant": "base_etc",
+        "ink": "black",
+        "observedBaseFareYen": 340,
+        "page": 25,
+        "reviewMethod": [
+          "pdf_text_layer"
+        ],
+        "reviewedAt": "2026-10-11T00:00:00Z",
+        "routeLabel": "中央環状線",
+        "rowLabel": "小菅",
+        "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin_kaitei_toll_rates.pdf"
       }
     ],
     "documents": [
@@ -322833,7 +323093,8 @@
         "assignment:c1-outer:kandabashi-takaracho",
         "assignment:c1-outer:kasumigaseki-daikancho",
         "assignment:c1-outer:ginza-shibakoen",
-        "assignment:c1-inner:kasumigaseki-shibakoen"
+        "assignment:c1-inner:kasumigaseki-shibakoen",
+        "assignment:c2-outer:kosuge-hirai-ohashi"
       ],
       "policy": "Version 3 assignments, price periods, and distance evidence are the tariff authority. verifiedOdPairs is a legacy compatibility projection and contains no deprecated Yoga or Takaido assignment.",
       "replaceAssignmentIds": []
@@ -323066,6 +323327,14 @@
         "effectiveTo": "2026-09-30T15:00:00Z",
         "entryRampId": "ramp:c2-inner:takinogawa-entry",
         "exitRampId": "ramp:c2-inner:nakano-chojabashi-exit"
+      },
+      {
+        "amountYen": 320,
+        "billingDistanceMeters": 4800,
+        "effectiveFrom": "2022-03-31T15:00:00Z",
+        "effectiveTo": "2026-09-30T15:00:00Z",
+        "entryRampId": "ramp:c2-outer:kosuge-entry",
+        "exitRampId": "ramp:c2-outer:hirai-ohashi-exit"
       }
     ],
     "version": 3

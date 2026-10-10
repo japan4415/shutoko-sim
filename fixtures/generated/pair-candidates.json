@@ -6,8 +6,8 @@
     "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
     "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
     "routeMembershipIndexSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
-    "billingPairAdjacencySha256": "7978ee1c890f05347aa7196e4d9ad49f4fd05f9964f9ecdac02af38109d54282",
-    "odTariffsSha256": "3405ed71d2c85994cc869edc652ee109d66235977118140e1ef00629170924f0"
+    "billingPairAdjacencySha256": "3264b3fd6e61bf2feee6a3c1f7b244b48f14a24e2ab61844fec511e1d5e553de",
+    "odTariffsSha256": "aa06c5e0e0e78d5344e05084ffb00d4ce1188b4ebd48b995ac68d5c585a3243f"
   },
   "relationCoverage": [
     {
@@ -596,9 +596,10 @@
         4256077
       ],
       "candidatePairIds": [
-        "bp:c2-outer:gotanda-hatsudai-minami"
+        "bp:c2-outer:gotanda-hatsudai-minami",
+        "bp:c2-outer:kosuge-hirai-ohashi"
       ],
-      "routePlanResolved": 1,
+      "routePlanResolved": 2,
       "routePlanUnresolved": 0,
       "status": "pass"
     },
@@ -2684,11 +2685,153 @@
       "promotionDecision": "eligible_for_review",
       "automaticSeedWrite": false,
       "rejectionReasons": []
+    },
+    {
+      "candidateId": "candidate:719a64642a8f3d3c8075fc658c4e81d7b57e1502f3e94d2e27c209f559ba1e8d",
+      "pairId": "bp:c2-outer:kosuge-hirai-ohashi",
+      "pairKind": "legacyRing",
+      "routeId": "C2",
+      "direction": "outer",
+      "entry": {
+        "rampId": "ramp:c2-outer:kosuge-entry",
+        "name": "小菅",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c2-outer:kosuge-entry",
+        "routeMembershipId": "route:C2:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c2-outer:hirai-ohashi-exit",
+        "name": "平井大橋",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c2-outer:hirai-ohashi-exit",
+        "routeMembershipId": "route:C2:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c2-outer:kosuge-hirai-ohashi",
+        "edgeIdsSha256": "7717e553045ddc47b4cd07d618a57306d4f804364e8c080451e874717a0fc1ff",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c2-outer:hirai-ohashi-exit:segment:0",
+          "binding:osm-ramp-binding:ramp:c2-outer:kosuge-entry:segment:0",
+          "relation:4256077:outer:split:2"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "2b68fe53a1a566c2b1e48105e8cb6f6913050b406865d04479e12cc025a24e87",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c2-outer:kosuge-entry:segment:0"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "cf8552bf27348d2e42c852f6aa540cf2ec6df612be5d47727029c411b4b884ca",
+            "sourceSegmentIds": [
+              "relation:4256077:outer:split:2"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "cf8552bf27348d2e42c852f6aa540cf2ec6df612be5d47727029c411b4b884ca",
+            "sourceSegmentIds": [
+              "relation:4256077:outer:split:2"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "d4fb4b19123bfcff925493bef3fb4f756f3df4bbf0b35d39d667de30a3e8db1d",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c2-outer:hirai-ohashi-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c2-outer:kosuge-hirai-ohashi",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c2-outer:kosuge-hirai-ohashi",
+        "billingDistanceMeters": 4800,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 320,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p25:c2-kosuge-hirai-ohashi",
+            "distanceEvidenceId": "evidence:2025-04:p25:c2-kosuge-hirai-ohashi"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 340,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p25:c2-kosuge-hirai-ohashi",
+            "distanceEvidenceId": "evidence:2026-10:p25:c2-kosuge-hirai-ohashi"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
     }
   ],
   "summary": {
-    "candidateTotal": 13,
-    "eligibleForReview": 12,
+    "candidateTotal": 14,
+    "eligibleForReview": 13,
     "hold": 1,
     "relationCoverage": {
       "relationTotal": 26,

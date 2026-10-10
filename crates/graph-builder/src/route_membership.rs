@@ -1830,19 +1830,28 @@ fn build_relation_member_paths(
                 break;
             }
             let Some(next) = successors.first().copied() else {
-                let has_external_successor = graph.edges.iter().any(|edge| {
-                    edge.kind == EdgeKind::Shutoko
-                        && edge.from == current_member.to_node_id
-                        && candidates.iter().any(|candidate| {
-                            candidate.member_index != current_member.member_index
-                                && !used_groups.contains(&candidate.member_index)
-                                && candidate.from_node_id == edge.to
-                        })
-                });
-                if has_external_successor {
+                // Name the place and the member way the relation would continue on,
+                // so an upstream OSM fix can be verified against the message.
+                let external_successor = graph
+                    .edges
+                    .iter()
+                    .filter(|edge| {
+                        edge.kind == EdgeKind::Shutoko && edge.from == current_member.to_node_id
+                    })
+                    .find_map(|edge| {
+                        candidates
+                            .iter()
+                            .find(|candidate| {
+                                candidate.member_index != current_member.member_index
+                                    && !used_groups.contains(&candidate.member_index)
+                                    && candidate.from_node_id == edge.to
+                            })
+                            .map(|candidate| (edge.id.clone(), candidate.way_id))
+                    });
+                if let Some((edge_id, way_id)) = external_successor {
                     return Err(RouteMembershipError::Relation(format!(
-                        "relation {relation_id} direction {direction} would traverse a way outside the relation after member {}",
-                        current_member.way_id
+                        "relation {relation_id} direction {direction} would traverse a way outside the relation after member {} at node {} via edge {} to member way {}",
+                        current_member.way_id, current_member.to_node_id, edge_id, way_id
                     )));
                 }
                 break;

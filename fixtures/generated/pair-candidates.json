@@ -7,7 +7,7 @@
     "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
     "routeMembershipIndexSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
     "billingPairAdjacencySha256": "1d8ee3abf8b49ef398ee9a39f80a80188c09a75d37a2d84ffcfd15818a98b44c",
-    "odTariffsSha256": "584234b8f58f25a69a3046a5c8211898f656c9ecee39599c7a7b3f6832b476ec"
+    "odTariffsSha256": "3d22257da7718da6ffd74feca03d3d9239027a23f6edb395b6161253f946d297"
   },
   "relationCoverage": [
     {
@@ -2524,9 +2524,9 @@
             "distanceEvidenceId": "evidence:2025-04:p25:c2-gotanda-hatsudai-minami"
           },
           {
-            "status": "pending_pdf_review",
-            "tariffStatus": "unpriced",
-            "amountYen": null,
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 370,
             "effectiveFrom": "2026-09-30T15:00:00Z",
             "effectiveTo": null,
             "ruleId": "shutoko-etc-ordinary-2026-10",

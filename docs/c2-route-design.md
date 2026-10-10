@@ -410,10 +410,13 @@ adjacency / od-tariffs に入れてフィクスチャまで再生成した。
   - graph の C2 外周 arc（`n:3387909571 → n:919617354`）は **134 辺 /
     5,749 m** で、billed 5.8 km と整合。
   - 初台南は 五反田 の次の出口（表で 富ヶ谷 は初台南のさらに 0.4 km 先）。
-- 2026-10 改定版（現行期間）の同じセルは**未確認**。公式 PDF は
-  `www.shutoko.jp` が HTTP 429（Vercel checkpoint）を返し、Wayback にも
-  スナップショットが無いため取得できない。`pendingEvidence`
-  （`pending_manual_pdf_review`）として記録し、価格は推測していない。
+- 2026-10 改定版（現行期間）の同じセルは **370 円 / 5.8 km**（改定版料金表
+  page 25、sha256 `1dd86cf7…`）。`www.shutoko.jp` は今も HTTP 429
+  （Vercel checkpoint）を返すため、以前のレビューで取得済みだった
+  `.cache/official-fare/ryoukin-kaitei_toll_rates.pdf`（sha256 が記録と一致）を
+  使ってテキスト層から読み直した。2026-10 ルールの式は 五反田 行の 7 セル
+  （820/1,270/1,920/370/1,800/610/750 円）をすべて再現し、距離列も 2025-04 版と
+  一致する。
 - 生成物: `all-real-v4` フィクスチャで **billing pair 12 件（legacy 10 +
   radial 2）**。C2 ペアは legacyRing、anchor `n:3387909571`、
   `anchorToExitEdgeIds` 141 辺、tariff 350 円 / 5,800 m、eligibility

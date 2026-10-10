@@ -297,7 +297,7 @@
       "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
       "routeMembershipIndexSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
       "billingPairAdjacencySha256": "1d8ee3abf8b49ef398ee9a39f80a80188c09a75d37a2d84ffcfd15818a98b44c",
-      "odTariffsSha256": "584234b8f58f25a69a3046a5c8211898f656c9ecee39599c7a7b3f6832b476ec"
+      "odTariffsSha256": "3d22257da7718da6ffd74feca03d3d9239027a23f6edb395b6161253f946d297"
     },
     "summary": {
       "candidateTotal": 12,
@@ -892,24 +892,24 @@
       "id": "bp:c2-outer:gotanda-hatsudai-minami",
       "source": "https://www.shutoko.jp/use/network/map/route-c2/gotanda/",
       "sourceDate": "2026-10-10",
-      "notes": "C2 outer 五反田入口 -> 初台南出口. Bindings are verified_bound (ways 805171060 / 381972983). Official 2025-04 ETC ordinary fare table page 25 row 五反田 column 初台南 = 350 yen / 5.8 km (sha256 dc2d80ee0c8f215f...). The C2 outer arc between the mainline attachments n:3387909571 -> n:919617354 is 134 edges / 5,749 m, matching the billed 5.8 km, and 初台南 is the first general exit after 五反田 (富ヶ谷 is a further 0.4 km). The 2026-10 revision cell is pending: the revised fare table returns HTTP 429 and has no archive snapshot."
+      "notes": "C2 outer 五反田入口 -> 初台南出口. Bindings are verified_bound (ways 805171060 / 381972983). Official 2025-04 ETC ordinary fare table page 25 row 五反田 column 初台南 = 350 yen / 5.8 km (sha256 dc2d80ee0c8f215f...). The C2 outer arc between the mainline attachments n:3387909571 -> n:919617354 is 134 edges / 5,749 m, matching the billed 5.8 km, and 初台南 is the first general exit after 五反田 (富ヶ谷 is a further 0.4 km). The 2026-10 revision bills 370 yen / 5.8 km on page 25 of the revised fare table (sha256 1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5), which the 2026-10 rule formula reproduces at 5,800 m."
     }
   ],
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "fc29e489191a0e19c9d4f2baa19d76afe04f845599aaf1058d5d15496fdf2309",
-      "byteLength": 7629066
+      "sha256": "32fdfaf21e60b873cd6769ad29bba775c4530bc3605b837be9247a786f5752ea",
+      "byteLength": 7629723
     },
     {
       "path": "od-tariffs.json",
-      "sha256": "584234b8f58f25a69a3046a5c8211898f656c9ecee39599c7a7b3f6832b476ec",
-      "byteLength": 52654
+      "sha256": "3d22257da7718da6ffd74feca03d3d9239027a23f6edb395b6161253f946d297",
+      "byteLength": 53153
     },
     {
       "path": "pair-candidates.json",
-      "sha256": "f5f94aae30ce56eb45f638193126f29731a35b55409cd60a05dd322dc9bd7f4a",
-      "byteLength": 81070
+      "sha256": "a765eecfb79f151cc303dbe3089f328b2a5724eb1d9a611c26ebd8f48c00e0af",
+      "byteLength": 81055
     },
     {
       "path": "ramps.json",

@@ -2394,7 +2394,7 @@
       ]
     },
     {
-      "candidateId": "candidate:b193b644d202988a0168f49c2d67d9d1817a438ea4e89aa87ae3a6cf0f0672fa",
+      "candidateId": "candidate:73e2f540e539d9ab9e5cde71a60381467452e621745434712b093addb08b972f",
       "pairId": "bp:c2-outer:gotanda-hatsudai-minami",
       "pairKind": "legacyRing",
       "routeId": "C2",
@@ -2423,8 +2423,8 @@
       },
       "routePlan": {
         "routePlanId": "route-plan:bp:c2-outer:gotanda-hatsudai-minami",
-        "edgeIdsSha256": "f6d14abce033a42314ebf07941ec1863164ed4b8cd59e9dfa13786c5140cc26f",
-        "loopValidationStatus": "unresolved",
+        "edgeIdsSha256": "51be5c85e8770799bcb2bcf36f3ac4d1a348e74912dcfe8ecd0ad59d9ef03fb3",
+        "loopValidationStatus": "declared_route_validated",
         "sourceSegmentIds": [
           "binding:osm-ramp-binding:ramp:c2-outer:gotanda-entry:segment:0",
           "binding:osm-ramp-binding:ramp:c2-outer:hatsudai-minami-exit:segment:0",
@@ -2443,9 +2443,13 @@
           },
           {
             "role": "mandatory_lap",
-            "status": "unresolved",
-            "edgeIdsSha256": null,
-            "sourceSegmentIds": []
+            "status": "passed",
+            "edgeIdsSha256": "a5dcd6ef90ee479b6e3a39def414551e34ca624b9a3d0d5a12ce22a71c512fdc",
+            "sourceSegmentIds": [
+              "relation:4256077:outer:split:0",
+              "relation:4256077:outer:split:3",
+              "relation:4256077:outer:split:5"
+            ]
           },
           {
             "role": "return_corridor",
@@ -2485,10 +2489,8 @@
           "reasonCodes": []
         },
         "mandatoryLap": {
-          "status": "failed",
-          "reasonCodes": [
-            "PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS"
-          ]
+          "status": "passed",
+          "reasonCodes": []
         },
         "entryBinding": {
           "status": "passed",
@@ -2504,9 +2506,9 @@
         }
       },
       "productEligibility": {
-        "status": "unverified",
+        "status": "verified_one_section_ahead",
         "officialAdjacencyEvidenceId": "adjacency:official-route-map:c2-outer:gotanda-hatsudai-minami",
-        "oneSectionAheadVerified": false
+        "oneSectionAheadVerified": true
       },
       "tariff": {
         "status": "priced",
@@ -2535,18 +2537,15 @@
           }
         ]
       },
-      "promotionDecision": "hold",
+      "promotionDecision": "eligible_for_review",
       "automaticSeedWrite": false,
-      "rejectionReasons": [
-        "PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS",
-        "ROUTE_PLAN_ROLES_UNRESOLVED"
-      ]
+      "rejectionReasons": []
     }
   ],
   "summary": {
     "candidateTotal": 12,
-    "eligibleForReview": 10,
-    "hold": 2,
+    "eligibleForReview": 11,
+    "hold": 1,
     "relationCoverage": {
       "relationTotal": 26,
       "relationExpanded": 11,

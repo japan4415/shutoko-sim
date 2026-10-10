@@ -484,10 +484,12 @@ fn all_real_v4_pair_derivation_covers_every_route_relation_and_membership() {
     }
     let summary = &candidates["summary"];
     // 11 legacy pairs (8 original C1 + Ginza-Shintomicho + C2
-    // Gotanda-Hatsudai) plus the 2 radial pairs produce 12 candidates.
+    // Gotanda-Hatsudai) plus the 2 radial pairs produce 12 candidates, and the
+    // C2 pair resolves its mandatory lap across the split runs, so only the
+    // conditional Shibakoen pair stays on hold.
     assert_eq!(summary["candidateTotal"], 12);
-    assert_eq!(summary["eligibleForReview"], 10);
-    assert_eq!(summary["hold"], 2);
+    assert_eq!(summary["eligibleForReview"], 11);
+    assert_eq!(summary["hold"], 1);
     let _ = fs::remove_dir_all(dir);
 }
 

@@ -301,8 +301,8 @@
     },
     "summary": {
       "candidateTotal": 12,
-      "eligibleForReview": 10,
-      "hold": 2,
+      "eligibleForReview": 11,
+      "hold": 1,
       "relationCoverage": {
         "relationTotal": 26,
         "relationExpanded": 11,
@@ -908,8 +908,8 @@
     },
     {
       "path": "pair-candidates.json",
-      "sha256": "a765eecfb79f151cc303dbe3089f328b2a5724eb1d9a611c26ebd8f48c00e0af",
-      "byteLength": 81055
+      "sha256": "ea737e7dfae291a541ce81fc390b650a55c82fe28d440360d0f4aa00976a230e",
+      "byteLength": 81144
     },
     {
       "path": "ramps.json",

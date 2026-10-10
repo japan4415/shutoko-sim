@@ -446,13 +446,31 @@ adjacency / od-tariffs に入れてフィクスチャまで再生成した。
    リリースは C2 を展開する必要がある（フィクスチャ生成は `all-real-v4` なので
    影響なし。テスト側の legacy CLI 実行に `--all-route-relations` を足した）。
 
-**残る不整合（fail-closed 側に倒れている）**: 導出レポート
-（`pair-candidates.json`）では C2 ペアの `mandatoryLap` ゲートが
-`PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS` で **hold** のままである
-（候補 12 件 = eligible 10 / hold 2）。graph 側の legacy 検証は通るが、
-run をまたぐ lap を導出側はまだ「一意な mainline 列」として承認しない。
-段 4〜5 の arc 生成（`explicitArc`）と multi-segment 対応を導出側の
-mandatoryLap ゲートにも通すのが次の作業である。
+**段7（導出レポートの mandatory lap を分割 membership でも解決する）**
+
+導出レポート（`pair-candidates.json`）のゲート 5 は
+`docs/data-pipeline.md` で「M→B の通常長弧が `lapCount=1` で構成される」と
+定義されているが、実装 `relation_mainline_lap` は「relationMainline セグメント
+がちょうど 1 本の巡回列」を要求していたため、run に分割された C2 では
+`PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS` で hold になっていた。
+
+ゲート定義どおりに直した。環状合成できた membership（C1）は従来どおり
+initial Edge から巡回列を回して境界（first の from / last の to が anchor）を
+検証する。分割された membership（C2）は、initial Edge から exit の分流点へ
+向かって「そのノードから分流点へ到達できる後続」が各ノードで一意な場合だけ
+その弧を mandatory lap として採用する（`fragmented_relation_mainline_lap`）。
+一意でなければ従来どおり fail-closed で hold に落ちる。
+
+結果:
+
+- C2 ペアの mandatory lap は **134 辺 / sha256
+  `a5dcd6ef90ee479b6e3a39def414551e34ca624b9a3d0d5a12ce22a71c512fdc`**
+  （`--emit-lap-arc` が出す arc と一致）。`sourceSegmentIds` は通過した 3 本の
+  run（`relation:4256077:outer:split:0|3|5`）で、ゲートは `passed`。
+- 候補 12 件 = **eligible 11 / hold 1**（残る hold は芝公園入口外回りの
+  `access:conditional` のみ）。
+- C1 と radial の 11 候補は lap の status・hash・source segment が変更前と
+  **完全に一致**（この緩和は分割 membership のときだけ効く）。
 
 - **未対応**: `explicitArc` は 1 本の arc 内での同一エッジ再訪をまだ許さない
   （`validate_ordered_edges` と `validate_resolved_route_plan` が単純列を前提に

@@ -807,7 +807,7 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             .iter()
             .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        8
+        9
     );
     assert_eq!(
         g.billing_pairs
@@ -821,15 +821,23 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
         .iter()
         .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
     {
-        assert_eq!(
-            pair.prices
-                .iter()
-                .map(|price| price.amount_yen)
-                .collect::<Vec<_>>(),
-            vec![300, 300],
-            "pair {} prices must match the reviewed tariff records",
-            pair.id
-        );
+        let amounts = pair
+            .prices
+            .iter()
+            .map(|price| price.amount_yen)
+            .collect::<Vec<_>>();
+        if pair.id == "bp:c2-outer:gotanda-hatsudai-minami" {
+            // 2026-10 改定版のセルは人手 PDF レビュー待ちなので、legacy 投影は
+            // レビュー済みの 2022-04 期間だけを持つ。
+            assert_eq!(amounts, vec![350], "C2 pair prices");
+        } else {
+            assert_eq!(
+                amounts,
+                vec![300, 300],
+                "pair {} prices must match the reviewed tariff records",
+                pair.id
+            );
+        }
         assert!(!pair.entry_to_anchor_edge_ids.is_empty());
         assert!(!pair.anchor_to_exit_edge_ids.is_empty());
     }
@@ -1794,12 +1802,17 @@ fn tokyo_wide_narrow_window_reports_nearest_tier_time_window() {
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn meguro_station_all_real_v4_end_to_end_contract() {
     let graph = real_graph();
-    // 9 legacy pairs since the Ginza-Shintomicho registration (Issue #34).
-    assert_eq!(graph.billing_pairs.len(), 9);
-    assert!(graph
-        .billing_pairs
-        .iter()
-        .all(|pair| pair.id.starts_with("bp:c1-")));
+    // 10 legacy pairs: 9 C1 pairs since the Ginza-Shintomicho registration
+    // (Issue #34) plus the C2 Gotanda-Hatsudai pair.
+    assert_eq!(graph.billing_pairs.len(), 10);
+    assert_eq!(
+        graph
+            .billing_pairs
+            .iter()
+            .filter(|pair| pair.id.starts_with("bp:c1-"))
+            .count(),
+        9
+    );
 
     let request = SearchRequest {
         request_id: "req-meguro-all-real-v4-contract".into(),
@@ -1859,10 +1872,11 @@ fn meguro_station_all_real_v4_end_to_end_contract() {
     }
 
     let generated_graph: Value = serde_json::from_str(real_graph_str()).unwrap();
-    // 8 original C1 pairs + Ginza-Shintomicho (Issue #34) + 2 radial pairs.
+    // 8 original C1 pairs + Ginza-Shintomicho (Issue #34) + the C2
+    // Gotanda-Hatsudai pair + 2 radial pairs.
     assert_eq!(
         generated_graph["billingPairs"].as_array().unwrap().len(),
-        11
+        12
     );
     assert_eq!(
         generated_graph["billingPairs"]

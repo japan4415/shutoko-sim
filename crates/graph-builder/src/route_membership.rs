@@ -6131,9 +6131,7 @@ fn min_cost_carriageway_flow(
                 }
             }
         }
-        if previous[sink_index].is_none() {
-            return None;
-        }
+        previous[sink_index]?;
         for (node, value) in distance.iter().enumerate() {
             if *value < i64::MAX {
                 potential[node] += *value;

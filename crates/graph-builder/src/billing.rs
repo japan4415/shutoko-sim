@@ -1594,6 +1594,66 @@ fn legacy_seed(
     })
 }
 
+/// Build the seed-facing diagnostic endpoint of one bound ramp.
+///
+/// A declarative radial pair has to carry its own endpoint segments, which the
+/// builder otherwise only derives at runtime. This emits them from the same
+/// inventory + binding evidence the derivation uses, so a new pair can be
+/// authored without hand-transcribing the ramp geometry.
+pub fn diagnostic_endpoint_for_ramp(
+    graph: &Graph,
+    inventory: &RampInventoryFile,
+    bindings: &OsmRampBindingsFile,
+    ramp_id: &str,
+) -> Result<DiagnosticEndpoint, PairDerivationError> {
+    let item = inventory
+        .ramps
+        .iter()
+        .find(|item| item.ramp_id == ramp_id)
+        .ok_or_else(|| {
+            PairDerivationError::new(
+                "RAMP_ENDPOINT_UNKNOWN_RAMP",
+                format!("{ramp_id} is absent from the ramp inventory"),
+            )
+        })?;
+    let bound = bound_ramp_evidence_from_inventory(graph, inventory, bindings)
+        .map_err(|error| {
+            PairDerivationError::new("RAMP_ENDPOINT_BINDING_FAILED", error.to_string())
+        })?
+        .into_iter()
+        .find(|evidence| evidence.ramp_id == ramp_id)
+        .ok_or_else(|| {
+            PairDerivationError::new(
+                "RAMP_ENDPOINT_UNBOUND",
+                format!("{ramp_id} has no bound ramp evidence"),
+            )
+        })?;
+    let suffix = match item.kind {
+        crate::model::RampKind::GeneralEntry | crate::model::RampKind::BoundaryIn => "入口",
+        crate::model::RampKind::GeneralExit | crate::model::RampKind::BoundaryOut => "出口",
+    };
+    let support_state = match item.support_state.as_deref() {
+        Some("verified_bound") => EndpointSupportState::VerifiedBound,
+        Some("unsupported") => EndpointSupportState::Unsupported,
+        _ => EndpointSupportState::Unresolved,
+    };
+    Ok(DiagnosticEndpoint {
+        ramp_id: bound.ramp_id.clone(),
+        name: format!("{}{}", item.facility_name, suffix),
+        support_state,
+        directed_segments: vec![DirectedEndpointSegment {
+            segment_id: format!("binding:{}:candidate:0", bound.ramp_id),
+            osm_way_ids: bound.osm_way_ids.clone(),
+            osm_node_ids: bound.osm_node_ids.clone(),
+            edge_ids: bound.edge_ids.clone(),
+            from_node_id: bound.from_node_id.clone(),
+            to_node_id: bound.to_node_id.clone(),
+            edge_ids_sha256: bound.edge_ids_sha256.clone(),
+        }],
+        binding_candidates: Vec::new(),
+    })
+}
+
 fn radial_seed(
     adjacency: &BillingPairAdjacency,
     entry: &ResolvedEndpoint,

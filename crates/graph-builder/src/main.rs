@@ -8,8 +8,9 @@ use shutoko_graph_builder::{
     bind_ramps_to_graph, bound_ramp_evidence_from_inventory, build_manifest,
     build_route_membership_indices_with_coverage, build_topology_with_report,
     carriageway_lap_boundaries, default_route_relation_ids,
-    derive_pair_candidates_from_source_bytes, generate_diagnostic_radial_route_plans,
-    generate_explicit_lap_arc, graph_schema_v4_to_deterministic_json_with_radial_and_catalog,
+    derive_pair_candidates_from_source_bytes, diagnostic_endpoint_for_ramp,
+    generate_diagnostic_radial_route_plans, generate_explicit_lap_arc,
+    graph_schema_v4_to_deterministic_json_with_radial_and_catalog,
     graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3,
     manifest_to_deterministic_json, pair_derivation_report_to_deterministic_json,
     parse_billing_pairs_seed, promote_verified_radial_pair, ramps_artifact_to_deterministic_json,
@@ -60,6 +61,9 @@ OPTIONS:
     --emit-lap-boundaries <membershipId>
                             Print the relationMainline chain boundaries of one carriageway
                             membership as JSON and exit (schema 4 only)
+    --emit-ramp-endpoint <rampId>
+                            Print the seed-facing endpoint segments of one bound ramp as JSON
+                            and exit (schema 4 only)
     --emit-lap-arc <membershipId>,<mergeNodeId>,<branchNodeId>
                             Print the explicit M-to-B lap arc of one carriageway membership as
                             JSON and exit (schema 4 only)
@@ -192,6 +196,7 @@ struct CliArgs {
     unverified_sections: Vec<String>,
     lap_boundaries_query: Option<String>,
     lap_arc_query: Option<String>,
+    ramp_endpoint_query: Option<String>,
     strict: bool,
 }
 
@@ -214,6 +219,7 @@ fn parse_args() -> Result<CliArgs, String> {
     let mut all_route_relations = false;
     let mut lap_boundaries_query: Option<String> = None;
     let mut lap_arc_query: Option<String> = None;
+    let mut ramp_endpoint_query: Option<String> = None;
     let mut release_id = "default-release".to_string();
     let mut vehicle_profile = "passenger-car-etc".to_string();
     let mut built_at =
@@ -323,6 +329,13 @@ fn parse_args() -> Result<CliArgs, String> {
                 }
                 lap_arc_query = Some(raw_args[i].clone());
             }
+            "--emit-ramp-endpoint" => {
+                i += 1;
+                if i >= raw_args.len() {
+                    return Err("--emit-ramp-endpoint requires a ramp id".into());
+                }
+                ramp_endpoint_query = Some(raw_args[i].clone());
+            }
             "--release-id" => {
                 i += 1;
                 if i >= raw_args.len() {
@@ -418,6 +431,7 @@ fn parse_args() -> Result<CliArgs, String> {
         unverified_sections,
         lap_boundaries_query,
         lap_arc_query,
+        ramp_endpoint_query,
         strict,
     })
 }
@@ -849,6 +863,26 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let arc =
             generate_explicit_lap_arc(&graph, &route_memberships, parts[0], parts[1], parts[2])?;
         print!("{}", serde_json::to_string_pretty(&arc)?);
+        return Ok(());
+    }
+    if let Some(ramp_id) = args.ramp_endpoint_query.as_deref() {
+        if args.graph_schema != 4 {
+            return Err("--emit-ramp-endpoint requires --graph-schema 4".into());
+        }
+        let inventory_path = args
+            .inventory_path
+            .as_ref()
+            .ok_or("--emit-ramp-endpoint requires --inventory")?;
+        let bindings_path = args
+            .bindings_path
+            .as_ref()
+            .ok_or("--emit-ramp-endpoint requires --bindings")?;
+        let inventory: RampInventoryFile =
+            serde_json::from_str(&fs::read_to_string(inventory_path)?)?;
+        let bindings: OsmRampBindingsFile =
+            serde_json::from_str(&fs::read_to_string(bindings_path)?)?;
+        let endpoint = diagnostic_endpoint_for_ramp(&graph, &inventory, &bindings, ramp_id)?;
+        print!("{}", serde_json::to_string_pretty(&endpoint)?);
         return Ok(());
     }
     if args.graph_schema == 4

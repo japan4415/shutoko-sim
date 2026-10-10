@@ -1,11 +1,11 @@
 use serde_json::{json, Value};
 use shutoko_graph_builder::{
     bound_ramp_evidence_from_inventory, build_route_membership_indices, build_topology,
-    build_topology_with_report, carriageway_lap_boundaries, generate_explicit_lap_arc,
-    generate_route_plan_lap_v1, haversine_distance_meters, ordered_edge_ids_sha256,
-    route_memberships_sha256, to_deterministic_json, EdgeKind, Graph, OverpassResponse,
-    RouteMembershipBuildOptions, RouteMembershipIndex, TopologyConfig, LOCAL_SPEED_KMH,
-    RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
+    build_topology_with_report, carriageway_lap_boundaries, diagnostic_endpoint_for_ramp,
+    generate_explicit_lap_arc, generate_route_plan_lap_v1, haversine_distance_meters,
+    ordered_edge_ids_sha256, route_memberships_sha256, to_deterministic_json, EdgeKind,
+    EndpointSupportState, Graph, OverpassResponse, RouteMembershipBuildOptions,
+    RouteMembershipIndex, TopologyConfig, LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
 };
 use std::collections::HashMap;
 
@@ -2105,6 +2105,19 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
         });
         assert!(!arc.edge_ids.is_empty());
     }
+
+    // The seed-facing endpoint emitter reproduces the verified 五反田 binding, so
+    // a C2 pair can be authored without hand-transcribing the ramp geometry.
+    let endpoint =
+        diagnostic_endpoint_for_ramp(&graph, &inventory, &bindings, "ramp:c2-outer:gotanda-entry")
+            .unwrap();
+    assert_eq!(endpoint.name, "五反田入口");
+    assert_eq!(endpoint.support_state, EndpointSupportState::VerifiedBound);
+    assert_eq!(endpoint.directed_segments.len(), 1);
+    assert_eq!(
+        endpoint.directed_segments[0].edge_ids,
+        vec!["e:w805171060:0:f".to_string()]
+    );
 
     // C1 regression: the role-derived inner / outer memberships stay intact.
     let c1_relation_ids = Some(vec![4256008]);

@@ -391,10 +391,59 @@ run エッジの分だけずれる。
 - **残る作業は pair への記入**: C2 料金ペアはまだ seed に無いので、ペアを追加する
   時点で上の arc を `explicitArc` に記入する。外周の 3 本と内周の 2 本はそのまま
   使える。
+
+**段6（C2 ペア authoring の検証）: 料金根拠は取れたが membership id 衝突で止まる**
+
+実在の C2 OD を 1 件選び、公式料金表から根拠を取って pair を組み立てた。
+
+- 選んだ OD: **五反田入口 → 初台南出口（C2 外周）**。両方とも
+  `data/osm-ramp-bindings.json` で `verified_bound`（way 805171060 / 381972983）。
+- 料金根拠: 公式「首都高 料金表」2025-04 版 PDF（sha256
+  `dc2d80ee…`、リポジトリの `documents[0]` と一致）**page 25（`料金・距離表`、
+  行=五反田・列=初台南）= 350 円 / 5.8 km**（ETC 普通車基本料金）。
+  PDF は 429 で直接取得できないためテキスト化プロキシ経由で取得し、表の
+  グリッド（`extract_tables`）で行・列を確認した。
+- 三重の整合確認:
+  - 2022-04 ルールの式で 5,800 m を計算すると 350 円（58 unit × 2.952 円
+    + 150 円 → ×1.1 → 10 円丸め）。表の 350 円と一致。
+  - graph の C2 外周 arc（`n:3387909571 → n:919617354`）は **134 辺 /
+    5,749 m** で、billed 5.8 km と整合。
+  - 初台南は 五反田 の次の出口（表で 富ヶ谷 は初台南のさらに 0.4 km 先）。
+- 2026-10 改定版（現行期間）の同じセルは**未確認**。公式 PDF は
+  `www.shutoko.jp` が HTTP 429（Vercel checkpoint）を返し、Wayback にも
+  スナップショットが無いため取得できない。`pendingEvidence`
+  （`pending_manual_pdf_review`）として記録する形が schema 上は可能。
+
+このデータを seed / adjacency / od-tariffs に入れて `--release-id all-real-v4` で
+ビルドすると **pair は生成できた**（legacyRing、anchor `n:3387909571`、
+`anchorToExitEdgeIds` 141 辺、tariff 350 円 / 5,800 m、eligibility
+verified_one_section_ahead）。
+
+しかし `--release-id all-real-test`（legacy 経路）では
+`RELATION_MAINLINE_NOT_UNIQUE` で落ちる。原因は **membership id の衝突**で、
+`build_bound_ramp_memberships` が bound ramp ごとに
+`route:{route}:{direction}`（= `route:C2:outer`）という **車線 membership と
+同じ id** を作るため、legacy 検証の `route_memberships.find(membership_id)` が
+ramp だけの membership（12 個の BoundRamp セグメント・relationMainline 0 本）を
+先に拾ってしまう。C1 では車線 membership と ramp membership が同じ index に
+merge されるため表面化しない。C2 で merge されないのは、C2 の車線 membership が
+`carriageway_memberships_for_relation` から別 index として追加されるためである。
+
+**したがって次の一手は membership の同一性の整理**である。具体的には
+(a) bound ramp membership に一意な id（例 `route:{route}:{direction}:ramp:{ramp_id}`）
+を付けて車線 membership と分離する、(b) merge 規則を C2 でも車線 membership を
+含めるように直す、(c) legacy 検証で relationMainline を持つ index を優先する、
+のいずれか。C1 の既存 id を変える (a) は影響が広いので、(c) から入るのが
+小さく、続けて (b) で構造を揃えるのが妥当である。
+
 - **未対応**: `explicitArc` は 1 本の arc 内での同一エッジ再訪をまだ許さない
   （`validate_ordered_edges` と `validate_resolved_route_plan` が単純列を前提に
   している）。「往復を含む明示エッジ列」が必要になった時点で、lap 専用の
   検証（`validate_ordered_edge_sequence_allowing_repeats` の適用）に切り替える。
+- **authoring 用ツール（実装済み）**: seed に貼る値は CLI で生成できる。
+  `--emit-lap-boundaries <membershipId>`、`--emit-lap-arc
+  <membershipId>,<M>,<B>`、`--emit-ramp-endpoint <rampId>`（いずれも
+  `--graph-schema 4 --inventory … --bindings …` と併用、出力は JSON 単体）。
 - 併せて **案 (a)（OSM 上流修正）** を調査項目として残す: relation 4256077 に
   欠落メンバーを補い、内周・外周が閉じるようにする。C1 は同じ graph で閉じて
   いるので、relation 編集で解決する見込みがある。

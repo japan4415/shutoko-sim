@@ -41,7 +41,7 @@ fn catalog_json() -> String {
 fn reads_the_reviewed_tariff_v3_catalog() {
     let catalog = read_tariff_v3(&catalog_json()).unwrap();
     assert_eq!(catalog.version, 3);
-    assert_eq!(catalog.assignments.len(), 10);
+    assert_eq!(catalog.assignments.len(), 11);
     assert_eq!(catalog.tariff_rules.len(), 2);
 }
 

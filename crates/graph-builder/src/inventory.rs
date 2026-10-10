@@ -4054,6 +4054,15 @@ mod tests {
                 790,
                 "p04:row-2-meguro:column-2-tengenji:base-etc:790yen:19.4km",
             ),
+            (
+                "c2-outer:gotanda-hatsudai-minami",
+                25,
+                "五反田",
+                "初台南",
+                5_800,
+                350,
+                "p25:row-c2-gotanda:column-c2-hatsudai-minami:base-etc:350yen:5.8km",
+            ),
         ];
         assert_eq!(tariffs.assignments.len(), expected.len());
         for (od_key, page, row, column, distance_meters, amount_yen, cell) in expected {
@@ -4113,7 +4122,18 @@ mod tests {
             ("c1-inner:ginza-shintomicho", 400, 300),
             ("2:meguro-tengenji", 19_400, 860),
         ];
-        assert_eq!(revision_expected.len(), tariffs.assignments.len());
+        // A pending 2026-10 PDF review legitimately carries no value for that
+        // rule, so the golden table covers the priced assignments only.
+        let priced_revision_assignments = tariffs
+            .assignments
+            .iter()
+            .filter(|assignment| {
+                assignment.prices.iter().any(|price| {
+                    price.rule_id == "shutoko-etc-ordinary-2026-10" && price.status == "priced"
+                })
+            })
+            .count();
+        assert_eq!(revision_expected.len(), priced_revision_assignments);
         for (od_key, distance_meters, amount_yen) in revision_expected {
             let assignment = tariffs
                 .assignments

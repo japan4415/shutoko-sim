@@ -216,10 +216,11 @@ fn pair_derivation_reports_every_membership_and_route_relation() {
 
     assert_eq!(report.schema_version, PAIR_DERIVATION_REPORT_SCHEMA_VERSION);
     assert_eq!(report.rule, PAIR_DERIVATION_RULE);
-    assert_eq!(report.summary.candidate_total, 11);
-    // 10 legacy pairs are eligible after the Ginza-Shintomicho registration.
+    assert_eq!(report.summary.candidate_total, 12);
+    // 10 legacy pairs are eligible after the Ginza-Shintomicho registration; the
+    // C2 Gotanda-Hatsudai pair is held on its cross-run mandatory lap.
     assert_eq!(report.summary.eligible_for_review, 10);
-    assert_eq!(report.summary.hold, 1);
+    assert_eq!(report.summary.hold, 2);
 
     // Every expanded membership has a manifest record, including the ones that
     // no candidate pair references.

@@ -769,9 +769,15 @@ fn relation_segments_match_required(
     segments: &[&RouteMembershipSegment],
     required: &[&str],
 ) -> bool {
-    let [segment] = segments else {
-        return false;
-    };
+    // A composed ring carries one cyclic relationMainline segment, but a
+    // fragmented ring (C2) keeps its runs as separate segments. Both are valid
+    // as long as one segment holds the whole required mainline edge sequence.
+    segments
+        .iter()
+        .any(|segment| segment_matches_required(segment, required))
+}
+
+fn segment_matches_required(segment: &RouteMembershipSegment, required: &[&str]) -> bool {
     let segment_len = segment.ordered_edge_ids.len();
     let positions = segment
         .ordered_edge_ids

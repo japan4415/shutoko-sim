@@ -1,10 +1,11 @@
 use serde_json::{json, Value};
 use shutoko_graph_builder::{
     bound_ramp_evidence_from_inventory, build_route_membership_indices, build_topology,
-    build_topology_with_report, generate_route_plan_lap_v1, haversine_distance_meters,
-    ordered_edge_ids_sha256, route_memberships_sha256, to_deterministic_json, EdgeKind, Graph,
-    OverpassResponse, RouteMembershipBuildOptions, RouteMembershipIndex, TopologyConfig,
-    LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
+    build_topology_with_report, carriageway_lap_boundaries, diagnostic_endpoint_for_ramp,
+    generate_explicit_lap_arc, generate_route_plan_lap_v1, haversine_distance_meters,
+    ordered_edge_ids_sha256, route_memberships_sha256, to_deterministic_json, EdgeKind,
+    EndpointSupportState, Graph, OverpassResponse, RouteMembershipBuildOptions,
+    RouteMembershipIndex, TopologyConfig, LOCAL_SPEED_KMH, RAMP_SPEED_KMH, SHUTOKO_SPEED_KMH,
 };
 use std::collections::HashMap;
 
@@ -2066,7 +2067,57 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
                 .is_some_and(|runs| !runs.is_empty()),
             "{direction} runs stay available for coverage reporting"
         );
+
+        // The fragmented carriageway still yields explicit lap arcs: a pair can
+        // declare the chain between one of its starts and a reachable end
+        // instead of relying on ring composition.
+        let membership_id = format!("route:C2:{direction}");
+        let boundaries =
+            carriageway_lap_boundaries(&graph, &built.route_memberships, &membership_id).unwrap();
+        assert!(
+            boundaries.start_node_ids.len() > 1,
+            "{membership_id} must stay fragmented: {boundaries:?}"
+        );
+        let mut generated = None;
+        for start in &boundaries.start_node_ids {
+            for end in &boundaries.end_node_ids {
+                if let Ok(arc) = generate_explicit_lap_arc(
+                    &graph,
+                    &built.route_memberships,
+                    &membership_id,
+                    start,
+                    end,
+                ) {
+                    assert_eq!(
+                        arc.edge_ids_sha256,
+                        ordered_edge_ids_sha256(&arc.edge_ids).unwrap()
+                    );
+                    generated = Some(arc);
+                    break;
+                }
+            }
+            if generated.is_some() {
+                break;
+            }
+        }
+        let arc = generated.unwrap_or_else(|| {
+            panic!("{membership_id} must expose at least one explicit lap arc: {boundaries:?}")
+        });
+        assert!(!arc.edge_ids.is_empty());
     }
+
+    // The seed-facing endpoint emitter reproduces the verified 五反田 binding, so
+    // a C2 pair can be authored without hand-transcribing the ramp geometry.
+    let endpoint =
+        diagnostic_endpoint_for_ramp(&graph, &inventory, &bindings, "ramp:c2-outer:gotanda-entry")
+            .unwrap();
+    assert_eq!(endpoint.name, "五反田入口");
+    assert_eq!(endpoint.support_state, EndpointSupportState::VerifiedBound);
+    assert_eq!(endpoint.directed_segments.len(), 1);
+    assert_eq!(
+        endpoint.directed_segments[0].edge_ids,
+        vec!["e:w805171060:0:f".to_string()]
+    );
 
     // C1 regression: the role-derived inner / outer memberships stay intact.
     let c1_relation_ids = Some(vec![4256008]);
@@ -3727,8 +3778,8 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
         .collect();
     assert_eq!(
         legacy_pairs.len(),
-        9,
-        "seed must retain exactly 9 legacy billing pairs (Issue #34 added the inner Ginza-Shintomicho pair)"
+        10,
+        "seed must retain exactly 10 legacy billing pairs (Issue #34 added the inner Ginza-Shintomicho pair, C2 the Gotanda-Hatsudai pair)"
     );
 
     let verified_pair_ids = [
@@ -3772,8 +3823,8 @@ fn test_billing_pair_seed_status_and_output_match_full_network() {
     let graph = generated_legacy_graph();
     assert_eq!(
         graph.billing_pairs.len(),
-        9,
-        "graph.json must retain all 9 audited billing pairs (8 + Issue #34)"
+        10,
+        "graph.json must retain all 10 audited billing pairs (8 + Issue #34 + C2 Gotanda-Hatsudai)"
     );
 
     for expected_id in &verified_pair_ids {
@@ -3853,7 +3904,7 @@ fn test_node_coords_edge_names_and_billing_pair_names_propagation() {
     }
 
     // 3. Billing pair entryName and exitName propagation from seed
-    assert_eq!(legacy_pairs.len(), 9);
+    assert_eq!(legacy_pairs.len(), 10);
     for seed_pair in &legacy_pairs {
         let graph_pair = graph
             .billing_pairs
@@ -4448,6 +4499,7 @@ fn test_cli_with_full_fixtures() {
             bin_data_path.to_str().unwrap(),
             "--tariffs",
             tar_path.to_str().unwrap(),
+            "--all-route-relations",
             "--out-dir",
             out_dir.to_str().unwrap(),
             "--release-id",
@@ -4705,7 +4757,7 @@ fn test_cli_schema2_retains_pair_specific_radial_rejections() {
         serde_json::from_str(&std::fs::read_to_string(out_dir.join("graph.json")).unwrap())
             .unwrap();
     assert_eq!(graph["schemaVersion"], 2);
-    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 9);
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 10);
     let manifest: Value =
         serde_json::from_str(&std::fs::read_to_string(out_dir.join("manifest.json")).unwrap())
             .unwrap();
@@ -4757,6 +4809,7 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
             bin_data_path.to_str().unwrap(),
             "--tariffs",
             tar_path.to_str().unwrap(),
+            "--all-route-relations",
             "--out-dir",
             out_dir.to_str().unwrap(),
             "--release-id",
@@ -4792,7 +4845,7 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
         .collect::<Vec<_>>();
     assert!(diagnostic_only.is_empty());
     assert_eq!(graph_json["schemaVersion"], 4);
-    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 11);
+    assert_eq!(graph_json["billingPairs"].as_array().unwrap().len(), 12);
     let legacy_pairs = graph_json["billingPairs"]
         .as_array()
         .unwrap()
@@ -4805,7 +4858,7 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
         .iter()
         .filter(|pair| pair["pairKind"] == "radialReturn")
         .collect::<Vec<_>>();
-    assert_eq!(legacy_pairs.len(), 9);
+    assert_eq!(legacy_pairs.len(), 10);
     assert_eq!(radial_pairs.len(), 2);
     for pair in legacy_pairs {
         assert_eq!(pair["anchor"]["anchorKind"], "sameNode");
@@ -4837,7 +4890,7 @@ fn test_cli_schema4_real_snapshot_preserves_route_membership_contracts() {
     }
     let prepared = shutoko_routing_core::prepare_json(&graph_raw, "{}").unwrap();
     assert_eq!(prepared.graph().schema_version, 4);
-    assert_eq!(prepared.graph().billing_pairs.len(), 9);
+    assert_eq!(prepared.graph().billing_pairs.len(), 10);
     assert_eq!(prepared.radial_billing_pairs().len(), 2);
     let edge_ids = graph_json["edges"]
         .as_array()

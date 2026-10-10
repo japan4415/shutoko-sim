@@ -5,7 +5,7 @@ use crate::model::{Edge, EdgeKind, Graph, Node, OdTariff, Ramp, RampKind};
 use crate::osm::{OsmElement, OsmMember, OverpassResponse};
 use crate::seed::{
     DiagnosticEndpoint, DiagnosticRoutePlan, DirectedEndpointSegment, DirectedJunctionAnchor,
-    EndpointSupportState, MandatoryLap, RadialReturnBillingPairSeed,
+    EndpointSupportState, ExplicitLapArc, MandatoryLap, RadialReturnBillingPairSeed,
 };
 use crate::validate::contains_forbidden_transition;
 use serde::{Deserialize, Serialize};
@@ -997,6 +997,13 @@ pub fn derive_carriageway_direction_split(
     if undecided.iter().any(|value| *value) {
         grow_carriageway_labels(&edges, &mainline_edge_ids, &mut labels);
     }
+
+    // Balance the two carriageways globally: the relation order and the ramp
+    // seeds cannot decide every edge, and a one-way ring needs every node to
+    // have equal in and out degree per direction. The local search moves the
+    // few edges whose label is not forced, in a deterministic order, until the
+    // total imbalance stops improving.
+    minimize_carriageway_imbalance(&edges, &mainline_edge_ids, &mut labels);
 
     let mut segment_labels = Vec::with_capacity(ordered_mainline.len());
     let mut ambiguous_segment_ids = Vec::new();
@@ -3334,12 +3341,15 @@ pub fn validate_mandatory_lap(
     Ok(())
 }
 
-pub fn validate_directed_junction_mandatory_lap(
+/// Shared preconditions of every mandatory lap: distinct M/B, a single lap, and
+/// a membership that matches the anchor route/direction with terminal edges
+/// that really meet M and B.
+fn validate_lap_anchor_boundaries<'a>(
     graph: &Graph,
-    route_memberships: &[RouteMembershipIndex],
+    route_memberships: &'a [RouteMembershipIndex],
     anchor: &DirectedJunctionAnchor,
     mandatory_lap: &MandatoryLap,
-) -> Result<(), RouteMembershipError> {
+) -> Result<&'a RouteMembershipIndex, RouteMembershipError> {
     if anchor.merge_node_id == anchor.branch_node_id {
         return Err(RouteMembershipError::Validation(
             "directed junction M and B must be different nodes".into(),
@@ -3394,6 +3404,21 @@ pub fn validate_directed_junction_mandatory_lap(
             "directed junction M/B boundaries do not match their terminal edges".into(),
         ));
     }
+    Ok(membership)
+}
+
+pub fn validate_directed_junction_mandatory_lap(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    anchor: &DirectedJunctionAnchor,
+    mandatory_lap: &MandatoryLap,
+) -> Result<(), RouteMembershipError> {
+    if let Some(explicit) = mandatory_lap.explicit_arc.as_ref() {
+        resolve_explicit_lap_arc(graph, route_memberships, anchor, mandatory_lap, explicit)?;
+        return Ok(());
+    }
+    let membership =
+        validate_lap_anchor_boundaries(graph, route_memberships, anchor, mandatory_lap)?;
 
     let connector_edge_ids = resolve_excluded_short_connector(
         graph,
@@ -3466,6 +3491,299 @@ pub fn validate_directed_junction_mandatory_lap(
         ));
     }
     Ok(())
+}
+
+/// Materialise a seed-declared explicit M-to-B lap arc.
+///
+/// [`generate_route_plan_lap_v1`] derives the arc from one relationMainline
+/// segment, which never works for a ring whose OSM relation is fragmented: the
+/// arc spans several runs and the connectors between them are not one segment.
+/// The explicit arc is validated against the graph exactly like a derived one,
+/// but it does not have to live inside one membership segment.
+fn resolve_explicit_lap_arc(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    anchor: &DirectedJunctionAnchor,
+    mandatory_lap: &MandatoryLap,
+    explicit: &ExplicitLapArc,
+) -> Result<RoutePlanLapV1, RouteMembershipError> {
+    validate_lap_anchor_boundaries(graph, route_memberships, anchor, mandatory_lap)?;
+    validate_sha256(&explicit.edge_ids_sha256, "explicitLapArc.edgeIdsSha256")?;
+    let expected = ordered_edge_ids_sha256(&explicit.edge_ids)
+        .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
+    if expected != explicit.edge_ids_sha256 {
+        return Err(RouteMembershipError::Segment(
+            "explicit mandatory lap edgeIdsSha256 does not match the ordered edge list".into(),
+        ));
+    }
+    let edges = validate_ordered_edges(graph, &explicit.edge_ids, "explicit mandatory lap")?;
+    if edges.iter().any(|edge| edge.kind != EdgeKind::Shutoko) {
+        return Err(RouteMembershipError::Segment(
+            "explicit mandatory lap contains a non-Shutoko edge".into(),
+        ));
+    }
+    if edges.first().map(|edge| edge.from.as_str()) != Some(anchor.merge_node_id.as_str())
+        || edges.last().map(|edge| edge.to.as_str()) != Some(anchor.branch_node_id.as_str())
+    {
+        return Err(RouteMembershipError::Validation(
+            "explicit mandatory lap does not run from M to B".into(),
+        ));
+    }
+    if mandatory_lap.first_edge_id != explicit.edge_ids[0]
+        || mandatory_lap.last_edge_id != explicit.edge_ids[explicit.edge_ids.len() - 1]
+    {
+        return Err(RouteMembershipError::Validation(
+            "explicit mandatory lap boundaries do not match firstEdgeId/lastEdgeId".into(),
+        ));
+    }
+    let connector_edge_ids = resolve_excluded_short_connector(
+        graph,
+        &anchor.excluded_short_connector,
+        &anchor.branch_node_id,
+        &anchor.merge_node_id,
+    )?;
+    let connector_set: HashSet<&str> = connector_edge_ids.iter().map(String::as_str).collect();
+    if explicit
+        .edge_ids
+        .iter()
+        .any(|edge_id| connector_set.contains(edge_id.as_str()))
+    {
+        return Err(RouteMembershipError::Segment(
+            "mandatory lap uses an excluded short connector".into(),
+        ));
+    }
+    if explicit.edge_ids.len() <= connector_edge_ids.len() {
+        return Err(RouteMembershipError::Segment(
+            "ordinary long arc is not longer than the excluded short connector".into(),
+        ));
+    }
+    let lap_distance = edges.iter().map(|edge| edge.distance_meters).sum::<u64>();
+    if lap_distance <= anchor.excluded_short_connector.distance_meters {
+        return Err(RouteMembershipError::Segment(
+            "ordinary long arc is not longer than the excluded short connector".into(),
+        ));
+    }
+    if contains_forbidden_transition(&explicit.edge_ids, &graph.forbidden_transitions) {
+        return Err(RouteMembershipError::Validation(
+            "mandatory lap contains a forbidden transition".into(),
+        ));
+    }
+    Ok(RoutePlanLapV1 {
+        merge_node_id: anchor.merge_node_id.clone(),
+        branch_node_id: anchor.branch_node_id.clone(),
+        route_id: anchor.route_id.clone(),
+        direction: anchor.direction.clone(),
+        first_edge_id: mandatory_lap.first_edge_id.clone(),
+        last_edge_id: mandatory_lap.last_edge_id.clone(),
+        lap_count: 1,
+        source_segment_id: format!("explicit:{}", mandatory_lap.membership_id),
+        edge_ids: explicit.edge_ids.clone(),
+        edge_ids_sha256: explicit.edge_ids_sha256.clone(),
+    })
+}
+
+/// Boundary nodes of the relationMainline edges of one carriageway membership.
+///
+/// A fragmented ring leaves the membership as several chains, and an explicit
+/// lap arc can only be declared from a chain start (or any interior node) to a
+/// downstream node of the same chain. The boundaries tell an author which M/B
+/// pairs are available before running [`generate_explicit_lap_arc`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CarriagewayLapBoundaries {
+    pub membership_id: String,
+    pub edge_count: usize,
+    /// Nodes with outgoing but no incoming membership edge.
+    pub start_node_ids: Vec<String>,
+    /// Nodes with incoming but no outgoing membership edge.
+    pub end_node_ids: Vec<String>,
+    /// Nodes with more than one outgoing membership edge. The arc generator
+    /// resolves them with the requested B unless two options both reach it.
+    pub branch_node_ids: Vec<String>,
+    /// Nodes with more than one incoming membership edge (chain merge).
+    pub merge_node_ids: Vec<String>,
+    /// True when every node has in-degree and out-degree one, so the whole
+    /// membership is one closed sequence.
+    pub cyclic: bool,
+}
+
+/// Boundary nodes of one carriageway membership, ordered so the result is
+/// deterministic.
+pub fn carriageway_lap_boundaries(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+) -> Result<CarriagewayLapBoundaries, RouteMembershipError> {
+    let edges = carriageway_membership_edges(graph, route_memberships, membership_id)?;
+    let mut in_degree: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut out_degree: BTreeMap<&str, usize> = BTreeMap::new();
+    for edge in &edges {
+        *out_degree.entry(edge.from.as_str()).or_default() += 1;
+        *in_degree.entry(edge.to.as_str()).or_default() += 1;
+    }
+    let nodes = in_degree
+        .keys()
+        .chain(out_degree.keys())
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let degree = |map: &BTreeMap<&str, usize>, node: &str| map.get(node).copied().unwrap_or(0);
+    let start_node_ids = nodes
+        .iter()
+        .filter(|node| degree(&out_degree, node) > 0 && degree(&in_degree, node) == 0)
+        .map(|node| node.to_string())
+        .collect::<Vec<_>>();
+    let end_node_ids = nodes
+        .iter()
+        .filter(|node| degree(&in_degree, node) > 0 && degree(&out_degree, node) == 0)
+        .map(|node| node.to_string())
+        .collect::<Vec<_>>();
+    let branch_node_ids = nodes
+        .iter()
+        .filter(|node| degree(&out_degree, node) > 1)
+        .map(|node| node.to_string())
+        .collect::<Vec<_>>();
+    let merge_node_ids = nodes
+        .iter()
+        .filter(|node| degree(&in_degree, node) > 1)
+        .map(|node| node.to_string())
+        .collect::<Vec<_>>();
+    Ok(CarriagewayLapBoundaries {
+        membership_id: membership_id.to_string(),
+        edge_count: edges.len(),
+        cyclic: start_node_ids.is_empty() && end_node_ids.is_empty(),
+        start_node_ids,
+        end_node_ids,
+        branch_node_ids,
+        merge_node_ids,
+    })
+}
+
+/// The distinct relationMainline edges of one carriageway membership, in
+/// segment order.
+fn carriageway_membership_edges<'a>(
+    graph: &'a Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+) -> Result<Vec<&'a Edge>, RouteMembershipError> {
+    let membership = route_memberships
+        .iter()
+        .find(|membership| membership.membership_id == membership_id)
+        .ok_or_else(|| {
+            RouteMembershipError::Validation(format!("unknown route membership {membership_id}"))
+        })?;
+    let mut edges = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for segment in membership
+        .segments
+        .iter()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+    {
+        validate_segment_hash(segment)?;
+        for edge_id in &segment.ordered_edge_ids {
+            if !seen.insert(edge_id.as_str()) {
+                continue;
+            }
+            let edge = graph
+                .edges
+                .iter()
+                .find(|edge| edge.id == *edge_id)
+                .ok_or_else(|| {
+                    RouteMembershipError::Segment(format!(
+                        "{membership_id} references missing graph edge {edge_id}"
+                    ))
+                })?;
+            edges.push(edge);
+        }
+    }
+    if edges.is_empty() {
+        return Err(RouteMembershipError::Validation(format!(
+            "{membership_id} has no relationMainline edges"
+        )));
+    }
+    Ok(edges)
+}
+
+/// Extract the explicit M-to-B lap arc of one carriageway membership.
+///
+/// The arc is the sub-chain from M to B: at every node the walk takes the
+/// membership edge that can still reach B. A fork is therefore resolved by the
+/// requested B, and only a genuine ambiguity (two distinct M-to-B paths) or an
+/// unreachable B fails closed. Fragmented and composed rings both work.
+pub fn generate_explicit_lap_arc(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    membership_id: &str,
+    merge_node_id: &str,
+    branch_node_id: &str,
+) -> Result<ExplicitLapArc, RouteMembershipError> {
+    if merge_node_id == branch_node_id {
+        return Err(RouteMembershipError::Validation(
+            "explicit lap arc needs distinct M and B nodes".into(),
+        ));
+    }
+    let edges = carriageway_membership_edges(graph, route_memberships, membership_id)?;
+    let mut successors: HashMap<&str, Vec<&Edge>> = HashMap::new();
+    let mut predecessors: HashMap<&str, Vec<&Edge>> = HashMap::new();
+    for edge in &edges {
+        successors.entry(edge.from.as_str()).or_default().push(edge);
+        predecessors.entry(edge.to.as_str()).or_default().push(edge);
+    }
+    // Nodes from which B is still reachable along membership edges.
+    let mut reaches_branch: HashSet<&str> = HashSet::new();
+    reaches_branch.insert(branch_node_id);
+    let mut stack = vec![branch_node_id];
+    while let Some(node) = stack.pop() {
+        for edge in predecessors.get(node).into_iter().flatten() {
+            if reaches_branch.insert(edge.from.as_str()) {
+                stack.push(edge.from.as_str());
+            }
+        }
+    }
+    if !reaches_branch.contains(merge_node_id) {
+        return Err(RouteMembershipError::Validation(format!(
+            "{membership_id} cannot reach {branch_node_id} from {merge_node_id} along the membership"
+        )));
+    }
+    let mut node = merge_node_id;
+    let mut edge_ids: Vec<String> = Vec::new();
+    while node != branch_node_id {
+        let candidates = successors.get(node).ok_or_else(|| {
+            RouteMembershipError::Validation(format!(
+                "{membership_id} has no option leaving {node} on the way to {branch_node_id}"
+            ))
+        })?;
+        let onward = candidates
+            .iter()
+            .filter(|edge| reaches_branch.contains(edge.to.as_str()))
+            .collect::<Vec<_>>();
+        if onward.is_empty() {
+            return Err(RouteMembershipError::Validation(format!(
+                "{membership_id} cannot reach {branch_node_id} from {node}"
+            )));
+        }
+        if onward.len() > 1 {
+            return Err(RouteMembershipError::Validation(format!(
+                "{membership_id} has {count} distinct M-to-B options at {node}; \
+                 a lap arc must be unambiguous",
+                count = onward.len()
+            )));
+        }
+        let edge = onward[0];
+        edge_ids.push(edge.id.clone());
+        node = edge.to.as_str();
+        if edge_ids.len() > edges.len() {
+            return Err(RouteMembershipError::Validation(format!(
+                "{membership_id} cannot reach {branch_node_id} from {merge_node_id} \
+                 along the membership"
+            )));
+        }
+    }
+    let edge_ids_sha256 = ordered_edge_ids_sha256(&edge_ids)
+        .map_err(|error| RouteMembershipError::Segment(error.to_string()))?;
+    Ok(ExplicitLapArc {
+        edge_ids,
+        edge_ids_sha256,
+    })
 }
 
 pub fn generate_route_plan_lap_v1(
@@ -3560,6 +3878,7 @@ pub fn generate_route_plan_lap_v1(
         first_edge_id: edge_ids.first().cloned().unwrap_or_default(),
         last_edge_id: edge_ids.last().cloned().unwrap_or_default(),
         lap_count: 1,
+        explicit_arc: None,
     };
     validate_directed_junction_mandatory_lap(graph, route_memberships, anchor, &mandatory_lap)?;
     let edge_ids_sha256 = ordered_edge_ids_sha256(edge_ids)
@@ -4791,7 +5110,16 @@ fn resolve_directed_route_plan_with_candidates(
 ) -> Result<DirectedRoutePlanResolution, RouteMembershipError> {
     let source_snapshot_sha256 = route_membership_source_snapshot_sha256(route_memberships)?;
     validate_route_membership_structure(graph, route_memberships, source_snapshot_sha256)?;
-    let lap = generate_route_plan_lap_v1(graph, route_memberships, &route_plan.anchor)?;
+    let lap = match route_plan.mandatory_lap.explicit_arc.as_ref() {
+        Some(explicit) => resolve_explicit_lap_arc(
+            graph,
+            route_memberships,
+            &route_plan.anchor,
+            &route_plan.mandatory_lap,
+            explicit,
+        )?,
+        None => generate_route_plan_lap_v1(graph, route_memberships, &route_plan.anchor)?,
+    };
     if route_plan.mandatory_lap.membership_id
         != route_memberships
             .iter()
@@ -5584,58 +5912,54 @@ fn balance_carriageway_walk(
     edges: &HashMap<&str, &Edge>,
     runs: &[Vec<String>],
 ) -> Option<Vec<String>> {
+    let _ = adjacency;
     if runs.is_empty() {
         return None;
     }
+    // Each run edge already carries one unit of flow. The correction flow is
+    // what the minimum-cost flow adds on top, so the walk is the run set plus
+    // the correction (an edge may therefore appear more than once, which the
+    // lap contract allows).
+    let run_edges: BTreeSet<&str> = runs
+        .iter()
+        .flat_map(|run| run.iter())
+        .map(String::as_str)
+        .collect();
+    let initial =
+        multiset_imbalance_units(edges, &runs.iter().flatten().cloned().collect::<Vec<_>>());
+    // `min_cost_carriageway_flow` reads a positive demand as "this node needs
+    // that much net inflow", which is exactly the signed run imbalance: a node
+    // whose runs leave one more edge than they enter has to receive one more
+    // correction edge than it sends.
+    let demand = initial
+        .iter()
+        .filter(|(_, value)| **value != 0)
+        .map(|(node, value)| (node.clone(), *value))
+        .collect::<BTreeMap<String, i64>>();
     let mut multiset: Vec<String> = runs.iter().flatten().cloned().collect();
-
-    // One greedy pass that improves connectivity first and degree balance
-    // second. Doing them in separate passes was measured to blow up: every
-    // connection edge added for one goal made the search for the other heavier.
-    for _ in 0..48 {
-        let (sources, sinks) = degree_imbalance(edges, &multiset);
-        let components = edge_components(edges, &multiset);
-        if sources.is_empty() && components <= 1 {
-            break;
-        }
-        let mut best: Option<(u8, u64, Vec<String>)> = None;
-        // (a) connectors between two components
-        if components > 1 {
-            for path in component_connectors(adjacency, edges, &multiset)? {
-                let key = (0_u8, path_cost(edges, &path), path);
-                if best.as_ref().is_none_or(|current| key < *current) {
-                    best = Some(key);
-                }
+    if demand.values().any(|value| *value != 0) {
+        let flow = min_cost_carriageway_flow(edges, &demand, &run_edges)?;
+        multiset.clear();
+        for (edge_id, units) in flow {
+            for _ in 0..units {
+                multiset.push(edge_id.clone());
             }
         }
-        // (b) connectors that reduce the degree imbalance
-        for path in imbalance_connectors(adjacency, edges, &sources, &sinks) {
-            let key = (1_u8, path_cost(edges, &path), path);
-            if best.as_ref().is_none_or(|current| key < *current) {
-                best = Some(key);
-            }
-        }
-        let Some((_, _, path)) = best else {
-            break;
-        };
-        if path.is_empty() {
-            break;
-        }
-        multiset.extend(path);
     }
-
-    let (sources, sinks) = degree_imbalance(edges, &multiset);
-    if !sources.is_empty() || !sinks.is_empty() {
+    if multiset_imbalance_units(edges, &multiset)
+        .values()
+        .any(|value| *value != 0)
+    {
         return None;
     }
     closed_walk(edges, &multiset)
 }
 
-/// In/out degree surplus (sources) and deficit (sinks) of a multiset.
-fn degree_imbalance(
+/// Signed degree imbalance of every node: positive is surplus (supply).
+fn multiset_imbalance_units(
     edges: &HashMap<&str, &Edge>,
     multiset: &[String],
-) -> (BTreeSet<String>, BTreeSet<String>) {
+) -> BTreeMap<String, i64> {
     let mut delta: BTreeMap<String, i64> = BTreeMap::new();
     for edge_id in multiset {
         if let Some(edge) = edges.get(edge_id.as_str()) {
@@ -5643,209 +5967,219 @@ fn degree_imbalance(
             *delta.entry(edge.to.clone()).or_default() -= 1;
         }
     }
-    let sources = delta
-        .iter()
-        .filter(|(_, value)| **value > 0)
-        .map(|(node, _)| node.clone())
-        .collect();
-    let sinks = delta
-        .iter()
-        .filter(|(_, value)| **value < 0)
-        .map(|(node, _)| node.clone())
-        .collect();
-    (sources, sinks)
+    delta
 }
 
-/// Number of weakly connected components over the multiset's edge endpoints.
-fn edge_components(edges: &HashMap<&str, &Edge>, multiset: &[String]) -> usize {
-    let mut parent: HashMap<String, String> = HashMap::new();
-    fn find(parent: &mut HashMap<String, String>, node: &str) -> String {
-        let entry = parent
-            .entry(node.to_string())
-            .or_insert_with(|| node.to_string())
-            .clone();
-        if entry == node {
-            return entry;
-        }
-        let root = find(parent, &entry);
-        parent.insert(node.to_string(), root.clone());
-        root
-    }
-    let mut nodes = Vec::new();
-    for edge_id in multiset {
-        let Some(edge) = edges.get(edge_id.as_str()) else {
-            continue;
-        };
-        let left = find(&mut parent, edge.from.as_str());
-        let right = find(&mut parent, edge.to.as_str());
-        if left != right {
-            parent.insert(left, right);
-        }
-        nodes.push(edge.from.clone());
-    }
-    let mut roots = BTreeSet::new();
-    for node in nodes {
-        roots.insert(find(&mut parent, node.as_str()));
-    }
-    roots.len()
-}
-
-/// Cheapest connectors between distinct components of the multiset.
-fn component_connectors(
-    adjacency: &HashMap<&str, Vec<&Edge>>,
+/// Ship every surplus unit to a deficit node along the cheapest Shutoko edges.
+///
+/// Successive shortest paths with potentials. Each round augments the largest
+/// amount that fits on the found path, so a node whose imbalance is larger than
+/// one unit is handled in one round. The returned map counts how often each edge
+/// has to be traversed by the shipped flow.
+fn min_cost_carriageway_flow(
     edges: &HashMap<&str, &Edge>,
-    multiset: &[String],
-) -> Option<Vec<Vec<String>>> {
-    const REPRESENTATIVES: usize = 4;
-    let mut parent: HashMap<String, String> = HashMap::new();
-    fn find(parent: &mut HashMap<String, String>, node: &str) -> String {
-        let entry = parent
-            .entry(node.to_string())
-            .or_insert_with(|| node.to_string())
-            .clone();
-        if entry == node {
-            return entry;
-        }
-        let root = find(parent, &entry);
-        parent.insert(node.to_string(), root.clone());
-        root
-    }
-    for edge_id in multiset {
-        let Some(edge) = edges.get(edge_id.as_str()) else {
-            continue;
-        };
-        let left = find(&mut parent, edge.from.as_str());
-        let right = find(&mut parent, edge.to.as_str());
-        if left != right {
-            parent.insert(left, right);
-        }
-    }
-    let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for edge_id in multiset {
-        let Some(edge) = edges.get(edge_id.as_str()) else {
-            continue;
-        };
-        let root = find(&mut parent, edge.from.as_str());
-        groups.entry(root).or_default().push(edge_id.clone());
-    }
-    if groups.len() <= 1 {
-        return Some(Vec::new());
-    }
-    let mut ordered = groups.values().cloned().collect::<Vec<_>>();
-    ordered.sort_by_key(|group| std::cmp::Reverse(group.len()));
-    let anchor = ordered.remove(0);
-    let mut paths = Vec::new();
-    for group in ordered.iter() {
-        let mut best: Option<(u64, Vec<String>)> = None;
-        for from_edge in anchor.iter().take(REPRESENTATIVES) {
-            let Some(from) = edges.get(from_edge.as_str()) else {
+    demand: &BTreeMap<String, i64>,
+    run_edges: &BTreeSet<&str>,
+) -> Option<BTreeMap<String, usize>> {
+    const CAPACITY: i64 = 64;
+
+    let mut node_ids: BTreeMap<String, usize> = BTreeMap::new();
+    {
+        let mut sorted = edges.keys().cloned().collect::<Vec<_>>();
+        sorted.sort_unstable();
+        for edge_id in &sorted {
+            let Some(edge) = edges.get(edge_id) else {
                 continue;
             };
-            for to_edge in group.iter().take(REPRESENTATIVES) {
-                let Some(to) = edges.get(to_edge.as_str()) else {
+            for node in [&edge.from, &edge.to] {
+                let next = node_ids.len();
+                node_ids.entry(node.clone()).or_insert(next);
+            }
+        }
+    }
+    let mut node_count = node_ids.len();
+    let source_index = {
+        let index = node_count;
+        node_count += 1;
+        index
+    };
+    let sink_index = {
+        let index = node_count;
+        node_count += 1;
+        index
+    };
+
+    #[derive(Clone, Copy)]
+    struct Arc {
+        to: usize,
+        capacity: i64,
+        cost: i64,
+    }
+    let mut edge_ids = edges.keys().cloned().collect::<Vec<_>>();
+    edge_ids.sort_unstable();
+    let mut arcs: Vec<Arc> = Vec::new();
+    let mut graph: Vec<Vec<usize>> = vec![Vec::new(); node_count];
+    // Arc index -> the carriageway edge it belongs to, so the net flow can be
+    // accumulated while augmenting (a reverse arc cancels earlier flow).
+    let mut arc_edge: Vec<Option<String>> = Vec::new();
+    let push_pair = |arcs: &mut Vec<Arc>,
+                     graph: &mut Vec<Vec<usize>>,
+                     arc_edge: &mut Vec<Option<String>>,
+                     from: usize,
+                     to: usize,
+                     capacity: i64,
+                     cost: i64,
+                     edge: Option<String>| {
+        let forward = arcs.len();
+        arcs.push(Arc { to, capacity, cost });
+        arcs.push(Arc {
+            to: from,
+            capacity: 0,
+            cost: -cost,
+        });
+        arc_edge.push(edge.clone());
+        arc_edge.push(edge);
+        graph[from].push(forward);
+        graph[to].push(forward + 1);
+    };
+    for (index, edge_id) in edge_ids.iter().enumerate() {
+        let Some(edge) = edges.get(edge_id) else {
+            continue;
+        };
+        let Some(&from) = node_ids.get(&edge.from) else {
+            continue;
+        };
+        let Some(&to) = node_ids.get(&edge.to) else {
+            continue;
+        };
+        let _ = index;
+        // A run edge starts with one unit of flow, so it only has room for
+        // additional correction units up to the capacity.
+        let carried = i64::from(run_edges.contains(edge_id));
+        push_pair(
+            &mut arcs,
+            &mut graph,
+            &mut arc_edge,
+            from,
+            to,
+            CAPACITY - carried,
+            edge.distance_meters as i64,
+            Some(edge_id.to_string()),
+        );
+    }
+    let mut total_supply = 0_i64;
+    let mut total_demand = 0_i64;
+    for (node, value) in demand.iter() {
+        let Some(&index) = node_ids.get(node) else {
+            continue;
+        };
+        if *value > 0 {
+            // Positive demand means the node needs this much net inflow.
+            total_demand += *value;
+            push_pair(
+                &mut arcs,
+                &mut graph,
+                &mut arc_edge,
+                index,
+                sink_index,
+                *value,
+                0,
+                None,
+            );
+        } else if *value < 0 {
+            total_supply -= *value;
+            push_pair(
+                &mut arcs,
+                &mut graph,
+                &mut arc_edge,
+                source_index,
+                index,
+                -value,
+                0,
+                None,
+            );
+        }
+    }
+    if total_supply != total_demand || total_supply == 0 {
+        return None;
+    }
+
+    let mut potential = vec![0_i64; node_count];
+    let mut flow = 0_i64;
+    let mut net_flow: BTreeMap<String, i64> = BTreeMap::new();
+    while flow < total_supply {
+        let mut distance = vec![i64::MAX; node_count];
+        let mut previous: Vec<Option<usize>> = vec![None; node_count];
+        let mut heap = BinaryHeap::new();
+        distance[source_index] = 0;
+        heap.push(std::cmp::Reverse((0_i64, source_index)));
+        while let Some(std::cmp::Reverse((cost, node))) = heap.pop() {
+            if distance[node] < cost {
+                continue;
+            }
+            for arc_index in graph[node].iter().copied() {
+                let arc = arcs[arc_index];
+                if arc.capacity <= 0 {
                     continue;
-                };
-                for (start, goal) in [
-                    (from.to.as_str(), to.from.as_str()),
-                    (to.to.as_str(), from.from.as_str()),
-                ] {
-                    let Some(path) = cheapest_shutoko_path(adjacency, edges, start, goal) else {
-                        continue;
-                    };
-                    let key = (path_cost(edges, &path), path);
-                    if best.as_ref().is_none_or(|current| key < *current) {
-                        best = Some(key);
-                    }
+                }
+                let reduced = arc.cost + potential[node] - potential[arc.to];
+                let candidate = cost.saturating_add(reduced);
+                if candidate < distance[arc.to] {
+                    distance[arc.to] = candidate;
+                    previous[arc.to] = Some(arc_index);
+                    heap.push(std::cmp::Reverse((candidate, arc.to)));
                 }
             }
         }
-        if let Some((_, path)) = best {
-            paths.push(path);
-        }
-    }
-    Some(paths)
-}
-
-/// Cheapest connectors between a degree surplus and deficit node.
-fn imbalance_connectors(
-    adjacency: &HashMap<&str, Vec<&Edge>>,
-    edges: &HashMap<&str, &Edge>,
-    sources: &BTreeSet<String>,
-    sinks: &BTreeSet<String>,
-) -> Vec<Vec<String>> {
-    let mut paths = Vec::new();
-    for source in sources.iter().take(8) {
-        let mut best: Option<(u64, Vec<String>)> = None;
-        for sink in sinks.iter().take(8) {
-            let Some(path) = cheapest_shutoko_path(adjacency, edges, source, sink) else {
-                continue;
-            };
-            let key = (path_cost(edges, &path), path);
-            if best.as_ref().is_none_or(|current| key < *current) {
-                best = Some(key);
+        previous[sink_index]?;
+        for (node, value) in distance.iter().enumerate() {
+            if *value < i64::MAX {
+                potential[node] += *value;
             }
         }
-        if let Some((_, path)) = best {
-            paths.push(path);
+        let mut bottleneck = total_supply - flow;
+        let mut node = sink_index;
+        while node != source_index {
+            let arc_index = previous[node]?;
+            bottleneck = bottleneck.min(arcs[arc_index].capacity);
+            node = arcs[arc_index ^ 1].to;
         }
-    }
-    paths
-}
-
-/// Deterministic minimum-distance Shutoko path.
-fn cheapest_shutoko_path(
-    adjacency: &HashMap<&str, Vec<&Edge>>,
-    edges: &HashMap<&str, &Edge>,
-    start: &str,
-    goal: &str,
-) -> Option<Vec<String>> {
-    if start == goal {
-        return Some(Vec::new());
-    }
-    let mut best: HashMap<&str, u64> = HashMap::new();
-    let mut previous: HashMap<&str, (&str, String)> = HashMap::new();
-    let mut heap = BinaryHeap::new();
-    best.insert(start, 0);
-    heap.push(std::cmp::Reverse((0_u64, start)));
-    while let Some(std::cmp::Reverse((distance, node))) = heap.pop() {
-        if best.get(node).copied().unwrap_or(u64::MAX) < distance {
-            continue;
+        if bottleneck <= 0 {
+            return None;
         }
-        if node == goal {
-            break;
-        }
-        for edge in adjacency.get(node).into_iter().flatten() {
-            let next = edge.to.as_str();
-            let candidate = distance.saturating_add(edge_distance_meters(edges, &edge.id));
-            if candidate > CARRIAGEWAY_SEED_REACH_METERS * 40 {
-                continue;
+        let mut node = sink_index;
+        while node != source_index {
+            let arc_index = previous[node]?;
+            arcs[arc_index].capacity -= bottleneck;
+            arcs[arc_index ^ 1].capacity += bottleneck;
+            if let Some(edge_id) = arc_edge.get(arc_index).and_then(|value| value.clone()) {
+                // A forward arc adds flow, a reverse arc cancels it.
+                let delta = if arc_index % 2 == 0 {
+                    bottleneck
+                } else {
+                    -bottleneck
+                };
+                *net_flow.entry(edge_id).or_default() += delta;
             }
-            if candidate < best.get(next).copied().unwrap_or(u64::MAX) {
-                best.insert(next, candidate);
-                previous.insert(next, (node, edge.id.clone()));
-                heap.push(std::cmp::Reverse((candidate, next)));
-            }
+            node = arcs[arc_index ^ 1].to;
+        }
+        flow += bottleneck;
+    }
+
+    let mut shipped: BTreeMap<String, usize> = BTreeMap::new();
+    let mut all_ids = edges.keys().copied().collect::<Vec<&str>>();
+    all_ids.sort_unstable();
+    for edge_id in all_ids {
+        let carried = usize::from(run_edges.contains(edge_id));
+        let correction = net_flow.get(edge_id).copied().unwrap_or(0).max(0) as usize;
+        let total = carried + correction;
+        if total > 0 {
+            shipped.insert(edge_id.to_string(), total);
         }
     }
-    let mut path = Vec::new();
-    let mut node = goal;
-    while node != start {
-        let (prior, edge_id) = previous.get(node)?.clone();
-        path.push(edge_id);
-        node = prior;
-    }
-    path.reverse();
-    Some(path)
+    Some(shipped)
 }
 
-fn path_cost(edges: &HashMap<&str, &Edge>, path: &[String]) -> u64 {
-    path.iter()
-        .map(|edge_id| edge_distance_meters(edges, edge_id))
-        .sum()
-}
-
-/// Hierholzer walk over an edge multiset; accepted only when it is a single
-/// closed walk that consumes every entry.
 fn closed_walk(edges: &HashMap<&str, &Edge>, multiset: &[String]) -> Option<Vec<String>> {
     // A lap may revisit an edge (see docs/c2-route-design.md 2.3), so the walk
     // consumes multiset entries rather than unique edge ids. Without that
@@ -5861,26 +6195,126 @@ fn closed_walk(edges: &HashMap<&str, &Edge>, multiset: &[String]) -> Option<Vec<
         list.sort_by(|left, right| multiset[*left].cmp(&multiset[*right]));
     }
     let start = outgoing.keys().next().copied()?;
-    let mut stack = vec![start];
-    let mut walk = Vec::new();
-    while let Some(node) = stack.last().copied() {
+    // Hierholzer's algorithm: a node only gives up its incoming edge once all of
+    // its outgoing edges are used, so the edges come out in post-order and have
+    // to be reversed at the end. Collecting them when the edge is first taken
+    // (pre-order) instead would splice a dead-end branch into the middle of the
+    // sequence and produce a non-contiguous "walk".
+    let mut stack = vec![(start, None)];
+    let mut order: Vec<usize> = Vec::new();
+    while let Some((node, incoming)) = stack.pop() {
         match outgoing.get_mut(node).and_then(|list| list.pop()) {
             Some(index) => {
                 let edge = edges.get(multiset[index].as_str())?;
-                stack.push(edge.to.as_str());
-                walk.push(multiset[index].clone());
+                stack.push((node, incoming));
+                stack.push((edge.to.as_str(), Some(index)));
             }
             None => {
-                stack.pop();
+                if let Some(index) = incoming {
+                    order.push(index);
+                }
             }
         }
     }
-    if walk.len() != multiset.len() {
+    if order.len() != multiset.len() {
         return None;
     }
-    walk.reverse();
+    order.reverse();
+    let walk = order
+        .into_iter()
+        .map(|index| multiset[index].clone())
+        .collect::<Vec<_>>();
     let closes = edges.get(walk.last()?.as_str())?.to == edges.get(walk.first()?.as_str())?.from;
     closes.then_some(walk)
+}
+
+/// Reduce the total in/out degree imbalance of the labelled carriageways by
+/// moving single edges between the inner, outer and unused labels.
+///
+/// This is the first step of the global formulation: instead of trusting the
+/// relation order, it optimises the actual cycle constraint (every node must
+/// have in-degree == out-degree per direction). The search is a deterministic
+/// hill climb with a bounded number of sweeps, so the release build cost stays
+/// predictable.
+fn minimize_carriageway_imbalance(
+    edges: &HashMap<&str, &Edge>,
+    mainline_edge_ids: &BTreeSet<String>,
+    labels: &mut HashMap<String, String>,
+) {
+    const DIRECTIONS: [&str; 2] = [CARRIAGEWAY_DIRECTION_INNER, CARRIAGEWAY_DIRECTION_OUTER];
+    const MAX_SWEEPS: usize = 24;
+
+    fn imbalance(
+        ordered_edges: &[&Edge],
+        label_of: &HashMap<String, String>,
+        direction: &str,
+    ) -> u64 {
+        let mut delta: HashMap<&str, i64> = HashMap::new();
+        for edge in ordered_edges {
+            if label_of.get(&edge.id).map(String::as_str) != Some(direction) {
+                continue;
+            }
+            *delta.entry(edge.from.as_str()).or_default() += 1;
+            *delta.entry(edge.to.as_str()).or_default() -= 1;
+        }
+        delta.values().map(|value| value.unsigned_abs()).sum()
+    }
+
+    let ordered_edges = mainline_edge_ids
+        .iter()
+        .filter_map(|edge_id| edges.get(edge_id.as_str()).copied())
+        .collect::<Vec<_>>();
+
+    for _ in 0..MAX_SWEEPS {
+        let mut best: Option<(u64, String, Option<String>)> = None;
+        for edge in &ordered_edges {
+            let current = labels.get(&edge.id).cloned();
+            let mut candidates: Vec<Option<String>> = vec![None];
+            for direction in DIRECTIONS {
+                candidates.push(Some(direction.to_string()));
+            }
+            for candidate in candidates {
+                if candidate == current {
+                    continue;
+                }
+                let mut trial = labels.clone();
+                match &candidate {
+                    Some(value) => {
+                        trial.insert(edge.id.clone(), value.clone());
+                    }
+                    None => {
+                        trial.remove(&edge.id);
+                    }
+                }
+                let score = DIRECTIONS
+                    .iter()
+                    .map(|direction| imbalance(&ordered_edges, &trial, direction))
+                    .sum::<u64>();
+                let key = (score, edge.id.clone(), candidate.clone());
+                if best.as_ref().is_none_or(|current| key < *current) {
+                    best = Some(key);
+                }
+            }
+        }
+        let Some((score, edge_id, candidate)) = best else {
+            return;
+        };
+        let current_score = DIRECTIONS
+            .iter()
+            .map(|direction| imbalance(&ordered_edges, labels, direction))
+            .sum::<u64>();
+        if score >= current_score {
+            return;
+        }
+        match candidate {
+            Some(value) => {
+                labels.insert(edge_id, value);
+            }
+            None => {
+                labels.remove(&edge_id);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -6241,6 +6675,141 @@ mod tests {
             RouteMembershipError::RampBinding(message)
                 if message == "exit endpoint supportState unsupported does not match first-general-exit exactDirectedBinding verified_bound"
         ));
+    }
+
+    /// Split the single relationMainline run in two so no membership segment
+    /// spans the anchor merge node M to the branch node B.
+    fn fragmented_radial_fixture() -> (
+        RadialReturnBillingPairSeed,
+        Graph,
+        Vec<RouteMembershipIndex>,
+    ) {
+        let (seed, graph, mut memberships) = verified_diagnostic_radial_fixture();
+        let membership = memberships
+            .iter_mut()
+            .find(|membership| membership.membership_id == "route:R1:forward")
+            .unwrap();
+        let index = membership
+            .segments
+            .iter()
+            .position(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+            .unwrap();
+        let split_index = membership.segments[index]
+            .ordered_edge_ids
+            .iter()
+            .position(|edge_id| edge_id == "e:w102:0:f")
+            .unwrap()
+            + 1;
+        let tail = membership.segments[index]
+            .ordered_edge_ids
+            .split_off(split_index);
+        let mut second = membership.segments[index].clone();
+        membership.segments[index].ordered_edge_ids_sha256 =
+            ordered_edge_ids_sha256(&membership.segments[index].ordered_edge_ids).unwrap();
+        second.segment_id = format!("{}:tail", second.segment_id);
+        second.ordered_edge_ids = tail;
+        second.ordered_edge_ids_sha256 = ordered_edge_ids_sha256(&second.ordered_edge_ids).unwrap();
+        second.member_indexes = Some(vec![1]);
+        second.member_order_matches_relation = Some(true);
+        membership.segments.push(second);
+        (seed, graph, memberships)
+    }
+
+    #[test]
+    fn explicit_lap_arc_composes_a_pair_whose_membership_is_fragmented() {
+        let (seed, graph, memberships) = fragmented_radial_fixture();
+        let edge_ids = vec!["e:w102:0:f".to_string(), "e:w103:0:f".to_string()];
+
+        // The fragmented membership cannot derive the M-to-B arc on its own.
+        let derived_error =
+            resolve_diagnostic_radial_route_plan(&graph, &memberships, &seed).unwrap_err();
+        assert!(matches!(derived_error, RouteMembershipError::Validation(_)));
+
+        // Declared explicitly, the same pair resolves.
+        let mut declared = seed.clone();
+        declared.route_plan.mandatory_lap.explicit_arc = Some(ExplicitLapArc {
+            edge_ids: edge_ids.clone(),
+            edge_ids_sha256: ordered_edge_ids_sha256(&edge_ids).unwrap(),
+        });
+        declared.validate().unwrap();
+        let resolution =
+            resolve_diagnostic_radial_route_plan(&graph, &memberships, &declared).unwrap();
+        assert_eq!(resolution.lap.edge_ids, edge_ids);
+        assert_eq!(
+            resolution.lap.source_segment_id,
+            "explicit:route:R1:forward"
+        );
+    }
+
+    #[test]
+    fn explicit_lap_arc_generator_cuts_the_chain_between_m_and_b() {
+        let (seed, graph, memberships) = fragmented_radial_fixture();
+        let boundaries =
+            carriageway_lap_boundaries(&graph, &memberships, "route:R1:forward").unwrap();
+        assert!(boundaries.edge_count >= 4);
+        assert!(!boundaries.cyclic);
+        assert!(!boundaries.start_node_ids.is_empty());
+
+        let arc = generate_explicit_lap_arc(&graph, &memberships, "route:R1:forward", "n:2", "n:4")
+            .unwrap();
+        assert_eq!(arc.edge_ids.last().unwrap(), "e:w103:0:f");
+        assert_eq!(
+            arc.edge_ids_sha256,
+            ordered_edge_ids_sha256(&arc.edge_ids).unwrap()
+        );
+
+        // The generated arc resolves the pair whose membership cannot derive it.
+        let mut declared = seed.clone();
+        declared.route_plan.mandatory_lap.explicit_arc = Some(arc.clone());
+        declared.validate().unwrap();
+        let resolution =
+            resolve_diagnostic_radial_route_plan(&graph, &memberships, &declared).unwrap();
+        assert_eq!(resolution.lap.edge_ids, arc.edge_ids);
+
+        // Backwards or cross-chain boundaries cannot be cut.
+        assert!(
+            generate_explicit_lap_arc(&graph, &memberships, "route:R1:forward", "n:4", "n:2")
+                .is_err()
+        );
+        assert!(
+            generate_explicit_lap_arc(&graph, &memberships, "route:R1:forward", "n:2", "n:1")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn explicit_lap_arc_rejects_tampering() {
+        let (seed, graph, memberships) = fragmented_radial_fixture();
+        let edge_ids = vec!["e:w102:0:f".to_string(), "e:w103:0:f".to_string()];
+        let mut declared = seed.clone();
+        let explicit = ExplicitLapArc {
+            edge_ids: edge_ids.clone(),
+            edge_ids_sha256: ordered_edge_ids_sha256(&edge_ids).unwrap(),
+        };
+        declared.route_plan.mandatory_lap.explicit_arc = Some(explicit.clone());
+        let anchor = declared.route_plan.anchor.clone();
+        let lap = declared.route_plan.mandatory_lap.clone();
+        validate_directed_junction_mandatory_lap(&graph, &memberships, &anchor, &lap).unwrap();
+
+        let mut wrong_hash = explicit.clone();
+        wrong_hash.edge_ids_sha256 = "0".repeat(64);
+        assert!(
+            resolve_explicit_lap_arc(&graph, &memberships, &anchor, &lap, &wrong_hash).is_err()
+        );
+
+        let mut non_contiguous = explicit.clone();
+        non_contiguous.edge_ids = vec!["e:w102:0:f".into(), "e:w101:0:f".into()];
+        non_contiguous.edge_ids_sha256 = ordered_edge_ids_sha256(&non_contiguous.edge_ids).unwrap();
+        assert!(
+            resolve_explicit_lap_arc(&graph, &memberships, &anchor, &lap, &non_contiguous).is_err()
+        );
+
+        let mut wrong_branch = explicit.clone();
+        wrong_branch.edge_ids = vec!["e:w102:0:f".into()];
+        wrong_branch.edge_ids_sha256 = ordered_edge_ids_sha256(&wrong_branch.edge_ids).unwrap();
+        assert!(
+            resolve_explicit_lap_arc(&graph, &memberships, &anchor, &lap, &wrong_branch).is_err()
+        );
     }
 
     #[test]
@@ -6712,6 +7281,7 @@ mod tests {
             first_edge_id: "e:w102:0:f".into(),
             last_edge_id: "e:w103:0:f".into(),
             lap_count: 1,
+            explicit_arc: None,
         };
         validate_directed_junction_mandatory_lap(&graph, &memberships, &anchor, &lap).unwrap();
         let mut wrong_arm = anchor.clone();
@@ -6791,6 +7361,7 @@ mod tests {
             first_edge_id: "e:w102:0:f".into(),
             last_edge_id: "e:w103:0:f".into(),
             lap_count: 2,
+            explicit_arc: None,
         };
         assert!(validate_directed_junction_mandatory_lap(
             &graph,
@@ -6879,6 +7450,7 @@ mod tests {
             first_edge_id: "e:w900:0:f".into(),
             last_edge_id: "e:w904:0:f".into(),
             lap_count: 1,
+            explicit_arc: None,
         };
         let error =
             validate_directed_junction_mandatory_lap(&graph, &memberships, &anchor, &declared_lap)
@@ -7562,5 +8134,74 @@ mod tests {
             .unwrap(),
             route_memberships_sha256(&legacy.membership_indices).unwrap()
         );
+    }
+
+    /// A four-node one-way ring with both carriageways available, so a run trail
+    /// can always be closed by shipping the correction flow the other way round.
+    fn ring_edges() -> Vec<Edge> {
+        vec![
+            edge("e:inner:1", "n:1", "n:2", EdgeKind::Shutoko),
+            edge("e:inner:2", "n:2", "n:3", EdgeKind::Shutoko),
+            edge("e:inner:3", "n:3", "n:4", EdgeKind::Shutoko),
+            edge("e:inner:4", "n:4", "n:1", EdgeKind::Shutoko),
+            edge("e:outer:1", "n:2", "n:1", EdgeKind::Shutoko),
+            edge("e:outer:2", "n:3", "n:2", EdgeKind::Shutoko),
+            edge("e:outer:3", "n:4", "n:3", EdgeKind::Shutoko),
+            edge("e:outer:4", "n:1", "n:4", EdgeKind::Shutoko),
+        ]
+    }
+
+    fn assert_closed_walk(edges: &HashMap<&str, &Edge>, walk: &[String]) {
+        assert!(!walk.is_empty(), "walk must not be empty");
+        for window in walk.windows(2) {
+            assert_eq!(
+                edges[window[0].as_str()].to,
+                edges[window[1].as_str()].from,
+                "walk must stay graph-contiguous at {window:?}"
+            );
+        }
+        assert_eq!(
+            edges[walk.last().unwrap().as_str()].to,
+            edges[walk.first().unwrap().as_str()].from,
+            "walk must return to its start"
+        );
+        assert!(
+            multiset_imbalance_units(edges, walk)
+                .values()
+                .all(|value| *value == 0),
+            "walk must balance every node"
+        );
+    }
+
+    #[test]
+    fn closed_walk_orders_a_branching_eulerian_multiset() {
+        let owned = ring_edges();
+        let edges: HashMap<&str, &Edge> = owned.iter().map(|e| (e.id.as_str(), e)).collect();
+        let multiset = vec![
+            "e:inner:1".to_string(),
+            "e:inner:2".to_string(),
+            "e:outer:2".to_string(),
+            "e:outer:1".to_string(),
+        ];
+        let walk = closed_walk(&edges, &multiset).expect("a balanced multiset must close");
+        assert_eq!(walk.len(), multiset.len());
+        assert_closed_walk(&edges, &walk);
+    }
+
+    #[test]
+    fn balance_carriageway_walk_closes_a_run_trail_on_the_ring() {
+        let owned = ring_edges();
+        let edges: HashMap<&str, &Edge> = owned.iter().map(|e| (e.id.as_str(), e)).collect();
+        let adjacency: HashMap<&str, Vec<&Edge>> = HashMap::new();
+        let runs = vec![vec!["e:inner:1".to_string(), "e:inner:2".to_string()]];
+        let walk = balance_carriageway_walk(&adjacency, &edges, &runs)
+            .expect("the correction flow must close the run trail");
+        for run_edge in runs.iter().flatten() {
+            assert!(
+                walk.contains(run_edge),
+                "run edge {run_edge} must stay in the walk"
+            );
+        }
+        assert_closed_walk(&edges, &walk);
     }
 }

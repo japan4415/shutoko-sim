@@ -93,7 +93,7 @@ fn real_graph_deserialization_and_schema_validation() {
     let wire: Value = serde_json::from_str(real_graph_str()).unwrap();
     assert_eq!(wire["schemaVersion"], 4);
     assert_eq!(wire["releaseId"], "all-real-v4");
-    assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 11);
+    assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 12);
     assert!(wire["routeMemberships"].as_array().is_some());
     let prepared = prepare_json(real_graph_str(), "{}").expect("schema 4 graph must prepare");
     assert_eq!(prepared.graph().schema_version, 4);
@@ -101,7 +101,8 @@ fn real_graph_deserialization_and_schema_validation() {
     // forward 1 件が inner / outer の 2 件に分割され、合計 52 件になる
     // （pair-candidates.json の relationManifest と一致）。
     assert_eq!(prepared.route_memberships().len(), 52);
-    // Issue #34 で内回り銀座入口→新富町出口が verified に加わり 10 件。
+    // Issue #34 の内回り銀座入口→新富町出口と、C2 五反田入口→初台南出口が
+    // verified に加わり 11 件（未検証は春日部条件付きの 1 件のみ）。
     assert_eq!(
         wire["billingPairs"]
             .as_array()
@@ -109,7 +110,7 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .filter(|pair| pair["pairEligibility"]["status"] == json!("verified_one_section_ahead"))
             .count(),
-        10,
+        11,
         "9 verified pairs (7 legacyRing + 2 radialReturn); only bp:c1-outer:shibakoen-iikura stays unverified (conditional public way)"
     );
     let g = real_graph();
@@ -118,11 +119,12 @@ fn real_graph_deserialization_and_schema_validation() {
     assert_eq!(g.vehicle_profile, "passenger-car-etc");
     assert!(!g.nodes.is_empty(), "nodes must not be empty");
     assert!(!g.edges.is_empty(), "edges must not be empty");
-    // Issue #34 で legacy 9 件（schema 2 の legacy adapter は radial を emit しない）。
+    // Issue #34 と C2 五反田→初台南で legacy 10 件（schema 2 の legacy adapter は
+    // radial を emit しない）。
     assert_eq!(
         g.billing_pairs.len(),
-        9,
-        "exactly 9 billing pairs expected in fixture"
+        10,
+        "exactly 10 billing pairs expected in fixture"
     );
 
     let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
@@ -133,7 +135,7 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .filter(|p| p.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        8
+        9
     );
     assert_eq!(
         g.billing_pairs
@@ -144,22 +146,32 @@ fn real_graph_deserialization_and_schema_validation() {
     );
 
     for pair in &g.billing_pairs {
-        assert_eq!(
-            pair.prices
-                .iter()
-                .map(|price| price.amount_yen)
-                .collect::<Vec<_>>(),
-            vec![300, 300],
-            "billing pair {} prices must match the reviewed tariff records",
-            pair.id
-        );
+        let amounts = pair
+            .prices
+            .iter()
+            .map(|price| price.amount_yen)
+            .collect::<Vec<_>>();
+        if pair.id == "bp:c2-outer:gotanda-hatsudai-minami" {
+            // 2026-10 改定版の料金表セルは人手 PDF レビュー待ちのため、legacy 投影は
+            // レビュー済みの 2022-04 期間だけを持つ。
+            assert_eq!(amounts, vec![350], "C2 pair prices");
+        } else {
+            assert_eq!(
+                amounts,
+                vec![300, 300],
+                "billing pair {} prices must match the reviewed tariff records",
+                pair.id
+            );
+        }
         assert_eq!(pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
         assert_eq!(
             pair.prices[0].effective_to.as_deref(),
             Some("2026-09-30T15:00:00Z")
         );
-        assert_eq!(pair.prices[1].amount_yen, 300);
-        assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+        if pair.prices.len() > 1 {
+            assert_eq!(pair.prices[1].amount_yen, 300);
+            assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
+        }
         if pair.status == shutoko_routing_core::VerificationStatus::Verified {
             assert!(
                 pair.entry_ramp_id.is_some() && pair.exit_ramp_id.is_some(),
@@ -234,7 +246,7 @@ fn radial_seed_is_promoted_after_exact_binding_resolution() {
     let seed: Value =
         serde_json::from_str(include_str!("../../../data/billing-pairs-seed.json")).unwrap();
     assert_eq!(seed["schemaVersion"], 2);
-    assert_eq!(seed["billingPairs"].as_array().unwrap().len(), 11);
+    assert_eq!(seed["billingPairs"].as_array().unwrap().len(), 12);
 
     let radial_pairs = seed["billingPairs"]
         .as_array()
@@ -320,7 +332,7 @@ fn radial_seed_is_promoted_after_exact_binding_resolution() {
     );
 
     let graph: Value = serde_json::from_str(real_graph_str()).unwrap();
-    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 11);
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 12);
     assert_eq!(
         graph["billingPairs"]
             .as_array()

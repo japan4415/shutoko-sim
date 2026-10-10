@@ -110,6 +110,11 @@
           "documentId": "shutoko-2026-04-fare-guide",
           "page": 4,
           "location": "0.1 km quantum, half-up rounding to 10 yen, and ordinary fare bounds"
+        },
+        {
+          "documentId": "shutoko-2025-04-od-fare-table",
+          "page": 25,
+          "location": "ETC ordinary C2 (中央環状線) OD fare and distance table"
         }
       ]
     },
@@ -163,6 +168,11 @@
           "documentId": "shutoko-2026-10-od-fare-table",
           "page": 4,
           "location": "Route 2 Meguro OD fare and distance cells reviewed from the 2026-10 edition"
+        },
+        {
+          "documentId": "shutoko-2026-10-od-fare-table",
+          "page": null,
+          "location": "C2 OD fare and distance cells pending manual PDF review"
         }
       ]
     }
@@ -667,9 +677,48 @@
         "page_image",
         "pdf_text_layer"
       ]
+    },
+    {
+      "evidenceId": "evidence:2025-04:p25:c2-gotanda-hatsudai-minami",
+      "documentId": "shutoko-2025-04-od-fare-table",
+      "edition": "2025-04",
+      "documentSha256": "dc2d80ee0c8f215ffcf544f1f2daf3b84ff036e636782be31e438a7113c3a889",
+      "page": 25,
+      "routeLabel": "中央環状線",
+      "rowLabel": "五反田",
+      "columnLabel": "初台南",
+      "cell": "p25:row-c2-gotanda:column-c2-hatsudai-minami:base-etc:350yen:5.8km",
+      "fareVariant": "base_etc",
+      "ink": "black",
+      "distanceMeters": 5800,
+      "distanceLabel": "5.8km",
+      "observedBaseFareYen": 350,
+      "calculatedBaseFareYen": 350,
+      "entryRampId": "ramp:c2-outer:gotanda-entry",
+      "exitRampId": "ramp:c2-outer:hatsudai-minami-exit",
+      "url": "https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf",
+      "reviewedAt": "2026-10-10T00:00:00Z",
+      "reviewMethod": [
+        "pdf_text_layer"
+      ]
     }
   ],
-  "pendingEvidence": [],
+  "pendingEvidence": [
+    {
+      "evidenceId": "evidence:2026-10:p25:c2-gotanda-hatsudai-minami",
+      "documentId": "shutoko-2026-10-od-fare-table",
+      "edition": "2026-10",
+      "page": null,
+      "rowLabel": "五反田",
+      "columnLabel": "初台南",
+      "cell": null,
+      "fareVariant": "base_etc",
+      "status": "pending_manual_pdf_review",
+      "observedBaseFareYen": null,
+      "observedDistanceMeters": null,
+      "reviewedAt": null
+    }
+  ],
   "assignments": [
     {
       "assignmentId": "assignment:c1-outer:kandabashi-takaracho",
@@ -1117,6 +1166,50 @@
           "distanceEvidenceId": "evidence:2026-10:p04:2-meguro-tengenji"
         }
       ]
+    },
+    {
+      "assignmentId": "assignment:c2-outer:gotanda-hatsudai-minami",
+      "odKey": "c2-outer:gotanda-hatsudai-minami",
+      "pairIds": [
+        "bp:c2-outer:gotanda-hatsudai-minami"
+      ],
+      "entryName": "五反田入口",
+      "exitName": "初台南出口",
+      "entryRampId": "ramp:c2-outer:gotanda-entry",
+      "exitRampId": "ramp:c2-outer:hatsudai-minami-exit",
+      "vehicleProfile": "passenger-car-etc",
+      "vehicleClass": "ordinary",
+      "paymentMethod": "etc",
+      "fareBasis": "base_toll_excluding_discounts",
+      "billingDistanceMeters": 5800,
+      "distanceEvidenceId": "evidence:2025-04:p25:c2-gotanda-hatsudai-minami",
+      "verificationStatus": "verified",
+      "prices": [
+        {
+          "status": "priced",
+          "tariffStatus": "priced",
+          "amountYen": 350,
+          "observedBaseFareYen": 350,
+          "observedDistanceMeters": 5800,
+          "effectiveFrom": "2022-03-31T15:00:00Z",
+          "effectiveTo": "2026-09-30T15:00:00Z",
+          "ruleId": "shutoko-etc-ordinary-2022-04",
+          "evidenceId": "evidence:2025-04:p25:c2-gotanda-hatsudai-minami",
+          "distanceEvidenceId": "evidence:2025-04:p25:c2-gotanda-hatsudai-minami"
+        },
+        {
+          "status": "pending_pdf_review",
+          "tariffStatus": "unpriced",
+          "amountYen": null,
+          "observedBaseFareYen": null,
+          "observedDistanceMeters": null,
+          "effectiveFrom": "2026-09-30T15:00:00Z",
+          "effectiveTo": null,
+          "ruleId": "shutoko-etc-ordinary-2026-10",
+          "evidenceId": "evidence:2026-10:p25:c2-gotanda-hatsudai-minami",
+          "distanceEvidenceId": "evidence:2026-10:p25:c2-gotanda-hatsudai-minami"
+        }
+      ]
     }
   ],
   "deprecatedAssignments": [
@@ -1156,7 +1249,8 @@
       "assignment:c1-inner:shibakoen-shiodome",
       "assignment:c1-inner:takaracho-kandabashi",
       "assignment:c1-inner:ginza-shintomicho",
-      "assignment:2:meguro-tengenji"
+      "assignment:2:meguro-tengenji",
+      "assignment:c2-outer:gotanda-hatsudai-minami"
     ],
     "deprecateLegacyPairs": [
       "ramp:3-inbound:yoga-entry->ramp:3-outbound:yoga-exit",
@@ -1239,6 +1333,14 @@
       "exitRampId": "ramp:2-outbound:tengenji-exit",
       "billingDistanceMeters": 19400,
       "amountYen": 790,
+      "effectiveFrom": "2022-03-31T15:00:00Z",
+      "effectiveTo": "2026-09-30T15:00:00Z"
+    },
+    {
+      "entryRampId": "ramp:c2-outer:gotanda-entry",
+      "exitRampId": "ramp:c2-outer:hatsudai-minami-exit",
+      "billingDistanceMeters": 5800,
+      "amountYen": 350,
       "effectiveFrom": "2022-03-31T15:00:00Z",
       "effectiveTo": "2026-09-30T15:00:00Z"
     }

@@ -409,6 +409,34 @@
           "initialEdgeId": "e:w4853805:0:f"
         }
       }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c2-outer:gotanda-hatsudai-minami",
+      "pairId": "bp:c2-outer:gotanda-hatsudai-minami",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C2",
+      "direction": "outer",
+      "entryRampId": "ramp:c2-outer:gotanda-entry",
+      "exitRampId": "ramp:c2-outer:hatsudai-minami-exit",
+      "entryName": "五反田入口",
+      "exitName": "初台南出口",
+      "entryOsmWayId": 805171060,
+      "exitOsmWayId": 381972983,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C2:outer",
+        "anchorNodeId": "n:3387909571",
+        "firstExitInitialEdgeId": "e:w805363106:134:f",
+        "exitApproachEdgeIds": [
+          "e:w381972981:0:f",
+          "e:w381972981:1:f",
+          "e:w381972981:2:f",
+          "e:w381972983:0:f",
+          "e:w381972983:1:f",
+          "e:w381972983:2:f"
+        ]
+      }
     }
   ]
 }

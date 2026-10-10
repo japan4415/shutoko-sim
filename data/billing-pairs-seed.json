@@ -438,6 +438,23 @@
         "sourceDate": "2026-09-25",
         "notes": "目黒入口、C1 outer の通常長弧周回、2号下り return corridor を経由し、firstPublicRoadConnection/v1 で確定した4-way/16-edge天現寺出口で終わる。料金は2025-04版公式セルの19.4km/790円、2026-10版公式セルの19.4km/860円。 2号目黒線（内回り/外回り）の路線図は https://www.shutoko.jp/use/network/map/route-2/ 。"
       }
+    },
+    {
+      "id": "bp:c2-outer:gotanda-hatsudai-minami",
+      "entryOsmWayId": 805171060,
+      "entryName": "五反田入口",
+      "exitOsmWayId": 381972983,
+      "exitName": "初台南出口",
+      "anchorOsmNodeId": 3387909571,
+      "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c2-outer:gotanda-hatsudai-minami",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/route-c2/gotanda/",
+        "sourceDate": "2026-10-10",
+        "notes": "C2 outer 五反田入口 -> 初台南出口. Bindings are verified_bound (ways 805171060 / 381972983). Official 2025-04 ETC ordinary fare table page 25 row 五反田 column 初台南 = 350 yen / 5.8 km (sha256 dc2d80ee0c8f215f...). The C2 outer arc between the mainline attachments n:3387909571 -> n:919617354 is 134 edges / 5,749 m, matching the billed 5.8 km, and 初台南 is the first general exit after 五反田 (富ヶ谷 is a further 0.4 km). The 2026-10 revision cell is pending: the revised fare table returns HTTP 429 and has no archive snapshot."
+      }
     }
   ]
 }

@@ -6,8 +6,8 @@
     "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
     "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
     "routeMembershipIndexSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
-    "billingPairAdjacencySha256": "d748051cbe94627bd54dba23fec44ed57f1213578606897304018e44d636fa44",
-    "odTariffsSha256": "48a62e9f7a882b67fa9ed3101e21555cf2d6f11d4197eefeda24592ebefc26cc"
+    "billingPairAdjacencySha256": "1d8ee3abf8b49ef398ee9a39f80a80188c09a75d37a2d84ffcfd15818a98b44c",
+    "odTariffsSha256": "584234b8f58f25a69a3046a5c8211898f656c9ecee39599c7a7b3f6832b476ec"
   },
   "relationCoverage": [
     {
@@ -593,8 +593,10 @@
       "relationIds": [
         4256077
       ],
-      "candidatePairIds": [],
-      "routePlanResolved": 0,
+      "candidatePairIds": [
+        "bp:c2-outer:gotanda-hatsudai-minami"
+      ],
+      "routePlanResolved": 1,
       "routePlanUnresolved": 0,
       "status": "pass"
     },
@@ -2390,12 +2392,161 @@
         "ENTRY_BINDING_UNRESOLVED",
         "ROUTE_PLAN_ROLES_UNRESOLVED"
       ]
+    },
+    {
+      "candidateId": "candidate:b193b644d202988a0168f49c2d67d9d1817a438ea4e89aa87ae3a6cf0f0672fa",
+      "pairId": "bp:c2-outer:gotanda-hatsudai-minami",
+      "pairKind": "legacyRing",
+      "routeId": "C2",
+      "direction": "outer",
+      "entry": {
+        "rampId": "ramp:c2-outer:gotanda-entry",
+        "name": "五反田",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c2-outer:gotanda-entry",
+        "routeMembershipId": "route:C2:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c2-outer:hatsudai-minami-exit",
+        "name": "初台南",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c2-outer:hatsudai-minami-exit",
+        "routeMembershipId": "route:C2:outer",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c2-outer:gotanda-hatsudai-minami",
+        "edgeIdsSha256": "f6d14abce033a42314ebf07941ec1863164ed4b8cd59e9dfa13786c5140cc26f",
+        "loopValidationStatus": "unresolved",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c2-outer:gotanda-entry:segment:0",
+          "binding:osm-ramp-binding:ramp:c2-outer:hatsudai-minami-exit:segment:0",
+          "relation:4256077:outer:split:0",
+          "relation:4256077:outer:split:3",
+          "relation:4256077:outer:split:5"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "8c38aae1a20af81ac47bf693966b0d3ede59da95216a726d4f74c720d4551894",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c2-outer:gotanda-entry:segment:0"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "unresolved",
+            "edgeIdsSha256": null,
+            "sourceSegmentIds": []
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "a5dcd6ef90ee479b6e3a39def414551e34ca624b9a3d0d5a12ce22a71c512fdc",
+            "sourceSegmentIds": [
+              "relation:4256077:outer:split:0",
+              "relation:4256077:outer:split:3",
+              "relation:4256077:outer:split:5"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "13888010b910ed064bbcf80475cf4b27cc5038567fb1dddffcda4514ab8f4569",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c2-outer:hatsudai-minami-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "failed",
+          "reasonCodes": [
+            "PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS"
+          ]
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "unverified",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c2-outer:gotanda-hatsudai-minami",
+        "oneSectionAheadVerified": false
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c2-outer:gotanda-hatsudai-minami",
+        "billingDistanceMeters": 5800,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 350,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p25:c2-gotanda-hatsudai-minami",
+            "distanceEvidenceId": "evidence:2025-04:p25:c2-gotanda-hatsudai-minami"
+          },
+          {
+            "status": "pending_pdf_review",
+            "tariffStatus": "unpriced",
+            "amountYen": null,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p25:c2-gotanda-hatsudai-minami",
+            "distanceEvidenceId": "evidence:2026-10:p25:c2-gotanda-hatsudai-minami"
+          }
+        ]
+      },
+      "promotionDecision": "hold",
+      "automaticSeedWrite": false,
+      "rejectionReasons": [
+        "PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS",
+        "ROUTE_PLAN_ROLES_UNRESOLVED"
+      ]
     }
   ],
   "summary": {
-    "candidateTotal": 11,
+    "candidateTotal": 12,
     "eligibleForReview": 10,
-    "hold": 1,
+    "hold": 2,
     "relationCoverage": {
       "relationTotal": 26,
       "relationExpanded": 11,

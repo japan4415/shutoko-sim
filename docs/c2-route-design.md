@@ -392,17 +392,18 @@ run エッジの分だけずれる。
   時点で上の arc を `explicitArc` に記入する。外周の 3 本と内周の 2 本はそのまま
   使える。
 
-**段6（C2 ペア authoring の検証）: 料金根拠は取れたが membership id 衝突で止まる**
+**段6（C2 ペア authoring）: 五反田入口 → 初台南出口を実データで投入した**
 
-実在の C2 OD を 1 件選び、公式料金表から根拠を取って pair を組み立てた。
+実在の C2 OD を 1 件選び、公式料金表から根拠を取って pair を組み立て、seed /
+adjacency / od-tariffs に入れてフィクスチャまで再生成した。
 
 - 選んだ OD: **五反田入口 → 初台南出口（C2 外周）**。両方とも
   `data/osm-ramp-bindings.json` で `verified_bound`（way 805171060 / 381972983）。
 - 料金根拠: 公式「首都高 料金表」2025-04 版 PDF（sha256
-  `dc2d80ee…`、リポジトリの `documents[0]` と一致）**page 25（`料金・距離表`、
+  `dc2d80ee…`、リポジトリの `documents[0]` と一致）**page 25（料金・距離表、
   行=五反田・列=初台南）= 350 円 / 5.8 km**（ETC 普通車基本料金）。
-  PDF は 429 で直接取得できないためテキスト化プロキシ経由で取得し、表の
-  グリッド（`extract_tables`）で行・列を確認した。
+  PDF は直接取得が 429 のためテキスト化プロキシ経由で取得し、表のグリッド
+  （`extract_tables`）で行・列を確認した。
 - 三重の整合確認:
   - 2022-04 ルールの式で 5,800 m を計算すると 350 円（58 unit × 2.952 円
     + 150 円 → ×1.1 → 10 円丸め）。表の 350 円と一致。
@@ -412,29 +413,43 @@ run エッジの分だけずれる。
 - 2026-10 改定版（現行期間）の同じセルは**未確認**。公式 PDF は
   `www.shutoko.jp` が HTTP 429（Vercel checkpoint）を返し、Wayback にも
   スナップショットが無いため取得できない。`pendingEvidence`
-  （`pending_manual_pdf_review`）として記録する形が schema 上は可能。
+  （`pending_manual_pdf_review`）として記録し、価格は推測していない。
+- 生成物: `all-real-v4` フィクスチャで **billing pair 12 件（legacy 10 +
+  radial 2）**。C2 ペアは legacyRing、anchor `n:3387909571`、
+  `anchorToExitEdgeIds` 141 辺、tariff 350 円 / 5,800 m、eligibility
+  `verified_one_section_ahead`。`fixtures/generated/*` を再生成し、
+  `docs/data-pipeline.md` のサイズ表も実測に更新した。
 
-このデータを seed / adjacency / od-tariffs に入れて `--release-id all-real-v4` で
-ビルドすると **pair は生成できた**（legacyRing、anchor `n:3387909571`、
-`anchorToExitEdgeIds` 141 辺、tariff 350 円 / 5,800 m、eligibility
-verified_one_section_ahead）。
+**途中で止まっていた本当の原因**（最初のコミットで「membership id 衝突」と
+書いたが誤りだったので訂正する）:
 
-しかし `--release-id all-real-test`（legacy 経路）では
-`RELATION_MAINLINE_NOT_UNIQUE` で落ちる。原因は **membership id の衝突**で、
-`build_bound_ramp_memberships` が bound ramp ごとに
-`route:{route}:{direction}`（= `route:C2:outer`）という **車線 membership と
-同じ id** を作るため、legacy 検証の `route_memberships.find(membership_id)` が
-ramp だけの membership（12 個の BoundRamp セグメント・relationMainline 0 本）を
-先に拾ってしまう。C1 では車線 membership と ramp membership が同じ index に
-merge されるため表面化しない。C2 で merge されないのは、C2 の車線 membership が
-`carriageway_memberships_for_relation` から別 index として追加されるためである。
+1. **legacy 検証は単一 run 前提だった**。`validate_relation_constrained_legacy_first_exit`
+   は「初期辺を含む relationMainline セグメント」1 本の巡回順で relation order を
+   作り、exit の分岐ノードがその中に現れることを要求する。C2 は membership が
+   7 run に分かれ、ペアの走行は run 3 → 0 → 5 とまたがるため、単一 run では
+   分岐ノードに到達できない。→ 到達可能性でガイドする前進ウォークを追加し、
+   その順序が分岐ノードに実際に到達したときだけ採用する（C1 は従来どおり
+   1 本の run で完結するので挙動不変）。
+2. `relation_segments_match_required`（routing-core）も「relationMainline
+   セグメントがちょうど 1 本」を要求していた。→ いずれか 1 本が要求辺列を
+   含めばよい、に緩和。
+3. **adjacency の `exitApproachEdgeIds` の起点を間違えていた**。exit の
+   approach は「出口ランプ way の辺」ではなく「分岐ノードから出口の直前までの
+   Shutoko 辺」で、起点は分岐ノードでなければならない。初台南では
+   `e:w381972981:0..2` + `e:w381972983:0..2` の 6 辺（最後の Exit 辺は pair 側が
+   付ける）。ここを直した時点で legacy 経路も通った。
+4. 副次的に、`--release-id all-real-test` のような **C2 を展開しない構成**では
+   route:C2:outer が ramp membership だけになる。C2 ペアを含む seed を回す
+   リリースは C2 を展開する必要がある（フィクスチャ生成は `all-real-v4` なので
+   影響なし。テスト側の legacy CLI 実行に `--all-route-relations` を足した）。
 
-**したがって次の一手は membership の同一性の整理**である。具体的には
-(a) bound ramp membership に一意な id（例 `route:{route}:{direction}:ramp:{ramp_id}`）
-を付けて車線 membership と分離する、(b) merge 規則を C2 でも車線 membership を
-含めるように直す、(c) legacy 検証で relationMainline を持つ index を優先する、
-のいずれか。C1 の既存 id を変える (a) は影響が広いので、(c) から入るのが
-小さく、続けて (b) で構造を揃えるのが妥当である。
+**残る不整合（fail-closed 側に倒れている）**: 導出レポート
+（`pair-candidates.json`）では C2 ペアの `mandatoryLap` ゲートが
+`PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS` で **hold** のままである
+（候補 12 件 = eligible 10 / hold 2）。graph 側の legacy 検証は通るが、
+run をまたぐ lap を導出側はまだ「一意な mainline 列」として承認しない。
+段 4〜5 の arc 生成（`explicitArc`）と multi-segment 対応を導出側の
+mandatoryLap ゲートにも通すのが次の作業である。
 
 - **未対応**: `explicitArc` は 1 本の arc 内での同一エッジ再訪をまだ許さない
   （`validate_ordered_edges` と `validate_resolved_route_plan` が単純列を前提に

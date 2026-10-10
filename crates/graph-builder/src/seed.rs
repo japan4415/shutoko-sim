@@ -1034,19 +1034,19 @@ mod tests {
             ParsedBillingPairsSeed::Schema1(_) => panic!("expected schema 2"),
         };
         assert_eq!(parsed.schema_version(), 2);
-        assert_eq!(seed.billing_pairs.len(), 11);
+        assert_eq!(seed.billing_pairs.len(), 12);
         let legacy_pairs: Vec<_> = seed
             .billing_pairs
             .iter()
             .filter_map(BillingPairSeedEntry::as_legacy_ring)
             .collect();
-        assert_eq!(legacy_pairs.len(), 9);
+        assert_eq!(legacy_pairs.len(), 10);
         assert_eq!(
             legacy_pairs
                 .iter()
                 .filter(|pair| pair.status == VerificationStatus::Verified)
                 .count(),
-            8
+            9
         );
         assert_eq!(
             legacy_pairs

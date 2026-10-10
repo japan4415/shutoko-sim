@@ -368,6 +368,8 @@ endpoint は単一 OSM way を仮定しない。`supportState=verified_bound` �
 
 mandatory lap 自身の境界は `routePlan.mandatoryLap.firstEdgeId` / `lastEdgeId` に置く。anchor と lap の責務を混ぜない。
 
+mandatory lap は**周回（walk）**であり、1 本の leg の中で同じ Edge を 2 回以上通ってよい（`docs/c2-route-design.md` 段2.3・段10）。relation membership segment と entry approach / return corridor / exit approach の 3 leg は従来どおり単純列で、重複 Edge を拒否する。明示 arc（`routePlan.mandatoryLap.explicitArc`）は 1 本の membership segment の部分列ではないため、resolved segment の source binding に `explicit:<membershipId>` マーカーを使う。このマーカーは mandatory lap の leg だけに許され、M/B 境界・除外ショートコネクタ・連結性・禁止遷移の検証は変わらない。
+
 | 現行 schema 1 | schema 2 / graph schema 4 | 規則 |
 | --- | --- | --- |
 | `pairKind` なし | `pairKind="legacyRing"` | seed では省略を許す。graph schema 4 では明示する。 |
@@ -721,14 +723,14 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
-| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 13件（legacy 11 + radial 2）、route memberships 52件、ramps 238件 | 7,641,078 bytes |
-| `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 24 件、assignment 12 件、deprecated 2 件） | 57,304 bytes |
-| `pair-candidates.json` | 2 | 導出レポート（候補 13 件 = eligible 12 / hold 1、relation coverage 26 件 = pass 11 / fail 15） | 86,185 bytes |
+| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 14件（legacy 12 + radial 2）、route memberships 52件、ramps 238件 | 7,650,330 bytes |
+| `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 26 件、assignment 13 件、deprecated 2 件） | 61,284 bytes |
+| `pair-candidates.json` | 2 | 導出レポート（候補 14 件 = eligible 13 / hold 1、relation coverage 26 件 = pass 11 / fail 15） | 91,097 bytes |
 | `ramps.json` | 1 | 正規台帳399件、うちbound 238件 | 278,803 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
-| `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 9件 | 48,442 bytes |
+| `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 13件 | 49,308 bytes |
 
-`graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は 5 成果物（`graph.json` / `od-tariffs.json` / `pair-candidates.json` / `ramps.json` / `snap-index.json`）の path・SHA-256・byte length を固定し、manifest 自身のサイズと schema は別情報として扱う。`all-real-v4` の `routeMembershipsSha256` は `6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5` であり、同一入力の2回の生成で一致する。3 世代分のバイト一致は `cargo test --release -p shutoko-graph-builder --test release_v4_contract --locked -- --ignored` の `all_real_v4_artifacts_are_byte_identical_across_three_generations` が担保する。
+`graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は 5 成果物（`graph.json` / `od-tariffs.json` / `pair-candidates.json` / `ramps.json` / `snap-index.json`）の path・SHA-256・byte length を固定し、manifest 自身のサイズと schema は別情報として扱う。`all-real-v4` の `routeMembershipsSha256` は `c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1` であり、同一入力の2回の生成で一致する。3 世代分のバイト一致は `cargo test --release -p shutoko-graph-builder --test release_v4_contract --locked -- --ignored` の `all_real_v4_artifacts_are_byte_identical_across_three_generations` が担保する。
 
 ### `snap-index.json` の意味と `schemaVersion: 2`
 
@@ -906,8 +908,8 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 | 指標 | 値 |
 | --- | ---: |
-| 候補総数 | 13 |
-| `eligible_for_review` | 12 |
+| 候補総数 | 14 |
+| `eligible_for_review` | 13 |
 | `hold` | 1（`bp:c1-outer:shibakoen-iikura`、public way が `access:conditional`） |
 | route relation 総数 | 26 |
 | 展開できた relation | 11 |

@@ -1,0 +1,734 @@
+{
+  "schemaVersion": 1,
+  "relationId": 4256077,
+  "routeId": "C2",
+  "status": "proposed_upstream_not_applied",
+  "description": "Proposed upstream edits to OSM relation 4256077 (首都高速中央環状線). The relation is role-less, so graph-builder derives the inner/outer carriageway split from the verified-bound C2 ramp evidence, which labels 2,296 of 2,479 mainline edges and leaves the walk in 9 inner and 7 outer runs. Applying this file to a copy of the snapshot does not change the release fixture; it is the candidate changeset the diagnostics are verified against (scripts/apply-osm-relation-repairs.py, docs/c2-route-design.md 段11).",
+  "applyCommand": [
+    "python3",
+    "scripts/apply-osm-relation-repairs.py",
+    "--osm",
+    "fixtures/osm/shutoko-all.json",
+    "--repairs",
+    "data/osm-relation-repairs.json",
+    "--out",
+    "/tmp/shutoko-repaired.json"
+  ],
+  "humanReviewRequired": [
+    "The setMemberRole entries are derived from the current derived split, not from a surveyed direction sign. A mapper has to confirm each one.",
+    "The removeMemberWay entries whose reason mentions \"no inner/outer evidence\" are members the current evidence cannot place; assigning a direction is preferred over dropping them when the way really is C2 mainline."
+  ],
+  "verification": {
+    "measuredAt": "2026-10-11",
+    "baseline": {
+      "innerRuns": 9,
+      "outerRuns": 7,
+      "assignedEdges": 2296,
+      "unassignedEdges": 169,
+      "uniqueArcs": 27,
+      "firstExitArcs": 11
+    },
+    "withThisFile": {
+      "innerRuns": 7,
+      "outerRuns": 6,
+      "innerEdges": 1223,
+      "outerEdges": 1087,
+      "uniqueArcs": 32,
+      "firstExitArcs": 11
+    },
+    "diagnostics": [
+      "Removing only the JCT link members stops the walk at n:8283617223 and the builder reports the node, the continuing edge e:w891237687:2:f, and member way 44180278.",
+      "Splitting the interior-continuation ways alone leaves the membership unchanged, because the C2 runs are cut by edge labels, not by member order.",
+      "Roles plus removals plus splits build, reduce the runs, and add five unique arcs; the first-exit-eligible arc count stays at 11."
+    ]
+  },
+  "repairs": [
+    {
+      "kind": "removeMemberWay",
+      "wayId": 80581131,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 80581133,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 331922702,
+      "reason": "JCT link member that starts on the same node as the mainline member (fork)"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 541983769,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 805171062,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 331922695,
+      "reason": "JCT link member that starts on the same node as the mainline member (fork)"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 78334073,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 593535941,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 78334076,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 78334075,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 766677827,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 28127318,
+      "reason": "JCT link member that starts on the same node as the mainline member (fork)"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 44289388,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 867182415,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 156344608,
+      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 80581132,
+      "role": "Inner directions",
+      "reason": "12 of 13 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 80581127,
+      "role": "Inner directions",
+      "reason": "79 of 79 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331692348,
+      "role": "Inner directions",
+      "reason": "22 of 22 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 438369821,
+      "role": "Inner directions",
+      "reason": "17 of 17 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 772511246,
+      "role": "Inner directions",
+      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 772511245,
+      "role": "Inner directions",
+      "reason": "21 of 21 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922708,
+      "role": "Inner directions",
+      "reason": "146 of 146 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 805363107,
+      "role": "Inner directions",
+      "reason": "5 of 5 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331692344,
+      "role": "Inner directions",
+      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1308572350,
+      "role": "Inner directions",
+      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922700,
+      "role": "Inner directions",
+      "reason": "12 of 12 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 250494182,
+      "role": "Inner directions",
+      "reason": "22 of 22 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 914917090,
+      "role": "Inner directions",
+      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 914917089,
+      "role": "Inner directions",
+      "reason": "4 of 4 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 4854100,
+      "role": "Inner directions",
+      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 768600220,
+      "role": "Outer directions",
+      "reason": "8 of 8 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922711,
+      "role": "Outer directions",
+      "reason": "28 of 28 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 78334071,
+      "role": "Outer directions",
+      "reason": "11 of 11 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922707,
+      "role": "Outer directions",
+      "reason": "16 of 16 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 78334074,
+      "role": "Outer directions",
+      "reason": "27 of 27 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 78334072,
+      "role": "Outer directions",
+      "reason": "44 of 44 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 766679040,
+      "role": "Outer directions",
+      "reason": "23 of 43 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 766679041,
+      "role": "Inner directions",
+      "reason": "6 of 11 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 768600219,
+      "role": "Inner directions",
+      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617333,
+      "role": "Inner directions",
+      "reason": "84 of 84 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617334,
+      "role": "Inner directions",
+      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617332,
+      "role": "Inner directions",
+      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127108,
+      "role": "Inner directions",
+      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1335055570,
+      "role": "Inner directions",
+      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1335055579,
+      "role": "Inner directions",
+      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1335055589,
+      "role": "Inner directions",
+      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 343240453,
+      "role": "Inner directions",
+      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1335055592,
+      "role": "Inner directions",
+      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28126649,
+      "role": "Inner directions",
+      "reason": "13 of 13 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 343240454,
+      "role": "Inner directions",
+      "reason": "8 of 8 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1335055558,
+      "role": "Inner directions",
+      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127112,
+      "role": "Inner directions",
+      "reason": "13 of 13 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28195150,
+      "role": "Inner directions",
+      "reason": "36 of 36 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 156344609,
+      "role": "Inner directions",
+      "reason": "49 of 49 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44289390,
+      "role": "Inner directions",
+      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127324,
+      "role": "Inner directions",
+      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44209384,
+      "role": "Inner directions",
+      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44211322,
+      "role": "Inner directions",
+      "reason": "29 of 29 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127449,
+      "role": "Inner directions",
+      "reason": "36 of 36 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44180277,
+      "role": "Inner directions",
+      "reason": "38 of 38 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44209394,
+      "role": "Inner directions",
+      "reason": "6 of 6 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28194811,
+      "role": "Inner directions",
+      "reason": "88 of 88 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 709826346,
+      "role": "Inner directions",
+      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28194807,
+      "role": "Inner directions",
+      "reason": "43 of 43 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44130134,
+      "role": "Inner directions",
+      "reason": "13 of 13 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 316265424,
+      "role": "Inner directions",
+      "reason": "24 of 24 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44422826,
+      "role": "Inner directions",
+      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44422827,
+      "role": "Inner directions",
+      "reason": "12 of 12 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 184872024,
+      "role": "Inner directions",
+      "reason": "29 of 29 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 184872022,
+      "role": "Inner directions",
+      "reason": "14 of 14 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28188274,
+      "role": "Outer directions",
+      "reason": "20 of 20 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44129867,
+      "role": "Outer directions",
+      "reason": "1 of 1 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 184872023,
+      "role": "Outer directions",
+      "reason": "130 of 130 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 184872021,
+      "role": "Outer directions",
+      "reason": "14 of 14 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44130240,
+      "role": "Outer directions",
+      "reason": "38 of 38 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44130133,
+      "role": "Outer directions",
+      "reason": "3 of 3 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 32898851,
+      "role": "Outer directions",
+      "reason": "10 of 10 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28194805,
+      "role": "Outer directions",
+      "reason": "42 of 42 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44180278,
+      "role": "Outer directions",
+      "reason": "81 of 81 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 891237687,
+      "role": "Outer directions",
+      "reason": "3 of 3 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44211094,
+      "role": "Inner directions",
+      "reason": "34 of 37 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 780870438,
+      "role": "Inner directions",
+      "reason": "64 of 64 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44209387,
+      "role": "Inner directions",
+      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127320,
+      "role": "Outer directions",
+      "reason": "51 of 52 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 24334800,
+      "role": "Outer directions",
+      "reason": "37 of 37 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44291527,
+      "role": "Outer directions",
+      "reason": "13 of 13 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127113,
+      "role": "Outer directions",
+      "reason": "24 of 24 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617330,
+      "role": "Outer directions",
+      "reason": "12 of 12 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617331,
+      "role": "Outer directions",
+      "reason": "1 of 1 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617335,
+      "role": "Outer directions",
+      "reason": "9 of 9 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 90184161,
+      "role": "Outer directions",
+      "reason": "81 of 81 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 863812381,
+      "role": "Outer directions",
+      "reason": "10 of 10 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 863812380,
+      "role": "Outer directions",
+      "reason": "4 of 4 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 863812379,
+      "role": "Outer directions",
+      "reason": "1 of 1 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 863812378,
+      "role": "Outer directions",
+      "reason": "4 of 4 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922705,
+      "role": "Outer directions",
+      "reason": "60 of 60 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 772511244,
+      "role": "Outer directions",
+      "reason": "1 of 1 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 772511247,
+      "role": "Outer directions",
+      "reason": "11 of 11 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 4854099,
+      "role": "Outer directions",
+      "reason": "4 of 4 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1051964007,
+      "role": "Outer directions",
+      "reason": "4 of 4 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 37794907,
+      "role": "Outer directions",
+      "reason": "6 of 6 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331692345,
+      "role": "Outer directions",
+      "reason": "14 of 14 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922706,
+      "role": "Outer directions",
+      "reason": "12 of 12 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 806097479,
+      "role": "Outer directions",
+      "reason": "4 of 4 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922709,
+      "role": "Outer directions",
+      "reason": "5 of 5 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 805363106,
+      "role": "Outer directions",
+      "reason": "164 of 164 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331692346,
+      "role": "Outer directions",
+      "reason": "28 of 28 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 4854098,
+      "role": "Outer directions",
+      "reason": "7 of 7 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 383231017,
+      "role": "Inner directions",
+      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 432603493,
+      "role": "Inner directions",
+      "reason": "10 of 10 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 574211698,
+      "role": "Inner directions",
+      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 432603492,
+      "role": "Inner directions",
+      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 4857050,
+      "role": "Inner directions",
+      "reason": "128 of 128 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44885527,
+      "role": "Inner directions",
+      "reason": "14 of 14 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44129869,
+      "role": "Inner directions",
+      "reason": "5 of 5 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+    },
+    {
+      "kind": "splitMemberWayAtNode",
+      "wayId": 891237687,
+      "nodeId": 8283617223,
+      "reason": "the member walk reaches n:8283617223 at the end of way 44211094 and way 891237687 only continues from the interior of its own node list"
+    },
+    {
+      "kind": "splitMemberWayAtNode",
+      "wayId": 44130240,
+      "nodeId": 370270234,
+      "reason": "way 44130240 holds n:370270234 at node index 1, so the chain from way 28188274 cannot continue into it"
+    }
+  ]
+}

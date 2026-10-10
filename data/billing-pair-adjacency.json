@@ -437,6 +437,31 @@
           "e:w381972983:2:f"
         ]
       }
+    },
+    {
+      "evidenceId": "adjacency:official-route-map:c2-inner:takinogawa-nakano-chojabashi",
+      "pairId": "bp:c2-inner:takinogawa-nakano-chojabashi",
+      "pairKind": "legacyRing",
+      "reviewStatus": "reviewed",
+      "routeId": "C2",
+      "direction": "inner",
+      "entryRampId": "ramp:c2-inner:takinogawa-entry",
+      "exitRampId": "ramp:c2-inner:nakano-chojabashi-exit",
+      "entryName": "滝野川入口",
+      "exitName": "中野長者橋出口",
+      "entryOsmWayId": 464736087,
+      "exitOsmWayId": 381950208,
+      "routePlan": {
+        "kind": "sameNode",
+        "membershipId": "route:C2:inner",
+        "anchorNodeId": "n:4597822558",
+        "firstExitInitialEdgeId": "e:w156344609:46:f",
+        "exitApproachEdgeIds": [
+          "e:w381950206:0:f",
+          "e:w381950206:1:f",
+          "e:w381950208:0:f"
+        ]
+      }
     }
   ]
 }

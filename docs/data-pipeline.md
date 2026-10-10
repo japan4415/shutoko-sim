@@ -723,7 +723,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
 | --- | ---: | --- | ---: |
 | `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 12件（legacy 10 + radial 2）、route memberships 52件、ramps 238件 | 7,629,723 bytes |
 | `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 22 件、assignment 11 件、deprecated 2 件） | 53,153 bytes |
-| `pair-candidates.json` | 2 | 導出レポート（候補 12 件 = eligible 10 / hold 2、relation coverage 26 件 = pass 11 / fail 15） | 81,055 bytes |
+| `pair-candidates.json` | 2 | 導出レポート（候補 12 件 = eligible 10 / hold 2、relation coverage 26 件 = pass 11 / fail 15） | 81,144 bytes |
 | `ramps.json` | 1 | 正規台帳399件、うちbound 238件 | 278,803 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
 | `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 9件 | 47,599 bytes |
@@ -895,7 +895,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
 2. **route**: 宣言された route の relation mainline が展開済み
 3. **direction**: 要求方向の有向接続が要求どおりに存在する
 4. **first exit**: relation 制約つきの First Exit（return corridor 上の最初の一般出口）が一致する
-5. **mandatory lap**: M→B の通常長弧が `lapCount=1` で構成される
+5. **mandatory lap**: M→B の通常長弧が `lapCount=1` で構成される。環状合成できた membership（C1）は巡回列を initial Edge から回して境界を検証し、run に分割された membership（C2）は initial Edge から exit の分流点へ向かう後続が各ノードで一意な場合だけその弧を採用する（`docs/c2-route-design.md` 段6）。
 6. **entry binding**: entry ランプが `firstPublicRoadConnection/v1` で `verified_bound`
 7. **exit binding**: exit ランプが `verified_bound`
 8. **tariff assignment**: 有効な料金規則と公式 PDF セル証跡が存在する
@@ -906,9 +906,9 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 | 指標 | 値 |
 | --- | ---: |
-| 候補総数 | 11 |
-| `eligible_for_review` | 9 |
-| `hold` | 2（`bp:c1-inner:ginza-shintomicho` と `bp:c1-outer:shibakoen-iikura`） |
+| 候補総数 | 12 |
+| `eligible_for_review` | 11 |
+| `hold` | 1（`bp:c1-outer:shibakoen-iikura`、public way が `access:conditional`） |
 | route relation 総数 | 26 |
 | 展開できた relation | 11 |
 | 展開できなかった relation | 15（すべて `ROUTE_MEMBERSHIP_RELATION_INVALID` などの reason code 付き） |

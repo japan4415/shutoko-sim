@@ -1459,26 +1459,41 @@ fn relation_mainline_lap(
     membership: &RouteMembershipIndex,
     anchor_node_id: &str,
     initial_edge_id: &str,
+    exit_split_node_id: Option<&str>,
 ) -> Result<Vec<String>, PairDerivationError> {
-    let segments = membership
-        .segments
-        .iter()
-        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
-        .collect::<Vec<_>>();
-    let [segment] = segments.as_slice() else {
-        return Err(PairDerivationError::new(
-            "PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS",
-            format!(
-                "membership {} must have one cyclic relationMainline segment",
-                membership.membership_id
-            ),
-        ));
-    };
     let edge_map = graph
         .edges
         .iter()
         .map(|edge| (edge.id.as_str(), edge))
         .collect::<HashMap<_, _>>();
+    let segments = membership
+        .segments
+        .iter()
+        .filter(|segment| segment.source_kind == RouteMembershipSourceKind::RelationMainline)
+        .collect::<Vec<_>>();
+    if segments.is_empty() {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS",
+            format!(
+                "membership {} has no relationMainline segment",
+                membership.membership_id
+            ),
+        ));
+    }
+    let [segment] = segments.as_slice() else {
+        // A fragmented mainline (C2) cannot close into one cyclic segment, so the
+        // mandatory lap is the normal-length arc the pair actually travels from the
+        // initial edge to the exit split, resolved uniquely through the segments.
+        return fragmented_relation_mainline_lap(
+            graph,
+            &edge_map,
+            &segments,
+            membership,
+            anchor_node_id,
+            initial_edge_id,
+            exit_split_node_id,
+        );
+    };
     let ordered = &segment.ordered_edge_ids;
     let (Some(first), Some(last)) = (ordered.first(), ordered.last()) else {
         return Err(PairDerivationError::new(
@@ -1533,6 +1548,103 @@ fn relation_mainline_lap(
                 membership.membership_id
             ),
         ));
+    }
+    Ok(lap)
+}
+
+/// Resolve the mandatory lap of a membership whose mainline is split into runs.
+///
+/// The gate is defined as the normal-length arc from the anchor to the exit split
+/// (docs/data-pipeline.md), so a carriageway that never closes is still usable:
+/// walk the relation mainline from the initial edge, always taking the successor
+/// that can still reach the exit split, and accept the arc only when that choice
+/// is unique at every node.
+#[allow(clippy::too_many_arguments)]
+fn fragmented_relation_mainline_lap(
+    graph: &Graph,
+    edge_map: &HashMap<&str, &Edge>,
+    segments: &[&crate::route_membership::RouteMembershipSegment],
+    membership: &RouteMembershipIndex,
+    anchor_node_id: &str,
+    initial_edge_id: &str,
+    exit_split_node_id: Option<&str>,
+) -> Result<Vec<String>, PairDerivationError> {
+    let Some(split_node_id) = exit_split_node_id else {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS",
+            format!(
+                "membership {} has {} relationMainline segments and no exit split to resolve",
+                membership.membership_id,
+                segments.len()
+            ),
+        ));
+    };
+    let initial = edge_map.get(initial_edge_id).copied().ok_or_else(|| {
+        PairDerivationError::new(
+            "PAIR_DERIVATION_INITIAL_EDGE_NOT_IN_RELATION",
+            format!("initial edge {initial_edge_id} is absent from the graph"),
+        )
+    })?;
+    if initial.from != anchor_node_id {
+        return Err(PairDerivationError::new(
+            "PAIR_DERIVATION_LAP_BOUNDARY_MISMATCH",
+            format!("initial edge {initial_edge_id} does not leave anchor {anchor_node_id}"),
+        ));
+    }
+    let mut successors: HashMap<&str, Vec<&Edge>> = HashMap::new();
+    let mut predecessors: HashMap<&str, Vec<&Edge>> = HashMap::new();
+    for segment in segments {
+        for edge_id in &segment.ordered_edge_ids {
+            let Some(edge) = edge_map.get(edge_id.as_str()).copied() else {
+                return Err(PairDerivationError::new(
+                    "PAIR_DERIVATION_RELATION_EDGE_NOT_FOUND",
+                    format!("edge {edge_id} is absent from the graph"),
+                ));
+            };
+            successors.entry(edge.from.as_str()).or_default().push(edge);
+            predecessors.entry(edge.to.as_str()).or_default().push(edge);
+        }
+    }
+    let mut can_reach: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    can_reach.insert(split_node_id);
+    let mut stack = vec![split_node_id];
+    while let Some(node) = stack.pop() {
+        for edge in predecessors.get(node).into_iter().flatten() {
+            if can_reach.insert(edge.from.as_str()) {
+                stack.push(edge.from.as_str());
+            }
+        }
+    }
+    let mut lap = vec![initial_edge_id.to_string()];
+    let mut node = initial.to.clone();
+    while node != split_node_id {
+        let candidates = successors
+            .get(node.as_str())
+            .into_iter()
+            .flatten()
+            .filter(|edge| can_reach.contains(edge.to.as_str()))
+            .collect::<Vec<_>>();
+        let [next] = candidates.as_slice() else {
+            return Err(PairDerivationError::new(
+                "PAIR_DERIVATION_RELATION_MAINLINE_AMBIGUOUS",
+                format!(
+                    "membership {} has {} mainline continuations at {node}",
+                    membership.membership_id,
+                    candidates.len()
+                ),
+            ));
+        };
+        lap.push(next.id.clone());
+        node = next.to.clone();
+        if lap.len() > graph.edges.len() {
+            return Err(PairDerivationError::new(
+                "PAIR_DERIVATION_RELATION_MAINLINE_NOT_CYCLIC",
+                format!(
+                    "membership {} never reaches {split_node_id}",
+                    membership.membership_id
+                ),
+            ));
+        }
     }
     Ok(lap)
 }
@@ -2043,15 +2155,28 @@ fn derive_legacy_route(
             membership_ids: vec![membership_id.clone()],
         };
     };
+    let exit_split_node_id = exit_approach_edge_ids
+        .first()
+        .and_then(|edge_id| graph.edges.iter().find(|edge| edge.id == *edge_id))
+        .map(|edge| edge.from.as_str());
     let lap = relation_mainline_lap(
         graph,
         membership,
         anchor_node_id,
         first_exit_initial_edge_id,
+        exit_split_node_id,
     );
     let (lap_gate, lap_edge_ids) = match &lap {
         Ok(edge_ids)
-            if has_non_empty_shutoko_loop(graph, anchor_node_id)
+            if (membership
+                .segments
+                .iter()
+                .filter(|segment| {
+                    segment.source_kind == RouteMembershipSourceKind::RelationMainline
+                })
+                .count()
+                > 1
+                || has_non_empty_shutoko_loop(graph, anchor_node_id))
                 && edge_ids
                     .first()
                     .and_then(|edge_id| graph.edges.iter().find(|edge| edge.id == *edge_id))

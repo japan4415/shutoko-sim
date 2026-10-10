@@ -13,6 +13,7 @@
     "verifiedEntries": [
       "e:w1091280541:0:f",
       "e:w378284514:0:f",
+      "e:w464736087:0:f",
       "e:w4848922:0:f",
       "e:w4848936:0:f",
       "e:w4853797:0:f",
@@ -26,6 +27,7 @@
       "e:w203873821:2:f",
       "e:w276920911:6:f",
       "e:w297864314:11:f",
+      "e:w381950208:1:f",
       "e:w381972983:3:f",
       "e:w390441534:2:f",
       "e:w45068171:1:f",
@@ -296,12 +298,12 @@
       "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
       "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
       "routeMembershipIndexSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
-      "billingPairAdjacencySha256": "1d8ee3abf8b49ef398ee9a39f80a80188c09a75d37a2d84ffcfd15818a98b44c",
-      "odTariffsSha256": "3d22257da7718da6ffd74feca03d3d9239027a23f6edb395b6161253f946d297"
+      "billingPairAdjacencySha256": "7978ee1c890f05347aa7196e4d9ad49f4fd05f9964f9ecdac02af38109d54282",
+      "odTariffsSha256": "3405ed71d2c85994cc869edc652ee109d66235977118140e1ef00629170924f0"
     },
     "summary": {
-      "candidateTotal": 12,
-      "eligibleForReview": 11,
+      "candidateTotal": 13,
+      "eligibleForReview": 12,
       "hold": 1,
       "relationCoverage": {
         "relationTotal": 26,
@@ -408,7 +410,6 @@
     "entry:e:w45657161:0:f",
     "entry:e:w45977417:0:f (飯田橋入口)",
     "entry:e:w46151740:0:f",
-    "entry:e:w464736087:0:f",
     "entry:e:w46876077:0:f",
     "entry:e:w46876172:0:f",
     "entry:e:w46876335:0:f",
@@ -568,7 +569,6 @@
     "exit:e:w378126418:2:f",
     "exit:e:w38028977:9:f",
     "exit:e:w38093007:8:f",
-    "exit:e:w381950208:1:f",
     "exit:e:w381953858:1:f (富ヶ谷出口)",
     "exit:e:w382210313:0:f (渋谷出口)",
     "exit:e:w383238619:0:f",
@@ -889,6 +889,12 @@
       "notes": "Verified 1-section-ahead adjacency on C1 outer loop from Kasumigaseki entry to Daikancho exit. Exit way 276920911 has OSM name 首都高速都心環状線 but connects to surface streets in Kitanomaru/Daikancho area. Tariff source (re-verified 2026-09-26 against the rendered page image): Kasumigaseki to Daikancho toll distance 2.3km and base ETC fare 300 yen in both editions (https://edge.sitecorecloud.io/metropolita84c2-shutokoeb0e-productionbcbd-eb79/media/Project/shutoko/docs/drivers/tolls/about/price/2504_pamphlet_fee_table.pdf, page 3, row 霞が関, column 代官町; and the official revision tariff table, page 3, same row and column). The 570 yen / 12.4km figure belongs to the 霞が関 diagonal cell (霞が関 to 霞が関), not to the 代官町 exit."
     },
     {
+      "id": "bp:c2-inner:takinogawa-nakano-chojabashi",
+      "source": "https://www.shutoko.jp/use/network/map/route-c2/takinogawa/",
+      "sourceDate": "2026-10-11",
+      "notes": "C2 inner 滝野川入口 -> 中野長者橋出口. Both bindings are verified_bound in data/osm-ramp-bindings.json (ways 464736087 entry / 381950208 exit). Official fare tables page 25 row 滝野川 column 中野長者橋 = 410 yen / 7.6 km (2025-04, sha256 dc2d80ee0c8f215f...) and 440 yen / 7.6 km (2026-10, sha256 1dd86cf7946deb28...); the 2022-04 and 2026-10 rule formulas both reproduce those amounts at 7,600 m. The C2 inner mainline arc between the two attachments (n:4597822558 -> n:3851530202) is 142 edges / 7,230 m, the first inner-carriageway C2 pair. No other C2 inner general exit attaches along that arc (中野長者橋 is the first)."
+    },
+    {
       "id": "bp:c2-outer:gotanda-hatsudai-minami",
       "source": "https://www.shutoko.jp/use/network/map/route-c2/gotanda/",
       "sourceDate": "2026-10-10",
@@ -898,18 +904,18 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "32fdfaf21e60b873cd6769ad29bba775c4530bc3605b837be9247a786f5752ea",
-      "byteLength": 7629723
+      "sha256": "5e9b28302c7d488c8efdda60406b391840845c622a85afe14e8cceeb4f5089f6",
+      "byteLength": 7641078
     },
     {
       "path": "od-tariffs.json",
-      "sha256": "3d22257da7718da6ffd74feca03d3d9239027a23f6edb395b6161253f946d297",
-      "byteLength": 53153
+      "sha256": "3405ed71d2c85994cc869edc652ee109d66235977118140e1ef00629170924f0",
+      "byteLength": 57304
     },
     {
       "path": "pair-candidates.json",
-      "sha256": "ea737e7dfae291a541ce81fc390b650a55c82fe28d440360d0f4aa00976a230e",
-      "byteLength": 81144
+      "sha256": "36e1c65c9c9cd24e4f7272026e13b5cb27daeae4f878caf4c923513dc7a8d45d",
+      "byteLength": 86185
     },
     {
       "path": "ramps.json",

@@ -93,7 +93,7 @@ fn real_graph_deserialization_and_schema_validation() {
     let wire: Value = serde_json::from_str(real_graph_str()).unwrap();
     assert_eq!(wire["schemaVersion"], 4);
     assert_eq!(wire["releaseId"], "all-real-v4");
-    assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 12);
+    assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 13);
     assert!(wire["routeMemberships"].as_array().is_some());
     let prepared = prepare_json(real_graph_str(), "{}").expect("schema 4 graph must prepare");
     assert_eq!(prepared.graph().schema_version, 4);
@@ -110,8 +110,8 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .filter(|pair| pair["pairEligibility"]["status"] == json!("verified_one_section_ahead"))
             .count(),
-        11,
-        "9 verified pairs (7 legacyRing + 2 radialReturn); only bp:c1-outer:shibakoen-iikura stays unverified (conditional public way)"
+        12,
+        "12 verified pairs (9 legacyRing + 2 radialReturn + the C2 inner/outer Ring pairs); only bp:c1-outer:shibakoen-iikura stays unverified (conditional public way)"
     );
     let g = real_graph();
     assert_eq!(g.schema_version, 2);
@@ -119,12 +119,12 @@ fn real_graph_deserialization_and_schema_validation() {
     assert_eq!(g.vehicle_profile, "passenger-car-etc");
     assert!(!g.nodes.is_empty(), "nodes must not be empty");
     assert!(!g.edges.is_empty(), "edges must not be empty");
-    // Issue #34 と C2 五反田→初台南で legacy 10 件（schema 2 の legacy adapter は
-    // radial を emit しない）。
+    // Issue #34 と C2 の 2 件（五反田→初台南、滝野川→中野長者橋）で legacy 11 件
+    // （schema 2 の legacy adapter は radial を emit しない）。
     assert_eq!(
         g.billing_pairs.len(),
-        10,
-        "exactly 10 billing pairs expected in fixture"
+        11,
+        "exactly 11 billing pairs expected in fixture"
     );
 
     let edge_map: std::collections::HashMap<&str, &shutoko_routing_core::Edge> =
@@ -135,7 +135,7 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .filter(|p| p.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        9
+        10
     );
     assert_eq!(
         g.billing_pairs
@@ -151,29 +151,30 @@ fn real_graph_deserialization_and_schema_validation() {
             .iter()
             .map(|price| price.amount_yen)
             .collect::<Vec<_>>();
-        if pair.id == "bp:c2-outer:gotanda-hatsudai-minami" {
-            // C2 五反田→初台南 は 2022-04 が 350 円、2026-10 改定が 370 円。
-            assert_eq!(amounts, vec![350, 370], "C2 pair prices");
-        } else {
-            assert_eq!(
-                amounts,
-                vec![300, 300],
-                "billing pair {} prices must match the reviewed tariff records",
-                pair.id
-            );
-        }
+        // 2022-04 と 2026-10 改定の 2 期間。C1 は 300 円、C2 五反田→初台南 は
+        // 350/370 円、C2 滝野川→中野長者橋 は 410/440 円。
+        let expected_amounts = match pair.id.as_str() {
+            "bp:c2-outer:gotanda-hatsudai-minami" => vec![350, 370],
+            "bp:c2-inner:takinogawa-nakano-chojabashi" => vec![410, 440],
+            _ => vec![300, 300],
+        };
+        assert_eq!(
+            amounts, expected_amounts,
+            "billing pair {} prices must match the reviewed tariff records",
+            pair.id
+        );
         assert_eq!(pair.prices[0].effective_from, "2022-03-31T15:00:00Z");
         assert_eq!(
             pair.prices[0].effective_to.as_deref(),
             Some("2026-09-30T15:00:00Z")
         );
         if pair.prices.len() > 1 {
-            let expected = if pair.id == "bp:c2-outer:gotanda-hatsudai-minami" {
-                370
-            } else {
-                300
+            let expected_second = match pair.id.as_str() {
+                "bp:c2-outer:gotanda-hatsudai-minami" => 370,
+                "bp:c2-inner:takinogawa-nakano-chojabashi" => 440,
+                _ => 300,
             };
-            assert_eq!(pair.prices[1].amount_yen, expected);
+            assert_eq!(pair.prices[1].amount_yen, expected_second);
             assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
         }
         if pair.status == shutoko_routing_core::VerificationStatus::Verified {
@@ -250,7 +251,7 @@ fn radial_seed_is_promoted_after_exact_binding_resolution() {
     let seed: Value =
         serde_json::from_str(include_str!("../../../data/billing-pairs-seed.json")).unwrap();
     assert_eq!(seed["schemaVersion"], 2);
-    assert_eq!(seed["billingPairs"].as_array().unwrap().len(), 12);
+    assert_eq!(seed["billingPairs"].as_array().unwrap().len(), 13);
 
     let radial_pairs = seed["billingPairs"]
         .as_array()
@@ -336,7 +337,7 @@ fn radial_seed_is_promoted_after_exact_binding_resolution() {
     );
 
     let graph: Value = serde_json::from_str(real_graph_str()).unwrap();
-    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 12);
+    assert_eq!(graph["billingPairs"].as_array().unwrap().len(), 13);
     assert_eq!(
         graph["billingPairs"]
             .as_array()
@@ -811,7 +812,7 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             .iter()
             .filter(|pair| pair.status == shutoko_routing_core::VerificationStatus::Verified)
             .count(),
-        9
+        10
     );
     assert_eq!(
         g.billing_pairs
@@ -830,17 +831,16 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             .iter()
             .map(|price| price.amount_yen)
             .collect::<Vec<_>>();
-        if pair.id == "bp:c2-outer:gotanda-hatsudai-minami" {
-            // C2 五反田→初台南 は 2022-04 が 350 円、2026-10 改定が 370 円。
-            assert_eq!(amounts, vec![350, 370], "C2 pair prices");
-        } else {
-            assert_eq!(
-                amounts,
-                vec![300, 300],
-                "pair {} prices must match the reviewed tariff records",
-                pair.id
-            );
-        }
+        let expected_amounts = match pair.id.as_str() {
+            "bp:c2-outer:gotanda-hatsudai-minami" => vec![350, 370],
+            "bp:c2-inner:takinogawa-nakano-chojabashi" => vec![410, 440],
+            _ => vec![300, 300],
+        };
+        assert_eq!(
+            amounts, expected_amounts,
+            "pair {} prices must match the reviewed tariff records",
+            pair.id
+        );
         assert!(!pair.entry_to_anchor_edge_ids.is_empty());
         assert!(!pair.anchor_to_exit_edge_ids.is_empty());
     }
@@ -1805,9 +1805,10 @@ fn tokyo_wide_narrow_window_reports_nearest_tier_time_window() {
 #[ignore = "real-graph search is slow in debug; run with --release -- --ignored (CI does)"]
 fn meguro_station_all_real_v4_end_to_end_contract() {
     let graph = real_graph();
-    // 10 legacy pairs: 9 C1 pairs since the Ginza-Shintomicho registration
-    // (Issue #34) plus the C2 Gotanda-Hatsudai pair.
-    assert_eq!(graph.billing_pairs.len(), 10);
+    // 11 legacy pairs: 9 C1 pairs since the Ginza-Shintomicho registration
+    // (Issue #34) plus the C2 outer Gotanda-Hatsudai and inner
+    // Takinogawa-Nakano-Chojabashi pairs.
+    assert_eq!(graph.billing_pairs.len(), 11);
     assert_eq!(
         graph
             .billing_pairs
@@ -1875,11 +1876,11 @@ fn meguro_station_all_real_v4_end_to_end_contract() {
     }
 
     let generated_graph: Value = serde_json::from_str(real_graph_str()).unwrap();
-    // 8 original C1 pairs + Ginza-Shintomicho (Issue #34) + the C2
-    // Gotanda-Hatsudai pair + 2 radial pairs.
+    // 8 original C1 pairs + Ginza-Shintomicho (Issue #34) + the C2 outer and
+    // inner pairs + 2 radial pairs.
     assert_eq!(
         generated_graph["billingPairs"].as_array().unwrap().len(),
-        12
+        13
     );
     assert_eq!(
         generated_graph["billingPairs"]

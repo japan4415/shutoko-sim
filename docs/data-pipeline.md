@@ -721,12 +721,12 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
-| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 12件（legacy 10 + radial 2）、route memberships 52件、ramps 238件 | 7,629,723 bytes |
-| `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 22 件、assignment 11 件、deprecated 2 件） | 53,153 bytes |
-| `pair-candidates.json` | 2 | 導出レポート（候補 12 件 = eligible 10 / hold 2、relation coverage 26 件 = pass 11 / fail 15） | 81,144 bytes |
+| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 13件（legacy 11 + radial 2）、route memberships 52件、ramps 238件 | 7,641,078 bytes |
+| `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 24 件、assignment 12 件、deprecated 2 件） | 57,304 bytes |
+| `pair-candidates.json` | 2 | 導出レポート（候補 13 件 = eligible 12 / hold 1、relation coverage 26 件 = pass 11 / fail 15） | 86,185 bytes |
 | `ramps.json` | 1 | 正規台帳399件、うちbound 238件 | 278,803 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
-| `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 9件 | 47,599 bytes |
+| `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 9件 | 48,442 bytes |
 
 `graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は 5 成果物（`graph.json` / `od-tariffs.json` / `pair-candidates.json` / `ramps.json` / `snap-index.json`）の path・SHA-256・byte length を固定し、manifest 自身のサイズと schema は別情報として扱う。`all-real-v4` の `routeMembershipsSha256` は `6cb9b78af5cd556abae9b2285cb41f2e501d10a891e1845593fce8d4871aa6f5` であり、同一入力の2回の生成で一致する。3 世代分のバイト一致は `cargo test --release -p shutoko-graph-builder --test release_v4_contract --locked -- --ignored` の `all_real_v4_artifacts_are_byte_identical_across_three_generations` が担保する。
 
@@ -906,8 +906,8 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 | 指標 | 値 |
 | --- | ---: |
-| 候補総数 | 12 |
-| `eligible_for_review` | 11 |
+| 候補総数 | 13 |
+| `eligible_for_review` | 12 |
 | `hold` | 1（`bp:c1-outer:shibakoen-iikura`、public way が `access:conditional`） |
 | route relation 総数 | 26 |
 | 展開できた relation | 11 |

@@ -6,8 +6,8 @@
     "osmSnapshotSha256": "566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9",
     "rampLedgerSha256": "f81046d2ff005de6010680213c036a830d7bbcd4b7a0e3b9fb35d5ce246ff609",
     "routeMembershipIndexSha256": "c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1",
-    "billingPairAdjacencySha256": "1d8ee3abf8b49ef398ee9a39f80a80188c09a75d37a2d84ffcfd15818a98b44c",
-    "odTariffsSha256": "3d22257da7718da6ffd74feca03d3d9239027a23f6edb395b6161253f946d297"
+    "billingPairAdjacencySha256": "7978ee1c890f05347aa7196e4d9ad49f4fd05f9964f9ecdac02af38109d54282",
+    "odTariffsSha256": "3405ed71d2c85994cc869edc652ee109d66235977118140e1ef00629170924f0"
   },
   "relationCoverage": [
     {
@@ -581,8 +581,10 @@
       "relationIds": [
         4256077
       ],
-      "candidatePairIds": [],
-      "routePlanResolved": 0,
+      "candidatePairIds": [
+        "bp:c2-inner:takinogawa-nakano-chojabashi"
+      ],
+      "routePlanResolved": 1,
       "routePlanUnresolved": 0,
       "status": "pass"
     },
@@ -2394,6 +2396,148 @@
       ]
     },
     {
+      "candidateId": "candidate:5dd1d731978bd2332bf2fccd58539e0ec31d400010f142bb1c6f01feb1084b59",
+      "pairId": "bp:c2-inner:takinogawa-nakano-chojabashi",
+      "pairKind": "legacyRing",
+      "routeId": "C2",
+      "direction": "inner",
+      "entry": {
+        "rampId": "ramp:c2-inner:takinogawa-entry",
+        "name": "滝野川",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c2-inner:takinogawa-entry",
+        "routeMembershipId": "route:C2:inner",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "exit": {
+        "rampId": "ramp:c2-inner:nakano-chojabashi-exit",
+        "name": "中野長者橋",
+        "supportState": "verified_bound",
+        "bindingEvidenceId": "osm-ramp-binding:ramp:c2-inner:nakano-chojabashi-exit",
+        "routeMembershipId": "route:C2:inner",
+        "gate": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "routePlan": {
+        "routePlanId": "route-plan:bp:c2-inner:takinogawa-nakano-chojabashi",
+        "edgeIdsSha256": "871deb9f02a5070057be865e17fdf14905ffcf09fbfb24f610e4336a9111d908",
+        "loopValidationStatus": "declared_route_validated",
+        "sourceSegmentIds": [
+          "binding:osm-ramp-binding:ramp:c2-inner:nakano-chojabashi-exit:segment:0",
+          "binding:osm-ramp-binding:ramp:c2-inner:takinogawa-entry:segment:0",
+          "relation:4256077:inner:split:1"
+        ],
+        "resolvedRoles": [
+          {
+            "role": "entry_approach",
+            "status": "passed",
+            "edgeIdsSha256": "6d4220f7f8f148575189375dddbc2e784606b1e9cc96486a792d1192e97b9c75",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c2-inner:takinogawa-entry:segment:0"
+            ]
+          },
+          {
+            "role": "mandatory_lap",
+            "status": "passed",
+            "edgeIdsSha256": "39ae3b0dc028b5c1337f834256d7d5955e8089956acbac242b9dd83d6ca6a691",
+            "sourceSegmentIds": [
+              "relation:4256077:inner:split:1"
+            ]
+          },
+          {
+            "role": "return_corridor",
+            "status": "passed",
+            "edgeIdsSha256": "39ae3b0dc028b5c1337f834256d7d5955e8089956acbac242b9dd83d6ca6a691",
+            "sourceSegmentIds": [
+              "relation:4256077:inner:split:1"
+            ]
+          },
+          {
+            "role": "exit_approach",
+            "status": "passed",
+            "edgeIdsSha256": "786032ae681a424989eec91ef595a557dbc04d103c7dad5556af9da3b8259d8c",
+            "sourceSegmentIds": [
+              "binding:osm-ramp-binding:ramp:c2-inner:nakano-chojabashi-exit:segment:0"
+            ]
+          }
+        ]
+      },
+      "gates": {
+        "officialAdjacency": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "route": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "direction": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "firstExit": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "mandatoryLap": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "entryBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "exitBinding": {
+          "status": "passed",
+          "reasonCodes": []
+        },
+        "tariffAssignment": {
+          "status": "passed",
+          "reasonCodes": []
+        }
+      },
+      "productEligibility": {
+        "status": "verified_one_section_ahead",
+        "officialAdjacencyEvidenceId": "adjacency:official-route-map:c2-inner:takinogawa-nakano-chojabashi",
+        "oneSectionAheadVerified": true
+      },
+      "tariff": {
+        "status": "priced",
+        "assignmentId": "assignment:c2-inner:takinogawa-nakano-chojabashi",
+        "billingDistanceMeters": 7600,
+        "prices": [
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 410,
+            "effectiveFrom": "2022-03-31T15:00:00Z",
+            "effectiveTo": "2026-09-30T15:00:00Z",
+            "ruleId": "shutoko-etc-ordinary-2022-04",
+            "evidenceId": "evidence:2025-04:p25:c2-takinogawa-nakano-chojabashi",
+            "distanceEvidenceId": "evidence:2025-04:p25:c2-takinogawa-nakano-chojabashi"
+          },
+          {
+            "status": "priced",
+            "tariffStatus": "priced",
+            "amountYen": 440,
+            "effectiveFrom": "2026-09-30T15:00:00Z",
+            "effectiveTo": null,
+            "ruleId": "shutoko-etc-ordinary-2026-10",
+            "evidenceId": "evidence:2026-10:p25:c2-takinogawa-nakano-chojabashi",
+            "distanceEvidenceId": "evidence:2026-10:p25:c2-takinogawa-nakano-chojabashi"
+          }
+        ]
+      },
+      "promotionDecision": "eligible_for_review",
+      "automaticSeedWrite": false,
+      "rejectionReasons": []
+    },
+    {
       "candidateId": "candidate:73e2f540e539d9ab9e5cde71a60381467452e621745434712b093addb08b972f",
       "pairId": "bp:c2-outer:gotanda-hatsudai-minami",
       "pairKind": "legacyRing",
@@ -2543,8 +2687,8 @@
     }
   ],
   "summary": {
-    "candidateTotal": 12,
-    "eligibleForReview": 11,
+    "candidateTotal": 13,
+    "eligibleForReview": 12,
     "hold": 1,
     "relationCoverage": {
       "relationTotal": 26,

@@ -455,6 +455,23 @@
         "sourceDate": "2026-10-10",
         "notes": "C2 outer 五反田入口 -> 初台南出口. Bindings are verified_bound (ways 805171060 / 381972983). Official 2025-04 ETC ordinary fare table page 25 row 五反田 column 初台南 = 350 yen / 5.8 km (sha256 dc2d80ee0c8f215f...). The C2 outer arc between the mainline attachments n:3387909571 -> n:919617354 is 134 edges / 5,749 m, matching the billed 5.8 km, and 初台南 is the first general exit after 五反田 (富ヶ谷 is a further 0.4 km). The 2026-10 revision bills 370 yen / 5.8 km on page 25 of the revised fare table (sha256 1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5), which the 2026-10 rule formula reproduces at 5,800 m."
       }
+    },
+    {
+      "id": "bp:c2-inner:takinogawa-nakano-chojabashi",
+      "entryOsmWayId": 464736087,
+      "entryName": "滝野川入口",
+      "exitOsmWayId": 381950208,
+      "exitName": "中野長者橋出口",
+      "anchorOsmNodeId": 4597822558,
+      "vehicleProfile": "passenger-car-etc",
+      "assignmentId": "assignment:c2-inner:takinogawa-nakano-chojabashi",
+      "status": "verified",
+      "oneSectionAheadVerified": true,
+      "provenance": {
+        "source": "https://www.shutoko.jp/use/network/map/route-c2/takinogawa/",
+        "sourceDate": "2026-10-11",
+        "notes": "C2 inner 滝野川入口 -> 中野長者橋出口. Both bindings are verified_bound in data/osm-ramp-bindings.json (ways 464736087 entry / 381950208 exit). Official fare tables page 25 row 滝野川 column 中野長者橋 = 410 yen / 7.6 km (2025-04, sha256 dc2d80ee0c8f215f...) and 440 yen / 7.6 km (2026-10, sha256 1dd86cf7946deb28...); the 2022-04 and 2026-10 rule formulas both reproduce those amounts at 7,600 m. The C2 inner mainline arc between the two attachments (n:4597822558 -> n:3851530202) is 142 edges / 7,230 m, the first inner-carriageway C2 pair. No other C2 inner general exit attaches along that arc (中野長者橋 is the first)."
+      }
     }
   ]
 }

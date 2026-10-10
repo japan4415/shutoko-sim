@@ -2508,6 +2508,45 @@ fn find_matching_membership<'a>(
     Ok(matches[0])
 }
 
+/// Source marker of a lap arc that a reviewed seed declared explicitly.
+///
+/// [`resolve_explicit_lap_arc`] materialises an M-to-B lap that revisits edges
+/// (a ring whose runs only connect by retracing a section). Such a walk is not
+/// an ordered subpath of any single relationMainline segment, so the resolved
+/// lap is bound to its membership with this marker instead of a segment ID.
+/// Only the mandatory lap may use it; every other role stays bound to real
+/// membership segments.
+pub const EXPLICIT_LAP_SOURCE_PREFIX: &str = "explicit:";
+
+/// Membership ID of an explicitly declared lap leg, if this segment is one.
+fn explicit_lap_membership_id(resolved: &ResolvedRouteSegment) -> Option<&str> {
+    if resolved.role != RoutePlanSegmentRole::MandatoryLap {
+        return None;
+    }
+    let [source] = resolved.source_segment_ids.as_slice() else {
+        return None;
+    };
+    let membership_id = source.strip_prefix(EXPLICIT_LAP_SOURCE_PREFIX)?;
+    (membership_id == resolved.membership_id).then_some(membership_id)
+}
+
+/// Edge lookup of one resolved leg under its own contract: a lap is a walk and
+/// may revisit an edge, every other leg is a simple path.
+fn validate_resolved_segment_edges<'a>(
+    graph: &'a Graph,
+    resolved: &ResolvedRouteSegment,
+) -> Result<Vec<&'a Edge>, RouteMembershipError> {
+    if resolved.role == RoutePlanSegmentRole::MandatoryLap {
+        validate_ordered_edge_sequence_allowing_repeats(
+            graph,
+            &resolved.edge_ids,
+            &resolved.resolved_segment_id,
+        )
+    } else {
+        validate_ordered_edges(graph, &resolved.edge_ids, &resolved.resolved_segment_id)
+    }
+}
+
 fn validate_ordered_edge_sequence_allowing_repeats<'a>(
     graph: &'a Graph,
     edge_ids: &[String],
@@ -3525,7 +3564,11 @@ fn resolve_explicit_lap_arc(
             "explicit mandatory lap edgeIdsSha256 does not match the ordered edge list".into(),
         ));
     }
-    let edges = validate_ordered_edges(graph, &explicit.edge_ids, "explicit mandatory lap")?;
+    let edges = validate_ordered_edge_sequence_allowing_repeats(
+        graph,
+        &explicit.edge_ids,
+        "explicit mandatory lap",
+    )?;
     if edges.iter().any(|edge| edge.kind != EdgeKind::Shutoko) {
         return Err(RouteMembershipError::Segment(
             "explicit mandatory lap contains a non-Shutoko edge".into(),
@@ -4028,14 +4071,15 @@ pub fn validate_resolved_route_plan_segments(
                 resolved.resolved_segment_id
             )));
         }
-        let edges =
-            validate_ordered_edges(graph, &resolved.edge_ids, &resolved.resolved_segment_id)?;
-        if edges
-            .iter()
-            .map(|edge| edge.id.as_str())
-            .collect::<HashSet<_>>()
-            .len()
-            != resolved.edge_ids.len()
+        let explicit_lap_membership = explicit_lap_membership_id(resolved);
+        let edges = validate_resolved_segment_edges(graph, resolved)?;
+        if resolved.role != RoutePlanSegmentRole::MandatoryLap
+            && edges
+                .iter()
+                .map(|edge| edge.id.as_str())
+                .collect::<HashSet<_>>()
+                .len()
+                != resolved.edge_ids.len()
         {
             return Err(RouteMembershipError::Segment(format!(
                 "{} repeats an edge inside one resolved segment",
@@ -4051,6 +4095,12 @@ pub fn validate_resolved_route_plan_segments(
                     resolved.resolved_segment_id, resolved.membership_id
                 ))
             })?;
+        if explicit_lap_membership.is_some() {
+            // The arc was verified against the graph by resolve_explicit_lap_arc
+            // when the seed was resolved; the marker only has to agree with the
+            // membership it is bound to.
+            continue;
+        }
         let source_segments = resolved
             .source_segment_ids
             .iter()
@@ -4105,8 +4155,8 @@ pub fn validate_resolved_route_plan(
         ));
     }
     for pair in resolved_segments.windows(2) {
-        let left = validate_ordered_edges(graph, &pair[0].edge_ids, &pair[0].resolved_segment_id)?;
-        let right = validate_ordered_edges(graph, &pair[1].edge_ids, &pair[1].resolved_segment_id)?;
+        let left = validate_resolved_segment_edges(graph, &pair[0])?;
+        let right = validate_resolved_segment_edges(graph, &pair[1])?;
         if left.last().map(|edge| edge.to.as_str()) != right.first().map(|edge| edge.from.as_str())
         {
             return Err(RouteMembershipError::Segment(
@@ -6818,6 +6868,108 @@ mod tests {
         wrong_branch.edge_ids_sha256 = ordered_edge_ids_sha256(&wrong_branch.edge_ids).unwrap();
         assert!(
             resolve_explicit_lap_arc(&graph, &memberships, &anchor, &lap, &wrong_branch).is_err()
+        );
+    }
+
+    #[test]
+    fn explicit_lap_arc_allows_a_repeated_edge() {
+        let (seed, graph, memberships) = fragmented_radial_fixture();
+        // M n:2 -> n:3 -> n:2 -> n:3 -> n:4. The lap retraces its own first
+        // section, which is not an ordered subpath of any relationMainline
+        // segment, so only a declared arc can express it.
+        let edge_ids = vec![
+            "e:w102:0:f".to_string(),
+            "e:w102:0:r".to_string(),
+            "e:w102:0:f".to_string(),
+            "e:w103:0:f".to_string(),
+        ];
+        let mut declared = seed.clone();
+        declared.route_plan.mandatory_lap.explicit_arc = Some(ExplicitLapArc {
+            edge_ids: edge_ids.clone(),
+            edge_ids_sha256: ordered_edge_ids_sha256(&edge_ids).unwrap(),
+        });
+        declared.validate().unwrap();
+        let resolution =
+            resolve_diagnostic_radial_route_plan(&graph, &memberships, &declared).unwrap();
+        assert_eq!(resolution.lap.edge_ids, edge_ids);
+        assert_eq!(
+            resolution.lap.source_segment_id,
+            "explicit:route:R1:forward"
+        );
+
+        // The same arc still has to be a connected walk from M to B.
+        let mut broken = declared.clone();
+        broken.route_plan.mandatory_lap.explicit_arc = Some(ExplicitLapArc {
+            edge_ids: vec![
+                "e:w102:0:f".into(),
+                "e:w102:0:f".into(),
+                "e:w103:0:f".into(),
+            ],
+            edge_ids_sha256: ordered_edge_ids_sha256(&[
+                "e:w102:0:f".to_string(),
+                "e:w102:0:f".to_string(),
+                "e:w103:0:f".to_string(),
+            ])
+            .unwrap(),
+        });
+        let error =
+            resolve_diagnostic_radial_route_plan(&graph, &memberships, &broken).unwrap_err();
+        assert!(matches!(
+            error,
+            RouteMembershipError::Segment(message) if message.contains("is disconnected")
+        ));
+    }
+
+    #[test]
+    fn promotes_an_explicit_lap_that_revisits_an_edge() {
+        let (seed, graph, memberships) = fragmented_radial_fixture();
+        let edge_ids = vec![
+            "e:w102:0:f".to_string(),
+            "e:w102:0:r".to_string(),
+            "e:w102:0:f".to_string(),
+            "e:w103:0:f".to_string(),
+        ];
+        let mut declared = seed.clone();
+        declared.route_plan.mandatory_lap.explicit_arc = Some(ExplicitLapArc {
+            edge_ids: edge_ids.clone(),
+            edge_ids_sha256: ordered_edge_ids_sha256(&edge_ids).unwrap(),
+        });
+        let resolution =
+            resolve_diagnostic_radial_route_plan(&graph, &memberships, &declared).unwrap();
+        let promoted =
+            promote_verified_radial_pair(&graph, &memberships, &declared, &resolution).unwrap();
+        let lap = &promoted.resolved_route_segments[1];
+        assert_eq!(
+            lap.source_segment_ids,
+            vec!["explicit:route:R1:forward".to_string()]
+        );
+        assert_eq!(lap.edge_ids, edge_ids);
+
+        let mut overrides: HashMap<String, shutoko_routing_core::Tariff> = HashMap::new();
+        let mut override_tariff = promoted.tariff.clone();
+        override_tariff.amount_yen = Some(300);
+        override_tariff.billing_distance_meters = Some(2000);
+        override_tariff.prices = vec![shutoko_routing_core::Price {
+            amount_yen: 300,
+            effective_from: "2022-03-31T15:00:00Z".into(),
+            effective_to: Some("2026-09-30T15:00:00Z".into()),
+        }];
+        overrides.insert(promoted.id.clone(), override_tariff);
+        let json = graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
+            &graph,
+            &memberships,
+            vec![promoted],
+            None,
+            overrides,
+        )
+        .unwrap();
+        // The schema 4 reader accepts the repeated lap edge and still enforces
+        // the M-to-B boundaries on it.
+        let prepared = shutoko_routing_core::prepare_json(&json, "{}").unwrap();
+        assert_eq!(prepared.radial_billing_pairs().len(), 1);
+        assert_eq!(
+            prepared.radial_billing_pairs()[0].resolved_route_segments[1].edge_ids,
+            edge_ids
         );
     }
 

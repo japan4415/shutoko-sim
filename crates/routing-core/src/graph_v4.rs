@@ -1253,13 +1253,22 @@ pub(crate) fn validate_radial_return_pair(
             .iter()
             .map(|source| source.segment_id.as_str())
             .collect::<HashSet<_>>();
-        let mut sources = HashSet::new();
-        for source in &segment.source_segment_ids {
-            if !source_ids.contains(source.as_str()) || !sources.insert(source.as_str()) {
-                return Err(invalid("resolved route segment source binding mismatch"));
+        // A lap that revisits an edge is no ordered subpath of one membership
+        // segment, so a declared arc binds to its membership with the explicit
+        // marker instead. The marker is only legal on the mandatory lap, and the
+        // boundary, connector, and continuity checks below still run on it.
+        let explicit_lap = segment.role == RoutePlanSegmentRole::MandatoryLap
+            && segment.source_segment_ids.len() == 1
+            && segment.source_segment_ids[0] == explicit_lap_source_id(&segment.membership_id);
+        if !explicit_lap {
+            let mut sources = HashSet::new();
+            for source in &segment.source_segment_ids {
+                if !source_ids.contains(source.as_str()) || !sources.insert(source.as_str()) {
+                    return Err(invalid("resolved route segment source binding mismatch"));
+                }
             }
+            validate_resolved_segment_sources(membership, segment)?;
         }
-        validate_resolved_segment_sources(membership, segment)?;
         validate_sha256(&segment.edge_ids_sha256, "edgeIdsSha256")?;
         if ordered_edge_ids_sha256(&segment.edge_ids).ok().as_deref()
             != Some(segment.edge_ids_sha256.as_str())
@@ -1270,7 +1279,7 @@ pub(crate) fn validate_radial_return_pair(
             &edge_map,
             &segment.edge_ids,
             &segment.resolved_segment_id,
-            true,
+            segment.role != RoutePlanSegmentRole::MandatoryLap,
         )?;
         full_edge_ids.extend(segment.edge_ids.iter().cloned());
     }
@@ -1331,6 +1340,12 @@ pub(crate) fn validate_radial_return_pair(
     )?;
     validate_ordered_graph_edges(&edge_map, &full_edge_ids, "radialReturn full route", false)?;
     Ok(())
+}
+
+/// Source binding of a mandatory lap that the reviewed seed declared explicitly
+/// instead of deriving it from one membership segment.
+fn explicit_lap_source_id(membership_id: &str) -> String {
+    format!("explicit:{membership_id}")
 }
 
 fn validate_resolved_segment_sources(

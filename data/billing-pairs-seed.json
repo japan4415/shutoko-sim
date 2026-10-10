@@ -453,7 +453,7 @@
       "provenance": {
         "source": "https://www.shutoko.jp/use/network/map/route-c2/gotanda/",
         "sourceDate": "2026-10-10",
-        "notes": "C2 outer 五反田入口 -> 初台南出口. Bindings are verified_bound (ways 805171060 / 381972983). Official 2025-04 ETC ordinary fare table page 25 row 五反田 column 初台南 = 350 yen / 5.8 km (sha256 dc2d80ee0c8f215f...). The C2 outer arc between the mainline attachments n:3387909571 -> n:919617354 is 134 edges / 5,749 m, matching the billed 5.8 km, and 初台南 is the first general exit after 五反田 (富ヶ谷 is a further 0.4 km). The 2026-10 revision cell is pending: the revised fare table returns HTTP 429 and has no archive snapshot."
+        "notes": "C2 outer 五反田入口 -> 初台南出口. Bindings are verified_bound (ways 805171060 / 381972983). Official 2025-04 ETC ordinary fare table page 25 row 五反田 column 初台南 = 350 yen / 5.8 km (sha256 dc2d80ee0c8f215f...). The C2 outer arc between the mainline attachments n:3387909571 -> n:919617354 is 134 edges / 5,749 m, matching the billed 5.8 km, and 初台南 is the first general exit after 五反田 (富ヶ谷 is a further 0.4 km). The 2026-10 revision bills 370 yen / 5.8 km on page 25 of the revised fare table (sha256 1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5), which the 2026-10 rule formula reproduces at 5,800 m."
       }
     }
   ]

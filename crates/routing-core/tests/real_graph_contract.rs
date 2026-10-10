@@ -152,9 +152,8 @@ fn real_graph_deserialization_and_schema_validation() {
             .map(|price| price.amount_yen)
             .collect::<Vec<_>>();
         if pair.id == "bp:c2-outer:gotanda-hatsudai-minami" {
-            // 2026-10 改定版の料金表セルは人手 PDF レビュー待ちのため、legacy 投影は
-            // レビュー済みの 2022-04 期間だけを持つ。
-            assert_eq!(amounts, vec![350], "C2 pair prices");
+            // C2 五反田→初台南 は 2022-04 が 350 円、2026-10 改定が 370 円。
+            assert_eq!(amounts, vec![350, 370], "C2 pair prices");
         } else {
             assert_eq!(
                 amounts,
@@ -169,7 +168,12 @@ fn real_graph_deserialization_and_schema_validation() {
             Some("2026-09-30T15:00:00Z")
         );
         if pair.prices.len() > 1 {
-            assert_eq!(pair.prices[1].amount_yen, 300);
+            let expected = if pair.id == "bp:c2-outer:gotanda-hatsudai-minami" {
+                370
+            } else {
+                300
+            };
+            assert_eq!(pair.prices[1].amount_yen, expected);
             assert_eq!(pair.prices[1].effective_from, "2026-09-30T15:00:00Z");
         }
         if pair.status == shutoko_routing_core::VerificationStatus::Verified {
@@ -827,9 +831,8 @@ fn test_all_billing_pairs_search_and_connectivity_contract() {
             .map(|price| price.amount_yen)
             .collect::<Vec<_>>();
         if pair.id == "bp:c2-outer:gotanda-hatsudai-minami" {
-            // 2026-10 改定版のセルは人手 PDF レビュー待ちなので、legacy 投影は
-            // レビュー済みの 2022-04 期間だけを持つ。
-            assert_eq!(amounts, vec![350], "C2 pair prices");
+            // C2 五反田→初台南 は 2022-04 が 350 円、2026-10 改定が 370 円。
+            assert_eq!(amounts, vec![350, 370], "C2 pair prices");
         } else {
             assert_eq!(
                 amounts,

@@ -4121,6 +4121,7 @@ mod tests {
             ("c1-inner:takaracho-kandabashi", 1_700, 300),
             ("c1-inner:ginza-shintomicho", 400, 300),
             ("2:meguro-tengenji", 19_400, 860),
+            ("c2-outer:gotanda-hatsudai-minami", 5_800, 370),
         ];
         // A pending 2026-10 PDF review legitimately carries no value for that
         // rule, so the golden table covers the priced assignments only.
@@ -4150,10 +4151,12 @@ mod tests {
                 .iter()
                 .find(|evidence| evidence.evidence_id == price.evidence_id)
                 .unwrap();
-            assert_eq!(
-                evidence.page,
-                if od_key == "2:meguro-tengenji" { 4 } else { 3 }
-            );
+            let expected_page = match od_key {
+                "2:meguro-tengenji" => 4,
+                "c2-outer:gotanda-hatsudai-minami" => 25,
+                _ => 3,
+            };
+            assert_eq!(evidence.page, expected_page);
             assert_eq!(evidence.distance_meters, distance_meters);
             assert_eq!(price.amount_yen, Some(amount_yen));
             assert_eq!(price.observed_distance_meters, Some(distance_meters));

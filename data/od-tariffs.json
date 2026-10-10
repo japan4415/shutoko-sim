@@ -171,8 +171,8 @@
         },
         {
           "documentId": "shutoko-2026-10-od-fare-table",
-          "page": null,
-          "location": "C2 OD fare and distance cells pending manual PDF review"
+          "page": 25,
+          "location": "ETC ordinary C2 (中央環状線) OD fare and distance table"
         }
       ]
     }
@@ -701,24 +701,33 @@
       "reviewMethod": [
         "pdf_text_layer"
       ]
-    }
-  ],
-  "pendingEvidence": [
+    },
     {
       "evidenceId": "evidence:2026-10:p25:c2-gotanda-hatsudai-minami",
       "documentId": "shutoko-2026-10-od-fare-table",
       "edition": "2026-10",
-      "page": null,
+      "documentSha256": "1dd86cf7946deb28ca6e25d57f133f3acf1c4f5e4110d70d00d8055b3ee6d1e5",
+      "page": 25,
+      "routeLabel": "中央環状線",
       "rowLabel": "五反田",
       "columnLabel": "初台南",
-      "cell": null,
+      "cell": "p25:row-c2-gotanda:column-c2-hatsudai-minami:base-etc:370yen:5.8km",
       "fareVariant": "base_etc",
-      "status": "pending_manual_pdf_review",
-      "observedBaseFareYen": null,
-      "observedDistanceMeters": null,
-      "reviewedAt": null
+      "ink": "black",
+      "distanceMeters": 5800,
+      "distanceLabel": "5.8km",
+      "observedBaseFareYen": 370,
+      "calculatedBaseFareYen": 370,
+      "entryRampId": "ramp:c2-outer:gotanda-entry",
+      "exitRampId": "ramp:c2-outer:hatsudai-minami-exit",
+      "url": "https://www.shutoko.jp/ss/2026ryoukin-kaitei/gallery/ryoukin_kaitei_toll_rates.pdf",
+      "reviewedAt": "2026-10-10T00:00:00Z",
+      "reviewMethod": [
+        "pdf_text_layer"
+      ]
     }
   ],
+  "pendingEvidence": [],
   "assignments": [
     {
       "assignmentId": "assignment:c1-outer:kandabashi-takaracho",
@@ -1198,11 +1207,11 @@
           "distanceEvidenceId": "evidence:2025-04:p25:c2-gotanda-hatsudai-minami"
         },
         {
-          "status": "pending_pdf_review",
-          "tariffStatus": "unpriced",
-          "amountYen": null,
-          "observedBaseFareYen": null,
-          "observedDistanceMeters": null,
+          "status": "priced",
+          "tariffStatus": "priced",
+          "amountYen": 370,
+          "observedBaseFareYen": 370,
+          "observedDistanceMeters": 5800,
           "effectiveFrom": "2026-09-30T15:00:00Z",
           "effectiveTo": null,
           "ruleId": "shutoko-etc-ordinary-2026-10",

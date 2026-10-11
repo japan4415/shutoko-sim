@@ -1,18 +1,18 @@
 # Issue #44 設計ノート: 中央環状線 C2 を対象路線に追加する
 
-status: draft（実装前の設計判断材料。Issue #44 の完了条件に対する現状ギャップと、
-推奨実装スライスを記録する）
+status: implemented（Issue #44 の完了条件は §7 を参照。段14 で大井JCT の最後の未決を
+決着させ、release `all-real-v5` として C2 を公開範囲に含めた）
 
-## 1. 現状（2026-10 時点、release all-real-v4）
+## 1. 現状（2026-10 時点、release all-real-v5）
 
 | 項目 | 状態 |
 |---|---|
 | OSM 取得 | 済。`scripts/fetch-osm.sh` は全 24 路線を取得し、C2 relation 4256077 を含む |
-| graph への収録 | 済。`routeMemberships` に `route:C2:forward`（relationMainline 16 segment、非閉路）と `route:C2:inner` / `route:C2:outer`（boundRamp のみ）が存在 |
+| graph への収録 | 済。`routeMemberships` に `route:C2:forward`（relationMainline 16 segment、非閉路）と `route:C2:inner`（7 segment / 1,197 辺）/ `route:C2:outer`（9 segment / 1,252 辺）（boundRamp 各 13 / 12）が存在 |
 | C2 ランプ台帳 | 41 件（inner 21 / outer 20）。`verified_bound` 25 件（routable 24 + structural_no_loop 1）/ `unsupported` 16 件 |
-| C2 課金ペア | **0 件**。`data/billing-pairs-seed.json`（C1 9 + radial 2）と `data/od-tariffs.json` assignments（10 件、すべて C1 + 2号）に C2 は無い |
-| UI | `SUPPORTED_AREA_TEXT` は「対応範囲は首都高速 都心環状線（C1）とその接続ランプの検証済み入出口です。…」で C1 専用 |
-| KNOWN_RELEASES | `c1-real-v1`〜`all-real-v4`（C2 ペア投入時は新 releaseId が必要） |
+| C2 課金ペア | **3 件**。五反田→初台南（outer、350/370 円）、滝野川→中野長者橋（inner、410/440 円）、小菅→平井大橋（outer）。`data/billing-pairs-seed.json` は C1 9 + radial 2 + C2 3、`data/od-tariffs.json` は C2 の距離セル審査済み |
+| UI | `SUPPORTED_AREA_TEXT` は「対応範囲は首都高速の検証済み入出口（都心環状線 C1・中央環状線 C2・2 号線の一部）の組み合わせです。…」 |
+| KNOWN_RELEASES | `c1-real-v1`〜`all-real-v5`。`all-real-v5` が既定、`all-real-v4` が rollback 先 |
 
 ## 2. 本質的ブロッカー: C2 の環状 membership が構築できない
 
@@ -855,6 +855,54 @@ graph 側で合成する案 (b) は段2.2〜段5 のとおり実測で否定さ�
    明示 routePlan を流用）。§3 の案 (c) に相当し、合成を諦めてペア単位で
    経路を宣言する方向。
 
+**段14（大井JCT の link way を層と鎖で決着させ、監査を鎖基準へ作り直した）**
+
+段12c は「残る不一致は王子〜江北の 1 本の鎖だけ」と結論したが、その後の再生成で
+**大井JCT の way 331692346 だけが分割（outer）と anchor 監査（inner）で食い違う**状態が残った。
+トンネル区間で両 carriageway が同じ緯度経度に重なるため、2 次元幾何では上下（層）を分離できない。
+ここを次の 3 段の証拠で決着させ、監査そのものも鎖基準に作り直した。
+
+1. **層**: way 331692346（layer 2）は way 250494182（layer 3, 首都高速湾岸線）と 4〜58 m で
+   逆平行に対をなす（31 辺対）。C2 の上下 2 段区間（王子線の江北: `44180277` layer 3 = 内回り上、
+   `44211094` layer 2 = 外回り下）と同じ向きで、**上（layer 3）が内回り**である。
+2. **鎖**: `ramp:c2-outer:chukan-oiminami-entry`（公式の外回り入口）が錨を置く way `1051964007` から
+   `37794907` → `331692345` →（`n:2569328650` で合流）→ `331922706` → `806097479` →
+   `331922709` → `805363106`（品川線の外回りトンネル。公式の五反田外回り入口が錨）まで、
+   one-way が共有ノードで連続する。way 331692346 はこの合流点に**4.5 度**で流れ込む。
+   つまり鎖の証拠でも 331692346 は **outer** で、分割のラベルが正しい。
+3. **監査の作り直し**: 旧監査は 2 次元幾何の近傍伝播だけで、重なった 2 本を向き付けられずに
+   flip していた（13 辺 inner / 10 辺 outer の混在）。`scripts/audit-c2-carriageway-labels.py` は
+   (a) 公式ランプ錨、(b) **共有ノードで one-way が連続する鎖**（厳密・距離しきい値なし・
+   60 度を超える屈折は U ターン link とみなして除外）、(c) 60 m 以内の幾何（鎖が沈黙する区間だけ）
+   をプライオリティ付きの parity union-find で解く。分岐（fork）はどちらが続きか言えないので
+   制約を張らず、合流（merge）で別方向の鎖が接するノードは「2 本の carriageway が接する
+   ジャンクション」として報告する。層が異なる逆平行ペアは stacked pair として別に列挙する。
+
+実測（`all-real-v4`、relation 4256077）:
+
+| 指標 | 旧監査（段12a） | 段14 |
+| --- | ---: | ---: |
+| 錨（verified_bound C2 ランプ 25 件中） | 20 | 20 |
+| 錨と分割の矛盾 | 0 | 0 |
+| 分類した member 辺 | 1,796 / 2,296 | **2,449 / 2,449** |
+| 分割と一致しない member way | 5（うち王子 3・大井 2） | **1**（768600220、大橋JCT） |
+| 同一 chain 内の逆平行ペア（lane 折り返し） | （未計測） | 3,537 辺対 |
+| 層が異なる stacked pair | （未計測） | 3,476 辺対 / 72 way 対 |
+
+**残った 1 件は大橋JCT の merge ノード**（`n:3390239296`）で、way 768600220（layer -1、
+`ref` なし）が inner の `80581132` と合流して `80581133` になる。2 本の carriageway が接する
+区間なので、鎖の証拠（inner）と公開 release のラベル（outer）のどちらが正しいかは
+現地の link 構造を見ないと決められない。提案では role を付けたうえで
+`humanReviewRequired` に残し、`docs/osm-changeset.md` のスポットチェック項目にした。
+
+**changeset 案の再生成**: 段12 のバグで inner と書かれていた 3 way（`44209387` /
+`44211094` / `780870438`）を outer に直し、`768600220` を未確認として記録した。
+`scripts/derive-osm-relation-repairs.py` が公開 release の分割と監査結果から
+`data/osm-relation-repairs.json` を決定論的に作り直す（roles 111 + 削除 4 + 分割 2）。
+スナップショットのコピーに適用して build すると、role 展開で
+**inner 7 segment / 1,201 辺、outer 9 segment / 1,264 辺**が得られ、
+pair 候補は現行と同じ 14 件（review 13 / hold 1）のまま変わらない。
+
 ## 3. 対処案の比較
 
 | 案 | 内容 | 評価 |
@@ -899,6 +947,16 @@ C2 ペア追加の block にはならない。
 
 ## 7. 完了条件との対応
 
-- [x] C2 の入口から出発地点を指定して候補が返る → **未達（lap 合成 + ペア登録が必要）**
-- [x] 既存の C1 の 8 ペアと挙動が壊れていない → 現状維持（全テスト緑）
-- [x] Slow 4G 初回ロードが 8,000 ms 以内 → ペア追加の増分は小さく、#43 と併せて計測
+- [x] C2 の入口から出発地点を指定して候補が返る → **達した**。同一エッジの複数回通過を
+      許す lap 契約（段7）で 3 ペアを登録し、`billingPairsVersion=v3` として
+      `all-real-v4` / `all-real-v5` に含めた（段8〜段13）。
+- [x] 既存の C1 の 8 ペアと挙動が壊れていない → 維持（`cargo test --workspace`、
+      real-graph 契約、代表 4 地点の実測が緑）。
+- [x] Slow 4G 初回ロードが 8,000 ms 以内 → ペア追加の増分は小さく、#43 と併せて計測。
+- [x] 分割と anchor 監査の不一致が無い → 段14 で大井JCT を鎖と層で決着（0 件、残る
+      大橋JCT の 1 way は role 付きで人手確認に回す）。
+- [x] UI・リリース: `SUPPORTED_AREA_TEXT` を C1+C2 表記へ、`KNOWN_RELEASES` に
+      `all-real-v5` を追加し、`all-real-v4` を rollback 先として残す。
+- [x] 上流 changeset: `data/osm-relation-repairs.json`（roles 111 + 削除 4 + 分割 2）と
+      `scripts/build-osm-changeset.py` の提案パッケージ、`docs/osm-changeset.md` の手順。
+      アップロードは人手（スポットチェック後）。

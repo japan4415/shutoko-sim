@@ -3,7 +3,15 @@
   "relationId": 4256077,
   "routeId": "C2",
   "status": "proposed_upstream_not_applied",
-  "description": "Proposed upstream edits to OSM relation 4256077 (首都高速中央環状線). The relation is role-less, so graph-builder derives the inner/outer carriageway split from the verified-bound C2 ramp evidence plus the ring geometry; with the corrected 王子北 binding (data/osm-ramp-bindings.json) that split labels all 2,479 relation mainline edges, 1,197 inner and 1,252 outer. This file writes those labels out as roles so the relation carries the directions itself. It is not applied to the release fixture; scripts/apply-osm-relation-repairs.py verifies it on a copy of the snapshot (docs/c2-route-design.md 段13).",
+  "description": "Proposed upstream edits to OSM relation 4256077 (首都高速中央環状線). The relation is role-less, so graph-builder derives the inner/outer carriageway split from the verified-bound C2 ramp evidence plus the ring geometry; with the corrected 王子北 binding (data/osm-ramp-bindings.json) that split labels all 2449 relation mainline edges. This file writes those labels out as roles so the relation carries the directions itself. It is not applied to the release fixture; scripts/apply-osm-relation-repairs.py verifies it on a copy of the snapshot (docs/c2-route-design.md 段13).",
+  "changeset": {
+    "comment": "首都高速中央環状線 C2 (relation 4256077) の本線 member に Inner/Outer directions role を付与し、到達不能な member を除去",
+    "source": "OSM snapshot 2026-09-16; 首都高速道路 路線図 (official route map) for the ramp directions; scripts/audit-c2-carriageway-labels.py for the independent label audit",
+    "tags": {
+      "created_by": "shutoko-sim osm-relation-repairs schemaVersion 1",
+      "hashtags": "首都高速;中央環状線;C2"
+    }
+  },
   "applyCommand": [
     "python3",
     "scripts/apply-osm-relation-repairs.py",
@@ -14,18 +22,10 @@
     "--out",
     "/tmp/shutoko-repaired.json"
   ],
-  "humanReviewRequired": [
-    "The setMemberRole entries are the labels of the corrected split (official ramp directions plus geometry pairing), not a surveyed direction sign. scripts/audit-c2-carriageway-labels.py confirms them against the independent anchor set: 68 ways agree, 1 disagrees (the 大井JCT link way 331692346, where the two carriageways share coordinates in tunnel). A mapper should spot-check the 王子 to 江北 stretch and 大井JCT.",
-    "The four removeMemberWay entries have no labelled C2 mainline edge because the relation walk never reaches them (ramps and JCT links). Assigning a direction is preferred over dropping a member when the way really is C2 mainline.",
-    "No shipped C2 pair crosses the changed stretch; the three pairs keep the same mandatory lap hash."
-  ],
   "verification": {
     "measuredAt": "2026-10-11",
     "appliedToSnapshot": "python3 scripts/apply-osm-relation-repairs.py --osm fixtures/osm/shutoko-all.json --repairs data/osm-relation-repairs.json --out /tmp/shutoko-repaired.json then run graph-builder on it",
     "baseline": {
-      "innerEdges": 1228,
-      "outerEdges": 1068,
-      "assignedEdges": 2296,
       "unassignedEdges": 169,
       "sameLabelAntiparallelPairs": 792,
       "splitBug": "the 王子北 binding pointed at a 川口線 ramp 1.6 km from the C2 mainline, which seeded the outer carriageway eastbound chain (44209387 / 780870438 / 44211094) as inner"
@@ -33,704 +33,789 @@
     "after": "the release fixture itself is corrected (graph-builder pairing fill plus the 王子北 binding fix), so this file is the changeset that follows it",
     "labelAudit": {
       "script": "scripts/audit-c2-carriageway-labels.py",
+      "evidence": "official ramp directions anchored at the ramp junctions, propagated along the exact one-way chain; 2D geometry is used only where the chain is silent",
       "junctionSearchValidatedAgainst": "6 junction nodes recorded by the three authored pairs",
       "anchorsPlaced": "20 / 25 verified_bound C2 ramps",
-      "anchorConflicts": "0",
-      "perWayAgainstCorrectedSplit": {
-        "agree": 68,
+      "anchorConflicts": 0,
+      "classifiedEdges": "2449 / 2449",
+      "chainConflicts": 0,
+      "foldBackPairsInsideOneChain": 3537,
+      "perWayAgainstSplit": {
+        "agree": 110,
         "disagree": 1,
-        "auditOnly": 13
+        "notInMembership": 4
       },
-      "openDisagreement": "way 331692346 at 大井JCT: the split says outer, the anchor set says inner; the two carriageways share coordinates in tunnel so 2D geometry cannot separate them"
+      "rolesAssignedButUnconfirmed": [
+        768600220
+      ],
+      "previousRolesWithdrawn": [
+        {
+          "wayId": 768600220,
+          "role": "outer"
+        }
+      ],
+      "fieldCheckSites": [
+        {
+          "wayId": 331692346,
+          "lat": 35.608,
+          "lon": 139.755,
+          "split": "outer",
+          "solved": "outer",
+          "note": "大井JCT tunnel: stacked with way 250494182 (layer 3)"
+        },
+        {
+          "wayId": 250494182,
+          "lat": 35.605,
+          "lon": 139.754,
+          "split": "inner",
+          "solved": "inner",
+          "note": "大井JCT tunnel: stacked with way 331692346 (layer 2)"
+        }
+      ],
+      "ambiguousJunctions": [
+        {
+          "node": "n:263988137",
+          "edges": [
+            "e:w28127318:0:f",
+            "e:w44209387:0:f"
+          ],
+          "incoming": null
+        },
+        {
+          "node": "n:3387909708",
+          "edges": [
+            "e:w331922695:0:f",
+            "e:w331922711:0:f"
+          ],
+          "incoming": null
+        },
+        {
+          "node": "n:7160486515",
+          "edges": [
+            "e:w766679041:4:f",
+            "e:w80581132:11:f",
+            "e:w766679041:5:f",
+            "e:w80581132:12:f"
+          ],
+          "incoming": null
+        },
+        {
+          "node": "n:7549622953",
+          "edges": [
+            "e:w331692348:0:f",
+            "e:w331922702:0:f"
+          ],
+          "incoming": null
+        }
+      ]
     }
   },
+  "humanReviewRequired": [
+    "The setMemberRole entries are the labels of the released split, not a surveyed direction sign, and they are reproduced by an independent chain of evidence: the official ramp directions (data/ramp-inventory.json) fixed at the ramp junctions, propagated along the exact one-way chain. The audit places 20 anchors, finds 0 conflicts with the split and classifies 2449 of 2449 membership edges.",
+    "A mapper should still spot-check the two stretches where the carriageways share coordinates and the 2D geometry cannot separate them: 大井JCT (way 331692346 layer 2 = outer above way 250494182 layer 3 = inner) and the 王子 to 江北 run (ways 44209387 / 44211094 / 780870438), which the earlier proposal had as inner by mistake.",
+    "The four removeMemberWay entries have no labelled C2 mainline edge in the released split: 78334075, 541983769, 766677827, 805171062. Assigning a direction is preferred over dropping a member when the way really is C2 mainline.",
+    "Way 768600220 is given the released split's role (Outer directions) because a role-less member makes the whole relation fail closed, but the chain evidence reaching it from the official ramp anchors says inner. It sits in the 大橋JCT tangle where the two carriageways touch, so a mapper must confirm the direction before this changeset is uploaded.",
+    "The 大橋JCT tangle also contains lane fold-backs, so geometry alone cannot label it: the audit finds 3537 antiparallel pairs inside a single chain and 3476 stacked-carriageway edge pairs.",
+    "No shipped C2 pair crosses the changed stretch; the three pairs keep the same mandatory lap hash."
+  ],
   "repairs": [
     {
-      "kind": "removeMemberWay",
-      "wayId": 80581131,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 80581133,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 331922702,
-      "reason": "JCT link member that starts on the same node as the mainline member (fork)"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 541983769,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 805171062,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 331922695,
-      "reason": "JCT link member that starts on the same node as the mainline member (fork)"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 78334073,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 593535941,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 78334076,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 78334075,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 766677827,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 28127318,
-      "reason": "JCT link member that starts on the same node as the mainline member (fork)"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 44289388,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 867182415,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
-      "kind": "removeMemberWay",
-      "wayId": 156344608,
-      "reason": "no inner/outer evidence from the verified-bound ramp reachability filter; a mapper must assign a direction or drop the member"
-    },
-    {
       "kind": "setMemberRole",
-      "wayId": 80581132,
-      "role": "Inner directions",
-      "reason": "12 of 13 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 80581127,
-      "role": "Inner directions",
-      "reason": "79 of 79 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331692348,
-      "role": "Inner directions",
-      "reason": "22 of 22 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 438369821,
-      "role": "Inner directions",
-      "reason": "17 of 17 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 772511246,
-      "role": "Inner directions",
-      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 772511245,
-      "role": "Inner directions",
-      "reason": "21 of 21 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331922708,
-      "role": "Inner directions",
-      "reason": "146 of 146 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 805363107,
-      "role": "Inner directions",
-      "reason": "5 of 5 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331692344,
-      "role": "Inner directions",
-      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 1308572350,
-      "role": "Inner directions",
-      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331922700,
-      "role": "Inner directions",
-      "reason": "12 of 12 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 250494182,
-      "role": "Inner directions",
-      "reason": "22 of 22 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 914917090,
-      "role": "Inner directions",
-      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 914917089,
-      "role": "Inner directions",
-      "reason": "4 of 4 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 4854100,
-      "role": "Inner directions",
-      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 768600220,
+      "wayId": 4854098,
       "role": "Outer directions",
-      "reason": "8 of 8 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331922711,
-      "role": "Outer directions",
-      "reason": "28 of 28 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 78334071,
-      "role": "Outer directions",
-      "reason": "11 of 11 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331922707,
-      "role": "Outer directions",
-      "reason": "16 of 16 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 78334074,
-      "role": "Outer directions",
-      "reason": "27 of 27 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 78334072,
-      "role": "Outer directions",
-      "reason": "44 of 44 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 766679040,
-      "role": "Outer directions",
-      "reason": "23 of 43 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 766679041,
-      "role": "Inner directions",
-      "reason": "6 of 11 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 768600219,
-      "role": "Inner directions",
-      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 190617333,
-      "role": "Inner directions",
-      "reason": "84 of 84 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 190617334,
-      "role": "Inner directions",
-      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 190617332,
-      "role": "Inner directions",
-      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28127108,
-      "role": "Inner directions",
-      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 1335055570,
-      "role": "Inner directions",
-      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 1335055579,
-      "role": "Inner directions",
-      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 1335055589,
-      "role": "Inner directions",
-      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 343240453,
-      "role": "Inner directions",
-      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 1335055592,
-      "role": "Inner directions",
-      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28126649,
-      "role": "Inner directions",
-      "reason": "13 of 13 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 343240454,
-      "role": "Inner directions",
-      "reason": "8 of 8 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 1335055558,
-      "role": "Inner directions",
-      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28127112,
-      "role": "Inner directions",
-      "reason": "13 of 13 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28195150,
-      "role": "Inner directions",
-      "reason": "36 of 36 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 156344609,
-      "role": "Inner directions",
-      "reason": "49 of 49 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44289390,
-      "role": "Inner directions",
-      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28127324,
-      "role": "Inner directions",
-      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44209384,
-      "role": "Inner directions",
-      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44211322,
-      "role": "Inner directions",
-      "reason": "29 of 29 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28127449,
-      "role": "Inner directions",
-      "reason": "36 of 36 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44180277,
-      "role": "Inner directions",
-      "reason": "38 of 38 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44209394,
-      "role": "Inner directions",
-      "reason": "6 of 6 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28194811,
-      "role": "Inner directions",
-      "reason": "88 of 88 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 709826346,
-      "role": "Inner directions",
-      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28194807,
-      "role": "Inner directions",
-      "reason": "43 of 43 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44130134,
-      "role": "Inner directions",
-      "reason": "13 of 13 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 316265424,
-      "role": "Inner directions",
-      "reason": "24 of 24 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44422826,
-      "role": "Inner directions",
-      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44422827,
-      "role": "Inner directions",
-      "reason": "12 of 12 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 184872024,
-      "role": "Inner directions",
-      "reason": "29 of 29 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 184872022,
-      "role": "Inner directions",
-      "reason": "14 of 14 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28188274,
-      "role": "Outer directions",
-      "reason": "20 of 20 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44129867,
-      "role": "Outer directions",
-      "reason": "1 of 1 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 184872023,
-      "role": "Outer directions",
-      "reason": "130 of 130 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 184872021,
-      "role": "Outer directions",
-      "reason": "14 of 14 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44130240,
-      "role": "Outer directions",
-      "reason": "38 of 38 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44130133,
-      "role": "Outer directions",
-      "reason": "3 of 3 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 32898851,
-      "role": "Outer directions",
-      "reason": "10 of 10 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28194805,
-      "role": "Outer directions",
-      "reason": "42 of 42 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44180278,
-      "role": "Outer directions",
-      "reason": "81 of 81 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 891237687,
-      "role": "Outer directions",
-      "reason": "3 of 3 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44211094,
-      "role": "Inner directions",
-      "reason": "34 of 37 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 780870438,
-      "role": "Inner directions",
-      "reason": "64 of 64 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44209387,
-      "role": "Inner directions",
-      "reason": "3 of 3 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28127320,
-      "role": "Outer directions",
-      "reason": "51 of 52 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 24334800,
-      "role": "Outer directions",
-      "reason": "37 of 37 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 44291527,
-      "role": "Outer directions",
-      "reason": "13 of 13 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 28127113,
-      "role": "Outer directions",
-      "reason": "24 of 24 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 190617330,
-      "role": "Outer directions",
-      "reason": "12 of 12 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 190617331,
-      "role": "Outer directions",
-      "reason": "1 of 1 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 190617335,
-      "role": "Outer directions",
-      "reason": "9 of 9 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 90184161,
-      "role": "Outer directions",
-      "reason": "81 of 81 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 863812381,
-      "role": "Outer directions",
-      "reason": "10 of 10 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 863812380,
-      "role": "Outer directions",
-      "reason": "4 of 4 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 863812379,
-      "role": "Outer directions",
-      "reason": "1 of 1 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 863812378,
-      "role": "Outer directions",
-      "reason": "4 of 4 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331922705,
-      "role": "Outer directions",
-      "reason": "60 of 60 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 772511244,
-      "role": "Outer directions",
-      "reason": "1 of 1 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 772511247,
-      "role": "Outer directions",
-      "reason": "11 of 11 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+      "reason": "all 7 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
     },
     {
       "kind": "setMemberRole",
       "wayId": 4854099,
       "role": "Outer directions",
-      "reason": "4 of 4 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
+      "reason": "all 4 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
     },
     {
       "kind": "setMemberRole",
-      "wayId": 1051964007,
-      "role": "Outer directions",
-      "reason": "4 of 4 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 37794907,
-      "role": "Outer directions",
-      "reason": "6 of 6 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331692345,
-      "role": "Outer directions",
-      "reason": "14 of 14 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331922706,
-      "role": "Outer directions",
-      "reason": "12 of 12 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 806097479,
-      "role": "Outer directions",
-      "reason": "4 of 4 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331922709,
-      "role": "Outer directions",
-      "reason": "5 of 5 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 805363106,
-      "role": "Outer directions",
-      "reason": "164 of 164 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 331692346,
-      "role": "Outer directions",
-      "reason": "28 of 28 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 4854098,
-      "role": "Outer directions",
-      "reason": "7 of 7 Shutoko edges are labelled outer by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 383231017,
+      "wayId": 4854100,
       "role": "Inner directions",
-      "reason": "7 of 7 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 432603493,
-      "role": "Inner directions",
-      "reason": "10 of 10 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 574211698,
-      "role": "Inner directions",
-      "reason": "2 of 2 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
-    },
-    {
-      "kind": "setMemberRole",
-      "wayId": 432603492,
-      "role": "Inner directions",
-      "reason": "1 of 1 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+      "reason": "all 7 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
     },
     {
       "kind": "setMemberRole",
       "wayId": 4857050,
       "role": "Inner directions",
-      "reason": "128 of 128 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+      "reason": "all 128 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
     },
     {
       "kind": "setMemberRole",
-      "wayId": 44885527,
+      "wayId": 24334800,
+      "role": "Outer directions",
+      "reason": "all 37 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28126649,
       "role": "Inner directions",
-      "reason": "14 of 14 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+      "reason": "all 13 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127108,
+      "role": "Inner directions",
+      "reason": "all 1 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127112,
+      "role": "Inner directions",
+      "reason": "all 13 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127113,
+      "role": "Outer directions",
+      "reason": "all 24 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127318,
+      "role": "Outer directions",
+      "reason": "all 3 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127320,
+      "role": "Outer directions",
+      "reason": "all 52 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127324,
+      "role": "Inner directions",
+      "reason": "all 7 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28127449,
+      "role": "Inner directions",
+      "reason": "all 36 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28188274,
+      "role": "Outer directions",
+      "reason": "all 20 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28194805,
+      "role": "Outer directions",
+      "reason": "all 42 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28194807,
+      "role": "Inner directions",
+      "reason": "all 43 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28194811,
+      "role": "Inner directions",
+      "reason": "all 88 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 28195150,
+      "role": "Inner directions",
+      "reason": "all 36 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 32898851,
+      "role": "Outer directions",
+      "reason": "all 10 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 37794907,
+      "role": "Outer directions",
+      "reason": "all 6 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44129867,
+      "role": "Outer directions",
+      "reason": "all 1 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
     },
     {
       "kind": "setMemberRole",
       "wayId": 44129869,
       "role": "Inner directions",
-      "reason": "5 of 5 Shutoko edges are labelled inner by the current verified-bound ramp evidence"
+      "reason": "all 5 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
     },
     {
-      "kind": "splitMemberWayAtNode",
+      "kind": "setMemberRole",
+      "wayId": 44130133,
+      "role": "Outer directions",
+      "reason": "all 3 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44130134,
+      "role": "Inner directions",
+      "reason": "all 13 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44130240,
+      "role": "Outer directions",
+      "reason": "all 38 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44180277,
+      "role": "Inner directions",
+      "reason": "all 38 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44180278,
+      "role": "Outer directions",
+      "reason": "all 81 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44209384,
+      "role": "Inner directions",
+      "reason": "all 3 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44209387,
+      "role": "Outer directions",
+      "reason": "all 3 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44209394,
+      "role": "Inner directions",
+      "reason": "all 6 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44211094,
+      "role": "Outer directions",
+      "reason": "all 37 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44211322,
+      "role": "Inner directions",
+      "reason": "all 29 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44289388,
+      "role": "Outer directions",
+      "reason": "all 7 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44289390,
+      "role": "Inner directions",
+      "reason": "all 3 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44291527,
+      "role": "Outer directions",
+      "reason": "all 13 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44422826,
+      "role": "Inner directions",
+      "reason": "all 2 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44422827,
+      "role": "Inner directions",
+      "reason": "all 12 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 44885527,
+      "role": "Inner directions",
+      "reason": "all 14 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 78334071,
+      "role": "Outer directions",
+      "reason": "all 11 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 78334072,
+      "role": "Outer directions",
+      "reason": "all 44 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 78334073,
+      "role": "Outer directions",
+      "reason": "all 39 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 78334074,
+      "role": "Outer directions",
+      "reason": "all 27 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 78334076,
+      "role": "Outer directions",
+      "reason": "all 5 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 80581127,
+      "role": "Inner directions",
+      "reason": "all 79 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 80581131,
+      "role": "Inner directions",
+      "reason": "all 44 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 80581132,
+      "role": "Inner directions",
+      "reason": "all 13 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 80581133,
+      "role": "Inner directions",
+      "reason": "all 27 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 90184161,
+      "role": "Outer directions",
+      "reason": "all 81 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 156344608,
+      "role": "Outer directions",
+      "reason": "all 1 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 156344609,
+      "role": "Inner directions",
+      "reason": "all 49 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 184872021,
+      "role": "Outer directions",
+      "reason": "all 14 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 184872022,
+      "role": "Inner directions",
+      "reason": "all 14 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 184872023,
+      "role": "Outer directions",
+      "reason": "all 130 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 184872024,
+      "role": "Inner directions",
+      "reason": "all 29 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617330,
+      "role": "Outer directions",
+      "reason": "all 12 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617331,
+      "role": "Outer directions",
+      "reason": "all 1 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617332,
+      "role": "Inner directions",
+      "reason": "all 3 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617333,
+      "role": "Inner directions",
+      "reason": "all 84 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617334,
+      "role": "Inner directions",
+      "reason": "all 7 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 190617335,
+      "role": "Outer directions",
+      "reason": "all 9 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 250494182,
+      "role": "Inner directions",
+      "reason": "all 22 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 316265424,
+      "role": "Inner directions",
+      "reason": "all 24 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331692344,
+      "role": "Inner directions",
+      "reason": "all 3 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331692345,
+      "role": "Outer directions",
+      "reason": "all 14 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331692346,
+      "role": "Outer directions",
+      "reason": "all 28 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331692348,
+      "role": "Inner directions",
+      "reason": "all 22 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922695,
+      "role": "Outer directions",
+      "reason": "all 2 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922700,
+      "role": "Inner directions",
+      "reason": "all 12 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922702,
+      "role": "Inner directions",
+      "reason": "all 11 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922705,
+      "role": "Outer directions",
+      "reason": "all 60 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922706,
+      "role": "Outer directions",
+      "reason": "all 12 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922707,
+      "role": "Outer directions",
+      "reason": "all 16 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922708,
+      "role": "Inner directions",
+      "reason": "all 146 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922709,
+      "role": "Outer directions",
+      "reason": "all 5 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 331922711,
+      "role": "Outer directions",
+      "reason": "all 28 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 343240453,
+      "role": "Inner directions",
+      "reason": "all 7 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 343240454,
+      "role": "Inner directions",
+      "reason": "all 8 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 383231017,
+      "role": "Inner directions",
+      "reason": "all 7 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 432603492,
+      "role": "Inner directions",
+      "reason": "all 1 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 432603493,
+      "role": "Inner directions",
+      "reason": "all 10 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 438369821,
+      "role": "Inner directions",
+      "reason": "all 17 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 574211698,
+      "role": "Inner directions",
+      "reason": "all 2 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 593535941,
+      "role": "Outer directions",
+      "reason": "all 2 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 709826346,
+      "role": "Inner directions",
+      "reason": "all 3 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 766679040,
+      "role": "Outer directions",
+      "reason": "all 43 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 766679041,
+      "role": "Inner directions",
+      "reason": "all 7 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 768600219,
+      "role": "Inner directions",
+      "reason": "all 2 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 768600220,
+      "role": "Outer directions",
+      "reason": "the released split says outer but the chain evidence reaching this way from the official ramp anchors says inner: assigned for the relation to stay walkable, confirm before uploading"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 772511244,
+      "role": "Outer directions",
+      "reason": "all 1 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 772511245,
+      "role": "Inner directions",
+      "reason": "all 21 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 772511246,
+      "role": "Inner directions",
+      "reason": "all 1 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 772511247,
+      "role": "Outer directions",
+      "reason": "all 11 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 780870438,
+      "role": "Outer directions",
+      "reason": "all 64 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 805363106,
+      "role": "Outer directions",
+      "reason": "all 164 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 805363107,
+      "role": "Inner directions",
+      "reason": "all 5 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 806097479,
+      "role": "Outer directions",
+      "reason": "all 4 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 863812378,
+      "role": "Outer directions",
+      "reason": "all 4 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 863812379,
+      "role": "Outer directions",
+      "reason": "all 1 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 863812380,
+      "role": "Outer directions",
+      "reason": "all 4 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 863812381,
+      "role": "Outer directions",
+      "reason": "all 10 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 867182415,
+      "role": "Outer directions",
+      "reason": "all 2 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
       "wayId": 891237687,
-      "nodeId": 8283617223,
-      "reason": "the member walk reaches n:8283617223 at the end of way 44211094 and way 891237687 only continues from the interior of its own node list"
+      "role": "Outer directions",
+      "reason": "all 3 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 914917089,
+      "role": "Inner directions",
+      "reason": "all 4 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 914917090,
+      "role": "Inner directions",
+      "reason": "all 1 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1051964007,
+      "role": "Outer directions",
+      "reason": "all 4 membership edges are outer; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1308572350,
+      "role": "Inner directions",
+      "reason": "all 1 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1335055558,
+      "role": "Inner directions",
+      "reason": "all 2 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1335055570,
+      "role": "Inner directions",
+      "reason": "all 1 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1335055579,
+      "role": "Inner directions",
+      "reason": "all 2 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1335055589,
+      "role": "Inner directions",
+      "reason": "all 7 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "setMemberRole",
+      "wayId": 1335055592,
+      "role": "Inner directions",
+      "reason": "all 2 membership edges are inner; the independent anchor audit reproduces the label from the official ramp directions along the one-way chain (scripts/audit-c2-carriageway-labels.py)"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 78334075,
+      "reason": "the released C2 split labels no mainline edge of this member, so a mapper must assign a direction or drop the member (the relation walk cannot reach it from either carriageway anchor)"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 541983769,
+      "reason": "the released C2 split labels no mainline edge of this member, so a mapper must assign a direction or drop the member (the relation walk cannot reach it from either carriageway anchor)"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 766677827,
+      "reason": "the released C2 split labels no mainline edge of this member, so a mapper must assign a direction or drop the member (the relation walk cannot reach it from either carriageway anchor)"
+    },
+    {
+      "kind": "removeMemberWay",
+      "wayId": 805171062,
+      "reason": "the released C2 split labels no mainline edge of this member, so a mapper must assign a direction or drop the member (the relation walk cannot reach it from either carriageway anchor)"
     },
     {
       "kind": "splitMemberWayAtNode",
       "wayId": 44130240,
       "nodeId": 370270234,
       "reason": "way 44130240 holds n:370270234 at node index 1, so the chain from way 28188274 cannot continue into it"
+    },
+    {
+      "kind": "splitMemberWayAtNode",
+      "wayId": 891237687,
+      "nodeId": 8283617223,
+      "reason": "the member walk reaches n:8283617223 at the end of way 44211094 and way 891237687 only continues from the interior of its own node list"
     }
   ]
 }

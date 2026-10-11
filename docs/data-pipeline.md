@@ -723,14 +723,14 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
-| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 14件（legacy 12 + radial 2）、route memberships 52件、ramps 238件 | 7,650,330 bytes |
+| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 14件（legacy 12 + radial 2）、route memberships 52件、ramps 238件 | 7,655,199 bytes |
 | `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 26 件、assignment 13 件、deprecated 2 件） | 61,284 bytes |
 | `pair-candidates.json` | 2 | 導出レポート（候補 14 件 = eligible 13 / hold 1、relation coverage 26 件 = pass 11 / fail 15） | 91,097 bytes |
 | `ramps.json` | 1 | 正規台帳399件、うちbound 238件 | 278,803 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
 | `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 13件 | 49,308 bytes |
 
-`graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は 5 成果物（`graph.json` / `od-tariffs.json` / `pair-candidates.json` / `ramps.json` / `snap-index.json`）の path・SHA-256・byte length を固定し、manifest 自身のサイズと schema は別情報として扱う。`all-real-v4` の `routeMembershipsSha256` は `c65b740cccb505745b9641ea79e3172343c75e02b2cc27ce40e15443a21a61c1` であり、同一入力の2回の生成で一致する。3 世代分のバイト一致は `cargo test --release -p shutoko-graph-builder --test release_v4_contract --locked -- --ignored` の `all_real_v4_artifacts_are_byte_identical_across_three_generations` が担保する。
+`graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は 5 成果物（`graph.json` / `od-tariffs.json` / `pair-candidates.json` / `ramps.json` / `snap-index.json`）の path・SHA-256・byte length を固定し、manifest 自身のサイズと schema は別情報として扱う。`all-real-v4` の `routeMembershipsSha256` は `50764c134ef6315f633310e40adc5bb41203dd90b3609e5c9fa63b12c9b49029` であり、同一入力の2回の生成で一致する。3 世代分のバイト一致は `cargo test --release -p shutoko-graph-builder --test release_v4_contract --locked -- --ignored` の `all_real_v4_artifacts_are_byte_identical_across_three_generations` が担保する。
 
 ### `snap-index.json` の意味と `schemaVersion: 2`
 

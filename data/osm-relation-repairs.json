@@ -3,7 +3,7 @@
   "relationId": 4256077,
   "routeId": "C2",
   "status": "proposed_upstream_not_applied",
-  "description": "Proposed upstream edits to OSM relation 4256077 (首都高速中央環状線). The relation is role-less, so graph-builder derives the inner/outer carriageway split from the verified-bound C2 ramp evidence, which labels 2,296 of 2,479 mainline edges and leaves the walk in 9 inner and 7 outer runs. Applying this file to a copy of the snapshot does not change the release fixture; it is the candidate changeset the diagnostics are verified against (scripts/apply-osm-relation-repairs.py, docs/c2-route-design.md 段11).",
+  "description": "Proposed upstream edits to OSM relation 4256077 (首都高速中央環状線). The relation is role-less, so graph-builder derives the inner/outer carriageway split from the verified-bound C2 ramp evidence plus the ring geometry; with the corrected 王子北 binding (data/osm-ramp-bindings.json) that split labels all 2,479 relation mainline edges, 1,197 inner and 1,252 outer. This file writes those labels out as roles so the relation carries the directions itself. It is not applied to the release fixture; scripts/apply-osm-relation-repairs.py verifies it on a copy of the snapshot (docs/c2-route-design.md 段13).",
   "applyCommand": [
     "python3",
     "scripts/apply-osm-relation-repairs.py",
@@ -15,67 +15,33 @@
     "/tmp/shutoko-repaired.json"
   ],
   "humanReviewRequired": [
-    "The setMemberRole entries are derived from the current derived split, not from a surveyed direction sign. scripts/audit-c2-carriageway-labels.py re-derives them from the official ramp directions plus geometry alone and confirms 59 member ways exactly, 12 partially, and disagrees on 5 (see docs/c2-route-design.md 段12).",
-    "The 5 disagreements are 44209387 / 780870438 / 44211094 (file=inner, geometry=outer, in the 飛鳥山トンネル stretch where the published upper=inner deck rule does not apply) and 331692346 / 4854098 (file=outer, geometry=inner, at 大井JCT where the carriageways are stacked at the same coordinates). A route-map arrow or imagery check is needed for those 5 ways only.",
-    "No shipped C2 pair crosses the 5 ways, so the release data is unaffected today."
+    "The setMemberRole entries are the labels of the corrected split (official ramp directions plus geometry pairing), not a surveyed direction sign. scripts/audit-c2-carriageway-labels.py confirms them against the independent anchor set: 68 ways agree, 1 disagrees (the 大井JCT link way 331692346, where the two carriageways share coordinates in tunnel). A mapper should spot-check the 王子 to 江北 stretch and 大井JCT.",
+    "The four removeMemberWay entries have no labelled C2 mainline edge because the relation walk never reaches them (ramps and JCT links). Assigning a direction is preferred over dropping a member when the way really is C2 mainline.",
+    "No shipped C2 pair crosses the changed stretch; the three pairs keep the same mandatory lap hash."
   ],
   "verification": {
     "measuredAt": "2026-10-11",
+    "appliedToSnapshot": "python3 scripts/apply-osm-relation-repairs.py --osm fixtures/osm/shutoko-all.json --repairs data/osm-relation-repairs.json --out /tmp/shutoko-repaired.json then run graph-builder on it",
     "baseline": {
-      "innerRuns": 9,
-      "outerRuns": 7,
+      "innerEdges": 1228,
+      "outerEdges": 1068,
       "assignedEdges": 2296,
       "unassignedEdges": 169,
-      "uniqueArcs": 27,
-      "firstExitArcs": 11
+      "sameLabelAntiparallelPairs": 792,
+      "splitBug": "the 王子北 binding pointed at a 川口線 ramp 1.6 km from the C2 mainline, which seeded the outer carriageway eastbound chain (44209387 / 780870438 / 44211094) as inner"
     },
-    "withThisFile": {
-      "innerRuns": 7,
-      "outerRuns": 6,
-      "innerEdges": 1223,
-      "outerEdges": 1087,
-      "uniqueArcs": 32,
-      "firstExitArcs": 11
-    },
-    "diagnostics": [
-      "Removing only the JCT link members stops the walk at n:8283617223 and the builder reports the node, the continuing edge e:w891237687:2:f, and member way 44180278.",
-      "Splitting the interior-continuation ways alone leaves the membership unchanged, because the C2 runs are cut by edge labels, not by member order.",
-      "Roles plus removals plus splits build, reduce the runs, and add five unique arcs; the first-exit-eligible arc count stays at 11."
-    ],
+    "after": "the release fixture itself is corrected (graph-builder pairing fill plus the 王子北 binding fix), so this file is the changeset that follows it",
     "labelAudit": {
       "script": "scripts/audit-c2-carriageway-labels.py",
+      "junctionSearchValidatedAgainst": "6 junction nodes recorded by the three authored pairs",
       "anchorsPlaced": "20 / 25 verified_bound C2 ramps",
-      "anchorAgreement": "19 / 20 agree with the derived split",
-      "classifiedMembershipEdges": "1796 / 2296",
-      "perWay": {
-        "confirmed": 59,
-        "confirmedPartial": 12,
-        "disagrees": 5,
-        "unclassified": 38,
-        "notInRoleFile": 1
+      "anchorConflicts": "0",
+      "perWayAgainstCorrectedSplit": {
+        "agree": 68,
+        "disagree": 1,
+        "auditOnly": 13
       },
-      "disagreements": {
-        "44209387": {
-          "file": "inner",
-          "geometry": "outer"
-        },
-        "780870438": {
-          "file": "inner",
-          "geometry": "outer"
-        },
-        "44211094": {
-          "file": "inner",
-          "geometry": "outer"
-        },
-        "331692346": {
-          "file": "outer",
-          "geometry": "inner"
-        },
-        "4854098": {
-          "file": "outer",
-          "geometry": "inner"
-        }
-      }
+      "openDisagreement": "way 331692346 at 大井JCT: the split says outer, the anchor set says inner; the two carriageways share coordinates in tunnel so 2D geometry cannot separate them"
     }
   },
   "repairs": [

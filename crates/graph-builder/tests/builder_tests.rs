@@ -1953,15 +1953,17 @@ fn test_real_c2_carriageway_direction_split_from_verified_bound_ramps() {
     );
     let inner = split.edge_count("inner");
     let outer = split.edge_count("outer");
-    // Almost-even segments are re-derived from their neighbours after their
-    // split labels are dropped, so every labelled edge now lands on exactly one
-    // carriageway and no segment stays ambiguous.
-    assert_eq!(inner, 1228);
-    assert_eq!(outer, 1068);
-    // 14 of the 2,310 labelled edges are dropped by the boundary trim, so the
-    // two carriageways partition every labelled edge the trim and the exit
-    // reachability filter keep.
-    assert_eq!(split.labelled_edge_ids.len() - (inner + outer), 14);
+    // The pairing fill labels the runs a JCT breaks apart, so every C2 relation
+    // mainline edge carries a direction and no segment stays ambiguous. The
+    // 王子北 binding fix (data/osm-ramp-bindings.json) moved the westbound chain
+    // out of `inner` and the eastbound chain of 王子 to 江北 into `outer`.
+    assert_eq!(inner, 1197);
+    assert_eq!(outer, 1252);
+    assert_eq!(split.labelled_edge_ids.len(), 2479);
+    assert!(split.unassigned_edge_ids.is_empty());
+    // The per-segment majority still drops the minority labels (30 edges that
+    // belong to a segment whose majority is the other carriageway).
+    assert_eq!(split.labelled_edge_ids.len() - (inner + outer), 30);
     assert_eq!(
         split.unassigned_edge_ids.len() + split.labelled_edge_ids.len(),
         2479,

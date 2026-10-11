@@ -174,6 +174,17 @@ pub const C2_DIRECTION_MINORITY_SEGMENT_RATIO: f64 = 0.05;
 /// attachment point and the edges a ramp can reach on its carriageway.
 pub const CARRIAGEWAY_SEED_REACH_METERS: u64 = 3_000;
 
+/// Two carriageways of a ring run side by side (or stacked) at one station, so
+/// an edge of the other carriageway is within this distance and nearly
+/// antiparallel (`CARRIAGEWAY_PAIR_MIN_COS`).
+pub const CARRIAGEWAY_PAIR_MAX_METERS: u64 = 60;
+pub const CARRIAGEWAY_PAIR_MIN_COS: f64 = -0.95;
+
+/// Consecutive edges of one carriageway meet end to end, so their midpoints are
+/// at most half of two edge lengths apart and their headings almost identical.
+pub const CARRIAGEWAY_CONTINUATION_MAX_METERS: u64 = 300;
+pub const CARRIAGEWAY_CONTINUATION_MIN_COS: f64 = 0.99;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GraphSchemaV4BillingPair {
@@ -970,6 +981,15 @@ pub fn derive_carriageway_direction_split(
         &mut labels,
     );
 
+    // The ramp seeds and the relation-order propagation cannot label the runs a
+    // JCT breaks apart, and `apply_exit_reachability_filter` cannot help there
+    // either: it walks the membership too, so a hole stops it as well. Fill those
+    // edges from the ring's geometry instead. At one station the two carriageways
+    // run in opposite directions, so an edge that runs antiparallel to a labelled
+    // edge nearby is the other carriageway, and an edge that continues a labelled
+    // edge is the same one.
+    fill_carriageway_labels_by_pairing(graph, &mainline_edge_ids, &mut labels);
+
     // A segment whose labels are split almost evenly is not "half inner, half
     // outer": the relation order crosses both carriageways inside the segment.
     // Drop those labels and let propagation re-derive them from the segments
@@ -1103,6 +1123,162 @@ pub fn derive_carriageway_direction_split(
         ambiguous_segment_ids,
         seed_ramp_ids,
     }))
+}
+
+/// Fill the carriageway labels the ramp seeds and the relation order cannot reach.
+///
+/// A ring carries the same two carriageways everywhere, so the geometry decides
+/// the labels the relation order loses at a JCT: at one station the two
+/// carriageways run in opposite directions and are close together, so an edge
+/// that runs antiparallel to a labelled edge within [`CARRIAGEWAY_PAIR_MAX_METERS`]
+/// is the other carriageway, and an edge that continues a labelled edge within
+/// [`CARRIAGEWAY_CONTINUATION_MAX_METERS`] with an almost identical heading is the
+/// same one. Starting from the ramp seeds, the fill walks outward until no edge
+/// can be decided.
+///
+/// The pass only ever fills an unlabelled edge, never rewrites a label, and it
+/// runs in a deterministic order: edges and the candidates around them are
+/// visited in edge-id order, and each round applies the closest evidence first.
+fn fill_carriageway_labels_by_pairing(
+    graph: &Graph,
+    mainline_edge_ids: &BTreeSet<String>,
+    labels: &mut HashMap<String, String>,
+) {
+    const CELL_METERS: f64 = 200.0;
+    let geometry = |edge: &Edge| -> Option<(f64, f64, f64, f64)> {
+        let from = graph.nodes.iter().find(|node| node.id == edge.from)?;
+        let to = graph.nodes.iter().find(|node| node.id == edge.to)?;
+        let from = project(from);
+        let to = project(to);
+        let mid = ((from.0 + to.0) / 2.0, (from.1 + to.1) / 2.0);
+        let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+        let length = (dx * dx + dy * dy).sqrt();
+        if length == 0.0 {
+            return None;
+        }
+        Some((mid.0, mid.1, dx / length, dy / length))
+    };
+    fn project(node: &Node) -> (f64, f64) {
+        (
+            node.lat * 111_320.0,
+            node.lon * 111_320.0 * node.lat.to_radians().cos(),
+        )
+    }
+
+    let mut geometry_by_edge: HashMap<&str, (f64, f64, f64, f64)> = HashMap::new();
+    let mut cells: HashMap<(i64, i64), Vec<&str>> = HashMap::new();
+    for edge_id in mainline_edge_ids {
+        let Some(edge) = graph.edges.iter().find(|edge| edge.id == *edge_id) else {
+            continue;
+        };
+        let Some(shape) = geometry(edge) else {
+            continue;
+        };
+        cells
+            .entry((
+                (shape.0 / CELL_METERS).floor() as i64,
+                (shape.1 / CELL_METERS).floor() as i64,
+            ))
+            .or_default()
+            .push(edge_id.as_str());
+        geometry_by_edge.insert(edge_id.as_str(), shape);
+    }
+
+    let mut rounds = 0_usize;
+    let max_rounds = mainline_edge_ids.len().max(1) + 1;
+    loop {
+        rounds += 1;
+        if rounds > max_rounds {
+            break;
+        }
+        // (distance, antiparallel, other edge id, target edge id, direction)
+        let mut proposals: Vec<(u64, bool, &str, &str, String)> = Vec::new();
+        for edge_id in mainline_edge_ids {
+            if labels.contains_key(edge_id) {
+                continue;
+            }
+            let Some((mid_x, mid_y, dx, dy)) = geometry_by_edge.get(edge_id.as_str()) else {
+                continue;
+            };
+            let cell = (
+                (mid_x / CELL_METERS).floor() as i64,
+                (mid_y / CELL_METERS).floor() as i64,
+            );
+            for offset_x in -2..=2 {
+                for offset_y in -2..=2 {
+                    let Some(candidates) = cells.get(&(cell.0 + offset_x, cell.1 + offset_y))
+                    else {
+                        continue;
+                    };
+                    for other in candidates {
+                        if *other == edge_id.as_str() {
+                            continue;
+                        }
+                        let Some(direction) = labels.get(*other) else {
+                            continue;
+                        };
+                        let Some((other_x, other_y, other_dx, other_dy)) =
+                            geometry_by_edge.get(other)
+                        else {
+                            continue;
+                        };
+                        let distance =
+                            ((other_x - mid_x).powi(2) + (other_y - mid_y).powi(2)).sqrt() as u64;
+                        let cos = dx * other_dx + dy * other_dy;
+                        if cos <= CARRIAGEWAY_PAIR_MIN_COS
+                            && distance <= CARRIAGEWAY_PAIR_MAX_METERS
+                        {
+                            let flipped = if direction == CARRIAGEWAY_DIRECTION_INNER {
+                                CARRIAGEWAY_DIRECTION_OUTER
+                            } else {
+                                CARRIAGEWAY_DIRECTION_INNER
+                            };
+                            proposals.push((
+                                distance,
+                                true,
+                                other,
+                                edge_id.as_str(),
+                                flipped.to_string(),
+                            ));
+                        } else if cos >= CARRIAGEWAY_CONTINUATION_MIN_COS
+                            && distance <= CARRIAGEWAY_CONTINUATION_MAX_METERS
+                        {
+                            proposals.push((
+                                distance,
+                                false,
+                                other,
+                                edge_id.as_str(),
+                                direction.clone(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        if proposals.is_empty() {
+            break;
+        }
+        // Closest evidence first, then antiparallel pairs (the stronger signal),
+        // then edge ids, so the result never depends on iteration order.
+        proposals.sort_by(|left, right| {
+            left.0
+                .cmp(&right.0)
+                .then_with(|| right.1.cmp(&left.1))
+                .then_with(|| left.3.cmp(right.3))
+                .then_with(|| left.2.cmp(right.2))
+        });
+        let mut changed = false;
+        for (_, _, _, target, direction) in proposals {
+            if labels.contains_key(target) {
+                continue;
+            }
+            labels.insert(target.to_string(), direction);
+            changed = true;
+        }
+        if !changed {
+            break;
+        }
+    }
 }
 
 /// Walk from the ramp evidence path towards the relation mainline.
@@ -7970,6 +8146,69 @@ mod tests {
         assert!(
             validate_route_memberships(&memberships, &graph, &response, &snapshot, &[]).is_err()
         );
+    }
+
+    /// Two carriageways of a ring run side by side and in opposite directions, so
+    /// the geometry decides the labels the relation order cannot reach.
+    #[test]
+    fn pairing_fill_labels_the_other_carriageway_and_the_continuation() {
+        let node_at = |id: &str, lat: f64, lon: f64| Node {
+            id: id.into(),
+            lat,
+            lon,
+        };
+        let edge_at = |id: &str, from: &str, to: &str| Edge {
+            id: id.into(),
+            from: from.into(),
+            to: to.into(),
+            kind: EdgeKind::Shutoko,
+            duration_seconds: 1,
+            distance_meters: 36,
+            name: None,
+        };
+        // Inner runs east at lat 35.0; outer runs west 22 m north of it; the inner
+        // continues east on a third way.
+        let graph = Graph {
+            schema_version: 2,
+            release_id: "fixture".into(),
+            vehicle_profile: "passenger-car-etc".into(),
+            nodes: vec![
+                node_at("n:1", 35.0, 139.0000),
+                node_at("n:2", 35.0, 139.0004),
+                node_at("n:3", 35.0, 139.0008),
+                node_at("n:4", 35.0, 139.0012),
+                node_at("n:11", 35.0002, 139.0004),
+                node_at("n:12", 35.0002, 139.0000),
+            ],
+            edges: vec![
+                edge_at("e:w1:0:f", "n:1", "n:2"),
+                edge_at("e:w2:0:f", "n:2", "n:3"),
+                edge_at("e:w3:0:f", "n:3", "n:4"),
+                edge_at("e:w4:0:f", "n:11", "n:12"),
+            ],
+            billing_pairs: Vec::new(),
+            forbidden_transitions: Vec::new(),
+            ramps: Vec::new(),
+            od_tariffs: Vec::new(),
+        };
+        let mainline = ["e:w1:0:f", "e:w2:0:f", "e:w3:0:f", "e:w4:0:f"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<BTreeSet<_>>();
+        let mut labels = HashMap::from([("e:w1:0:f".to_string(), "inner".to_string())]);
+        fill_carriageway_labels_by_pairing(&graph, &mainline, &mut labels);
+        assert_eq!(labels.get("e:w2:0:f").map(String::as_str), Some("inner"));
+        assert_eq!(labels.get("e:w3:0:f").map(String::as_str), Some("inner"));
+        assert_eq!(labels.get("e:w4:0:f").map(String::as_str), Some("outer"));
+
+        // The fill never rewrites a label, and it works the other way round too:
+        // pinning the outer carriageway labels the inner one from it.
+        let mut pinned = HashMap::from([("e:w4:0:f".to_string(), "outer".to_string())]);
+        fill_carriageway_labels_by_pairing(&graph, &mainline, &mut pinned);
+        assert_eq!(pinned.get("e:w4:0:f").map(String::as_str), Some("outer"));
+        assert_eq!(pinned.get("e:w1:0:f").map(String::as_str), Some("inner"));
+        assert_eq!(pinned.get("e:w2:0:f").map(String::as_str), Some("inner"));
+        assert_eq!(pinned.get("e:w3:0:f").map(String::as_str), Some("inner"));
     }
 
     #[test]

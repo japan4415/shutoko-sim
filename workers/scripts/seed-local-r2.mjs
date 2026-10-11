@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,9 +31,14 @@ const SCHEMA4_BILLING_PAIRS_VERSIONS = new Set(["v2", "v3"]);
 const TARIFF_MODEL_VERSION = 1;
 
 /**
- * R2 object の投入に要する wrangler CLI の最小版。
+ * ローカル preview 投入（E2E / wrangler dev の Miniflare 状態）に使う wrangler CLI の最小版。
  * `wrangler r2 object put|get --file --content-type` が使える 4.x のうち
  * 最も古い版を下限とし、これ未満は機能不足として停止する。
+ *
+ * 本番 R2 への公開投入（--remote）は wrangler ではなく cf CLI を使う（Issue #98）。
+ * cf のオブジェクト操作は `cf r2 objects put|get` で、read-back の本文は stdout に流れる。
+ * wrangler と違ってリポジトリ内に固定版を持たないため、投入前に `cf --version` を
+ * ログへ出して確認時点の版を runbook の記録と照合できるようにする（固定は未決）。
  */
 const MINIMUM_WRANGLER_VERSION = "4.0.0";
 
@@ -325,7 +329,7 @@ function commandErrorText(error) {
 }
 
 function isMissingObjectError(error) {
-  return /specified key does not exist|object not found|nosuchkey|\b10007\b/i.test(
+  return /specified key does not exist|no such key|object not found|nosuchkey|\b10007\b/i.test(
     commandErrorText(error)
   );
 }
@@ -454,9 +458,75 @@ export function preflightWrangler({ runCommand, commandCwd, repoRoot, env = proc
       `wrangler ${version} is older than the required ${MINIMUM_WRANGLER_VERSION} (r2 object put/get); install a newer wrangler`,
     );
   }
-  return { binary, source, version, pinnedVersion: pinned, matchesPin };
+  return { name: "wrangler", binary, source, version, pinnedVersion: pinned, matchesPin };
 }
 
+/**
+ * PATH 上の `cf` を名前に解決する（npx へはフォールバックしない）。
+ * wrangler と同じ規約で、`CF_BIN` に相対パスを渡した場合は `cwd` を基準に解決する。
+ */
+export function resolveCfBinary({ env = process.env, cwd = defaultRepoRoot } = {}) {
+  const override = env.CF_BIN;
+  if (override !== undefined && override !== "") {
+    const absolute = path.isAbsolute(override) ? override : path.resolve(cwd, override);
+    const resolved = isExecutableFile(absolute) ? absolute : null;
+    if (resolved === null) {
+      throw new Error(
+        `CF_BIN=${override} is not a file (resolved to ${absolute}); fix the override or unset it`,
+      );
+    }
+    return { binary: resolved, source: "CF_BIN" };
+  }
+  const onPath = resolveOnPath("cf", env);
+  if (onPath !== null) {
+    return { binary: onPath, source: "PATH" };
+  }
+  throw new Error(
+    "cf was not found on PATH; install it (npm install -g cf) or set CF_BIN. npx is not used as a fallback.",
+  );
+}
+
+/**
+ * `cf --version` の出力から版トークンを抜く。beta 版は `v1.0.0-beta.10` のように
+ * プリリリースsuffixを持つので、それも版の一部として扱う。
+ */
+function readCfVersion({ runCommand, commandCwd, binary }) {
+  let stdout;
+  try {
+    stdout = runCommand(binary, ["--version"], {
+      cwd: commandCwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    throw new Error(
+      `cf preflight failed: \`${binary} --version\` did not run: ${commandErrorText(error)}`,
+    );
+  }
+  const match = /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/.exec(String(stdout ?? ""));
+  if (match === null) {
+    throw new Error(
+      `cf preflight failed: \`${binary} --version\` printed no version: ${String(stdout ?? "").trim()}`,
+    );
+  }
+  return match[0];
+}
+
+/**
+ * 本番投入の前に cf の実行ファイルと版を確定する。
+ * wrangler と違いリポジトリ内に固定版がない（beta を /usr/local/bin で運用中）ため、
+ * 版の強制はせず `cf --version` の結果を必ずログへ出す。runbook に記録した
+ * 確認時点の版（1.0.0-beta.10）とログを照合するのが運用である。
+ */
+export function preflightCf({ runCommand, commandCwd, repoRoot, env = process.env, log }) {
+  const { binary, source } = resolveCfBinary({ env, cwd: repoRoot });
+  const version = readCfVersion({ runCommand, commandCwd, binary });
+  log(`  ✓ cf ${version} (${source}: ${binary})`);
+  log("      cf has no repository pin yet; the verified version is recorded in docs/delivery.md");
+  return { name: "cf", binary, source, version };
+}
+
+/** ローカル preview 投入（wrangler）の引数。object key は `<bucket>/releases/<id>/<name>`。 */
 function wranglerArgs(operation, bucketName, releaseId, file, modeFlag) {
   const objectKey = `${bucketName}/releases/${releaseId}/${file.name}`;
   if (operation === "put") {
@@ -475,53 +545,72 @@ function wranglerArgs(operation, bucketName, releaseId, file, modeFlag) {
   return ["r2", "object", "get", objectKey, "--file", file.path, modeFlag];
 }
 
+/**
+ * 本番投入（cf）の引数。bucket は `--bucket-name` フラグで渡すため object key は
+ * `releases/<id>/<name>` になり、worker の releases.ts が読む key と直接一致する。
+ * put は `--content-length` を要求する。get に `--file` は無く、本文は stdout へ流れる。
+ */
+function cfObjectArgs(operation, bucketName, releaseId, file) {
+  const objectKey = `releases/${releaseId}/${file.name}`;
+  if (operation === "put") {
+    return [
+      "r2",
+      "objects",
+      "put",
+      objectKey,
+      "--bucket-name",
+      bucketName,
+      "--file",
+      file.path,
+      "--content-type",
+      contentTypeFor(file.name),
+      "--content-length",
+      String(file.content.length),
+    ];
+  }
+  return ["r2", "objects", "get", objectKey, "--bucket-name", bucketName];
+}
+
 function ensureRemoteReleaseIsNew({
   runCommand,
   commandCwd,
-  wrangler,
+  cf,
   bucketName,
   releaseId,
-  modeFlag,
 }) {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "shutoko-r2-preflight-"));
-  const destination = path.join(tempDir, "manifest.json");
-  const file = { name: "manifest.json", path: destination };
+  // cf r2 objects get の本文は stdout へ流れる。存在確認だけが目的なので
+  // 中身は捨てて、成功（既存 manifest あり）と欠落エラーだけを区別する。
   try {
-    try {
-      runCommand(wrangler, wranglerArgs("get", bucketName, releaseId, file, modeFlag), {
-        cwd: commandCwd,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-    } catch (error) {
-      if (isMissingObjectError(error)) return;
-      throw new Error(
-        `Remote preflight failed closed for release ${releaseId}: ${commandErrorText(error)}`
-      );
-    }
+    runCommand(cf, cfObjectArgs("get", bucketName, releaseId, { name: "manifest.json" }), {
+      cwd: commandCwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    if (isMissingObjectError(error)) return;
     throw new Error(
-      `Remote release ${releaseId} is already published; refusing to overwrite manifest.json`
+      `Remote preflight failed closed for release ${releaseId}: ${commandErrorText(error)}`
     );
-  } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
   }
+  throw new Error(
+    `Remote release ${releaseId} is already published; refusing to overwrite manifest.json`
+  );
 }
 
 function uploadFile({
   runCommand,
   commandCwd,
-  wrangler,
-  bucketName,
-  releaseId,
-  modeFlag,
+  executable,
+  argsFor,
   modeLabel,
   file,
   log,
 }) {
-  const objectKey = `${bucketName}/releases/${releaseId}/${file.name}`;
-  log(`Uploading ${file.path} to ${modeLabel} ${objectKey} (${contentTypeFor(file.name)})...`);
+  // wrangler / cf ともに object key は引数列の先頭位置（index 3）に来る。
+  const args = argsFor("put", file);
+  log(`Uploading ${file.path} to ${modeLabel} ${args[3]} (${contentTypeFor(file.name)})...`);
   try {
-    runCommand(wrangler, wranglerArgs("put", bucketName, releaseId, file, modeFlag), {
+    runCommand(executable, args, {
       cwd: commandCwd,
       stdio: "inherit",
     });
@@ -533,41 +622,34 @@ function uploadFile({
 function verifyRemoteFiles({
   runCommand,
   commandCwd,
-  wrangler,
+  cf,
   bucketName,
   releaseId,
-  modeFlag,
   files,
   log,
 }) {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "shutoko-r2-readback-"));
-  try {
-    for (const expected of files) {
-      const destination = path.join(tempDir, expected.name);
-      const remoteFile = { name: expected.name, path: destination };
-      try {
-        runCommand(wrangler, wranglerArgs("get", bucketName, releaseId, remoteFile, modeFlag), {
-          cwd: commandCwd,
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-      } catch (error) {
-        throw new Error(
-          `Failed to read back ${expected.name} from remote R2: ${commandErrorText(error)}`
-        );
-      }
-      const actual = readRequiredFile(destination, `remote read-back ${expected.name}`);
-      if (
-        actual.length !== expected.content.length ||
-        sha256(actual) !== sha256(expected.content) ||
-        !actual.equals(expected.content)
-      ) {
-        throw new Error(`Remote read-back mismatch for ${expected.name}`);
-      }
-      log(`  ✓ Read-back verified ${expected.name}`);
+  for (const expected of files) {
+    let actual;
+    try {
+      // cf r2 objects get は本文を stdout に流すので、そのまま buffer で受ける。
+      actual = runCommand(cf, cfObjectArgs("get", bucketName, releaseId, expected), {
+        cwd: commandCwd,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      throw new Error(
+        `Failed to read back ${expected.name} from remote R2: ${commandErrorText(error)}`
+      );
     }
-  } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    const body = Buffer.isBuffer(actual) ? actual : Buffer.from(String(actual ?? ""));
+    if (
+      body.length !== expected.content.length ||
+      sha256(body) !== sha256(expected.content) ||
+      !body.equals(expected.content)
+    ) {
+      throw new Error(`Remote read-back mismatch for ${expected.name}`);
+    }
+    log(`  ✓ Read-back verified ${expected.name}`);
   }
 }
 
@@ -606,24 +688,30 @@ export function seedR2({
   const payloadFiles = [...fixtureFiles, ...engineEntries.map((entry) => entry.file)];
   const filesInPublishOrder = [...payloadFiles, engineFile, manifestFile];
 
-  const modeFlag = isRemote ? "--remote" : "--local";
   const modeLabel = isRemote ? "remote" : "local";
   const bucketName = isRemote ? "shutoko-artifacts" : "shutoko-artifacts-preview";
 
-  // ローカルの検証（manifest / graph 契約 / engine 成果物）が全部通ってから wrangler を
-  // 触る。成果物が欠けていれば wrangler を実行せずに停止する。
-  log("Checking the wrangler CLI before any upload...");
-  const wranglerInfo = preflightWrangler({ runCommand, commandCwd, repoRoot, env, log });
-  const wrangler = wranglerInfo.binary;
+  // ローカルの検証（manifest / graph 契約 / engine 成果物）が全部通ってから外部 CLI を
+  // 触る。成果物が欠けていれば wrangler / cf を実行せずに停止する。
+  // 本番投入（--remote）は cf、ローカル preview 投入は wrangler --local が担う。
+  // E2E の dev サーバが wrangler dev であり続ける限り、preview 状態を書くのは
+  // 同じ wrangler である必要がある（cf dev は wrangler.toml を読めない。docs/delivery.md）。
+  log(`Checking the ${isRemote ? "cf" : "wrangler"} CLI before any upload...`);
+  const cli = isRemote
+    ? preflightCf({ runCommand, commandCwd, repoRoot, env, log })
+    : preflightWrangler({ runCommand, commandCwd, repoRoot, env, log });
+  const executable = cli.binary;
+  const argsFor = isRemote
+    ? (operation, file) => cfObjectArgs(operation, bucketName, releaseId, file)
+    : (operation, file) => wranglerArgs(operation, bucketName, releaseId, file, "--local");
 
   if (isRemote) {
     ensureRemoteReleaseIsNew({
       runCommand,
       commandCwd,
-      wrangler,
+      cf: executable,
       bucketName,
       releaseId,
-      modeFlag,
     });
   }
 
@@ -633,10 +721,8 @@ export function seedR2({
     uploadFile({
       runCommand,
       commandCwd,
-      wrangler,
-      bucketName,
-      releaseId,
-      modeFlag,
+      executable,
+      argsFor,
       modeLabel,
       file,
       log,
@@ -647,10 +733,9 @@ export function seedR2({
     verifyRemoteFiles({
       runCommand,
       commandCwd,
-      wrangler,
+      cf: executable,
       bucketName,
       releaseId,
-      modeFlag,
       files: filesBeforePublish,
       log,
     });
@@ -659,10 +744,8 @@ export function seedR2({
   uploadFile({
     runCommand,
     commandCwd,
-    wrangler,
-    bucketName,
-    releaseId,
-    modeFlag,
+    executable,
+    argsFor,
     modeLabel,
     file: manifestFile,
     log,
@@ -672,10 +755,9 @@ export function seedR2({
     verifyRemoteFiles({
       runCommand,
       commandCwd,
-      wrangler,
+      cf: executable,
       bucketName,
       releaseId,
-      modeFlag,
       files: [manifestFile],
       log,
     });
@@ -685,7 +767,7 @@ export function seedR2({
   return {
     releaseId,
     files: filesInPublishOrder.map((file) => file.name),
-    wrangler: wranglerInfo,
+    cli,
   };
 }
 

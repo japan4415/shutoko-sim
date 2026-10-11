@@ -8,7 +8,9 @@ import generatedGraph from "../../fixtures/generated/graph.json?raw";
 import generatedManifest from "../../fixtures/generated/manifest.json?raw";
 import {
   pinnedWranglerVersion,
+  preflightCf,
   preflightWrangler,
+  resolveCfBinary,
   resolveWranglerBinary,
   routeMembershipsSha256,
   seedR2,
@@ -24,41 +26,57 @@ const ENGINE_NAMES = [
 const PUBLISH_ORDER = [...FIXTURE_NAMES, ...ENGINE_NAMES, "engine.json", "manifest.json"];
 /** CI (npm run) は workers/node_modules/.bin を PATH へ足すので、lock の固定版と一致する。 */
 const PINNED_WRANGLER = "4.131.0";
+/** runbook（docs/delivery.md）に記録した確認時点の cf 版。リポジトリ内の固定はまだない。 */
+const CF_VERSION = "1.0.0-beta.10";
 
 function sha256(content) {
   return crypto.createHash("sha256").update(content).digest("hex");
 }
 
 /** 実行可能な空ファイルを作る。実体は runCommand がスタブなので実行しない。 */
-function fakeWrangler(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seed-r2-wrangler-"));
+function fakeBinary(t, name, prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   t.onTestFinished(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const file = path.join(dir, "wrangler");
+  const file = path.join(dir, name);
   fs.writeFileSync(file, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   return file;
+}
+
+function fakeWrangler(t) {
+  return fakeBinary(t, "wrangler", "seed-r2-wrangler-");
+}
+
+function fakeCf(t) {
+  return fakeBinary(t, "cf", "seed-r2-cf-");
 }
 
 function isVersionCall(call) {
   return Array.isArray(call.args) && call.args.length === 1 && call.args[0] === "--version";
 }
 
-/** `wrangler --version` だけ版を返し、それ以外の実行は spy 側へ渡す。 */
-function versionSpy(spy, version = PINNED_WRANGLER) {
+/** 実行ファイルの名前で wrangler / cf の版を返し分ける。 */
+function toolVersionFor(executable, { wrangler = PINNED_WRANGLER, cf = CF_VERSION } = {}) {
+  const name = path.basename(String(executable));
+  return name === "cf" ? `${cf}\n` : `${wrangler}\n`;
+}
+
+/** `--version` だけ版を返し、それ以外の実行は spy 側へ渡す。 */
+function versionSpy(spy, versions = {}) {
   return (executable, args, options) => {
-    if (Array.isArray(args) && args.length === 1 && args[0] === "--version") {
-      return `${version}\n`;
+    if (isVersionCall({ args })) {
+      return toolVersionFor(executable, versions);
     }
     return spy(executable, args, options);
   };
 }
 
 /** 全呼び出し（`--version` を含む）を記録し、`--version` には版を返す。 */
-function recordingSpy(version = PINNED_WRANGLER) {
+function recordingSpy(versions = {}) {
   const calls = [];
   const run = (executable, args, options) => {
     const call = { executable, args, options };
     calls.push(call);
-    if (isVersionCall(call)) return `${version}\n`;
+    if (isVersionCall(call)) return toolVersionFor(executable, versions);
     return undefined;
   };
   return { calls, run };
@@ -211,7 +229,9 @@ function createSchema4Repo(
   return repoRoot;
 }
 
-// 引数は ["r2", "object", "put" | "get", "<bucket>/releases/<id>/<name>", ...]。
+// wrangler は ["r2", "object", "put"|"get", "<bucket>/releases/<id>/<name>", ...]、
+// cf は ["r2", "objects", "put"|"get", "releases/<id>/<name>", "--bucket-name", <bucket>, ...]。
+// どちらも操作と object key は引数列の index 2 / 3 に来る。
 function operation(call) {
   return call.args[2];
 }
@@ -222,6 +242,10 @@ function keyName(call) {
 
 function fileArg(call) {
   return call.args[call.args.indexOf("--file") + 1];
+}
+
+function bucketArg(call) {
+  return call.args[call.args.indexOf("--bucket-name") + 1];
 }
 
 function quiet() {}
@@ -332,6 +356,7 @@ test("all-real-v4 の billingPairsVersion=v3 と tariffModelVersion=1 を検証�
     log: quiet,
   });
   assert.equal(result.releaseId, "all-real-v4");
+  assert.equal(result.cli.name, "wrangler");
   // od-tariffs.json と pair-candidates.json も payload として先に投入する。
   assert.deepEqual(result.files, [
     "graph.json",
@@ -412,12 +437,12 @@ test("all four engine artifacts are required in local and remote modes", (t) => 
           isRemote,
           repoRoot,
           runCommand: versionSpy(() => calls++),
-          env: { WRANGLER_BIN: fakeWrangler(t) },
+          env: isRemote ? { CF_BIN: fakeCf(t) } : { WRANGLER_BIN: fakeWrangler(t) },
           log: quiet,
         }),
       /Required artifact index\.d\.ts not found/,
     );
-    // engine 成果物が欠ければ wrangler にも触れない。
+    // engine 成果物が欠ければ wrangler / cf にも触れない。
     assert.equal(calls, 0);
   }
 });
@@ -450,7 +475,7 @@ test("remote seed refuses an existing manifest and fails closed on unknown prefl
       seedR2({
         isRemote: true,
         repoRoot: existingRoot,
-        env: { WRANGLER_BIN: fakeWrangler(t) },
+        env: { CF_BIN: fakeCf(t) },
         log: quiet,
         runCommand: versionSpy((executable, args) => existingCalls.push({ executable, args })),
       }),
@@ -460,6 +485,14 @@ test("remote seed refuses an existing manifest and fails closed on unknown prefl
   assert.equal(existingObjects.length, 1);
   assert.equal(operation(existingObjects[0]), "get");
   assert.equal(keyName(existingObjects[0]), "manifest.json");
+  assert.deepEqual(existingObjects[0].args, [
+    "r2",
+    "objects",
+    "get",
+    "releases/c1-real-v2/manifest.json",
+    "--bucket-name",
+    "shutoko-artifacts",
+  ]);
 
   const errorRoot = createRepo(t);
   let errorCalls = 0;
@@ -468,7 +501,7 @@ test("remote seed refuses an existing manifest and fails closed on unknown prefl
       seedR2({
         isRemote: true,
         repoRoot: errorRoot,
-        env: { WRANGLER_BIN: fakeWrangler(t) },
+        env: { CF_BIN: fakeCf(t) },
         log: quiet,
         runCommand: versionSpy(() => {
           errorCalls += 1;
@@ -501,25 +534,28 @@ test("remote seed publishes payload then engine then manifest and verifies all e
       error.stderr = "The specified key does not exist";
       throw error;
     }
-    fs.writeFileSync(fileArg(call), uploaded.get(name));
-    return undefined;
+    // cf r2 objects get は本文を stdout（= 戻り値）へ流す。
+    return uploaded.get(name);
   };
 
   const result = seedR2({
     isRemote: true,
     repoRoot,
     runCommand,
-    env: { WRANGLER_BIN: fakeWrangler(t) },
+    env: { CF_BIN: fakeCf(t) },
     log: quiet,
   });
   assert.equal(result.releaseId, "c1-real-v2");
   assert.deepEqual(result.files, PUBLISH_ORDER);
+  assert.equal(result.cli.name, "cf");
+  assert.equal(result.cli.version, CF_VERSION);
   assert.equal(calls.filter(isVersionCall).length, 1);
   const objects = calls.filter((call) => !isVersionCall(call));
   // 0: manifest の存在 preflight (get) / 1-7: payload put / 8-14: read-back get /
   // 15: manifest put / 16: manifest read-back get
+  assert.equal(objects.length, 17);
   assert.ok(objects.every((call) => call.executable === objects[0].executable));
-  assert.ok(objects[0].executable.endsWith("wrangler"));
+  assert.equal(path.basename(objects[0].executable), "cf");
   assert.equal(operation(objects[0]), "get");
   assert.equal(keyName(objects[0]), "manifest.json");
   assert.deepEqual(objects.slice(1, 8).map(operation), Array(7).fill("put"));
@@ -530,7 +566,24 @@ test("remote seed publishes payload then engine then manifest and verifies all e
   assert.equal(keyName(objects[15]), "manifest.json");
   assert.equal(operation(objects[16]), "get");
   assert.equal(keyName(objects[16]), "manifest.json");
-  assert.ok(objects.every((call) => call.args.includes("--remote")));
+
+  // cf の引数形状: bucket は --bucket-name、key は releases/<id>/<name>、
+  // put は --content-type と --content-length を持つ。mode フラグは付かない。
+  for (const call of objects) {
+    assert.equal(bucketArg(call), "shutoko-artifacts");
+    assert.ok(call.args.includes("--local") === false);
+    assert.ok(call.args.includes("--remote") === false);
+    if (operation(call) === "put") {
+      assert.deepEqual(call.args.slice(0, 3), ["r2", "objects", "put"]);
+      assert.equal(call.args[3], `releases/c1-real-v2/${keyName(call)}`);
+      assert.ok(call.args.includes("--content-type"));
+      const contentLength = call.args[call.args.indexOf("--content-length") + 1];
+      assert.equal(contentLength, String(uploaded.get(keyName(call)).length));
+    } else {
+      assert.deepEqual(call.args.slice(0, 3), ["r2", "objects", "get"]);
+      assert.equal(call.args[3], `releases/c1-real-v2/${keyName(call)}`);
+    }
+  }
 });
 
 test("remote read-back mismatch fails the seed", (t) => {
@@ -542,7 +595,7 @@ test("remote read-back mismatch fails the seed", (t) => {
       seedR2({
         isRemote: true,
         repoRoot,
-        env: { WRANGLER_BIN: fakeWrangler(t) },
+        env: { CF_BIN: fakeCf(t) },
         log: quiet,
         runCommand: versionSpy((_executable, args) => {
           const call = { args };
@@ -556,7 +609,7 @@ test("remote read-back mismatch fails the seed", (t) => {
             throw new Error("The specified key does not exist");
           }
           const content = name === "graph.json" ? Buffer.from("corrupt") : uploaded.get(name);
-          fs.writeFileSync(fileArg(call), content);
+          return content;
         }),
       }),
     /Remote read-back mismatch for graph\.json/,
@@ -600,6 +653,86 @@ test("wrangler は WRANGLER_BIN を優先し、PATH 探しで解決し、npx に
   );
 });
 
+test("cf は CF_BIN を優先し、PATH 探しで解決し、npx にはフォールバックしない", (t) => {
+  const override = fakeCf(t);
+  assert.deepEqual(resolveCfBinary({ env: { CF_BIN: override, PATH: "" } }), {
+    binary: override,
+    source: "CF_BIN",
+  });
+  assert.deepEqual(resolveCfBinary({ env: { CF_BIN: override, PATH: "/nonexistent" } }), {
+    binary: override,
+    source: "CF_BIN",
+  });
+  const onPathDir = path.dirname(fakeCf(t));
+  assert.deepEqual(resolveCfBinary({ env: { PATH: onPathDir } }), {
+    binary: path.join(onPathDir, "cf"),
+    source: "PATH",
+  });
+  assert.throws(
+    () => resolveCfBinary({ env: { PATH: "/nonexistent" } }),
+    /npx is not used as a fallback/,
+  );
+  assert.throws(
+    () => resolveCfBinary({ env: { CF_BIN: path.join(onPathDir, "absent"), PATH: onPathDir } }),
+    /CF_BIN=.* is not a file \(resolved to /,
+  );
+  assert.throws(
+    () => resolveCfBinary({ env: { CF_BIN: onPathDir, PATH: "" } }),
+    /CF_BIN=.* is not a file/,
+  );
+
+  const relative = path.relative(process.cwd(), override);
+  assert.deepEqual(
+    resolveCfBinary({ env: { CF_BIN: relative, PATH: "" }, cwd: process.cwd() }),
+    { binary: override, source: "CF_BIN" },
+  );
+});
+
+test("remote preflight は cf の版をログへ出し、リポジトリ内の固定照合はしない", (t) => {
+  const repoRoot = createRepo(t);
+  const cf = fakeCf(t);
+  const lines = [];
+  const info = preflightCf({
+    runCommand: () => "🍊☁️  cf · v1.0.0-beta.10\n─────────────────────────\n",
+    commandCwd: path.join(repoRoot, "workers"),
+    repoRoot,
+    env: { CF_BIN: cf },
+    log: (line) => lines.push(line),
+  });
+  assert.deepEqual(info, {
+    name: "cf",
+    binary: cf,
+    source: "CF_BIN",
+    version: "1.0.0-beta.10",
+  });
+  assert.ok(lines.some((line) => line.includes("cf 1.0.0-beta.10")));
+
+  assert.throws(
+    () =>
+      preflightCf({
+        runCommand: () => "no version here\n",
+        commandCwd: path.join(repoRoot, "workers"),
+        repoRoot,
+        env: { CF_BIN: cf },
+        log: quiet,
+      }),
+    /printed no version/,
+  );
+  assert.throws(
+    () =>
+      preflightCf({
+        runCommand: () => {
+          throw new Error("spawn failed");
+        },
+        commandCwd: path.join(repoRoot, "workers"),
+        repoRoot,
+        env: { CF_BIN: cf },
+        log: quiet,
+      }),
+    /did not run/,
+  );
+});
+
 test("preflight は lock の固定版と並べ、差を表示し、固定を要求する環境変数では停止する", (t) => {
   const repoRoot = createRepo(t);
   const wrangler = fakeWrangler(t);
@@ -612,6 +745,7 @@ test("preflight は lock の固定版と並べ、差を表示し、固定を要�
     log: (line) => lines.push(line),
   });
   assert.deepEqual(info, {
+    name: "wrangler",
     binary: wrangler,
     source: "WRANGLER_BIN",
     version: "4.131.0",

@@ -54,11 +54,15 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
 2-3. マージ前に検証できるソースレベルの切替を確認する（deploy はまだ無い）:
    `web/src/worker/artifact-hashes.ts` の `DEFAULT_RELEASE_ID` と `workers/wrangler.toml` の `ALLOWED_RELEASES` に `all-real-v5` が含まれ、`all-real-v4` も許可されたままであることを確認する（`web/test/release-rollback.test.ts` が 2 つの allowlist の一致、既定と公開 fixture の通過、rollback 先の残存を検査する。`DEFAULT_RELEASE_ID` を 1 行戻す rollback commit でもこのテストは green のままになる）。**この時点では本番の Worker はまだ `all-real-v5` を 404 する**（`workers/src/releases.ts` が新しい allowlist を配るまで）ので、実行時の確認は 4 に置く。
 
-2-4. 固定版の wrangler と照合してから R2 へ投入する:
+2-4. cf CLI で本番 R2 へ投入して read-back する:
    ```bash
-   SHUTOKO_REQUIRE_PINNED_WRANGLER=1 npm --prefix workers run seed:local -- --remote
+   node workers/scripts/seed-local-r2.mjs --remote
    ```
-   seed script は wrangler を `WRANGLER_BIN` → PATH の順で解決し（`npx` フォールバックは無い）、`wrangler --version` の結果を `workers/package-lock.json` の固定版（4.131.0）と照合する。差があれば必ずログへ出す。`SHUTOKO_REQUIRE_PINNED_WRANGLER=1` を付けると完全一致を要求し、固定版 4.0.0 未満は機能不足として停止する。`npm --prefix workers run` は `workers/node_modules/.bin` を PATH へ足すため固定版 4.131.0 が選ばれる。`node workers/scripts/seed-local-r2.mjs` を直接呼ぶと `node_modules/.bin` が PATH に入らないので、その形を使う場合は `WRANGLER_BIN=workers/node_modules/.bin/wrangler` を明示する。投入先は未使用の `releases/all-real-v5/` とし、既存の `manifest.json` があれば上書きを拒否する。投入順は manifest の `artifacts[]` 順（graph / od-tariffs / pair-candidates / ramps / snap-index）に WASM 4 点と `engine.json` を先に上げ、各 payload と `engine.json` を read-back して bytes・length・SHA-256 を照合し、**全件成功した後の最後に `manifest.json` を上げて read-back する**。`manifest.json` の投入前は Worker が新 release を公開しない。
+   本番への公開投入は wrangler ではなく cf CLI で行う（Issue #98）。seed script は投入前に `cf --version` を実行して版をログへ出す。cf はリポジトリ内に固定版を持たないため、ログの版が下に記録した確認時点版と一致するかを照合する。実行ファイルは `CF_BIN` → PATH の順で解決し（`npx` フォールバックは無い）、`node workers/scripts/seed-local-r2.mjs` の直接呼び出しでも PATH 上の `cf` を使える（wrangler と違い `node_modules/.bin` を要求しない）。cf の OAuth トークンは `~/Library/Preferences/cloudflare/config/<profile>.json` にあり、`expiration_time` を過ぎると `cf auth whoami` が `authenticated: false` を返す。その場合は `cf auth login`（`--no-browser` で device flow）で再ログインしてから投入する。投入先は未使用の `releases/all-real-v5/` とし、既存の `manifest.json` があれば上書きを拒否する（`cf r2 objects get` が既存 key を取得できた時点で停止し、取得エラーが「key が存在しない」以外なら fail-closed で停止する）。bucket は `--bucket-name shutoko-artifacts` として渡り、object key は `releases/all-real-v5/<artifact>` になる。投入順は manifest の `artifacts[]` 順（graph / od-tariffs / pair-candidates / ramps / snap-index）に WASM 4 点と `engine.json` を先に上げ、各 payload と `engine.json` を `cf r2 objects get`（本文は stdout に流れる）で読み戻して bytes・length・SHA-256 を照合し、**全件成功した後の最後に `manifest.json` を上げて read-back する**。`manifest.json` の投入前は Worker が新 release を公開しない。
+
+   **cf の確認時点版**: `1.0.0-beta.10`（`/usr/local/bin/cf`、2026-10-11 実測）。cf は beta のためリポジトリ内に固定版を持たず、seed のログに出る `cf --version` をこの記録と照合する。npm の `cf` パッケージで入れる運用に変えるときに固定方法を再検討する。
+
+   **ローカル preview 投入と E2E は wrangler を使い続ける**（Issue #98 で判断）: `npm --prefix workers run seed:local`（`--remote` 無し）は E2E / `wrangler dev` が読む Miniflare のローカル R2（`.wrangler/state`）へ書く工程で、こちらは引き続き wrangler 4.131.0 を使う（`WRANGLER_BIN` → PATH の順で解決し `npx` フォールバックは無く、`SHUTOKO_REQUIRE_PINNED_WRANGLER=1` で `workers/package-lock.json` の固定版と完全一致を要求する。`npm --prefix workers run` は `workers/node_modules/.bin` を PATH へ足すため固定版が選ばれる）。`cf dev` は `--experimental-new-config` を強制して新設定系の `cloudflare.config.ts` を要求し、`workers/wrangler.toml` を読めないため、E2E の dev サーバ（`npx wrangler dev --port 8787`）とそれに投入する preview seed は wrangler に残す。`cf dev` / `cf deploy` への設定移行は別 Issue で行う。
 
 ### 3. PR を merge する
 
@@ -126,7 +130,7 @@ Issue #66 のコード変更だけでは本番の release は切り替わらな�
    ```bash
    node workers/scripts/seed-local-r2.mjs --remote
    ```
-   seed script は既存の `releases/all-real-v3/manifest.json` を拒否し、manifestの`artifacts[]`順に`graph.json`、`ramps.json`、`snap-index.json`、WASM、glue、型定義、`engine.json`を先に投入する。各 payload と `engine.json` を read-back して bytes、length、SHA-256 を照合し、全件成功した後の最後に `manifest.json` を投入して read-back する。`manifest.json` の投入前は Worker が新 release を公開しない。**この工程とread-backが終わるまでPRをmergeしない。**
+   本番投入は cf CLI で行う（手順と前提は上の v5 runbook 2-4 と同じ。投入前に `cf --version` がログへ出る）。seed script は既存の `releases/all-real-v3/manifest.json` を拒否し、manifestの`artifacts[]`順に`graph.json`、`ramps.json`、`snap-index.json`、WASM、glue、型定義、`engine.json`を先に投入する。各 payload と `engine.json` を read-back して bytes、length、SHA-256 を照合し、全件成功した後の最後に `manifest.json` を投入して read-back する。`manifest.json` の投入前は Worker が新 release を公開しない。**この工程とread-backが終わるまでPRをmergeしない。**
 4. **公開後の切替を確認する**: Worker と Web の release allowlist が `all-real-v3` を含み、`all-real-v2` も許可されていることを確認し、manifest → engine → graph → WASM/glue の取得・hash・schema 4 照合、build-time device manifestのbinding、C1 legacy 回帰を再実行する。異常時は Worker/Web の参照を `all-real-v2` に戻し、旧 release の manifest を上書き・削除しない。
 5. **merge と production deploy を行う**: R2 artifactとmanifestのread-back、以及Web/Workerのrelease検証が成功した後に限り、PRをmergeし、続けてCloudflare WorkersとWebのproduction deployを別Managerが行う。R2のread-back確認前にmergeまたはproduction deployを実行しない。mainへのmerge/pushがCloudflare Buildsの自動deployを誘発する構成では、R2 v3 manifestの存在確認とread-backをmanual approval / feature gateとして確認する。
 
@@ -235,7 +239,8 @@ Issue #72のコード実装、release設定、物理端末の4系列検証、公
 - 課金ペアの自動導出 `billingPairDerivation/v2`: `pair-candidates.json`（候補 11 / eligible 9 / hold 2、relation 11 展開・15 失敗）、seed の自動変更なし。
 - `all-real-v5` の 5 成果物と manifest: 決定論的再生成、3 世代のバイト一致、route relation coverage、C1 legacy 回帰（神田橋・霞が関）、代表 4 地点の実測（`fixtures/representative-locations.json`）、web 統合テスト 261 件、E2E 55 件。
 - Web / Workers の release 許可リスト: `DEFAULT_RELEASE_ID` と `ALLOWED_RELEASES` は `all-real-v5` を含み、`all-real-v4` / `all-real-v3` を残したまま運用する。rollback は Web の既定 1 行だけで成立する。
-- 固定版 wrangler 照合（4.131.0、`WRANGLER_BIN` 上書き可、`npx` フォールバックなし、`SHUTOKO_REQUIRE_PINNED_WRANGLER=1` で完全一致要求）。
+- 本番 R2 投入（`seed:local -- --remote`）は cf CLI（確認時点版 1.0.0-beta.10、`CF_BIN` 上書き可、`npx` フォールバックなし、版は seed ログへ出力。リポジトリ内の固定は未決で npm 運用へ切り替えるときに再検討）。
+- ローカル preview 投入（E2E / `wrangler dev` 用の Miniflare 状態）は wrangler 照合を維持（4.131.0、`WRANGLER_BIN` 上書き可、`npx` フォールバックなし、`SHUTOKO_REQUIRE_PINNED_WRANGLER=1` で完全一致要求）。`cf dev` は `workers/wrangler.toml` を読めないため E2E は wrangler に残す（詳細は v5 runbook 2-4）。
 
 ### 未実施（外部実施が必要）
 

@@ -15,9 +15,9 @@
     "/tmp/shutoko-repaired.json"
   ],
   "humanReviewRequired": [
-    "The setMemberRole entries are derived from the current derived split. scripts/audit-c2-carriageway-labels.py re-derives them from the official ramp directions plus geometry; with the junction search validated against the six junction nodes of the three authored pairs, 20 anchors place and none conflicts with the derived split (docs/c2-route-design.md 段12a).",
-    "One disagreement remains: the chain 44209387 -> 44211322 -> 28127449 -> 780870438 -> 44211094 (166 edges, 王子 to 江北) is labelled inner but sits on the outer carriageway by geometry, by the layer of its ways where the corridor is stacked, and by the destination tag of 44211094 (常磐道/東関東道, i.e. north-east bound).",
-    "The same stretch is missing one carriageway from the membership entirely: the nearest opposite-carriageway edge is 156-916 m away for seven members. The official route map arrow or imagery at 王子北 (inner exit) and 王子南 (outer exit), 1.8 km apart at lat 35.749-35.7525, decides whether the chain is mislabelled or the relation lacks the opposite members.",
+    "The setMemberRole entries are derived from the current derived split. scripts/audit-c2-carriageway-labels.py re-derives them from the official ramp directions plus geometry, with the junction search validated against the six junction nodes of the three authored pairs (20 anchors placed, 0 conflicts).",
+    "The derived split mislabels the outer carriageway as inner for 101 edges in the 王子 to 江北 stretch: 44209387 (3), 780870438 (64) and 44211094 (34). The anchored inner chain (滝野川 inner entry -> 156344609 -> 44289390 -> 28127324) runs westbound and joins the westbound chain 44180277 -> 28127449 -> 44211322 -> 44209384 at node n:308931779, so the eastbound chain that starts 10 m away at n:263988137 is the other carriageway. Geometry, the deck layer at 江北 and the destination tag of 44211094 all agree.",
+    "Those ways must therefore not be given an Inner directions role. Fix the split first (docs/c2-route-design.md 段12c); the roles are written from the corrected labels.",
     "No shipped C2 pair crosses the stretch, so the release data is unaffected today."
   ],
   "verification": {
@@ -77,6 +77,37 @@
           "the layer rule is inverted at three stations in the eastern stretch (lon 139.82)"
         ],
         "missingOppositeCarriageway": "nearest opposite edge 156-916 m away for seven members"
+      },
+      "resolved": {
+        "ojiToKohoku": {
+          "verdict": "the file labels the outer carriageway as inner for 101 edges",
+          "ways": {
+            "44209387": 3,
+            "780870438": 64,
+            "44211094": 34
+          },
+          "evidence": [
+            "the anchored inner chain runs westbound (滝野川 inner entry -> 156344609 -> 44289390 -> 28127324)",
+            "the westbound chain 44180277 -> 28127449 -> 44211322 -> 44209384 joins it at node n:308931779, so it is the inner carriageway",
+            "the eastbound chain 44209387 -> 780870438 -> 44211094 starts 10 m away at n:263988137 and runs the opposite way, so it is the outer one",
+            "geometry, the layer pair at 江北 (44180277 layer 3 above vs 44211094 layer 2 below) and destination=常磐道;東関東道 on 44211094 all agree"
+          ]
+        },
+        "ohashiJct": {
+          "verdict": "no conflict; the earlier suspicion came from the wrong junction node"
+        }
+      },
+      "internalContradiction": {
+        "rule": "at one station the two carriageways run in opposite directions, so an antiparallel same-label pair means one of them is mislabelled",
+        "wayPairs": 21,
+        "edgePairs": 792,
+        "top": [
+          "44180277 <-> 44211094: 224 edge pairs, both inner",
+          "44211322 <-> 780870438: 185 edge pairs, both inner",
+          "28127449 <-> 780870438: 169 edge pairs, both inner",
+          "766679040 <-> 768600220: 82 edge pairs, both outer",
+          "78334074 <-> 766679040: 58 edge pairs, both outer"
+        ]
       }
     }
   },

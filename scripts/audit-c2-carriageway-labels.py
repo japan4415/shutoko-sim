@@ -287,6 +287,33 @@ def main():
     for way_id, winner, distance, other in gaps:
         print(f"  {way_id:<12} labelled {winner:<6} nearest {other} edge at {distance} m")
 
+    # Internal consistency: at one station the two carriageways of a ring run in
+    # opposite directions, so an antiparallel pair of membership edges that share
+    # a label is a contradiction -- one of the two is mislabelled. No external
+    # source is needed to see it.
+    pairs = defaultdict(int)
+    for eid in membership:
+        mid, heading = geo[eid]
+        cx, cy = cell_of(mid)
+        for dx in (-2, -1, 0, 1, 2):
+            for dy in (-2, -1, 0, 1, 2):
+                for other in grid.get((cx + dx, cy + dy), ()):
+                    if other <= eid or way_of(other) == way_of(eid):
+                        continue
+                    omid, oheading = geo[other]
+                    if math.hypot(omid[0] - mid[0], omid[1] - mid[1]) > PAIR_M:
+                        continue
+                    cos = heading[0] * oheading[0] + heading[1] * oheading[1]
+                    if cos > -PAIR_COS:
+                        continue
+                    if membership[eid] == membership[other]:
+                        key = tuple(sorted((way_of(eid), way_of(other))))
+                        pairs[key] += 1
+    print("antiparallel same-label way pairs (one of the two must be mislabelled):")
+    for (left, right), count in sorted(pairs.items(), key=lambda item: -item[1])[:8]:
+        print(f"  way {left} <-> way {right}: {count} edge pairs, both labelled {membership[[e for e in membership if way_of(e) == left][0]]}")
+    print(f"  ... {len(pairs)} way pairs in total, {sum(pairs.values())} edge pairs")
+
 
 if __name__ == "__main__":
     main()

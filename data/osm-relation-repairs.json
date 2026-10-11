@@ -15,8 +15,9 @@
     "/tmp/shutoko-repaired.json"
   ],
   "humanReviewRequired": [
-    "The setMemberRole entries are derived from the current derived split, not from a surveyed direction sign. A mapper has to confirm each one.",
-    "The removeMemberWay entries whose reason mentions \"no inner/outer evidence\" are members the current evidence cannot place; assigning a direction is preferred over dropping them when the way really is C2 mainline."
+    "The setMemberRole entries are derived from the current derived split, not from a surveyed direction sign. scripts/audit-c2-carriageway-labels.py re-derives them from the official ramp directions plus geometry alone and confirms 59 member ways exactly, 12 partially, and disagrees on 5 (see docs/c2-route-design.md 段12).",
+    "The 5 disagreements are 44209387 / 780870438 / 44211094 (file=inner, geometry=outer, in the 飛鳥山トンネル stretch where the published upper=inner deck rule does not apply) and 331692346 / 4854098 (file=outer, geometry=inner, at 大井JCT where the carriageways are stacked at the same coordinates). A route-map arrow or imagery check is needed for those 5 ways only.",
+    "No shipped C2 pair crosses the 5 ways, so the release data is unaffected today."
   ],
   "verification": {
     "measuredAt": "2026-10-11",
@@ -40,7 +41,42 @@
       "Removing only the JCT link members stops the walk at n:8283617223 and the builder reports the node, the continuing edge e:w891237687:2:f, and member way 44180278.",
       "Splitting the interior-continuation ways alone leaves the membership unchanged, because the C2 runs are cut by edge labels, not by member order.",
       "Roles plus removals plus splits build, reduce the runs, and add five unique arcs; the first-exit-eligible arc count stays at 11."
-    ]
+    ],
+    "labelAudit": {
+      "script": "scripts/audit-c2-carriageway-labels.py",
+      "anchorsPlaced": "20 / 25 verified_bound C2 ramps",
+      "anchorAgreement": "19 / 20 agree with the derived split",
+      "classifiedMembershipEdges": "1796 / 2296",
+      "perWay": {
+        "confirmed": 59,
+        "confirmedPartial": 12,
+        "disagrees": 5,
+        "unclassified": 38,
+        "notInRoleFile": 1
+      },
+      "disagreements": {
+        "44209387": {
+          "file": "inner",
+          "geometry": "outer"
+        },
+        "780870438": {
+          "file": "inner",
+          "geometry": "outer"
+        },
+        "44211094": {
+          "file": "inner",
+          "geometry": "outer"
+        },
+        "331692346": {
+          "file": "outer",
+          "geometry": "inner"
+        },
+        "4854098": {
+          "file": "outer",
+          "geometry": "inner"
+        }
+      }
+    }
   },
   "repairs": [
     {

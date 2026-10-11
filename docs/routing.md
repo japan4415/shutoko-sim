@@ -1,6 +1,6 @@
 # ルート探索設計
 
-本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は graph-builder、schema 4 reader、core/WASM/Web consumer、公開 release のコードと fixture まで実装済みとする（R2 投入・read-back・本番 deploy を含む atomic activation は未実施）。公開 release は `all-real-v4`（`billingPairsVersion=v3`、`tariffModelVersion=1`）を次の候補として扱い、`all-real-v3` は rollback 用に残す。
+本文では、配信済みの現行挙動と将来の実装方針を区別する。現行の仕様は「現行」、Issue #42 で追加する設計は graph-builder、schema 4 reader、core/WASM/Web consumer、公開 release のコードと fixture まで実装済みとする（R2 投入・read-back・本番 deploy を含む atomic activation は未実施）。公開 release は `all-real-v5`（`billingPairsVersion=v3`、`tariffModelVersion=1`）を次の候補として扱い、rollback 用に `all-real-v4`、さらに前の `all-real-v3` を残す。
 
 ## 探索問題
 
@@ -250,7 +250,7 @@ Issue #69でdynamic ODを`TopologyOnlyCandidate`へ移行した。`eligibilitySt
 
 ### 実装 issue は単独で検証できる順に分ける
 
-graph schema 4 は reader/consumer と `all-real-v4` の生成物・許可リストまで実装した。builder の既定出力、generated fixtures、manifest、WASM contract、Web pipeline、Workers allowlist、versioned release ID を同時に整合させる。atomic activation（`releases/all-real-v4/` への R2 投入と read-back、`manifest.json` の本番配置、production deploy）は未実施で、正本は [`docs/delivery.md`](delivery.md#all-real-v4-の-atomic-release-runbook) の runbook とする。rollback は Worker の許可リストを狭めずに Web の既定 1 行だけ戻す方針で、Web の `DEFAULT_RELEASE_ID` は `all-real-v4`、Worker の `ALLOWED_RELEASES` は `c1-real-v1,c1-real-v2,all-real-v1,all-real-v2,all-real-v3,all-real-v4` を保持し、1 行戻した先が `all-real-v3` になる。`--graph-schema 2` を明示した場合だけ legacy schema 2 を生成する。
+graph schema 4 は reader/consumer と `all-real-v5` の生成物・許可リストまで実装した。builder の既定出力、generated fixtures、manifest、WASM contract、Web pipeline、Workers allowlist、versioned release ID を同時に整合させる。atomic activation（`releases/all-real-v5/` への R2 投入と read-back、`manifest.json` の本番配置、production deploy）は未実施で、正本は [`docs/delivery.md`](delivery.md#all-real-v5-の-atomic-release-runbook) の runbook とする。rollback は Worker の許可リストを狭めずに Web の既定 1 行だけ戻す方針で、Web の `DEFAULT_RELEASE_ID` は `all-real-v5`、Worker の `ALLOWED_RELEASES` は `c1-real-v1,c1-real-v2,all-real-v1,all-real-v2,all-real-v3,all-real-v4,all-real-v5` を保持し、1 行戻した先が `all-real-v4` になる。`--graph-schema 2` を明示した場合だけ legacy schema 2 を生成する。
 
 | Issue | 実装範囲 | 主な受け入れ条件 | 依存 |
 | ---: | --- | --- | --- |
@@ -267,7 +267,7 @@ graph schema 4 は reader/consumer と `all-real-v4` の生成物・許可リス
 | 11 | Maps 実機検証と release gate（#72コード実装済み、実機検証待ち） | Issue #71で確定したmanifestを`data/device-verification-manifest.json`へ未検証状態で置く。gateはmanifest欠落・失敗・期限切れ・binding不一致でradial public departureを無効にし、C1への副作用がないことを確認する。Android / iOS × Web / appの実測完了までは公開handoffを閉じ続ける。 | 10 |
 | 12 | 2026-10 tariff 統合（料金表 v3、`tariffModelVersion=1`、実装済み） | 公式billing distance、車種、税率、単価、最低・上限、丸め、effective intervalを版管理し、10件の OD assignment を再検証する。period ごとに別の `evidenceId` と観測基本料金を持ち、整数演算で検算する。OSM distance fallback を持たず、3号用賀・4号高井戸は deprecate する。 | #41, 7, 8 |
 | 13 | 端点解決と billing pair 自動導出（`firstPublicRoadConnection/v1`、`billingPairDerivation/v2`、実装済み） | conditional / reversible / alternating を fail-closed として端点を確定し、天現寺を 4 way / 16 Edge で `verified_bound` にする。gate 8 個を通過した候補を `pair-candidates.json` に列挙し、seed は自動変更しない。relation 制約つきの First Exit として 1 区間先を確定し、芝公園→飯倉と内回り銀座→新富町は未検証のまま残す。 | 6, 7, 12 |
-| 14 | `all-real-v4` の atomic release 公開と代表 4 地点の固定（コード・fixture 実装済み、R2 投入と本番 deploy は未実施） | 5 成果物（graph / od-tariffs / pair-candidates / ramps / snap-index）の決定論的再生成、固定版 wrangler 照合、payload → `engine.json` → `manifest.json` の順の read-back、Web/Worker allowlist の同期を runbook にする。4 代表地点の探索結果を `fixtures/representative-locations.json` に固定し、Web 統合テストと engine 契約テストが再計算して照合する。 | 12, 13 |
+| 14 | `all-real-v5` の atomic release 公開と代表 4 地点の固定（コード・fixture 実装済み、R2 投入と本番 deploy は未実施） | 5 成果物（graph / od-tariffs / pair-candidates / ramps / snap-index）の決定論的再生成、固定版 wrangler 照合、payload → `engine.json` → `manifest.json` の順の read-back、Web/Worker allowlist の同期を runbook にする。4 代表地点の探索結果を `fixtures/representative-locations.json` に固定し、Web 統合テストと engine 契約テストが再計算して照合する。 | 12, 13 |
 
 Issue #42 の設計完了は、この節と seed / graph の wire-level schema により2号課金ペア形状を確定することとする。天現寺は最初の一般道接続nodeで `verified_bound` として昇格し、schema実装とdevice gateはそれぞれ実装上の公開を止める条件として残す。
 

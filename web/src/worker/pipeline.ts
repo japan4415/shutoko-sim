@@ -492,7 +492,7 @@ async function validateGraphManifestContract(
     throw graphContractMismatch("manifest.json: graphSchemaVersion=4 の記録が必要です");
   }
   if (manifest.billingPairsVersion !== "v2" && manifest.billingPairsVersion !== "v3") {
-    // v2 は all-real-v3（rollback 先）、v3 は all-real-v4。両方の graph 契約が
+    // v2 は all-real-v3（rollback 先）、v3 は all-real-v4 / all-real-v5。両方の graph 契約が
     // 同じ reader（billingPairs / routeMemberships / 料金 v3）で読める。
     throw graphContractMismatch(
       `manifest.json: billingPairsVersion は v2 または v3 が必要です（received ${JSON.stringify(manifest.billingPairsVersion)}）`,

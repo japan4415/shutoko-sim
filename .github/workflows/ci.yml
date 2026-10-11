@@ -21,7 +21,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: cargo test --release -p shutoko-routing-core --test real_graph_contract --locked -- --ignored
-      - run: cargo test --release -p shutoko-graph-builder --test release_v4_contract --locked -- --ignored
+      - run: cargo test --release -p shutoko-graph-builder --test release_contract --locked -- --ignored
       - run: cargo test --release -p shutoko-graph-builder --test route_relation_coverage --locked -- --ignored
       - name: Verify fixture regeneration determinism
         run: |
@@ -36,6 +36,13 @@ jobs:
             git status --porcelain
             exit 1
           fi
+      - name: Verify the C2 label audit and the upstream changeset package
+        run: |
+          python3 scripts/audit-c2-carriageway-labels.py --json /tmp/audit-c2.json
+          python3 scripts/derive-osm-relation-repairs.py --check
+          package_dir="$(mktemp -d)"
+          python3 scripts/build-osm-changeset.py --out-dir "${package_dir}"
+          rm -rf "${package_dir}"
       - run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
       - run: bash scripts/build-wasm.sh
       - run: node scripts/test-wasm.mjs

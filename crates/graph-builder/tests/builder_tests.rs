@@ -16,7 +16,7 @@ fn generated_legacy_graph() -> Graph {
     wire["schemaVersion"] = json!(2);
     wire.as_object_mut().unwrap().remove("routeMemberships");
     wire.as_object_mut().unwrap().remove("odTariffsV3");
-    // all-real-v4 が記録する版メタデータ（schema 2 の reader には無い）。
+    // 公開 release（all-real-v5）が記録する版メタデータ（schema 2 の reader には無い）。
     wire.as_object_mut().unwrap().remove("billingPairsVersion");
     wire.as_object_mut().unwrap().remove("tariffModelVersion");
     wire["billingPairs"]

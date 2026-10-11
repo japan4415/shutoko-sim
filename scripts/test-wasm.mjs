@@ -57,7 +57,7 @@ schema4Pg.free();
 const generatedPg = prepare(generatedGraph, '{}');
 generatedPg.free();
 assert.equal(JSON.parse(generatedGraph).schemaVersion, 4);
-assert.equal(generatedManifest.releaseId, 'all-real-v4');
+assert.equal(generatedManifest.releaseId, 'all-real-v5');
 assert.equal(generatedManifest.graphSchemaVersion, 4);
 assert.equal(generatedManifest.billingPairsVersion, 'v3');
 assert.equal(generatedManifest.tariffModelVersion, 1);

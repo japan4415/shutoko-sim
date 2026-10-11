@@ -282,7 +282,7 @@ describe("parseGraphDocument", () => {
     };
   }
 
-  // v2 は all-real-v3（rollback 先）、v3 は all-real-v4。どちらも同じ reader で読む。
+  // v2 は all-real-v3（rollback 先）、v3 は all-real-v4 / all-real-v5。どちらも同じ reader で読む。
   it.each(["v2", "v3"])(
     "loadRelease が billingPairsVersion=%s の schema 4 graph を WASM prepare へ渡せる",
     async (billingPairsVersion) => {

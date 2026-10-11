@@ -7,7 +7,7 @@ const ALLOWED_ARTIFACTS = new Set([
   "graph.json",
   "snap-index.json",
   "ramps.json",
-  // all-real-v4 の manifest が結ぶ入力由来の成果物（graph.json に埋め込まれた
+  // all-real-v4 / all-real-v5 の manifest が結ぶ入力由来の成果物（graph.json に埋め込まれた
   // odTariffsV3 と同一のカタログ、および導出レポート）。
   "od-tariffs.json",
   "pair-candidates.json",

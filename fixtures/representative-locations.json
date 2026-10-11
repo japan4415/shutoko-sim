@@ -1,7 +1,7 @@
 {
   "fixtureVersion": 2,
   "note": "4 地点（東京駅・目黒駅・銀座・六本木）の探索結果を固定する。Web の統合テスト (web/test/integration-wasm.test.ts) と engine 契約テスト (crates/routing-core/tests/real_graph_contract.rs) が実 WASM / 実 engine で再計算し、最寄りの入口と距離・候補の件数と並び・商品区分・基本料金（割引適用前）の金額と証拠を照合する。料金は 2026-10 改定をまたぐ 2 時点（pricingWindows）を固定する。公開 release を差し替えたときは releaseId が変わるため、このファイルも合わせて更新すること。",
-  "releaseId": "all-real-v4",
+  "releaseId": "all-real-v5",
   "vehicleProfile": "passenger-car-etc",
   "fareLabel": "普通車ETC基本料金（割引適用前）",
   "tollSource": "official_distance_rule",

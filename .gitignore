@@ -18,3 +18,7 @@
 # Research and PDF cache
 /.cache/
 *.pdf
+
+# Python bytecode from the OSM repair / audit scripts
+__pycache__/
+*.pyc

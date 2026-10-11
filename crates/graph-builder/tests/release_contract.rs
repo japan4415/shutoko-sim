@@ -1,8 +1,8 @@
-//! End-to-end contract for the `all-real-v4` release build.
+//! End-to-end contract for the current full release build (`all-real-v5`).
 //!
 //! The heavy cases run the release binary over the real OSM snapshot, so they are
 //! marked `#[ignore]` and executed in release mode by CI:
-//! `cargo test --release -p shutoko-graph-builder --test release_v4_contract -- --ignored`.
+//! `cargo test --release -p shutoko-graph-builder --test release_contract -- --ignored`.
 
 use serde_json::Value;
 use std::fs;
@@ -66,7 +66,7 @@ fn builder_command(out_dir: &Path, release_id: &str) -> Command {
 }
 
 fn run_builder(out_dir: &Path, extra: &[&str]) -> std::process::Output {
-    builder_command(out_dir, "all-real-v4")
+    builder_command(out_dir, "all-real-v5")
         .args(extra)
         .output()
         .expect("builder must be runnable")
@@ -91,7 +91,7 @@ fn generate(name: &str) -> PathBuf {
     let output = run_builder(&dir, &[]);
     assert!(
         output.status.success(),
-        "all-real-v4 build failed: {}{}",
+        "all-real-v5 build failed: {}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -189,12 +189,12 @@ fn relation_selection_fails_closed_before_any_expensive_work() {
             "is not an OSM type=route relation",
         ),
         (
-            Some("all-real-v4"),
+            Some("all-real-v5"),
             &["--relation-id", "4256008"],
             "--relation-id cannot be combined with a full-coverage release",
         ),
         (
-            Some("all-real-v4"),
+            Some("all-real-v5"),
             &["--all-route-relations", "--relation-id", "4256008"],
             "--relation-id cannot be combined with a full-coverage release",
         ),
@@ -217,7 +217,7 @@ fn relation_selection_fails_closed_before_any_expensive_work() {
 
 #[test]
 #[ignore = "runs the release binary three times over the real OSM snapshot"]
-fn all_real_v4_artifacts_are_byte_identical_across_three_generations() {
+fn release_artifacts_are_byte_identical_across_three_generations() {
     let first = generate("gen-1");
     let second = generate("gen-2");
     let third = generate("gen-3");
@@ -230,14 +230,14 @@ fn all_real_v4_artifacts_are_byte_identical_across_three_generations() {
 
 #[test]
 #[ignore = "runs the release binary over the real OSM snapshot"]
-fn all_real_v4_manifest_binds_every_artifact_and_input_hash() {
+fn release_manifest_binds_every_artifact_and_input_hash() {
     let dir = generate("manifest");
     let manifest = read_json(&dir.join("manifest.json"));
     let graph = read_json(&dir.join("graph.json"));
     let candidates = read_json(&dir.join("pair-candidates.json"));
     let root = repo_root();
 
-    assert_eq!(manifest["releaseId"], "all-real-v4");
+    assert_eq!(manifest["releaseId"], "all-real-v5");
     assert_eq!(manifest["graphSchemaVersion"], 4);
     assert_eq!(manifest["routePlanVersion"], 1);
     assert_eq!(manifest["billingPairsVersion"], "v3");
@@ -408,7 +408,7 @@ fn all_real_v4_manifest_binds_every_artifact_and_input_hash() {
 
 #[test]
 #[ignore = "runs the release binary over the real OSM snapshot"]
-fn all_real_v4_pair_derivation_covers_every_route_relation_and_membership() {
+fn release_pair_derivation_covers_every_route_relation_and_membership() {
     let dir = generate("coverage");
     let graph = read_json(&dir.join("graph.json"));
     let candidates = read_json(&dir.join("pair-candidates.json"));
@@ -499,19 +499,19 @@ fn routing_core_reads_the_generated_graph_and_the_legacy_release() {
     let dir = generate("routing-core");
     let graph = fs::read_to_string(dir.join("graph.json")).unwrap();
     shutoko_routing_core::prepare_json(&graph, "{}")
-        .expect("the generated all-real-v4 graph must be readable by routing-core");
-    // 公開 fixture 自体も同じ build の all-real-v4 であり、reader が一致すること。
+        .expect("the generated all-real-v5 graph must be readable by routing-core");
+    // 公開 fixture 自体も同じ build の all-real-v5 であり、reader が一致すること。
     let checked_in = fs::read_to_string(repo_root().join("fixtures/generated/graph.json")).unwrap();
     let checked_in_manifest = read_json(&repo_root().join("fixtures/generated/manifest.json"));
-    assert_eq!(checked_in_manifest["releaseId"], "all-real-v4");
+    assert_eq!(checked_in_manifest["releaseId"], "all-real-v5");
     assert_eq!(checked_in_manifest["billingPairsVersion"], "v3");
     assert_eq!(checked_in_manifest["tariffModelVersion"], 1);
     assert_eq!(
         shutoko_graph_builder::compute_sha256(checked_in.as_bytes()),
         sha256(graph.as_bytes()),
-        "the checked-in all-real-v4 graph must be byte identical to a fresh build"
+        "the checked-in all-real-v5 graph must be byte identical to a fresh build"
     );
     shutoko_routing_core::prepare_json(&checked_in, "{}")
-        .expect("the checked-in all-real-v4 graph must be readable by routing-core");
+        .expect("the checked-in all-real-v5 graph must be readable by routing-core");
     let _ = fs::remove_dir_all(dir);
 }

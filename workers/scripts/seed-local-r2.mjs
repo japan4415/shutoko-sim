@@ -689,13 +689,16 @@ export function seedR2({
   const filesInPublishOrder = [...payloadFiles, engineFile, manifestFile];
 
   const modeLabel = isRemote ? "remote" : "local";
-  const bucketName = isRemote ? "shutoko-artifacts" : "shutoko-artifacts-preview";
+  // ローカル投入と本番投入は同じバケット名を使う。ローカルでは Miniflare 状態の名前空間と
+  // しての `shutoko-artifacts` に書き、cf dev の r2 バインディング（同じ bucket 名）から
+  // 読める（.wrangler/state は wrangler / cf で共通）。旧 wrangler dev がバインドしていた
+  // preview バケット名は新設定系（cloudflare.config.ts）には存在しない。
+  const bucketName = "shutoko-artifacts";
 
   // ローカルの検証（manifest / graph 契約 / engine 成果物）が全部通ってから外部 CLI を
   // 触る。成果物が欠けていれば wrangler / cf を実行せずに停止する。
-  // 本番投入（--remote）は cf、ローカル preview 投入は wrangler --local が担う。
-  // E2E の dev サーバが wrangler dev であり続ける限り、preview 状態を書くのは
-  // 同じ wrangler である必要がある（cf dev は wrangler.toml を読めない。docs/delivery.md）。
+  // 本番投入（--remote）は cf、ローカル投入（E2E / cf dev が読む .wrangler/state への
+  // 書き込み）は wrangler --local が担う（Issue #98）。
   log(`Checking the ${isRemote ? "cf" : "wrangler"} CLI before any upload...`);
   const cli = isRemote
     ? preflightCf({ runCommand, commandCwd, repoRoot, env, log })

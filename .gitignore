@@ -4,6 +4,8 @@
 /.wrangler/
 /workers/node_modules/
 /workers/.wrangler/
+# cf dev / cf deploy のビルド出力と生成型（新設定系）
+/workers/.cloudflare/
 /workers/.dev.vars
 /web/node_modules/
 /web/dist/

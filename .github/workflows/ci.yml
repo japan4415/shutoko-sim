@@ -98,13 +98,14 @@ jobs:
         working-directory: web
       - run: npx playwright install --with-deps chromium
         working-directory: web
-      # E2E の seed と dev サーバは wrangler に残す（Issue #98）: `cf dev` は新設定系の
-      # cloudflare.config.ts を要求して workers/wrangler.toml を読めないため、
-      # ローカル preview への投入（seed:local の wrangler --local）と wrangler dev をセットで使う。
-      # 本番 R2 への公開投入（seed --remote）は cf CLI だが、認証と本番書き込みが必要なため CI では実行しない。
-      - name: Seed local R2 (Miniflare preview bucket)
+      # E2E の dev サーバは cf dev（新設定系 cloudflare.config.ts / wrangler.config.ts、
+      # Issue #98）。seed:local（wrangler --local）が書く .wrangler/state を cf dev が読むため
+      # seed は wrangler のまま。cf（1.0.0-beta.14）と wrangler（4.149.0）は workers の
+      # npm ci で入る。本番 R2 への公開投入（seed --remote）は認証と本番書き込みが
+      # 必要なため CI では実行しない。
+      - name: Seed local R2 (Miniflare local state)
         run: npm run seed:local
         working-directory: workers
-      - name: E2E (vite build → wrangler dev 8787 → Playwright)
+      - name: E2E (vite build → cf dev 8787 → Playwright)
         run: npm run e2e
         working-directory: web

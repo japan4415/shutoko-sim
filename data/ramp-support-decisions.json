@@ -6250,24 +6250,29 @@
     },
     {
       "rampId": "ramp:c2-inner:oji-kita-exit",
-      "lat": 35.776591,
-      "lon": 139.748751,
+      "lat": 35.75865,
+      "lon": 139.73787,
       "coordinateSource": "https://www.openstreetmap.org/",
       "coordinateStatus": "derived",
       "supportState": "verified_bound",
-      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。",
+      "supportReason": "施設・方向・種別に対応する exact directed OSM segment を監査済み。王子北（内回り出口）は way 53541951 が member way 28127449 とノード 676408802 を共有して分流し、way 780869433 を経て way 210795860 の Exit 辺で北本通りに降りる。標識（赤羽・十条駅）は 王子北出入口 の本線標識と一致（Wikipedia）。",
       "supportEvidence": [
         "https://www.shutoko.jp/use/network/map/route-c2/oujikita/",
+        "https://www.openstreetmap.org/way/210795860",
+        "https://www.openstreetmap.org/way/53541951",
+        "https://ja.wikipedia.org/wiki/王子北出入口",
+        "https://www.openstreetmap.org/way/53541951",
+        "https://ja.wikipedia.org/wiki/王子北出入口",
         "https://www.openstreetmap.org/way/592279108",
         "analyze-duplicate-bindings-001.json"
       ],
       "binding": {
         "rampId": "ramp:c2-inner:oji-kita-exit",
-        "osmWayId": 592279108,
-        "osmNodeId": 5964179231,
-        "motorwayNodeId": 5653183407,
+        "osmWayId": 210795860,
+        "osmNodeId": 2208424576,
+        "motorwayNodeId": 1908031288,
         "direction": "inner",
-        "notes": "Verified OSM binding for 王子北 (C2 inner)"
+        "notes": "Verified OSM binding for 王子北 (C2 inner): the exit ramp runs from the inner carriageway down to 北本通り -- way 53541951 diverges at node 676408802, which it shares with member way 28127449, then 780869433, and the Exit edge belongs to way 210795860 (n:1908031288 -> n:2208424576). The ramp way carries destination=赤羽;十条駅;王子駅, the signage of 王子北出入口 (https://ja.wikipedia.org/wiki/王子北出入口). The earlier binding pointed at way 592279108 on the 川口線, 1.6 km from the C2 mainline; its attach walk crossed to the outer carriageway and seeded that eastbound chain as inner."
       },
       "routingCapability": "routable",
       "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。"

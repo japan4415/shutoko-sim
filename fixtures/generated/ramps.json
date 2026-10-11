@@ -5356,9 +5356,9 @@
       "routingCapability": "routable",
       "routingCapabilityReason": "有向Shutoko実グラフ上で5km以上の循環SCCと接続し、合法な周回ODを構成可能。",
       "bound": true,
-      "edgeId": "e:w592279108:0:f",
-      "nodeId": "n:5964179231",
-      "mainlineNodeId": "n:5653183407"
+      "edgeId": "e:w210795860:0:f",
+      "nodeId": "n:2208424576",
+      "mainlineNodeId": "n:1908031288"
     },
     {
       "id": "ramp:c2-outer:shin-itabashi-exit",

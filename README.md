@@ -14,7 +14,7 @@
 
 「実際に走る周回経路」と「料金の対象となる1区間」を分けることが設計の中心です。一般道で出発地点に戻ることは今回の企画案です。所要時間は予測で、Google マップでの周回再現は先行検証が必要です。
 
-表示する料金は **普通車 ETC 基本料金（割引適用前）** に固定しています（車種 `ordinary` / 支払方法 `etc` / 料金種別 `base_toll_excluding_discounts`、適用する割引は列挙して除外）。深夜割引・都心流入割引・環境道路料金割引・ETC2.0 割引・ETC フリート割引は含みません。検証済みの商品課金ペアは 9 件（legacy 7 + radial 2）で、2026-10-01 の改定をまたぐ期間を保持し、1 件が未検証（`bp:c1-outer:shibakoen-iikura`）として商品推薦から外れています。金額（`amountYen`）が確認済みの候補集合では時間効率（`time_per_yen`）順に並びます。
+表示する料金は **普通車 ETC 基本料金（割引適用前）** に固定しています（車種 `ordinary` / 支払方法 `etc` / 料金種別 `base_toll_excluding_discounts`、適用する割引は列挙して除外）。深夜割引・都心流入割引・環境道路料金割引・ETC2.0 割引・ETC フリート割引は含みません。検証済みの商品課金ペアは 13 件（C1 8 + C2 3 + 2 号 radial 2）で、2026-10-01 の改定をまたぐ期間を保持し、1 件が未検証（`bp:c1-outer:shibakoen-iikura`）として商品推薦から外れています。金額（`amountYen`）が確認済みの候補集合では時間効率（`time_per_yen`）順に並びます。
 
 ## 実データ生成パイプラインと graph-builder
 
@@ -26,7 +26,7 @@
 - route membership の hash、料金表 v3 の期間別 evidence と規則検算の整合
 - 出典情報（`provenance`）と、5 入力（OSM snapshot / ランプ台帳 / route membership index / 隣接関係 / 料金カタログ）の SHA-256
 
-公開既定は graph schema 4、release ID は `all-real-v4`（`billingPairsVersion=v3`、`tariffModelVersion=1`）です。`all-real-v3` は rollback 先として allowlist に残します。
+公開既定は graph schema 4、release ID は `all-real-v5`（`billingPairsVersion=v3`、`tariffModelVersion=1`）です。rollback 先は `all-real-v4` で、その前の `all-real-v3` とあわせて allowlist に残します。
 
 ### 再現手順
 
@@ -39,7 +39,21 @@
    ```bash
    ./scripts/generate-fixtures.sh
    ```
-   コミット済みの OSM スナップショットと `data/*.json` の入力から `fixtures/generated/` 以下の 5 成果物（`graph.json` / `od-tariffs.json` / `pair-candidates.json` / `ramps.json` / `snap-index.json`）と `manifest.json` をバイト完全一致（SHA-256 一致）で再生成します。CI でもこの再生成チェックを実行し、差分がないことを自動検証しています。release ID を変える場合は `SHUTOKO_RELEASE_ID=...` を渡します（既定は `all-real-v4`）。
+   コミット済みの OSM スナップショットと `data/*.json` の入力から `fixtures/generated/` 以下の 5 成果物（`graph.json` / `od-tariffs.json` / `pair-candidates.json` / `ramps.json` / `snap-index.json`）と `manifest.json` をバイト完全一致（SHA-256 一致）で再生成します。CI でもこの再生成チェックを実行し、差分がないことを自動検証しています。release ID を変える場合は `SHUTOKO_RELEASE_ID=...` を渡します（既定は `all-real-v5`）。
+
+## C2 のラベル監査と上流 changeset
+
+中央環状線（C2）は relation 4256077 が方向ロールを持たないため、graph-builder が
+verified_bound な C2 ランプの接続点を錨にして内回り／外回りの分割を推定します。推定が
+2 次元幾何では決まらない区間（大井JCT のトンネル、大橋JCT の link 折り返し）を含むので、
+`scripts/audit-c2-carriageway-labels.py` が公式ランプ方向・one-way の鎖・幾何の 3 系統で
+独立に監査します。監査結果は `python3 scripts/derive-osm-relation-repairs.py` が
+`data/osm-relation-repairs.json`（上流への提案: role 111 + 削除 4 + 分割 2）へ反映し、
+`python3 scripts/build-osm-changeset.py --out-dir /tmp/osm-changeset` が投稿用の
+パッケージ（`plan.json` / `relation-4256077.osm` / `SPOT-CHECK.md` / `changeset-tags.json`）を
+作ります。手順とスポットチェック項目は [`docs/osm-changeset.md`](docs/osm-changeset.md)、
+設計判断の記録は [`docs/c2-route-design.md`](docs/c2-route-design.md) を参照してください。
+アップロードは人手で行い、このリポジトリは OSM へ接続しません。
 
 ## Cloudflare Workers（成果物配信・住所検索プロキシ）
 
@@ -92,7 +106,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
    bash scripts/build-wasm.sh
    SHUTOKO_REQUIRE_PINNED_WRANGLER=1 npm --prefix workers run seed:local -- --remote
    ```
-   詳細手順と manifest を最後に置く atomic release の runbook は [`docs/delivery.md`](docs/delivery.md#all-real-v4-の-atomic-release-runbook) を参照する。先に未使用の `all-real-v4` へ client allowlist を更新し、payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。既存の本番 release ID があれば上書きを拒否する。`seed:local -- --remote` は `npm --prefix workers run` が `workers/node_modules/.bin` を PATH へ足すため、`workers/package-lock.json` の固定版 wrangler（4.131.0）が選ばれる。`SHUTOKO_REQUIRE_PINNED_WRANGLER=1` を付けると `wrangler --version` が固定版と完全一致することを要求し、`npx` フォールバックは無い。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。このリポジトリの変更作業では R2 upload / Wrangler deploy / Cloudflare 書き込みを実行しない。
+   詳細手順と manifest を最後に置く atomic release の runbook は [`docs/delivery.md`](docs/delivery.md#all-real-v5-の-atomic-release-runbook) を参照する。先に未使用の `all-real-v5` へ client allowlist を更新し、payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。既存の本番 release ID があれば上書きを拒否する。`seed:local -- --remote` は `npm --prefix workers run` が `workers/node_modules/.bin` を PATH へ足すため、`workers/package-lock.json` の固定版 wrangler（4.131.0）が選ばれる。`SHUTOKO_REQUIRE_PINNED_WRANGLER=1` を付けると `wrangler --version` が固定版と完全一致することを要求し、`npx` フォールバックは無い。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。このリポジトリの変更作業では R2 upload / Wrangler deploy / Cloudflare 書き込みを実行しない。
 3. **デプロイ**:
    ```bash
    cd workers && npx wrangler deploy
@@ -100,7 +114,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
    デプロイ完了時に表示される `https://<worker>.<subdomain>.workers.dev` が配信 URL です。
 4. **疎通確認**: `GET /releases/{releaseId}/manifest.json` と `GET /releases/{releaseId}/engine.json` が `200`・`application/json`・`Cache-Control: max-age=300` で返ること、`GET /releases/{releaseId}/graph.json` が `immutable` キャッシュと `ETag` 付きで返り本文の `sha256` が `manifest.json` と一致すること、存在しない release / 二重スラッシュが `404` になること、`POST /api/geocode` が正常クエリで `200`、空クエリで `400 INVALID_QUERY` を返すことを確認する。
 
-現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-17 `all-real-v2` デプロイ, wrangler 4.131.0）。`all-real-v3` / `all-real-v4` の R2 投入と production deploy はこのリポジトリの作業範囲外であり、`docs/delivery.md` の runbook の read-back 確認と本番デプロイが完了するまで本番参照は切り替えない。Web（`DEFAULT_RELEASE_ID`）と Worker（`ALLOWED_RELEASES`）の許可リストはすでに `all-real-v4` を含んでおり、異常時は Worker の許可リストを狭めずに Web の既定 1 行を `all-real-v3` へ戻すだけで前の版へ切り戻せる。
+現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-17 `all-real-v2` デプロイ, wrangler 4.131.0）。`all-real-v3` / `all-real-v4` / `all-real-v5` の R2 投入と production deploy はこのリポジトリの作業範囲外であり、`docs/delivery.md` の runbook の read-back 確認と本番デプロイが完了するまで本番参照は切り替えない。Web（`DEFAULT_RELEASE_ID`）と Worker（`ALLOWED_RELEASES`）の許可リストはすでに `all-real-v5` を含んでおり、異常時は Worker の許可リストを狭めずに Web の既定 1 行を `all-real-v4` へ戻すだけで前の版へ切り戻せる（連鎖は `all-real-v5` → `all-real-v4` → `all-real-v3`）。
 
 > **レート制限の本番挙動に関する注記**: `wrangler.toml` の `[[ratelimits]]`（IP: 10 req/60s、Global: 600 req/60s）は Cloudflare Workers Rate Limiting binding のベストエフォート仕様であり、`wrangler dev --local` の決定論的シミュレーションと異なり本番環境では正確な即時遮断を保証しない（同一 IP から短時間に 15 リクエストを送っても `429` が発生しない場合がある）。アプリケーション側の防御としては機能するが、厳密なレート保証が必要な用途には追加の対策を検討すること。
 
@@ -114,12 +128,11 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
 
 ### 対象範囲と未検証事項
 
-- **対象範囲**: 首都高速道路 都心環状線（C1）8 区間と 2 号目黒線（目黒入口 → 天現寺出口）の 2 区間、およびそれぞれの接続ランプ（進入・退出）。路線グラフ自体は全 24 路線を収録していますが、公開する商品課金ペアは上記 10 件だけです。
+- **対象範囲**: 首都高速道路 都心環状線（C1）8 区間、中央環状線（C2）3 区間、2 号目黒線（目黒入口 → 天現寺出口）の 2 区間、およびそれぞれの接続ランプ（進入・退出）。路線グラフ自体は全 24 路線を収録していますが、公開する商品課金ペアは上記 13 件だけです。
 - **対応車両**: 普通乗用車・ETC（`passenger-car-etc`）。券種は普通車 ETC 基本料金（割引適用前）です。
-- **検証済み課金区間**: 9 ペア。legacy 7 ペア（`bp:c1-outer:kandabashi-takaracho`、`bp:c1-outer:kasumigaseki-daikancho`、`bp:c1-outer:ginza-shibakoen`、`bp:c1-inner:kasumigaseki-shibakoen`、`bp:c1-inner:daikancho-kasumigaseki`、`bp:c1-inner:shibakoen-shiodome`、`bp:c1-inner:takaracho-kandabashi`）と radial 2 ペア（`bp:2-inbound:meguro:c1-inner:tengenji`、`bp:2-inbound:meguro:c1-outer:tengenji`）。いずれも公式路線図と公式料金表のセル証跡（版ごとに別の `evidenceId`）を保持し、2026-10-01 改定の期間別金額を区別します。出典はペアごとに異なり、legacy 7 ペアは `fixtures/generated/manifest.json` の `provenance`、radial 2 ペアは `data/billing-pairs-seed.json` の `billingPairs[].provenance` と `data/od-tariffs.json` の `assignmentId: assignment:2:meguro-tengenji`（`prices[].evidenceId` / `prices[].distanceEvidenceId`）と `documents[]` にあります。radial 2 ペアの出典を `manifest.json` の `provenance` へ伝播させる実装はまだないため、manifest だけを読む検証者には該当 2 件の出典が伝わりません。一覧と値は [`docs/data-pipeline.md`](docs/data-pipeline.md) を参照してください。
+- **検証済み課金区間**: 13 ペア。C1 8 ペア（`bp:c1-outer:kandabashi-takaracho`、`bp:c1-outer:kasumigaseki-daikancho`、`bp:c1-outer:ginza-shibakoen`、`bp:c1-inner:kasumigaseki-shibakoen`、`bp:c1-inner:daikancho-kasumigaseki`、`bp:c1-inner:shibakoen-shiodome`、`bp:c1-inner:takaracho-kandabashi`、`bp:c1-inner:ginza-shintomicho`）、C2 3 ペア（`bp:c2-outer:gotanda-hatsudai-minami`、`bp:c2-inner:takinogawa-nakano-chojabashi`、`bp:c2-outer:kosuge-hirai-ohashi`）と radial 2 ペア（`bp:2-inbound:meguro:c1-inner:tengenji`、`bp:2-inbound:meguro:c1-outer:tengenji`）。いずれも公式路線図と公式料金表のセル証跡（版ごとに別の `evidenceId`）を保持し、2026-10-01 改定の期間別金額を区別します。出典はペアごとに異なり、C1 8 ペアは `fixtures/generated/manifest.json` の `provenance`、radial 2 ペアは `data/billing-pairs-seed.json` の `billingPairs[].provenance` と `data/od-tariffs.json` の `assignmentId: assignment:2:meguro-tengenji`（`prices[].evidenceId` / `prices[].distanceEvidenceId`）と `documents[]` にあります。radial 2 ペアの出典を `manifest.json` の `provenance` へ伝播させる実装はまだないため、manifest だけを読む検証者には該当 2 件の出典が伝わりません。一覧と値は [`docs/data-pipeline.md`](docs/data-pipeline.md) を参照してください。
 - **未検証のまま残す項目**:
   - `bp:c1-outer:shibakoen-iikura`（芝公園入口 → 飯倉出口）は、接続する一般道 way `40969792` に `access:conditional` があるため端点が unresolved で、**商品推薦から外したうえで未検証を保持**します。時間帯モデルが導入されるまで昇格は凍結です。
-  - `bp:c1-inner:ginza-shintomicho`（内回り銀座入口 → 新富町出口）も、OSM 上の分流点が銀座入口の合流点より上流にあり relation 制約つきの First Exit 検証が通らないため**未検証のまま**です。導出レポートでも `hold` として出力されます。
   - 上記以外の C1 ランプ区間（新富町、京橋、北の丸等）と他の首都高速路線（湾岸線・羽田線等）は未検証であり、`manifest.json` の `unverifiedSections` に未検証エッジとして自動列挙されます。ルート relation は 26 件のうち 11 件のみ展開済みで、残り 15 件は理由付きで `fail` として記録され、無言でスキップされません。
   - 検証済みペアに到達できない動的 OD は `topology_only` として道路形状だけを返し、金額も商品推薦も付けません。
   - 放射線（radial）候補の Google マップ引き継ぎ（3 leg split URL）は**実機検証が完了していないため `enabled=false`** です。Web は出発ボタンを出さず「実機検証待ち」の理由を表示します。C1 legacy の単一 URL は従来どおり動作します。
@@ -205,6 +218,7 @@ npm run bench:summarize -- ../docs/bench/<date>-proxy/fast4g.json \
 | データ形式と外部サービスへの引き継ぎ | [データ・インターフェース設計](docs/interfaces.md) |
 | Rust コアのテスト、WASM ビルド、実装済みの範囲 | [Rust / WASM 開発](docs/wasm-development.md) |
 | 実装順序、検証条件、未決事項 | [実装・検証計画](docs/delivery.md) |
+| C2 の上流 changeset 提案と人手スポットチェックの手順 | [OSM changeset](docs/osm-changeset.md) |
 | 性能目標の計測手順・計測値の定義・実測レポート | [性能計測（bench）](docs/bench/README.md) |
 
-最初に企画と要件を読み、実装時にはシステム設計、探索、インターフェースの順に参照してください。設計は原案を具体化した提案であり、現在の実装範囲と動かし方は Rust / WASM 開発に記載しています。公開中の versioned release は `all-real-v4` で、外部仕様（料金表・改定発表・路線図）の参照確認日は 2026-09-25 です。
+最初に企画と要件を読み、実装時にはシステム設計、探索、インターフェースの順に参照してください。設計は原案を具体化した提案であり、現在の実装範囲と動かし方は Rust / WASM 開発に記載しています。公開中の versioned release は `all-real-v5` で、外部仕様（料金表・改定発表・路線図）の参照確認日は 2026-09-25 です。

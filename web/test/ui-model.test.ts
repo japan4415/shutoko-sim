@@ -166,6 +166,9 @@ describe("statusMessage / errorMessage", () => {
     expect(text).toContain("対応範囲外");
     expect(text).toContain(SUPPORTED_AREA_TEXT);
     expect(SUPPORTED_AREA_TEXT).toContain("都心環状線");
+    // Issue #44 の完了条件: C2 ペアを公開する文面では中央環状線も範囲に含める。
+    expect(SUPPORTED_AREA_TEXT).toContain("中央環状線");
+    expect(SUPPORTED_AREA_TEXT).toContain("C2");
   });
 
   it("対応範囲の文言は実装に忠実（一般道は探索しない・直線距離の概算）", () => {

@@ -15,7 +15,7 @@ const MANIFEST_ARTIFACT_NAMES = ["graph.json", "snap-index.json"];
 const MANIFEST_ARTIFACT_ALLOWLIST = new Set([
   ...MANIFEST_ARTIFACT_NAMES,
   "ramps.json",
-  // all-real-v4 が manifest に結ぶ入力由来の成果物。
+  // all-real-v4 / all-real-v5 が manifest に結ぶ入力由来の成果物。
   "od-tariffs.json",
   "pair-candidates.json",
 ]);
@@ -26,7 +26,7 @@ const ENGINE_ARTIFACT_NAMES = [
   "index.d.ts",
 ];
 
-/** schema 4 graph が記録できる billingPairsVersion（v2=all-real-v3, v3=all-real-v4）。 */
+/** schema 4 graph が記録できる billingPairsVersion（v2=all-real-v3, v3=all-real-v4 / all-real-v5）。 */
 const SCHEMA4_BILLING_PAIRS_VERSIONS = new Set(["v2", "v3"]);
 /** billingPairsVersion=v3 が要求する tariffModelVersion。 */
 const TARIFF_MODEL_VERSION = 1;

@@ -66,12 +66,12 @@ describe("release allowlist の同期（Web / Worker）", () => {
     expect(allowed).toContain(DEFAULT_RELEASE_ID);
   });
 
-  it("文書化された rollback（既定を all-real-v3 へ 1 行戻す）が allowlist 内で完結する", async () => {
+  it("文書化された rollback（既定を all-real-v4 へ 1 行戻す）が allowlist 内で完結する", async () => {
     const allowed = await workerAllowedReleases();
     // docs/delivery.md の rollback: DEFAULT_RELEASE_ID 1 行の変更だけで前の版へ戻る。
-    expect(rollbackTargetFrom("all-real-v4")).toBe("all-real-v3");
+    expect(rollbackTargetFrom("all-real-v5")).toBe("all-real-v4");
     // その 1 行だけ変えた rollback commit でも、Worker と Web の集合は一致したまま。
-    expect(allowed).toContain("all-real-v3");
+    expect(allowed).toContain("all-real-v4");
     expect(new Set(allowed)).toEqual(new Set(KNOWN_RELEASES));
   });
 });

@@ -84,6 +84,17 @@ fn repository_data_path(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// Release ids built from the full pipeline inputs: a schema 4 graph, the seeded
+/// billing pairs, the ramp inventory and bindings, and the version 3 tariff
+/// catalog. A published release id is never reused (docs/architecture.md), so a new
+/// release appends its id here; older ids stay listed so the rollback target still
+/// builds from the same inputs.
+const FULL_RELEASE_IDS: [&str; 2] = ["all-real-v4", "all-real-v5"];
+
+fn is_full_release(release_id: &str) -> bool {
+    FULL_RELEASE_IDS.contains(&release_id)
+}
+
 /// Route relation selection for the schema 4 route membership index.
 ///
 /// `None` selects every route relation in the OSM snapshot, which is what the
@@ -449,20 +460,22 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // The lap-arc emit modes write a single JSON document, so the build report
     // is suppressed to keep stdout machine readable.
     let emit_query = args.lap_boundaries_query.is_some() || args.lap_arc_query.is_some();
-    let is_v4_release = args.release_id == "all-real-v4";
-    if is_v4_release {
+    let release_id = args.release_id.clone();
+    let full_release = is_full_release(&release_id);
+    if full_release {
         if args.graph_schema != 4 {
-            return Err("release all-real-v4 requires --graph-schema 4".into());
+            return Err(format!("release {} requires --graph-schema 4", args.release_id).into());
         }
         if args.seed_path.is_none()
             || args.inventory_path.is_none()
             || args.bindings_path.is_none()
             || args.tariffs_path.is_none()
         {
-            return Err(
-                "release all-real-v4 requires --seed, --inventory, --bindings, and --tariffs"
-                    .into(),
-            );
+            return Err(format!(
+                "release {} requires --seed, --inventory, --bindings, and --tariffs",
+                args.release_id
+            )
+            .into());
         }
     }
     let adjacency_path = args
@@ -473,9 +486,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .support_decisions_path
         .clone()
         .unwrap_or_else(|| repository_data_path("ramp-support-decisions.json"));
-    if is_v4_release && (!adjacency_path.exists() || !support_decisions_path.exists()) {
+    if full_release && (!adjacency_path.exists() || !support_decisions_path.exists()) {
         return Err(format!(
-            "release all-real-v4 requires adjacency {} and support decisions {}",
+            "release {} requires adjacency {} and support decisions {}",
+            release_id,
             adjacency_path.display(),
             support_decisions_path.display()
         )
@@ -502,7 +516,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         &overpass_resp,
         args.relation_ids.as_deref(),
         args.all_route_relations,
-        is_v4_release,
+        full_release,
     )?;
 
     // 2. Build topology
@@ -536,7 +550,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 e
             )
         })?;
-        if is_v4_release {
+        if full_release {
             seed_file
                 .validate_tariff_assignment_refs()
                 .map_err(|error| format!("seed tariff assignment validation failed: {}", error))?;
@@ -769,7 +783,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                             e
                         )
                     })?;
-                if is_v4_release {
+                if full_release {
                     shutoko_routing_core::read_tariff_v3(tar_raw).map_err(|error| {
                         format!("tariff v3 catalog validation failed: {}", error)
                     })?;
@@ -814,8 +828,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|e| format!("ramps serialization failed: {}", e))?;
         ramps_artifact_opt = Some((artifact, ramps_json));
     }
-    if is_v4_release && od_tariffs_artifact_bytes.is_none() {
-        return Err("release all-real-v4 requires a version 3 tariff catalog".into());
+    if full_release && od_tariffs_artifact_bytes.is_none() {
+        return Err(format!("release {} requires a version 3 tariff catalog", release_id).into());
     }
 
     // 4. Serialize graph.json and snap-index.json deterministically
@@ -886,7 +900,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if args.graph_schema == 4
-        && !is_v4_release
+        && !full_release
         && (args.inventory_path.is_some() || args.bindings_path.is_some())
     {
         let inv_path = args.inventory_path.as_ref().ok_or_else(|| {
@@ -1003,19 +1017,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    if is_v4_release {
+    if full_release {
         let inventory_path = args
             .inventory_path
             .as_ref()
-            .ok_or_else(|| "release all-real-v4 requires --inventory".to_string())?;
+            .ok_or_else(|| format!("release {} requires --inventory", release_id))?;
         let bindings_path = args
             .bindings_path
             .as_ref()
-            .ok_or_else(|| "release all-real-v4 requires --bindings".to_string())?;
+            .ok_or_else(|| format!("release {} requires --bindings", release_id))?;
         let tariffs_path = args
             .tariffs_path
             .as_ref()
-            .ok_or_else(|| "release all-real-v4 requires --tariffs".to_string())?;
+            .ok_or_else(|| format!("release {} requires --tariffs", release_id))?;
         let inventory_raw = fs::read(inventory_path).map_err(|error| {
             format!(
                 "failed to read inventory {} for pair derivation: {}",
@@ -1052,12 +1066,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             )
         })?;
         let seed_raw = seed_bytes.as_ref().ok_or_else(|| {
-            "release all-real-v4 requires a readable billing pair seed".to_string()
+            format!(
+                "release {} requires a readable billing pair seed",
+                release_id
+            )
         })?;
         let relation_coverage = route_relation_coverage
             .as_ref()
             .ok_or_else(|| {
-                "release all-real-v4 requires schema 4 route relation coverage".to_string()
+                format!(
+                    "release {} requires schema 4 route relation coverage",
+                    release_id
+                )
             })?
             .relations
             .clone();
@@ -1089,7 +1109,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
     let graph_json = if args.graph_schema == 4 {
-        if is_v4_release {
+        if full_release {
             graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3(
                 &graph,
                 &route_memberships,
@@ -1280,7 +1300,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         vehicle_profile: args.vehicle_profile,
         time_model_version: "v1-static-speeds".into(),
         billing_pairs_version: if args.graph_schema == 4 {
-            if is_v4_release {
+            if full_release {
                 "v3"
             } else {
                 "v2"
@@ -1323,7 +1343,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         verified_exits,
         artifacts_to_bundle,
     );
-    if is_v4_release {
+    if full_release {
         manifest.tariff_model_version = Some(shutoko_routing_core::tariff::TARIFF_MODEL_VERSION);
         if let Some(report) = &pair_derivation_report {
             manifest.pair_derivation = Some(ManifestPairDerivation {

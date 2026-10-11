@@ -133,7 +133,7 @@ fn derive(fixture: &RealDerivationFixture) -> shutoko_graph_builder::PairDerivat
 fn derives_all_official_candidates_with_independent_gates() {
     // The fixture expands C1 and route 2 only, so the two C2 pairs fail their route
     // gate here and stay on hold. The full-coverage release derivation, which does
-    // expand C2, is asserted by release_v4_contract.
+    // expand C2, is asserted by release_contract.
     let fixture = real_fixture();
     let report = derive(&fixture);
     assert_eq!(report.schema_version, PAIR_DERIVATION_REPORT_SCHEMA_VERSION);

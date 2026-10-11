@@ -305,11 +305,11 @@ def main(argv):
 
     # Cross-check the planned member list against the verified apply script.
     apply_module = load_module(APPLY_SCRIPT, "apply_osm_relation_repairs")
-    applied = target_members_from_apply(
-        apply_module, Path(args.osm), Path(args.repairs), out_dir / "applied-snapshot.json"
-    )
+    applied_path = out_dir / "applied-snapshot.json"
+    applied = target_members_from_apply(apply_module, Path(args.osm), Path(args.repairs), applied_path)
+    applied_path.unlink()
     synthetic = {}
-    for index, split in enumerate(plan["splits"]):
+    for split in plan["splits"]:
         synthetic[apply_module.split_way_id(split["wayId"], 1)] = split["headRef"]
         synthetic[apply_module.split_way_id(split["wayId"], 2)] = split["tailRef"]
     applied_members = [

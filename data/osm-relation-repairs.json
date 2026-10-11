@@ -15,9 +15,10 @@
     "/tmp/shutoko-repaired.json"
   ],
   "humanReviewRequired": [
-    "The setMemberRole entries are derived from the current derived split, not from a surveyed direction sign. scripts/audit-c2-carriageway-labels.py re-derives them from the official ramp directions plus geometry alone and confirms 59 member ways exactly, 12 partially, and disagrees on 5 (see docs/c2-route-design.md 段12).",
-    "The 5 disagreements are 44209387 / 780870438 / 44211094 (file=inner, geometry=outer, in the 飛鳥山トンネル stretch where the published upper=inner deck rule does not apply) and 331692346 / 4854098 (file=outer, geometry=inner, at 大井JCT where the carriageways are stacked at the same coordinates). A route-map arrow or imagery check is needed for those 5 ways only.",
-    "No shipped C2 pair crosses the 5 ways, so the release data is unaffected today."
+    "The setMemberRole entries are derived from the current derived split. scripts/audit-c2-carriageway-labels.py re-derives them from the official ramp directions plus geometry; with the junction search validated against the six junction nodes of the three authored pairs, 20 anchors place and none conflicts with the derived split (docs/c2-route-design.md 段12a).",
+    "One disagreement remains: the chain 44209387 -> 44211322 -> 28127449 -> 780870438 -> 44211094 (166 edges, 王子 to 江北) is labelled inner but sits on the outer carriageway by geometry, by the layer of its ways where the corridor is stacked, and by the destination tag of 44211094 (常磐道/東関東道, i.e. north-east bound).",
+    "The same stretch is missing one carriageway from the membership entirely: the nearest opposite-carriageway edge is 156-916 m away for seven members. The official route map arrow or imagery at 王子北 (inner exit) and 王子南 (outer exit), 1.8 km apart at lat 35.749-35.7525, decides whether the chain is mislabelled or the relation lacks the opposite members.",
+    "No shipped C2 pair crosses the stretch, so the release data is unaffected today."
   ],
   "verification": {
     "measuredAt": "2026-10-11",
@@ -44,37 +45,38 @@
     ],
     "labelAudit": {
       "script": "scripts/audit-c2-carriageway-labels.py",
+      "junctionSearchValidatedAgainst": "6 junction nodes recorded by the three authored pairs",
       "anchorsPlaced": "20 / 25 verified_bound C2 ramps",
-      "anchorAgreement": "19 / 20 agree with the derived split",
+      "anchorConflicts": "0",
       "classifiedMembershipEdges": "1796 / 2296",
       "perWay": {
         "confirmed": 59,
         "confirmedPartial": 12,
         "disagrees": 5,
-        "unclassified": 38,
-        "notInRoleFile": 1
+        "unclassified": 26,
+        "noRoleInFile": 1
       },
-      "disagreements": {
-        "44209387": {
-          "file": "inner",
-          "geometry": "outer"
-        },
-        "780870438": {
-          "file": "inner",
-          "geometry": "outer"
-        },
-        "44211094": {
-          "file": "inner",
-          "geometry": "outer"
-        },
-        "331692346": {
-          "file": "outer",
-          "geometry": "inner"
-        },
-        "4854098": {
-          "file": "outer",
-          "geometry": "inner"
-        }
+      "openDisagreement": {
+        "chain": [
+          44209387,
+          44211322,
+          28127449,
+          780870438,
+          44211094
+        ],
+        "file": "inner",
+        "geometry": "outer",
+        "edges": 166,
+        "evidence": [
+          "geometry (all votes)",
+          "layer 2 where the 王子線 is stacked with inner above",
+          "destination=常磐道;湾岸線;京王道路;東関東道 on 44211094"
+        ],
+        "counter": [
+          "王子北 inner exit ramp way 28127318 sits 2 m from the chain south end",
+          "the layer rule is inverted at three stations in the eastern stretch (lon 139.82)"
+        ],
+        "missingOppositeCarriageway": "nearest opposite edge 156-916 m away for seven members"
       }
     }
   },

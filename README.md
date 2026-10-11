@@ -91,22 +91,22 @@ Cloudflare Workers Builds では、Git リポジトリを接続して次の値�
 | Automatic dependency install | `SKIP_DEPENDENCY_INSTALL=1` |
 | Non-production branch builds | OFF |
 
-`SKIP_DEPENDENCY_INSTALL=1` でプラットフォーム側の自動インストールを止め、`scripts/cloudflare-build.sh` が `workers` と `web` の lockfile 固定依存を `npm ci` で導入して `web/dist` を生成する。これにより deploy command が使う pinned Wrangler も `workers/node_modules` に用意される。
+`SKIP_DEPENDENCY_INSTALL=1` でプラットフォーム側の自動インストールを止め、`scripts/cloudflare-build.sh` が `workers` と `web` の lockfile 固定依存を `npm ci` で導入して `web/dist` を生成する。これにより deploy command が使う pinned Wrangler も `workers/node_modules` に用意される。Deploy command は wrangler を使い続ける（Issue #98）。`cf deploy` は新設定系の `cloudflare.config.ts` を要求して `workers/wrangler.toml` を読めないため、デプロイの cf 移行は設定移行と合わせて別 Issue で行う。
 
 Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 release を上書きしない。R2 成果物を更新する場合は、別の versioned release ID で WASM・graph・manifest・engine を先にすべて投入して検証し、その後に Worker と Web の参照先を新しい release へ切り替える。公開済み release ID へ再投入すると、複数オブジェクトの非原子的な上書きによって新旧ファイルが一時的に混在するため、自動 CI/CD では実行しない。
 
 1. **R2 バケットの作成**（初回のみ。既存なら再利用）:
    ```bash
-   npx wrangler r2 bucket create shutoko-artifacts
-   npx wrangler r2 bucket create shutoko-artifacts-preview
+   cf r2 buckets create --name shutoko-artifacts
+   cf r2 buckets create --name shutoko-artifacts-preview
    ```
 2. **新しい versioned release のビルドと本番 R2 への投入**（`sha256`・`byteLength` を `manifest.json` と照合してからアップロード）:
    ```bash
    bash scripts/generate-fixtures.sh
    bash scripts/build-wasm.sh
-   SHUTOKO_REQUIRE_PINNED_WRANGLER=1 npm --prefix workers run seed:local -- --remote
+   node workers/scripts/seed-local-r2.mjs --remote
    ```
-   詳細手順と manifest を最後に置く atomic release の runbook は [`docs/delivery.md`](docs/delivery.md#all-real-v5-の-atomic-release-runbook) を参照する。先に未使用の `all-real-v5` へ client allowlist を更新し、payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。既存の本番 release ID があれば上書きを拒否する。`seed:local -- --remote` は `npm --prefix workers run` が `workers/node_modules/.bin` を PATH へ足すため、`workers/package-lock.json` の固定版 wrangler（4.131.0）が選ばれる。`SHUTOKO_REQUIRE_PINNED_WRANGLER=1` を付けると `wrangler --version` が固定版と完全一致することを要求し、`npx` フォールバックは無い。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。このリポジトリの変更作業では R2 upload / Wrangler deploy / Cloudflare 書き込みを実行しない。
+   詳細手順と manifest を最後に置く atomic release の runbook は [`docs/delivery.md`](docs/delivery.md#all-real-v5-の-atomic-release-runbook) を参照する。先に未使用の `all-real-v5` へ client allowlist を更新し、payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。既存の本番 release ID があれば上書きを拒否する。本番への投入（`--remote`）は wrangler ではなく cf CLI で行う（Issue #98）。seed script は投入前に `cf --version` をログへ出し、確認時点版（1.0.0-beta.10、`docs/delivery.md` の runbook に記録）と照合する。実行ファイルは `CF_BIN` → PATH の順で解決し `npx` フォールバックは無い。cf のトークン期限が切れて `cf auth whoami` が `authenticated: false` を返すときは `cf auth login` で再ログインする。ローカル preview 投入（`seed:local`、E2E / `wrangler dev` 用の Miniflare 状態）は引き続き wrangler 4.131.0 を使う（`cf dev` は `workers/wrangler.toml` を読めないため。理由の詳細は runbook 2-4）。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。このリポジトリの変更作業では R2 upload / deploy / Cloudflare 書き込みを実行しない。
 3. **デプロイ**:
    ```bash
    cd workers && npx wrangler deploy
@@ -154,7 +154,7 @@ Vite + Vanilla TypeScript の製品 UI。探索はブラウザの専用 Web Work
    ```bash
    cd workers && npx wrangler dev --port 8787
    ```
-   `http://localhost:8787/` を直接開くとビルド済み UI が表示される。
+   `http://localhost:8787/` を直接開くとビルド済み UI が表示される。dev サーバは wrangler を使い続ける（Issue #98）。`cf dev` は新設定系の `cloudflare.config.ts` を要求して `workers/wrangler.toml` を読めないためで、判断の詳細は [`docs/delivery.md`](docs/delivery.md#all-real-v5-の-atomic-release-runbook) の runbook 2-4 を参照する。
 3. **開発用 Vite サーバー**（任意。5173 から `/releases`・`/api` を 8787 へ proxy 中継）:
    ```bash
    cd web && npm ci && npm run dev

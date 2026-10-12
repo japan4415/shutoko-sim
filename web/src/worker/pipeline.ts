@@ -542,12 +542,23 @@ export interface LoadReleaseOptions {
  * - graph.json の期待ハッシュは manifest の artifacts から取る
  * - wasm / glue の期待ハッシュは配信側 engine.json から取る（固定定数は持たない）
  * - engine.json の取得失敗は FETCH_FAILED、形式不正・照合不一致は ARTIFACT_MISMATCH で停止
- *   （以降の fetch は呼ばれない）
+ *   （検証は依存順のままで、失敗した成果物より後の成果物は検証しない）
  * - glue は text 取得して照合後、同じ URL を importImpl で import し、
  *   init({ module_or_path: wasmBytes }) で初期化する
  * - 初期化後、prepare(graphJson, SEARCH_LIMITS_JSON) を即座に実行して WasmPreparedGraph を構築し、
  *   graphJson は保持せず V8 GC 対象にする（limits は接続判定の上界だけで、成立判定は時間窓）
+ * - Issue #43: 成果物のパスは release ごとに固定なので、5 件のリクエストは 1 往復で出す。
+ *   検証は依存順のままだが、前段の失敗時に後段が飛行中になりうる（失う帯域は wasm の
+ *   ≈350 KiB が上限で、既に致命的な経路に限る）。削減できる往復は Slow 4G の初回ロード
+ *   予算 8 秒に対して ≈2.2 秒（docs/bench/2026-10-12-proxy-pixel5-c2-payload/summary.md）。
  */
+function ignoreRejection<T>(promise: Promise<T>): Promise<T> {
+  // 早期の検証失敗で await されなくなった先読み応答が unhandled rejection にならないように
+  // する。元の promise は後で await する呼び出し元に対してはそのまま reject する。
+  void promise.catch(() => undefined);
+  return promise;
+}
+
 export async function loadRelease(
   fetchImpl: FetchLike,
   releaseId: string,
@@ -563,7 +574,20 @@ export async function loadRelease(
       : `?bench=${encodeURIComponent(options.cacheBust)}`;
 
   const manifestUrl = `${base}/manifest.json${query}`;
-  const manifestText = await fetchText(fetchImpl, manifestUrl, signal);
+  const engineUrl = `${base}/engine.json${query}`;
+  const graphUrl = `${base}/graph.json${query}`;
+  const wasmUrl = `${base}/${WASM_ARTIFACT_PATH}${query}`;
+  const glueUrl = `${base}/${GLUE_ARTIFACT_PATH}${query}`;
+
+  // 5 件を 1 往復で開始する（検証は下の依存順のまま）。呼び出し順は従来と同じなので、
+  // 取得順を検査する契約テストの `calls` 順も変わらない。
+  const manifestPromise = fetchText(fetchImpl, manifestUrl, signal);
+  const enginePromise = ignoreRejection(fetchText(fetchImpl, engineUrl, signal));
+  const graphPromise = ignoreRejection(fetchBytes(fetchImpl, graphUrl, signal));
+  const wasmPromise = ignoreRejection(fetchBytes(fetchImpl, wasmUrl, signal));
+  const gluePromise = ignoreRejection(fetchText(fetchImpl, glueUrl, signal));
+
+  const manifestText = await manifestPromise;
   let manifest: ManifestLike;
   try {
     manifest = JSON.parse(manifestText) as ManifestLike;
@@ -582,8 +606,7 @@ export async function loadRelease(
     throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: graph.json の有効な descriptor が無い`);
   }
 
-  const engineUrl = `${base}/engine.json${query}`;
-  const engineText = await fetchText(fetchImpl, engineUrl, signal);
+  const engineText = await enginePromise;
   let engine: EngineLike;
   try {
     engine = JSON.parse(engineText) as EngineLike;
@@ -604,19 +627,16 @@ export async function loadRelease(
   const wasmExpected = engineExpectation(engine, WASM_ARTIFACT_PATH, engineUrl);
   const glueExpected = engineExpectation(engine, GLUE_ARTIFACT_PATH, engineUrl);
 
-  const graphUrl = `${base}/graph.json${query}`;
-  const graphBytes = await fetchBytes(fetchImpl, graphUrl, signal);
+  const graphBytes = await graphPromise;
   await verifyOrStop(graphUrl, graphBytes, graphEntry);
   const graphJson = new TextDecoder().decode(graphBytes);
   const graph = parseGraphDocument(graphJson);
   await validateGraphManifestContract(manifest, graph, releaseId);
 
-  const wasmUrl = `${base}/${WASM_ARTIFACT_PATH}${query}`;
-  const wasmBytes = await fetchBytes(fetchImpl, wasmUrl, signal);
+  const wasmBytes = await wasmPromise;
   await verifyOrStop(wasmUrl, wasmBytes, wasmExpected);
 
-  const glueUrl = `${base}/${GLUE_ARTIFACT_PATH}${query}`;
-  const glueText = await fetchText(fetchImpl, glueUrl, signal);
+  const glueText = await gluePromise;
   await verifyOrStop(glueUrl, new TextEncoder().encode(glueText), glueExpected);
   const glue = await importImpl(glueUrl);
 

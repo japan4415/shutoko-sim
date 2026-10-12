@@ -4540,6 +4540,35 @@ fn test_cli_with_full_fixtures() {
         route_memberships_sha256(&route_memberships).unwrap()
     );
 
+    // --- Issue #40: release-graph edge kinds --------------------------------
+    // The full network must classify without a Local edge and without losing connectors to
+    // the Entry/Exit kinds. The exit-reachability filter runs on top of the plain topology
+    // build and reclassifies 16 Shutoko edges as Exit (its own evidence lives in
+    // tests/multi_route_jct_classification.rs), so these release pins are 22,621 / 168 / 198
+    // rather than the plain build's 22,637 / 168 / 182.
+    {
+        let mut shutoko_edges = 0usize;
+        let mut entry_edges = 0usize;
+        let mut exit_edges = 0usize;
+        let mut local_edges = 0usize;
+        for edge in graph_json["edges"].as_array().expect("graph edges") {
+            match edge["kind"].as_str() {
+                Some("shutoko") => shutoko_edges += 1,
+                Some("entry") => entry_edges += 1,
+                Some("exit") => exit_edges += 1,
+                Some("local") => local_edges += 1,
+                other => panic!("unexpected edge kind {other:?}"),
+            }
+        }
+        assert_eq!(
+            shutoko_edges, 22621,
+            "release Shutoko edge count changed (issue #40)"
+        );
+        assert_eq!(entry_edges, 168, "release Entry edge count changed");
+        assert_eq!(exit_edges, 198, "release Exit edge count changed");
+        assert_eq!(local_edges, 0, "release graph must have no Local edges");
+    }
+
     let ramps_raw = std::fs::read_to_string(out_dir.join("ramps.json")).unwrap();
     let ramps_json: serde_json::Value = serde_json::from_str(&ramps_raw).unwrap();
     assert_eq!(ramps_json["totalRamps"], 399);

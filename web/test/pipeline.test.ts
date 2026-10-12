@@ -96,6 +96,23 @@ const stubGlue = (calls: unknown[]): WasmGlueModule => ({
   },
 });
 
+
+/**
+ * Issue #43: loadRelease は成果物のパスが release ごとに固定であることを使い、5 件の
+ * リクエストを 1 往復で出す。検証は依存順のままで、前段の失敗時には後段が飛行中になりうる。
+ * 失敗系のテストはこの先読みを前提に、エラーコードと「失敗した成果物を検証せず、glue を
+ * 初期化しない」ことを検査する。
+ */
+function prefetchedArtifacts(releaseId: string): string[] {
+  return [
+    `/releases/${releaseId}/manifest.json`,
+    `/releases/${releaseId}/engine.json`,
+    `/releases/${releaseId}/graph.json`,
+    `/releases/${releaseId}/shutoko_routing_bg.wasm`,
+    `/releases/${releaseId}/shutoko_routing.js`,
+  ];
+}
+
 describe("hexDigest / verifyArtifact", () => {
   const bytes = encoder.encode("hello");
 
@@ -302,12 +319,9 @@ describe("parseGraphDocument", () => {
     await expect(loadRelease(fetch, releaseId, async () => recordingGlue({ json: "" }))).rejects.toThrowError(
       /billingPairsVersion/,
     );
-    // graph.json は route membership hash の照合に要るので取得する。WASM / glue へは進まない。
-    expect(calls).toEqual([
-      `/releases/${releaseId}/manifest.json`,
-      `/releases/${releaseId}/engine.json`,
-      `/releases/${releaseId}/graph.json`,
-    ]);
+    // 5 件は先読みされる（Issue #43）。検証は manifest → engine → graph の順で止まり、
+    // graph は prepare されず glue も初期化されない。
+    expect(calls).toEqual(prefetchedArtifacts(releaseId));
   });
 });
 
@@ -638,18 +652,16 @@ describe("loadRelease（モック fetch）", () => {
     expect(JSON.parse(limitsJson).deviceVerification.manifestJson).toBe(JSON.stringify(manifest));
   });
 
-  it("graph.json 改ざん時は ARTIFACT_MISMATCH で停止し、以降の fetch を呼ばない", async () => {
+  it("graph.json 改ざん時は ARTIFACT_MISMATCH で停止し、glue を初期化しない（先読みは完了していてよい）", async () => {
     const files = await buildFiles({ tamperGraph: true });
     const { fetch, calls } = mockFetch(files);
     const initCalls: unknown[] = [];
     await expect(
       loadRelease(fetch, "c1-real-v1", async () => stubGlue(initCalls)),
     ).rejects.toMatchObject({ code: "ARTIFACT_MISMATCH" });
-    expect(calls).toEqual([
-      "/releases/c1-real-v1/manifest.json",
-      "/releases/c1-real-v1/engine.json",
-      "/releases/c1-real-v1/graph.json",
-    ]);
+    // 5 件は先読みされる（Issue #43）。改ざんされた graph は検証で止まり、prepare も
+    // glue の初期化も起きない。
+    expect(calls).toEqual(prefetchedArtifacts("c1-real-v1"));
     expect(initCalls).toHaveLength(0);
   });
 
@@ -660,12 +672,8 @@ describe("loadRelease（モック fetch）", () => {
     await expect(
       loadRelease(fetch, "c1-real-v1", async () => stubGlue(initCalls)),
     ).rejects.toMatchObject({ code: "ARTIFACT_MISMATCH" });
-    expect(calls).toEqual([
-      "/releases/c1-real-v1/manifest.json",
-      "/releases/c1-real-v1/engine.json",
-      "/releases/c1-real-v1/graph.json",
-      "/releases/c1-real-v1/shutoko_routing_bg.wasm",
-    ]);
+    // glue も先読みされるが、wasm の検証で止まるため glue の検証・初期化は起きない。
+    expect(calls).toEqual(prefetchedArtifacts("c1-real-v1"));
     expect(initCalls).toHaveLength(0);
   });
 
@@ -675,10 +683,8 @@ describe("loadRelease（モック fetch）", () => {
     await expect(loadRelease(fetch, "c1-real-v1")).rejects.toMatchObject({
       code: "FETCH_FAILED",
     });
-    expect(calls).toEqual([
-      "/releases/c1-real-v1/manifest.json",
-      "/releases/c1-real-v1/engine.json",
-    ]);
+    // engine の検証で止まる（engine の前段は manifest だけ）。5 件の先読みは完了していてよい。
+    expect(calls).toEqual(prefetchedArtifacts("c1-real-v1"));
   });
 
   it("engine.json が JSON でなければ ARTIFACT_MISMATCH", async () => {
@@ -687,10 +693,8 @@ describe("loadRelease（モック fetch）", () => {
     await expect(loadRelease(fetch, "c1-real-v1")).rejects.toMatchObject({
       code: "ARTIFACT_MISMATCH",
     });
-    expect(calls).toEqual([
-      "/releases/c1-real-v1/manifest.json",
-      "/releases/c1-real-v1/engine.json",
-    ]);
+    // engine の検証で止まる（engine の前段は manifest だけ）。5 件の先読みは完了していてよい。
+    expect(calls).toEqual(prefetchedArtifacts("c1-real-v1"));
   });
 
   it("engine.json の releaseId/schemaVersion 不一致は ARTIFACT_MISMATCH", async () => {
@@ -705,13 +709,11 @@ describe("loadRelease（モック fetch）", () => {
     await expect(loadRelease(fetch, "c1-real-v1")).rejects.toMatchObject({
       code: "ARTIFACT_MISMATCH",
     });
-    expect(calls).toEqual([
-      "/releases/c1-real-v1/manifest.json",
-      "/releases/c1-real-v1/engine.json",
-    ]);
+    // engine の検証で止まる（engine の前段は manifest だけ）。5 件の先読みは完了していてよい。
+    expect(calls).toEqual(prefetchedArtifacts("c1-real-v1"));
   });
 
-  it("engine.json に glue のエントリが無ければ ARTIFACT_MISMATCH（graph 以降は取得しない）", async () => {
+  it("engine.json に glue のエントリが無ければ ARTIFACT_MISMATCH（graph を prepare しない）", async () => {
     const files = await buildFiles({
       engineOverride: JSON.stringify({
         schemaVersion: 1,
@@ -725,10 +727,8 @@ describe("loadRelease（モック fetch）", () => {
     await expect(loadRelease(fetch, "c1-real-v1")).rejects.toMatchObject({
       code: "ARTIFACT_MISMATCH",
     });
-    expect(calls).toEqual([
-      "/releases/c1-real-v1/manifest.json",
-      "/releases/c1-real-v1/engine.json",
-    ]);
+    // engine の検証で止まる（engine の前段は manifest だけ）。5 件の先読みは完了していてよい。
+    expect(calls).toEqual(prefetchedArtifacts("c1-real-v1"));
   });
 
   it("fetch 失敗は FETCH_FAILED", async () => {

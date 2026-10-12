@@ -18,7 +18,8 @@
 - **Overpass API エンドポイント**:
   - 主系: `https://overpass-api.de/api/interpreter`
   - 副系: `https://overpass.kumi.systems/api/interpreter`
-- **クエリの正本**: `scripts/fetch-osm.sh`。既定は全24路線の relation を取得し、ランプを4 hop、context way を1 hop展開する
+- **クエリの正本**: `scripts/fetch-osm.sh`。既定は `relation["network"="首都高速道路"]` でネットワーク全体を取得する。ネットワークマスタ（relation `4256559`、`type=network`）が列挙する route relation は 26 件・路線コード 23 種（`C1`, `C2`, `1`（上野線/羽田線）, `2`〜`7`, `9`〜`11`, `B`, `Y`, `K1`, `K2`, `K3`, `K5`, `K6`, `K7`（横浜北線/横浜北西線の2 relation）, `S1`, `S2`, `S5`）。**`K4` / `S3` / `S4` はネットワークに存在しない**ため relation も ref も無い。ランプは4 hop、context way を1 hop展開する
+- **路線を追加するときの手順**: `scripts/fetch-osm.sh` の取得対象に加えたうえで、`crates/graph-builder/src/topology.rs` の `SHUTOKO_REFS` にも路線コードを追加する。`SHUTOKO_REFS` は `operator` / `network` を持たず name も無い way を ref だけで首都高本線と判定するリストで、追加漏れがあるとその路線の本線 way が**無言でグラフから落ちる**。`crates/graph-builder/tests/shutoko_ref_coverage.rs` が「ネットワークの全 route relation の ref が `SHUTOKO_REFS` に含まれること」「本線クラスの way が首都高か、別路線の ref を名乗るか（JCT で接続する他社路線の直通区間）のどちらかであること」を検査し、追加漏れとサイレントな欠落の両方で落ちる
 - **出力先**: `fixtures/osm/shutoko-all.json`
 - **source date**: `2026-09-16`
 - **ファイル SHA-256**: `566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9`

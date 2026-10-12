@@ -9,8 +9,12 @@
 // (8) 色に依存しない候補番号バッジ
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { abortTiles, stubTiles } from "./tiles";
 
 const GEOCODE_URL = "**/api/geocode";
+
+/** 地図タイルの扱い。既定はスタブ（実ネットワークに出さない）、abort は失敗状態を作る。 */
+type TileMode = "stub" | "abort";
 
 /** 住所検索の候補（外部ジオコーダへは出さず route スタブで返す）。 */
 const CANDIDATES = [
@@ -22,7 +26,10 @@ const CANDIDATES = [
  * アプリを開く。座標プリセットは折りたたみ内にあるため、テストからは開いて操作する
  * （vertical-slice.spec.ts と同じ規約）。
  */
-async function openApp(page: Page): Promise<void> {
+async function openApp(page: Page, tiles: TileMode = "stub"): Promise<void> {
+  // 地図タイルはテストの対象ではないので常に差し替える（tiles.ts 参照）。
+  if (tiles === "abort") await abortTiles(page);
+  else await stubTiles(page);
   await page.goto("/");
   await expect(page.locator("#search-btn")).toBeVisible();
   await page.locator("#manual-input").evaluate((node) => {
@@ -636,9 +643,9 @@ function delayUnlessAbortedProduct(ms: number, signal: AbortSignal): Promise<voi
 }
 
 /** 探索までの共通準備（住所確定 → 15〜60 設定）。 */
-async function prepareSearch(page: Page): Promise<void> {
+async function prepareSearch(page: Page, tiles: TileMode = "stub"): Promise<void> {
   await stubGeocode(page, { candidates: CANDIDATES });
-  await openApp(page);
+  await openApp(page, tiles);
   await searchByAddress(page, 0);
   await setTimeRange(page, "15", "60");
 }
@@ -684,9 +691,7 @@ test("(9) 探索をキャンセルすると文言が出て次の探索を開始�
 
 test("(10) 地図タイル失敗で出発が無効化され、再読み込みで回復する", async ({ page }) => {
   // GSI タイルを全て abort し、タイル失敗状態を作る。
-  await page.route("**/cyberjapandata.gsi.go.jp/**", (route) => route.abort());
-
-  await prepareSearch(page);
+  await prepareSearch(page, "abort");
   await page.click("#search-btn");
   await expect(page.locator("#results .card").first()).toBeVisible();
 
@@ -696,7 +701,11 @@ test("(10) 地図タイル失敗で出発が無効化され、再読み込みで
 
   // タイルを復旧させてから再読み込みを押すと、実際のタイル読込で回復する。
   // unroute の第 2 引数は handler のため、全 route を確実に破棄する unrouteAll を使う。
+  // 復旧側は実ネットワーク（GSI）に依存させない: CI のランナーから GSI に届かないことが
+  // あり、30 秒でタイムアウトしていた（2026-10-12）。abort を解除したうえで最小の PNG を
+  // 返すスタブに差し替え、アプリ側の回復（tileload でフォールバックを解除する）を検証する。
   await page.unrouteAll({ behavior: "ignoreErrors" });
+  await stubTiles(page);
   await page.click("#map-retry-btn");
   await expect(page.locator("#map-fallback")).toBeHidden();
   await expect(page.locator("#results .card").first().locator(".depart")).toBeEnabled();

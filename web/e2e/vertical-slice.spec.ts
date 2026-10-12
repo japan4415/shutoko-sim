@@ -6,6 +6,7 @@
 // (e) 入力エラー修正後の再検索
 // (f) 240/240 の指定枠で TIME_WINDOW 診断と復帰導線（Issue #57）
 import { expect, test } from "@playwright/test";
+import { stubTiles } from "./tiles";
 
 const GRAPH_URL = "**/releases/*/graph.json";
 
@@ -36,6 +37,8 @@ function delayUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 async function openApp(page: import("@playwright/test").Page): Promise<void> {
+  // 地図タイルはテストの対象ではないので常に差し替える（tiles.ts 参照）。
+  await stubTiles(page);
   await page.goto("/");
   await expect(page.locator("#search-btn")).toBeVisible();
   // #15 以降、座標プリセットは折りたたみ内にある。テストからは開いて操作する。

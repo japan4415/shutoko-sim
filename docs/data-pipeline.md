@@ -19,6 +19,7 @@
   - 主系: `https://overpass-api.de/api/interpreter`
   - 副系: `https://overpass.kumi.systems/api/interpreter`
 - **クエリの正本**: `scripts/fetch-osm.sh`。既定は `relation["network"="首都高速道路"]` でネットワーク全体を取得する。ネットワークマスタ（relation `4256559`、`type=network`）が列挙する route relation は 26 件・路線コード 23 種（`C1`, `C2`, `1`（上野線/羽田線）, `2`〜`7`, `9`〜`11`, `B`, `Y`, `K1`, `K2`, `K3`, `K5`, `K6`, `K7`（横浜北線/横浜北西線の2 relation）, `S1`, `S2`, `S5`）。**`K4` / `S3` / `S4` はネットワークに存在しない**ため relation も ref も無い。ランプは4 hop、context way を1 hop展開する
+- **ランプ展開のホップ上限（Issue #39）**: motorway_link は本線とノードを共有する way（コンタクト hop）から `SHUTOKO_LINK_HOPS`（既定 4）hop だけ辿る。つまり 1 本の連絡路チェーンは最大 5 way まで取り込む。取得後、上限の 1 hop 先を同じ展開で probe し、上限外に motorway_link way が残っていれば way の id・名前・ref を列挙して警告する（`SHUTOKO_SKIP_HOP_PROBE=1` で probe を省略でき、その場合は Overpass への要求が 1 回で済む）。警告が出たら、それが首都高のランプの一部かを確認し、必要なら `SHUTOKO_LINK_HOPS` を上げて再取得する。2026-10-12 の実測では、C1 起点で上限外 0 way（既定の上限で打ち切り無し）、湾岸線 B 起点では 1 段深い上限（チェーン 6 way 相当）からさらに 1 hop 先に 12 way が残った。後者は他社路線との JCT で連絡路網が首都高の外へ伸びる分を含むため、首都高のランプ幾何の欠落と即断せず、列挙された way の名前と ref で判断する
 - **路線を追加するときの手順**: `scripts/fetch-osm.sh` の取得対象に加えたうえで、`crates/graph-builder/src/topology.rs` の `SHUTOKO_REFS` にも路線コードを追加する。`SHUTOKO_REFS` は `operator` / `network` を持たず name も無い way を ref だけで首都高本線と判定するリストで、追加漏れがあるとその路線の本線 way が**無言でグラフから落ちる**。`crates/graph-builder/tests/shutoko_ref_coverage.rs` が「ネットワークの全 route relation の ref が `SHUTOKO_REFS` に含まれること」「本線クラスの way が首都高か、別路線の ref を名乗るか（JCT で接続する他社路線の直通区間）のどちらかであること」を検査し、追加漏れとサイレントな欠落の両方で落ちる
 - **出力先**: `fixtures/osm/shutoko-all.json`
 - **source date**: `2026-09-16`

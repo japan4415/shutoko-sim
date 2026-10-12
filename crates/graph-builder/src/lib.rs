@@ -103,9 +103,9 @@ pub use seed::{
 };
 pub use topology::{
     build_topology, build_topology_with_report, duration_seconds, haversine_distance_meters,
-    is_shutoko_motorway, parse_oneway, snap_index_to_deterministic_json, to_deterministic_json,
-    OnewayDirection, RestrictionReport, TopologyConfig, LOCAL_SPEED_KMH, RAMP_SPEED_KMH,
-    SHUTOKO_SPEED_KMH,
+    is_shutoko_motorway, is_shutoko_ref, parse_oneway, snap_index_to_deterministic_json,
+    to_deterministic_json, OnewayDirection, RestrictionReport, TopologyConfig, LOCAL_SPEED_KMH,
+    RAMP_SPEED_KMH, SHUTOKO_REFS, SHUTOKO_SPEED_KMH,
 };
 pub use validate::{
     contains_forbidden_transition, find_first_exits_from_anchor,

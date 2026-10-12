@@ -47,8 +47,20 @@ mkdir -p "$(dirname "${OUTPUT_PATH}")"
 #    the nd-ref lists (contained in way elements) for node-ID matching, not
 #    coordinates. Context ways are NOT added to the routing graph.
 # Target expressway selection:
-# By default, fetch all 24 routes of the Tokyo Metropolitan Expressway network
-# (C1, C2, 1-11, B, Y, K1-K7, S1-S5) via relation["network"="首都高速道路"].
+# By default, fetch all routes of the Tokyo Metropolitan Expressway network via
+# relation["network"="首都高速道路"], plus the few route relations whose tags lack that
+# network value (the two 神奈川7号 relations below).
+#
+# The network master relation 4256559 (type=network, name=首都高速道路) lists 26 route
+# relations carrying 23 distinct route codes:
+#   C1, C2, 1 (上野線 / 羽田線), 2, 3, 4, 5, 6 (向島線 / 三郷線), 7, 9, 10, 11, B, Y,
+#   K1, K2, K3, K5, K6, K7 (横浜北線 / 横浜北西線), S1, S2, S5.
+# K4 / S3 / S4 do not exist in the network, so no relation or ref carries them.
+#
+# Adding a route here is half of the job: the new route code must also be added to
+# SHUTOKO_REFS in crates/graph-builder/src/topology.rs, otherwise its mainline ways are
+# dropped from the graph silently. crates/graph-builder/tests/shutoko_ref_coverage.rs fails
+# until both sides agree.
 # For backward compatibility or focused extraction, specific relation IDs
 # (e.g. 4256008 for C1) can be targeted via ROUTES_FILTER.
 ROUTES_FILTER="${ROUTES_FILTER:-"all"}"
@@ -57,12 +69,13 @@ if [ "${ROUTES_FILTER}" = "c1" ]; then
   EXPRESSWAYS_QUERY='relation(id:4256008) -> .expressways;'
 else
   # Comprehensive query for all Shutoko routes:
-  # Captures all routes tagged network=首都高速道路 plus explicitly listed relations
-  # for C1, C2 (inner/outer), radial lines (1..11, B, Y), Kanagawa (K1..K7), Saitama (S1..S5).
+  # Captures all routes tagged network=首都高速道路 plus the explicitly listed relations that
+  # the network tag misses (the two 神奈川7号 lines). C1 / C2 are listed explicitly as
+  # belt-and-braces; both already carry the network tag.
   EXPRESSWAYS_QUERY='(
     relation["network"="首都高速道路"];
     relation(id:4256008); // C1
-    relation(id:3959826,4256011,4256077); // C2
+    relation(id:4256077); // C2
     relation(id:10355798,10732984); // K7 Yokohama North / Northwest lines
   ) -> .expressways;'
 fi

@@ -148,6 +148,43 @@ struct IntermediateEdge {
     tentative_kind: Option<EdgeKind>,
 }
 
+/// Route `ref` values that identify a Shutoko mainline way when the way carries neither an
+/// `operator` / `network` tag (Overpass output commonly drops them) nor a name fallback.
+///
+/// This list mirrors the route relations of the network (`network=首都高速道路`) in the
+/// checked-in extract `fixtures/osm/shutoko-all.json`:
+///
+/// - 環状線: `C1` (都心環状線), `C2` (中央環状線)
+/// - 放射線: `1` (上野線 / 羽田線), `2`, `3`, `4`, `5`, `6` (向島線 / 三郷線), `7`, `9`, `10`, `11`
+/// - 湾岸線・八重洲線: `B`, `Y`
+/// - 神奈川線: `K1`, `K2`, `K3`, `K5`, `K6`, `K7` (神奈川1/2/3/5/6/7号線)
+/// - 埼玉線: `S1` (川口線), `S2` (埼玉新都心線), `S5` (埼玉大宮線)
+///
+/// **`K4` / `S3` / `S4` are intentionally absent**: the network has no such lines, so no
+/// route relation and no `ref` exists for them (the 26 route relations listed by the network
+/// master relation `4256559` in the checked-in extract are the evidence; the codes `K1`/`K2`/
+/// `K3`/`K5`/`K6`/`K7` and `S1`/`S2`/`S5` are the ones that exist, and
+/// `tests/shutoko_ref_coverage.rs` pins the list against that relation).
+///
+/// When a route is added to the extract (`scripts/fetch-osm.sh`) its `ref` must be added
+/// here as well. `tests/shutoko_ref_coverage.rs` fails when a Shutoko route relation's
+/// `ref` is missing from this list, so the omission cannot ship silently.
+pub const SHUTOKO_REFS: &[&str] = &[
+    "C1", "C2", "1", "2", "3", "4", "5", "6", "7", "9", "10", "11", "B", "K1", "K2", "K3", "K5",
+    "K6", "K7", "S1", "S2", "S5", "Y",
+];
+
+/// True when a `ref` tag names a Shutoko route code (`C1`, `K5`, `S1`, …).
+///
+/// Semicolon-separated multi-value refs are accepted when any part matches, so a way
+/// tagged `ref=K2;E83` is still recognised as Shutoko mainline.
+pub fn is_shutoko_ref(value: &str) -> bool {
+    let upper = value.to_uppercase();
+    SHUTOKO_REFS
+        .iter()
+        .any(|known| upper.split(';').any(|part| part.trim() == *known))
+}
+
 /// Determines whether a way's tags identify it as Shutoko mainline.
 /// Inspects `operator`, `network`, `ref`, and `name` / `name:ja` tags.
 /// The `name` check is required because some OSM way segments for the Shutoko C1
@@ -179,16 +216,8 @@ pub fn is_shutoko_motorway(element: &OsmElement) -> bool {
     }
 
     if let Some(r) = element.get_tag("ref") {
-        let r_upper = r.to_uppercase();
-        // C1 (Inner Circular), C2, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, B, K1..K7, S1..S5, Y
-        const SHUTOKO_REFS: &[&str] = &[
-            "C1", "C2", "1", "2", "3", "4", "5", "6", "7", "9", "10", "11", "B", "K1", "K2", "K3",
-            "K5", "K6", "K7", "S1", "S2", "S5", "Y",
-        ];
-        for known in SHUTOKO_REFS {
-            if r_upper == *known || r_upper.split(';').any(|part| part.trim() == *known) {
-                return true;
-            }
+        if is_shutoko_ref(r) {
+            return true;
         }
         if r.contains("首都高") {
             return true;

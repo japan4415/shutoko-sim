@@ -185,7 +185,9 @@ fn relation_selection_fails_closed_before_any_expensive_work() {
         ),
         (
             None,
-            &["--relation-id", "4256011"],
+            // The network master relation (type=network). It stays in every fetch because the
+            // extract selects the whole network, so this probe survives an extract refresh.
+            &["--relation-id", "4256559"],
             "is not an OSM type=route relation",
         ),
         (

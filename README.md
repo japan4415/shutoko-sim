@@ -74,7 +74,7 @@ verified_bound な C2 ランプの接続点を錨にして内回り／外回り�
 3. **ローカル R2 エミュレータへの成果物シードと開発サーバー起動**:
    ```bash
    npm run seed:local  # fixtures/generated と dist/wasm のハッシュ照合・R2 投入（engine.json も生成して投入）
-   npx wrangler dev    # ローカル開発サーバー起動（http://localhost:8787）
+   npx cf dev          # ローカル開発サーバー起動（http://localhost:8787、新設定系 cloudflare.config.ts）
    ```
 
 ### 本番デプロイ手順
@@ -91,7 +91,7 @@ Cloudflare Workers Builds では、Git リポジトリを接続して次の値�
 | Automatic dependency install | `SKIP_DEPENDENCY_INSTALL=1` |
 | Non-production branch builds | OFF |
 
-`SKIP_DEPENDENCY_INSTALL=1` でプラットフォーム側の自動インストールを止め、`scripts/cloudflare-build.sh` が `workers` と `web` の lockfile 固定依存を `npm ci` で導入して `web/dist` を生成する。これにより deploy command が使う pinned Wrangler も `workers/node_modules` に用意される。Deploy command は wrangler を使い続ける（Issue #98）。`cf deploy` は新設定系の `cloudflare.config.ts` を要求して `workers/wrangler.toml` を読めないため、デプロイの cf 移行は設定移行と合わせて別 Issue で行う。
+`SKIP_DEPENDENCY_INSTALL=1` でプラットフォーム側の自動インストールを止め、`scripts/cloudflare-build.sh` が `workers` と `web` の lockfile 固定依存を `npm ci` で導入して `web/dist` を生成する。これにより deploy command が使う pinned Wrangler も `workers/node_modules` に用意される。Deploy command は wrangler を使い続ける（Issue #98）。`cf deploy` は新設定系（`cloudflare.config.ts` / `wrangler.config.ts`）を読み、`cf deploy --dry-run` でのビルド・assets・bindings 検証は済ませてある。wrangler.toml を削除して `cf deploy` に切り替えるには、Workers Builds の deploy command をダッシュボードで更新する外部作業が先に要る（それまで wrangler.toml が deploy の正で、新設定との一致は `workers/test/cloudflare-config.test.ts` が検査する）。
 
 Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 release を上書きしない。R2 成果物を更新する場合は、別の versioned release ID で WASM・graph・manifest・engine を先にすべて投入して検証し、その後に Worker と Web の参照先を新しい release へ切り替える。公開済み release ID へ再投入すると、複数オブジェクトの非原子的な上書きによって新旧ファイルが一時的に混在するため、自動 CI/CD では実行しない。
 
@@ -106,7 +106,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
    bash scripts/build-wasm.sh
    node workers/scripts/seed-local-r2.mjs --remote
    ```
-   詳細手順と manifest を最後に置く atomic release の runbook は [`docs/delivery.md`](docs/delivery.md#all-real-v5-の-atomic-release-runbook) を参照する。先に未使用の `all-real-v5` へ client allowlist を更新し、payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。既存の本番 release ID があれば上書きを拒否する。本番への投入（`--remote`）は wrangler ではなく cf CLI で行う（Issue #98）。seed script は投入前に `cf --version` をログへ出し、確認時点版（1.0.0-beta.10、`docs/delivery.md` の runbook に記録）と照合する。実行ファイルは `CF_BIN` → PATH の順で解決し `npx` フォールバックは無い。cf のトークン期限が切れて `cf auth whoami` が `authenticated: false` を返すときは `cf auth login` で再ログインする。ローカル preview 投入（`seed:local`、E2E / `wrangler dev` 用の Miniflare 状態）は引き続き wrangler 4.131.0 を使う（`cf dev` は `workers/wrangler.toml` を読めないため。理由の詳細は runbook 2-4）。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。このリポジトリの変更作業では R2 upload / deploy / Cloudflare 書き込みを実行しない。
+   詳細手順と manifest を最後に置く atomic release の runbook は [`docs/delivery.md`](docs/delivery.md#all-real-v5-の-atomic-release-runbook) を参照する。先に未使用の `all-real-v5` へ client allowlist を更新し、payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。既存の本番 release ID があれば上書きを拒否する。本番への投入（`--remote`）は wrangler ではなく cf CLI で行う（Issue #98）。seed script は投入前に `cf --version` をログへ出す。cf は package.json で 1.0.0-beta.14 に固定し（npm 運用へ切り替え済み。初回確認時点版 1.0.0-beta.10 の記録は `docs/delivery.md` の runbook にある）、`CF_BIN` → PATH の順で解決し `npx` フォールバックは無い。cf のトークン期限が切れて `cf auth whoami` が `authenticated: false` を返すときは `cf auth login` で再ログインする。ローカル投入（`seed:local`、E2E / `cf dev` が読む `.wrangler/state` への書き込み）は引き続き wrangler を使う。ローカルの投入先バケット名は cf dev の r2 バインディングと同じ `shutoko-artifacts` で、wrangler と cf はローカル状態を共有する。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。このリポジトリの変更作業では R2 upload / deploy / Cloudflare 書き込みを実行しない。
 3. **デプロイ**:
    ```bash
    cd workers && npx wrangler deploy
@@ -116,7 +116,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
 
 現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-17 `all-real-v2` デプロイ, wrangler 4.131.0）。`all-real-v3` / `all-real-v4` / `all-real-v5` の R2 投入と production deploy はこのリポジトリの作業範囲外であり、`docs/delivery.md` の runbook の read-back 確認と本番デプロイが完了するまで本番参照は切り替えない。Web（`DEFAULT_RELEASE_ID`）と Worker（`ALLOWED_RELEASES`）の許可リストはすでに `all-real-v5` を含んでおり、異常時は Worker の許可リストを狭めずに Web の既定 1 行を `all-real-v4` へ戻すだけで前の版へ切り戻せる（連鎖は `all-real-v5` → `all-real-v4` → `all-real-v3`）。
 
-> **レート制限の本番挙動に関する注記**: `wrangler.toml` の `[[ratelimits]]`（IP: 10 req/60s、Global: 600 req/60s）は Cloudflare Workers Rate Limiting binding のベストエフォート仕様であり、`wrangler dev --local` の決定論的シミュレーションと異なり本番環境では正確な即時遮断を保証しない（同一 IP から短時間に 15 リクエストを送っても `429` が発生しない場合がある）。アプリケーション側の防御としては機能するが、厳密なレート保証が必要な用途には追加の対策を検討すること。
+> **レート制限の本番挙動に関する注記**: `wrangler.toml` の `[[ratelimits]]`（IP: 10 req/60s、Global: 600 req/60s）は Cloudflare Workers Rate Limiting binding のベストエフォート仕様であり、ローカル dev サーバ（cf dev。wrangler dev と同じ workerd のシミュレーション）では決定論的に遮断するのに対し、本番環境では正確な即時遮断を保証しない（同一 IP から短時間に 15 リクエストを送っても `429` が発生しない場合がある）。アプリケーション側の防御としては機能するが、厳密なレート保証が必要な用途には追加の対策を検討すること。
 
 ### ライセンスとデータ帰属（ODbL）
 
@@ -140,7 +140,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
 
 ## Web アプリ（`web/`）
 
-Vite + Vanilla TypeScript の製品 UI。探索はブラウザの専用 Web Worker 内で WASM を実行する。地図は Leaflet、タイルは国土地理院（GSI）標準地図を既定とし（提供元は差し替え可能）、経路データの帰属として `© OpenStreetMap contributors` を地図上に常時表示する。住所検索は同一オリジンの `POST /api/geocode`（国土地理院ジオコーディングのプロキシ）を確定時のみ呼ぶ。`workers/wrangler.toml` の `[assets]` により、`wrangler dev` 1 台（ポート 8787）で静的ファイルと `/releases`・`/api` を同一オリジン配信する。
+Vite + Vanilla TypeScript の製品 UI。探索はブラウザの専用 Web Worker 内で WASM を実行する。地図は Leaflet、タイルは国土地理院（GSI）標準地図を既定とし（提供元は差し替え可能）、経路データの帰属として `© OpenStreetMap contributors` を地図上に常時表示する。住所検索は同一オリジンの `POST /api/geocode`（国土地理院ジオコーディングのプロキシ）を確定時のみ呼ぶ。ローカル開発は `cf dev`（新設定系 `cloudflare.config.ts` の assets と `wrangler.config.ts` の `assetsDirectory`）1 台（ポート 8787）で静的ファイルと `/releases`・`/api` を同一オリジン配信する（本番デプロイは旧設定 `wrangler.toml` の `[assets]` を読む）。
 
 ### 起動手順（ローカル）
 
@@ -152,9 +152,9 @@ Vite + Vanilla TypeScript の製品 UI。探索はブラウザの専用 Web Work
    ```
 2. **配信サーバー起動**（静的 + API、ポート 8787）:
    ```bash
-   cd workers && npx wrangler dev --port 8787
+   cd workers && npx cf dev --port 8787
    ```
-   `http://localhost:8787/` を直接開くとビルド済み UI が表示される。dev サーバは wrangler を使い続ける（Issue #98）。`cf dev` は新設定系の `cloudflare.config.ts` を要求して `workers/wrangler.toml` を読めないためで、判断の詳細は [`docs/delivery.md`](docs/delivery.md#all-real-v5-の-atomic-release-runbook) の runbook 2-4 を参照する。
+   `http://localhost:8787/` を直接開くとビルド済み UI が表示される。dev サーバは cf dev（Issue #98 で E2E と一緒に移行）。新設定系の `cloudflare.config.ts` / `wrangler.config.ts` を読み、seed:local が書く Miniflare のローカル R2（`.wrangler/state`）をそのまま配信する。
 3. **開発用 Vite サーバー**（任意。5173 から `/releases`・`/api` を 8787 へ proxy 中継）:
    ```bash
    cd web && npm ci && npm run dev
@@ -169,14 +169,14 @@ Vite + Vanilla TypeScript の製品 UI。探索はブラウザの専用 Web Work
    CI の `web` job も同じ理由で、`bash scripts/build-wasm.sh` を `npm ci` / `npm run typecheck` / `npm test` より前に置いている。
 5. **E2E（Playwright + chromium）**: 上記 1 の準備が終わっている状態で、
    ```bash
-   cd web && npm run e2e   # vite build → wrangler dev(8787) 起動 → 全シナリオ
+   cd web && npm run e2e   # vite build → cf dev(8787) 起動 → 全シナリオ
    ```
 
 UI の操作: 住所・地名で検索して候補を選ぶ、または「現在地を使う」で出発地点を確定する（座標の直接入力・神田橋プリセットも折りたたみ内に用意）→ 最小/最大分（既定 15〜60、`1 ≤ 最小 ≤ 最大 ≤ 240`、プリセットボタンあり）→「ルートを探す」→ 地図と候補カード（計画時間・総所要時間・時間内訳・料金・実走行距離・課金対象1区間・推薦理由・警告）が同じ候補 ID で連動し、カード選択で該当経路を強調 →「出発する（Google マップを開く）」。探索は 10 秒でタイムアウトし、キャンセルも可能。候補なし・GPS 拒否・住所検索失敗・地図取得失敗・成果物不整合の各状態から、リロードなしで再操作・再検索できる。
 
 ### 性能計測ページ（`bench.html`、#13）
 
-モバイル性能計測ハーネス。上記 1 の準備（`bash scripts/build-wasm.sh` → `npm --prefix workers ci` → `npm --prefix workers run seed:local`）と `cd web && npm run build` を済ませ、`wrangler dev`（8787）を起動して `http://localhost:8787/bench.html` を開く（`npm run e2e` も同じ `vite build` を行うため、E2E 実行後なら `web/dist` は生成済み）。
+モバイル性能計測ハーネス。上記 1 の準備（`bash scripts/build-wasm.sh` → `npm --prefix workers ci` → `npm --prefix workers run seed:local`）と `cd web && npm run build` を済ませ、`cf dev`（8787）を起動して `http://localhost:8787/bench.html` を開く（`npm run e2e` も同じ `vite build` を行うため、E2E 実行後なら `web/dist` は生成済み）。
 
 - 代表出発地点 10 件 × 時間条件 3 件 = 30 パターン。各パターンを cold 3 回 → warm 3 回の順に自動実行する（既定 180 試行）。1 試行ごとに新しい Worker を生成し、終了時に terminate する。
 - 計測値: `tTransfer`（Worker 生成〜成果物取得・照合・WASM init 完了）/ `tSearch`（`search` 呼び出し直前〜直後、Worker 内計測）/ `tFirstCandidate`（Worker 生成〜候補または status 文言の描画を二重 `requestAnimationFrame` で確定した後）/ 10 秒上限到達 / 成果物の `transferSize`・`encodedBodySize`・`decodedBodySize`・`deliveryType` / ピークメモリ。時刻は `performance.timeOrigin + performance.now()` の epoch ms で統一する。
@@ -184,11 +184,11 @@ UI の操作: 住所・地名で検索して候補を選ぶ、または「現在
 - 縮小実行: `?patterns=0,5`（パターン index）/ `?repeats=1`（cold・warm 各回数）/ `?auto=1`（表示直後に自動開始）。既定は計測開始ボタン押下で開始。
 - 端末名・OS・ブラウザ・ネットワーク条件・ピークメモリ（MiB）の手入力欄があり、記入すると envelope の `device` と `memoryManualMiB`（`memorySource: "manual"`）に反映される。`performance.memory` を持たないブラウザ（Safari）ではこの欄が唯一のメモリ計測手段になる（COOP/COEP による cross-origin isolation と `measureUserAgentSpecificMemory()` は使わない）。
 - 転送量は `transferSize` / `encodedBodySize` で判定する。`decodedBodySize` は伸長後サイズ（graph.json では約 7.6 倍）であり転送量ではない。
-- フル計測は CI に入れない（試行数が多く、スロットル下では不安定なため）。CI では `web/e2e/bench-smoke.spec.ts` が 2 パターン × cold/warm 各 1 回だけを検証する。`wrangler dev` は本番 Cloudflare と圧縮・ヘッダの挙動が異なるため、ローカルの転送量を本番値として扱わないこと。
+- フル計測は CI に入れない（試行数が多く、スロットル下では不安定なため）。CI では `web/e2e/bench-smoke.spec.ts` が 2 パターン × cold/warm 各 1 回だけを検証する。`cf dev`（wrangler dev と同じ workerd ローカルランタイム）は本番 Cloudflare と圧縮・ヘッダの挙動が異なるため、ローカルの転送量を本番値として扱わないこと。
 
 ### 代理計測（`npm run bench`、#13）
 
-Playwright で Pixel 5 相当のコンテキストを作り、CDP で回線（Fast 4G / Slow 4G）と CPU 倍率をエミュレートして `bench.html` を自動実行する。上記の準備（`build-wasm.sh` → `workers ci` → `seed:local` → `npm run build` → `wrangler dev` 8787）を済ませてから実行する。
+Playwright で Pixel 5 相当のコンテキストを作り、CDP で回線（Fast 4G / Slow 4G）と CPU 倍率をエミュレートして `bench.html` を自動実行する。上記の準備（`build-wasm.sh` → `workers ci` → `seed:local` → `npm run build` → `cf dev` 8787）を済ませてから実行する。
 
 ```bash
 cd web

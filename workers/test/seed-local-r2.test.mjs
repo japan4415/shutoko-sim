@@ -24,8 +24,9 @@ const ENGINE_NAMES = [
   "index.d.ts",
 ];
 const PUBLISH_ORDER = [...FIXTURE_NAMES, ...ENGINE_NAMES, "engine.json", "manifest.json"];
-/** CI (npm run) は workers/node_modules/.bin を PATH へ足すので、lock の固定版と一致する。 */
-const PINNED_WRANGLER = "4.131.0";
+/** CI (npm run) は workers/node_modules/.bin を PATH へ足すので、lock の固定版と一致する。
+ * （4.149.0 は cf dev / cf deploy が要求する 4.136.0 以上で、新設定系を読む cf と揃えている。） */
+const PINNED_WRANGLER = "4.149.0";
 /** runbook（docs/delivery.md）に記録した確認時点の cf 版。リポジトリ内の固定はまだない。 */
 const CF_VERSION = "1.0.0-beta.10";
 
@@ -461,6 +462,9 @@ test("local seed uses argument arrays, publishes manifest last, and permits reru
   for (const batch of batches) {
     assert.deepEqual(batch.map(operation), Array(8).fill("put"));
     assert.deepEqual(batch.map(keyName), PUBLISH_ORDER);
+    // ローカル投入も本番と同じ bucket 名に書く（cf dev の r2 バインディングが
+    // 同じ名前を Miniflare 状態の名前空間として読む。cloudflare.config.ts 参照）。
+    assert.ok(batch.every((call) => call.args[3].startsWith("shutoko-artifacts/releases/")));
     assert.ok(batch.every((call) => call.executable === objects[0].executable));
     assert.ok(batch.every((call) => call.args.includes("--local")));
     assert.ok(batch.every((call) => call.options.stdio === "inherit"));
@@ -738,7 +742,7 @@ test("preflight は lock の固定版と並べ、差を表示し、固定を要�
   const wrangler = fakeWrangler(t);
   const lines = [];
   const info = preflightWrangler({
-    runCommand: () => "4.131.0\n",
+    runCommand: () => "4.149.0\n",
     commandCwd: path.join(repoRoot, "workers"),
     repoRoot,
     env: { WRANGLER_BIN: wrangler },
@@ -748,11 +752,11 @@ test("preflight は lock の固定版と並べ、差を表示し、固定を要�
     name: "wrangler",
     binary: wrangler,
     source: "WRANGLER_BIN",
-    version: "4.131.0",
+    version: "4.149.0",
     pinnedVersion: PINNED_WRANGLER,
     matchesPin: true,
   });
-  assert.ok(lines.some((line) => line.includes("wrangler 4.131.0")));
+  assert.ok(lines.some((line) => line.includes("wrangler 4.149.0")));
   assert.ok(lines.some((line) => line.includes(`pinned ${PINNED_WRANGLER}`)));
 
   const mismatchLines = [];
@@ -765,7 +769,7 @@ test("preflight は lock の固定版と並べ、差を表示し、固定を要�
   });
   assert.equal(mismatch.matchesPin, false);
   assert.ok(
-    mismatchLines.some((line) => line.includes("wrangler 4.92.0 differs from the pinned 4.131.0")),
+    mismatchLines.some((line) => line.includes("wrangler 4.92.0 differs from the pinned 4.149.0")),
   );
 
   assert.throws(

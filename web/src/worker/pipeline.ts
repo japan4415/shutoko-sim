@@ -209,10 +209,31 @@ export interface WasmGlueModule {
 
 export interface LoadedRelease {
   readonly preparedGraph: WasmPreparedGraphLike;
+  /**
+   * manifest が記録するデータ基準日（`YYYY-MM-DD`）。書式や暦上の妥当性を確認できない
+   * ときは `null`（フッターは日付行を出さない）。UI はこの値だけを根拠に日付を表示する。
+   */
+  readonly sourceDate: string | null;
   searchPrepared(requestJson: string): string;
   free(): void;
   retain(): void;
   release(): void;
+}
+
+/**
+ * manifest の `sourceDate` を検証して返す。`YYYY-MM-DD` の形をしていても暦上に存在しない
+ * 日付（2026-13-45 など）は受け入れない。表示専用の値なので、欠落・不正は例外ではなく
+ * `null` にして日付行を落とす（配布済み release の後方互換を壊さない）。
+ */
+export function parseSourceDate(value: unknown): string | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toISOString().startsWith(value) ? value : null;
 }
 
 /** ArrayBuffer から SHA-256 の小文字 hex を返す。 */
@@ -421,6 +442,8 @@ interface ManifestLike {
   billingPairsVersion?: unknown;
   /** 料金 v3 を伴う release が記録する。無い release（v2 以前）は後方互換で受け入れる。 */
   tariffModelVersion?: unknown;
+  /** データ基準日（`YYYY-MM-DD`）。フッターが表示する。 */
+  sourceDate?: unknown;
   routeMembershipsSha256?: unknown;
   artifacts?: { path: string; sha256: string; byteLength: number }[];
 }
@@ -595,6 +618,8 @@ export async function loadRelease(
     throw new PipelineError("ARTIFACT_MISMATCH", `${manifestUrl}: JSON デコード失敗`);
   }
   validateManifestEnvelope(manifest, releaseId);
+  // フッターのデータ基準日。表示専用なので不正は握りつぶして日付行を落とす。
+  const sourceDate = parseSourceDate(manifest.sourceDate);
   const graphEntry = (manifest.artifacts ?? []).find((a) => a.path === "graph.json");
   if (
     graphEntry === undefined ||
@@ -654,6 +679,7 @@ export async function loadRelease(
   let freed = false;
   const release: LoadedRelease = {
     preparedGraph,
+    sourceDate,
     searchPrepared(requestJson: string): string {
       if (freed) {
         throw new PipelineError(

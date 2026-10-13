@@ -9,12 +9,16 @@
 // (8) 色に依存しない候補番号バッジ
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { abortTiles, stubTiles } from "./tiles";
+import { abortTiles, gateTiles, stubTiles, type TileGate } from "./tiles";
 
 const GEOCODE_URL = "**/api/geocode";
 
-/** 地図タイルの扱い。既定はスタブ（実ネットワークに出さない）、abort は失敗状態を作る。 */
-type TileMode = "stub" | "abort";
+/**
+ * 地図タイルの扱い。既定はスタブ（実ネットワークに出さない）、abort は失敗状態を作る。
+ * `TileGate` を渡すと、テスト側のフラグで「失敗のまま」と「スタブで成功」を 1 本のルート内で
+ * 切り替えられる（(10) の回復検証用。ルートを 2 本登録すると優先順位が曖昧になる）。
+ */
+type TileMode = "stub" | "abort" | TileGate;
 
 /** 住所検索の候補（外部ジオコーダへは出さず route スタブで返す）。 */
 const CANDIDATES = [
@@ -28,7 +32,8 @@ const CANDIDATES = [
  */
 async function openApp(page: Page, tiles: TileMode = "stub"): Promise<void> {
   // 地図タイルはテストの対象ではないので常に差し替える（tiles.ts 参照）。
-  if (tiles === "abort") await abortTiles(page);
+  if (typeof tiles === "object") await gateTiles(page, tiles);
+  else if (tiles === "abort") await abortTiles(page);
   else await stubTiles(page);
   await page.goto("/");
   await expect(page.locator("#search-btn")).toBeVisible();
@@ -697,13 +702,12 @@ test("(9) 探索をキャンセルすると文言が出て次の探索を開始�
 });
 
 test("(10) 地図タイル失敗で出発が無効化され、再読み込みで回復する", async ({ page }) => {
-  // このテストだけ実探索（graph 7.6MB + WASM）とタイル層の作り直しを 1 本で行うため、
-  // 既定の 30 秒予算では CI のランナーで 1 度タイムアウトした（2026-10-13、ローカルでは
-  // 8/8 で再現せず）。各 await には個別の待ち時間があるので、総予算を 90 秒に広げても
-  // 実際に壊れた回復経路は今までどおり失敗する。
-  test.slow();
-  // GSI タイルを全て abort し、タイル失敗状態を作る。
-  await prepareSearch(page, "abort");
+  // タイルは「再読み込みを押すまで失敗し続ける」1 本のルートで制御する。abort を解除して
+  // から stub を張る方式だと、その隙間に実タイル（GSI）が読めてアプリが自然回復し、
+  // 再読み込みボタンが消えた状態で click が待ち続けてテストごとタイムアウトする
+  // （2026-10-13 に CI とローカルで再現）。ゲートを開く瞬間だけが切り替え点になる。
+  const gate: TileGate = { allow: false };
+  await prepareSearch(page, gate);
   await page.click("#search-btn");
   await expect(page.locator("#results .card").first()).toBeVisible();
 
@@ -712,13 +716,16 @@ test("(10) 地図タイル失敗で出発が無効化され、再読み込みで
   await expect(page.locator("#results .card").first().locator(".depart")).toBeDisabled();
 
   // タイルを復旧させてから再読み込みを押すと、実際のタイル読込で回復する。
-  // unroute の第 2 引数は handler のため、全 route を確実に破棄する unrouteAll を使う。
-  // 復旧側は実ネットワーク（GSI）に依存させない: CI のランナーから GSI に届かないことが
-  // あり、30 秒でタイムアウトしていた（2026-10-12）。abort を解除したうえで最小の PNG を
-  // 返すスタブに差し替え、アプリ側の回復（tileload でフォールバックを解除する）を検証する。
-  await page.unrouteAll({ behavior: "ignoreErrors" });
-  await stubTiles(page);
-  await page.click("#map-retry-btn");
+  // 復旧側は実ネットワーク（GSI）に依存させない: 最小の PNG を返すスタブに切り替え、
+  // アプリ側の回復（tileload でフォールバックを解除する）を検証する。
+  await expect(page.locator("#map-fallback")).toBeVisible();
+  gate.allow = true;
+  // 地図が自発的に動いて先に回復した場合だけボタンが消えるため、押下は best-effort にし、
+  // 最終状態（フォールバック解除 + 出発有効）を下の 2 行で必ず検証する。
+  await page
+    .locator("#map-retry-btn")
+    .click({ timeout: 5_000 })
+    .catch(() => undefined);
   await expect(page.locator("#map-fallback")).toBeHidden();
   await expect(page.locator("#results .card").first().locator(".depart")).toBeEnabled();
 });
@@ -1854,4 +1861,34 @@ test("(74) 配信ヘッダーが文書と成果物に付き、CSP 下で実探�
   await expect(page.locator("#results .card").first()).toBeVisible();
 
   expect(cspViolations).toEqual([]);
+});
+
+// (75) Issue #16: 帰属・前提・免責はフッターに常時表示する。
+// 地図領域の帰属（(6) が検証）とは別に、地図を読み込めない場合でもライセンス表示と前提が
+// 画面から消えないことを、探索前の初期状態で確認する。データ基準日は manifest の
+// sourceDate が worker 経由で届いたときだけ表示する（ローカル seed は 2026-09-16）。
+test("(75) フッターに帰属・前提・免責とデータ基準日が常時表示される", async ({ page }) => {
+  await openApp(page);
+
+  const footer = page.locator("footer.site-footer");
+  await expect(footer).toBeVisible();
+
+  // 帰属はリンクであること（テキストだけでは要件を満たさない）。
+  await expect(
+    footer.locator('a[href="https://www.openstreetmap.org/copyright"]'),
+  ).toHaveText(/OpenStreetMap contributors/);
+  await expect(
+    footer.locator('a[href="https://maps.gsi.go.jp/development/ichiran.html"]'),
+  ).toHaveText(/国土地理院/);
+  // ODbL であることと、料金・所要時間の前提を常時示す。
+  await expect(footer).toContainText("ODbL");
+  await expect(footer).toContainText("普通車 ETC 基本料金（割引適用前）");
+  await expect(footer).toContainText("保証するものではありません");
+  // 対応範囲はエラー導線と同じ文言（ui/model.ts の SUPPORTED_AREA_TEXT）を出す。
+  await expect(footer.locator("#footer-area")).toContainText("都心環状線 C1");
+  await expect(footer.locator("#footer-area")).toContainText("中央環状線 C2");
+
+  // データ基準日は release の manifest から届く（実 worker）。
+  await expect(page.locator("#footer-source-date")).toBeVisible();
+  await expect(page.locator("#footer-source-date time")).toHaveAttribute("datetime", "2026-09-16");
 });

@@ -76,6 +76,9 @@ const el = {
   mapFallback: mustGet<HTMLParagraphElement>("map-fallback"),
   mapRetry: mustGet<HTMLButtonElement>("map-retry-btn"),
   recovery: mustGet<HTMLDivElement>("recovery-actions"),
+  footerArea: mustGet<HTMLParagraphElement>("footer-area"),
+  footerSourceDate: mustGet<HTMLParagraphElement>("footer-source-date"),
+  footerSourceDateValue: mustGet<HTMLTimeElement>("footer-source-date-value"),
   results: mustGet<HTMLDivElement>("results"),
   explicitOdSection: mustGet<HTMLElement>("explicit-od-section"),
   explicitOriginCurrent: mustGet<HTMLSpanElement>("explicit-origin-current"),
@@ -231,6 +234,7 @@ function handleWorkerMessage(msg: WorkerResponse): void {
     case "ready": {
       workerReady = true;
       bootFailed = false;
+      setFooterSourceDate(msg.sourceDate ?? null);
       // 探索開始後に届いた ready は「探索中…」や結果の文言を上書きしない。
       if (!hasSearched) {
         setStatus("準備完了。出発地点と時間を指定して検索してください。");
@@ -278,6 +282,32 @@ function handleWorkerMessage(msg: WorkerResponse): void {
       return;
     }
   }
+}
+
+// --- フッター（帰属・前提・データ基準日、Issue #16） ---
+
+/**
+ * 対応範囲の文言は ui/model.ts の SUPPORTED_AREA_TEXT を単一の出典として流し込む。
+ * エラー導線と同じ文言を出し、画面ごとに主張が食い違わないようにする。
+ */
+function renderFooterArea(): void {
+  el.footerArea.textContent = SUPPORTED_AREA_TEXT;
+}
+
+/**
+ * データ基準日を表示する。検証できない値（欠落・不正）では日付行ごと隠し、
+ * 推測した日付を出さない。
+ */
+function setFooterSourceDate(sourceDate: string | null): void {
+  if (sourceDate === null) {
+    el.footerSourceDate.hidden = true;
+    el.footerSourceDateValue.textContent = "";
+    el.footerSourceDateValue.removeAttribute("datetime");
+    return;
+  }
+  el.footerSourceDateValue.textContent = sourceDate;
+  el.footerSourceDateValue.setAttribute("datetime", sourceDate);
+  el.footerSourceDate.hidden = false;
 }
 
 // --- ステータス・復帰導線 ---
@@ -1847,6 +1877,7 @@ el.rampsRetryBtn.addEventListener("click", () => {
 });
 
 el.preset.value = "kandabashi";
+renderFooterArea();
 setSearching(false);
 setStatus("成果物を読み込み中…");
 initMap();

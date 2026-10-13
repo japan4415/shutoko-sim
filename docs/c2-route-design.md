@@ -953,6 +953,13 @@ C2 ペア追加の block にはならない。
 - [x] 既存の C1 の 8 ペアと挙動が壊れていない → 維持（`cargo test --workspace`、
       real-graph 契約、代表 4 地点の実測が緑）。
 - [x] Slow 4G 初回ロードが 8,000 ms 以内 → ペア追加の増分は小さく、#43 と併せて計測。
+- [x] 地下区間の実データ裏付け（issue 本文の懸念）→
+      `crates/graph-builder/tests/bound_ramp_edge_kinds.rs` が、C2 のトンネル区間 way 55 本
+      （`tunnel=yes`、ref=C2 または名称に中央環状線）が生む 1,147 エッジすべてが Shutoko で
+      あること、および配布グラフで公式台帳の `verified_bound` ランプ 238 件（うち C2 25 件、
+      入口 11・出口 14）が公式種別どおり Entry / Exit を持ち逆種別を持たないことを固定する。
+      素の topology build では radial の天現寺出口 1 件だけが release CLI の
+      exit-reachability filter を待つことも同ファイルが明示する。
 - [x] 分割と anchor 監査の不一致が無い → 段14 で大井JCT を鎖と層で決着（0 件、残る
       大橋JCT の 1 way は role 付きで人手確認に回す）。
 - [x] UI・リリース: `SUPPORTED_AREA_TEXT` を C1+C2 表記へ、`KNOWN_RELEASES` に

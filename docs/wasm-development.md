@@ -35,6 +35,7 @@ node scripts/test-wasm.mjs
 ```
 
 `dist/wasm/` に `.wasm`、ES module の JS glue、および TypeScript 型定義を生成する。
+- **配布サイズ（Issue #43）**: ビルドスクリプトは `wasm-bindgen` の後で `name` カスタムセクション（デバッグ用の関数名）を `scripts/strip-wasm-names.py` で落とす。実行には不要で、生 1,641,258 → 1,005,271 B（−39%）、gzip 347,711 → **298,827 B（−14%）**、Slow 4G の初回ロードで約 0.24 秒に相当する（2026-10-13 実測）。`opt-level="z"` は gzip をさらに 37 KB 削るが、実グラフの `prepare` が 255 → 320 ms（+25%）になるため採用していない（`Cargo.toml` のコメント参照）。落とすのは `name` セクションだけで、構造が想定外なら何も書かずに失敗する。デバッグ時のスタックトレースは関数名ではなく `wasm-function[N]` になる
 - TypeScript 正典型定義: `crates/routing-wasm/types/index.d.ts`
 - ビルドスクリプト（`scripts/build-wasm.sh`）がビルド完了時に `dist/wasm/index.d.ts` へコピーし、npm パッケージ / Web Worker から直接型参照可能にする。
 - 定義される主要型: `SearchRequest`, `SearchLimits`, `DeviceVerificationReleaseConfig`, `SearchResult`, `LegacyCandidate`, `TopologyOnlyCandidate`, `RadialCandidate`, `Candidate`, `GraphBillingPairV2`, `RouteMembershipIndex`, `EdgeRouteLeg`, `EstimatedLeg`, `Handoff`, `MapsHandoffLegWire`, `RadialHandoff`, `DeviceVerificationManifest`, `Toll`, `Loop`, `Duration`, `GeoJsonLineString`, `RoutingErrorPayload`

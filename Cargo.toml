@@ -9,4 +9,9 @@ resolver = "2"
 [profile.release]
 lto = true
 codegen-units = 1
+# opt-level="z" は配布 wasm の gzip を 347,711 → 310,156 B（−10.8%）にするが、実グラフでの
+# `prepare` が 255 → 320 ms（+25%）、探索中央値が 13.9 → 16.3 ms（+17%）になる
+# （2026-10-13 実測、同じ wasm-bindgen 0.2.128）。転送の利得（Slow 4G で約 0.19 秒）を
+# CPU の増分がほぼ食うため採用しない。配布サイズは `name` セクションの除去
+# （scripts/strip-wasm-names.py）で削る。
 opt-level = "s"

@@ -46,6 +46,16 @@ pub struct RestrictionReport {
     /// These edges are conservatively classified as Shutoko. Regenerate with an updated
     /// OSM extract that includes surface roads for accurate classification.
     pub undecidable_ramp_edges: usize,
+    /// Ramp endpoint candidates whose *per-location* surface-connection signal was unavailable,
+    /// regardless of whether the OSM node tag then decided the classification (issue #37).
+    ///
+    /// The node-sharing test proves a street connection when it succeeds, but its failure is
+    /// only meaningful where the extract demonstrably maps the endpoint's neighbourhood. This
+    /// counter measures how often that locality could not be established: either the extract
+    /// carries no surface-road geometry at all, or no surface-road node lies within
+    /// [`SURFACE_EVIDENCE_RADIUS_METERS`] of the endpoint. Such endpoints are counted here and
+    /// fall back to the OSM node tag, or to `undecidable_ramp_edges` when no tag is present.
+    pub surface_evidence_unavailable_ramp_edges: usize,
     /// Human-readable diagnostic messages from two sources:
     ///
     /// 1. **Classification warnings** — entry/exit ramp decisions that required
@@ -94,6 +104,216 @@ pub const LOCAL_SPEED_KMH: f64 = 30.0;
 
 /// Mean Earth radius in meters used for Haversine distance calculations.
 const EARTH_RADIUS_METERS: f64 = 6_371_000.0;
+
+/// Radius in meters within which a mapped surface-road node must exist for a ramp endpoint's
+/// *absence* from the shared-node surface set to count as evidence of "no street connection".
+///
+/// Rationale (issue #37): the primary signal is a node-sharing test, which proves a connection
+/// when it succeeds but proves nothing when it fails — a ramp terminus at street level whose
+/// landing street is mapped but not joined to the ramp (or not fetched) looks identical to a
+/// JCT connector that never reaches a street.  The absence is only meaningful when the extract
+/// demonstrably maps streets in the endpoint's own neighbourhood, which this radius bounds.
+/// 100 m is one urban block: a street serving a ramp terminus lies within that distance of it in
+/// Tokyo, so a mapped street farther away means the neighbourhood is not mapped at street level
+/// rather than that the ramp has no street connection.
+pub const SURFACE_EVIDENCE_RADIUS_METERS: u64 = 100;
+
+/// Degrees per side of the uniform grid cell used to look up nearby surface-road nodes.
+/// 0.0005° is ≈ 55 m in latitude, which keeps the searched cell count per query small.
+const SURFACE_INDEX_CELL_DEGREES: f64 = 0.0005;
+
+/// Meters per degree of latitude, used only to bound the surface-node grid search.
+const METERS_PER_DEGREE_LATITUDE: f64 = 111_320.0;
+
+/// Outcome of the per-location evaluation of the primary surface-connection signal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SurfaceConnection {
+    /// The endpoint node is shared with a vehicle-accessible surface road way.
+    Connected,
+    /// The endpoint node is not shared with any surface road, and the extract maps the
+    /// endpoint's own neighbourhood well enough for that absence to be evidence.
+    NoConnection,
+    /// The signal carries no information for this location; the caller must fall back to the
+    /// OSM node tag signal and, failing that, the conservative Shutoko default.
+    Unavailable(SurfaceEvidenceGap),
+}
+
+/// Why the surface-connection signal was unavailable for a single ramp endpoint (issue #37).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceEvidenceGap {
+    /// The extract carries no surface-road geometry at all: surface ways appear only as node-ID
+    /// lists (the shared-node context set emitted by `scripts/fetch-osm.sh`), so no location can
+    /// be inspected and the absence of a shared node cannot be read as proof of anything.
+    ExtractHasNoSurfaceGeometry,
+    /// The extract does carry surface-road geometry, but no surface-road node lies within
+    /// [`SURFACE_EVIDENCE_RADIUS_METERS`] of this endpoint, so the neighbourhood's street
+    /// coverage is unknown.
+    NoStreetWithinRadius,
+}
+
+impl SurfaceEvidenceGap {
+    /// Human-readable explanation used in warnings and diagnostics.
+    fn describe(self) -> &'static str {
+        match self {
+            SurfaceEvidenceGap::ExtractHasNoSurfaceGeometry => {
+                "the extract carries no surface-road geometry (context ways are node-ID lists \
+                 only), so the absence of a shared node cannot be read as proof of no street \
+                 connection"
+            }
+            SurfaceEvidenceGap::NoStreetWithinRadius => {
+                "no surface-road node is mapped within the evidence radius of this endpoint, so \
+                 the neighbourhood's street coverage is unknown"
+            }
+        }
+    }
+}
+
+/// Per-location evaluator for the primary surface-connection signal (issue #37).
+///
+/// The node-sharing test alone is a *global* yes/no: any surface road anywhere in the extract
+/// used to turn "not in the shared set" into a confident "no street connection" at every
+/// location.  This type scopes that conclusion to locations whose surface-road data is
+/// demonstrably available, and reports unavailability instead of manufacturing certainty.
+#[derive(Debug, Default)]
+struct SurfaceEvidence {
+    /// Surface-road geometry that is not part of the motorway network (street nodes only).
+    street_nodes: SurfaceNodeIndex,
+}
+
+impl SurfaceEvidence {
+    /// Build the evaluator from the extract's surface-road node sets.
+    ///
+    /// `surface_node_ids` are the nodes of all vehicle-accessible surface ways (the shared-node
+    /// context set), `motorway_node_ids` the nodes of all `motorway` / `motorway_link` ways, and
+    /// `node_coords` the coordinates present in the extract.
+    fn new(
+        surface_node_ids: &HashSet<i64>,
+        motorway_node_ids: &HashSet<i64>,
+        node_coords: &HashMap<i64, (f64, f64)>,
+    ) -> Self {
+        // Street geometry = surface-road nodes that are not themselves motorway-network nodes.
+        // When the extract emits surface ways as node-ID lists only (`out body` without
+        // `node(w.ctx_ways)`), every surface node that has coordinates is also a ramp/mainline
+        // node; this set is then empty and the evaluator degrades to "shared nodes are the only
+        // evidence available" instead of inventing per-location certainty.
+        let street_coords: Vec<(f64, f64)> = surface_node_ids
+            .iter()
+            .filter(|id| !motorway_node_ids.contains(id))
+            .filter_map(|id| node_coords.get(id).copied())
+            .collect();
+        Self {
+            street_nodes: SurfaceNodeIndex::new(&street_coords),
+        }
+    }
+
+    /// True when the extract carries street geometry, so per-location evaluation is possible.
+    fn has_per_location_geometry(&self) -> bool {
+        !self.street_nodes.is_empty()
+    }
+
+    /// Evaluate the primary signal for one ramp endpoint node (`"n:<id>"`).
+    fn evaluate(
+        &self,
+        node_str: &str,
+        shared_surface_nodes: &HashSet<String>,
+        node_coords: &HashMap<i64, (f64, f64)>,
+    ) -> SurfaceConnection {
+        if shared_surface_nodes.contains(node_str) {
+            return SurfaceConnection::Connected;
+        }
+        if !self.has_per_location_geometry() {
+            return SurfaceConnection::Unavailable(SurfaceEvidenceGap::ExtractHasNoSurfaceGeometry);
+        }
+        let Some((lat, lon)) = node_str
+            .strip_prefix("n:")
+            .and_then(|s| s.parse::<i64>().ok())
+            .and_then(|id| node_coords.get(&id))
+        else {
+            // No coordinates for the endpoint node: its neighbourhood cannot be inspected.
+            return SurfaceConnection::Unavailable(SurfaceEvidenceGap::NoStreetWithinRadius);
+        };
+        match self
+            .street_nodes
+            .nearest_within(*lat, *lon, SURFACE_EVIDENCE_RADIUS_METERS)
+        {
+            Some(_) => SurfaceConnection::NoConnection,
+            None => SurfaceConnection::Unavailable(SurfaceEvidenceGap::NoStreetWithinRadius),
+        }
+    }
+}
+
+/// Uniform-grid nearest-neighbour index over surface-road node coordinates.
+#[derive(Debug, Default)]
+struct SurfaceNodeIndex {
+    cells: HashMap<(i64, i64), Vec<(f64, f64)>>,
+}
+
+impl SurfaceNodeIndex {
+    fn new(coords: &[(f64, f64)]) -> Self {
+        let mut cells: HashMap<(i64, i64), Vec<(f64, f64)>> = HashMap::new();
+        for &(lat, lon) in coords {
+            cells
+                .entry(Self::cell_of(lat, lon))
+                .or_default()
+                .push((lat, lon));
+        }
+        Self { cells }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.cells.is_empty()
+    }
+
+    fn cell_of(lat: f64, lon: f64) -> (i64, i64) {
+        (
+            (lat / SURFACE_INDEX_CELL_DEGREES).floor() as i64,
+            (lon / SURFACE_INDEX_CELL_DEGREES).floor() as i64,
+        )
+    }
+
+    /// Distance in meters to the nearest indexed node, or `None` when the nearest node is
+    /// farther than `limit_meters`.
+    ///
+    /// The returned distance is always ≤ `limit_meters`, so a caller may treat `Some(_)` as
+    /// proof that a node exists inside the radius.  Conversely, the ring bound below covers every
+    /// cell that can hold a node within the radius, so a `None` is not an artifact of the search
+    /// being cut short.
+    fn nearest_within(&self, lat: f64, lon: f64, limit_meters: u64) -> Option<u64> {
+        if self.is_empty() {
+            return None;
+        }
+        // Meters per cell along each axis at this latitude; the smaller of the two bounds the
+        // number of rings to search. Longitude degrees are shorter than latitude degrees, so
+        // using latitude alone would under-search east-west.
+        let meters_per_cell_lat = SURFACE_INDEX_CELL_DEGREES * METERS_PER_DEGREE_LATITUDE;
+        let meters_per_cell_lon = meters_per_cell_lat * lat.to_radians().cos().abs();
+        let meters_per_cell = meters_per_cell_lat.min(meters_per_cell_lon.max(f64::MIN_POSITIVE));
+        // +1 ring of margin for the cell the query point itself sits in.
+        let max_ring = (limit_meters as f64 / meters_per_cell).ceil() as i64 + 1;
+
+        let base = Self::cell_of(lat, lon);
+        let mut best = u64::MAX;
+        for ring in 0..=max_ring {
+            for dy in -ring..=ring {
+                for dx in -ring..=ring {
+                    if ring > 0 && dy.abs() != ring && dx.abs() != ring {
+                        continue;
+                    }
+                    if let Some(bucket) = self.cells.get(&(base.0 + dy, base.1 + dx)) {
+                        for &(slat, slon) in bucket {
+                            best = best.min(haversine_distance_meters(lat, lon, slat, slon));
+                        }
+                    }
+                }
+            }
+        }
+        if best <= limit_meters {
+            Some(best)
+        } else {
+            None
+        }
+    }
+}
 
 /// Configuration options for building the topology.
 #[derive(Debug, Clone)]
@@ -1075,6 +1295,11 @@ pub fn build_topology_with_report(
     // IMPORTANT: these ways are NOT added to intermediate_edges and do not appear in the
     // final graph.  The output graph's Local-edge count remains 0.
     let mut surface_nodes: HashSet<String> = HashSet::new();
+    // Raw node IDs of vehicle-accessible surface ways, plus the node IDs of the motorway
+    // network. The difference between the two is the extract's street geometry, which decides
+    // whether the primary signal can be evaluated per location (issue #37).
+    let mut surface_node_ids: HashSet<i64> = HashSet::new();
+    let mut motorway_node_ids: HashSet<i64> = HashSet::new();
     let mut node_highway_tags: HashMap<i64, String> = HashMap::new();
     let mut ambiguous_highway_warnings: Vec<String> = Vec::new();
 
@@ -1100,6 +1325,7 @@ pub fn build_topology_with_report(
                 if let Some(nodes) = &elem.nodes {
                     for &nid in nodes {
                         surface_nodes.insert(format!("n:{}", nid));
+                        surface_node_ids.insert(nid);
                     }
                 }
             }
@@ -1107,7 +1333,13 @@ pub fn build_topology_with_report(
                 // Non-vehicle path or motorway-network way: not surface-connection evidence.
                 // (footways, cycleways, steps, parking aisles, private driveways, etc. can
                 // share a node with a ramp incidentally without implying the ramp descends
-                // to street level.)
+                // to street level.)  Motorway-network ways are still collected separately:
+                // their nodes must not be mistaken for street geometry below.
+                if matches!(highway, "motorway" | "motorway_link") {
+                    if let Some(nodes) = &elem.nodes {
+                        motorway_node_ids.extend(nodes.iter().copied());
+                    }
+                }
             }
             None => {
                 // Ambiguous or unresolvable highway type: conservatively exclude from
@@ -1138,9 +1370,17 @@ pub fn build_topology_with_report(
     }
 
     // True if the OSM extract contains at least one surface (non-motorway/motorway_link)
-    // road way.  Distinguishes "node is confirmed not on any surface road" from
-    // "no surface data present to evaluate".
+    // road way, i.e. if any node-sharing evidence exists at all.
     let has_surface_context = !surface_nodes.is_empty();
+
+    // Per-location evaluator for the primary signal (issue #37).  A shared node is a definitive
+    // "connected"; the *absence* of a shared node is only evidence where the extract maps the
+    // endpoint's own neighbourhood.  When the extract carries no street geometry at all — the
+    // shape `scripts/fetch-osm.sh` emits today, where context ways arrive as node-ID lists —
+    // absence is reported as unavailable instead of being read as proof of no street
+    // connection, and the OSM node tag / conservative default takes over.
+    let surface_evidence =
+        SurfaceEvidence::new(&surface_node_ids, &motorway_node_ids, &node_coords);
 
     if !has_surface_context {
         let ambiguous_note = if ambiguous_highway_warnings.is_empty() {
@@ -1163,6 +1403,16 @@ pub fn build_topology_with_report(
              Shutoko. Re-run with an updated OSM extract that includes surface roads for \
              accurate classification.",
             ambiguous_note
+        );
+    } else if !surface_evidence.has_per_location_geometry() {
+        eprintln!(
+            "Warning: OSM extract carries surface-road context ways as node-ID lists only \
+             (no street-node coordinates), so a ramp endpoint's absence from the shared-node \
+             surface set cannot be read as a confirmed lack of street connection. \
+             Surface-connection evidence is therefore treated as available only where a node is \
+             actually shared; every other ramp endpoint is resolved by its OSM node tag or \
+             conservatively as Shutoko. Fetch street geometry (see the context-ways pass in \
+             scripts/fetch-osm.sh) to enable per-location evaluation."
         );
     }
 
@@ -1368,6 +1618,16 @@ pub fn build_topology_with_report(
     //   Some(false) → confirmed no surface connection (surface data IS present) → Shutoko
     //   None        → no surface road data in extract → primary signal unavailable
     //
+    // Primary signal: does the candidate's street-side endpoint node share a node with any
+    // non-motorway, non-motorway_link highway way?  Evaluated *per location* (issue #37):
+    //   Some(true)  → real surface connection → Entry or Exit
+    //   Some(false) → confirmed no surface connection: the extract maps this endpoint's
+    //                 neighbourhood (a surface-road node lies within
+    //                 SURFACE_EVIDENCE_RADIUS_METERS) → Shutoko
+    //   None        → the signal is unavailable for this endpoint (no surface-road geometry in
+    //                 the extract, or no surface-road node near this location); the secondary
+    //                 signal decides, and with neither signal the edge is undecidable.
+    //
     // Secondary signal: OSM highway tag on the endpoint node.
     //   highway=traffic_signals → surface intersection → Entry/Exit evidence
     //   highway=motorway_junction → grade-separated junction → Shutoko evidence
@@ -1387,7 +1647,40 @@ pub fn build_topology_with_report(
     let mut final_edge_ids: HashSet<String> = HashSet::new();
     let mut dropped_link_edges = 0usize;
     let mut undecidable_ramp_count = 0usize;
+    let mut surface_evidence_unavailable_ramp_count = 0usize;
     let mut classification_warnings: Vec<String> = Vec::new();
+
+    // Evaluate the primary (per-location surface connection) and secondary (OSM node tag)
+    // signals for one candidate endpoint node, plus the reason the primary was unavailable.
+    let evaluate_endpoint =
+        |node_str: &str| -> (Option<bool>, Option<&str>, Option<SurfaceEvidenceGap>) {
+            let (primary, gap) =
+                match surface_evidence.evaluate(node_str, &surface_nodes, &node_coords) {
+                    SurfaceConnection::Connected => (Some(true), None),
+                    SurfaceConnection::NoConnection => (Some(false), None),
+                    SurfaceConnection::Unavailable(gap) => (None, Some(gap)),
+                };
+            let tag_hw: Option<&str> = node_str
+                .strip_prefix("n:")
+                .and_then(|s| s.parse::<i64>().ok())
+                .and_then(|id| node_highway_tags.get(&id))
+                .map(|s| s.as_str());
+            (primary, tag_hw, gap)
+        };
+    let undecidable_note = |node_str: &str, role: &str, gap: Option<SurfaceEvidenceGap>| {
+        let gap_note = gap
+            .map(|g| {
+                format!(
+                    " Surface-connection evidence unavailable: {}.",
+                    g.describe()
+                )
+            })
+            .unwrap_or_default();
+        format!(
+            "{role} candidate {node_str}: no discriminating OSM node tag and no per-location \
+             surface-connection evidence → undecidable, conservatively classified as Shutoko.{gap_note}"
+        )
+    };
 
     for edge in intermediate_edges {
         let kind = if let Some(k) = edge.tentative_kind {
@@ -1405,17 +1698,10 @@ pub fn build_topology_with_report(
                 // Entry candidate: no ramp/mainline edges flow into the from-node and the
                 // forward chain reaches the Shutoko mainline.
                 let node_str = &edge.from;
-                let on_surface = surface_nodes.contains(node_str.as_str());
-                let primary: Option<bool> = if has_surface_context {
-                    Some(on_surface)
-                } else {
-                    None
-                };
-                let tag_hw: Option<&str> = node_str
-                    .strip_prefix("n:")
-                    .and_then(|s| s.parse::<i64>().ok())
-                    .and_then(|id| node_highway_tags.get(&id))
-                    .map(|s| s.as_str());
+                let (primary, tag_hw, evidence_gap) = evaluate_endpoint(node_str);
+                if evidence_gap.is_some() {
+                    surface_evidence_unavailable_ramp_count += 1;
+                }
                 let secondary: Option<bool> = match tag_hw {
                     Some("traffic_signals") => Some(true),
                     Some("motorway_junction") => Some(false),
@@ -1449,13 +1735,13 @@ pub fn build_topology_with_report(
                     (None, Some(true)) => EdgeKind::Entry,
                     (None, Some(false)) => EdgeKind::Shutoko,
                     (None, None) => {
-                        // Undecidable: no surface context and no discriminating node tag.
-                        // Conservative default: Shutoko (see rationale in step 3e header).
+                        // Undecidable: no usable surface-connection signal and no discriminating
+                        // node tag. Conservative default: Shutoko (see rationale above).
                         undecidable_ramp_count += 1;
-                        classification_warnings.push(format!(
-                            "entry candidate {}: no surface-road context and no discriminating \
-                             OSM node tag → undecidable, conservatively classified as Shutoko",
-                            node_str
+                        classification_warnings.push(undecidable_note(
+                            node_str,
+                            "entry",
+                            evidence_gap,
                         ));
                         EdgeKind::Shutoko
                     }
@@ -1464,17 +1750,10 @@ pub fn build_topology_with_report(
                 // Exit candidate: no ramp/mainline edges leave the to-node and the backward
                 // chain reaches the Shutoko mainline.
                 let node_str = &edge.to;
-                let on_surface = surface_nodes.contains(node_str.as_str());
-                let primary: Option<bool> = if has_surface_context {
-                    Some(on_surface)
-                } else {
-                    None
-                };
-                let tag_hw: Option<&str> = node_str
-                    .strip_prefix("n:")
-                    .and_then(|s| s.parse::<i64>().ok())
-                    .and_then(|id| node_highway_tags.get(&id))
-                    .map(|s| s.as_str());
+                let (primary, tag_hw, evidence_gap) = evaluate_endpoint(node_str);
+                if evidence_gap.is_some() {
+                    surface_evidence_unavailable_ramp_count += 1;
+                }
                 let secondary: Option<bool> = match tag_hw {
                     Some("traffic_signals") => Some(true),
                     Some("motorway_junction") => Some(false),
@@ -1509,10 +1788,10 @@ pub fn build_topology_with_report(
                     (None, Some(false)) => EdgeKind::Shutoko,
                     (None, None) => {
                         undecidable_ramp_count += 1;
-                        classification_warnings.push(format!(
-                            "exit candidate {}: no surface-road context and no discriminating \
-                             OSM node tag → undecidable, conservatively classified as Shutoko",
-                            node_str
+                        classification_warnings.push(undecidable_note(
+                            node_str,
+                            "exit",
+                            evidence_gap,
                         ));
                         EdgeKind::Shutoko
                     }
@@ -1609,10 +1888,30 @@ pub fn build_topology_with_report(
     if undecidable_ramp_count > 0 {
         eprintln!(
             "Warning: {} ramp edge(s) could not be classified as Entry/Exit vs. Shutoko \
-             (no surface-road context and no discriminating OSM node tag); conservatively \
-             classified as Shutoko. Update OSM extract with surface roads via fetch-osm.sh \
-             for accurate Entry/Exit classification.",
+             (no per-location surface-connection evidence and no discriminating OSM node tag); \
+             conservatively classified as Shutoko. Update OSM extract with surface roads via \
+             fetch-osm.sh for accurate Entry/Exit classification.",
             undecidable_ramp_count
+        );
+    }
+
+    // Report how often the primary signal could not be evaluated for a location (issue #37).
+    // This is the extract-quality signal: a non-zero count on an extract that still contains
+    // surface ways means the surface data does not reach the ramp endpoints' own neighbourhoods.
+    if surface_evidence_unavailable_ramp_count > 0 {
+        let reason = if !surface_evidence.has_per_location_geometry() {
+            SurfaceEvidenceGap::ExtractHasNoSurfaceGeometry
+        } else {
+            SurfaceEvidenceGap::NoStreetWithinRadius
+        };
+        eprintln!(
+            "Warning: {} ramp endpoint candidate(s) had no per-location surface-connection \
+             evidence ({}); those edges were resolved by their OSM node tag or conservatively as \
+             Shutoko. The node-sharing test proves a street connection when it succeeds, so a \
+             non-zero count here means the extract's surface data does not cover every ramp \
+             endpoint's neighbourhood.",
+            surface_evidence_unavailable_ramp_count,
+            reason.describe()
         );
     }
 
@@ -1620,6 +1919,7 @@ pub fn build_topology_with_report(
     let mut report = RestrictionReport {
         dropped_link_edges,
         undecidable_ramp_edges: undecidable_ramp_count,
+        surface_evidence_unavailable_ramp_edges: surface_evidence_unavailable_ramp_count,
         notes: classification_warnings,
         ..Default::default()
     };
@@ -2175,6 +2475,103 @@ mod tests {
         assert_eq!(report.undecidable_ramp_edges, 0);
     }
 
+    /// The neighbourhood lookup must respect the evidence radius in both axes. Longitude
+    /// degrees are only ~0.81× as long as latitude degrees at Tokyo's latitude, so a
+    /// latitude-only search bound would under-search east-west.
+    #[test]
+    fn surface_node_index_respects_the_radius_in_both_axes() {
+        let lat0 = 35.6812_f64;
+        let lon0 = 139.7671_f64;
+        let north_90m = (lat0 + 90.0 / METERS_PER_DEGREE_LATITUDE, lon0);
+        let east_95m = (
+            lat0,
+            lon0 + 95.0 / (METERS_PER_DEGREE_LATITUDE * lat0.to_radians().cos()),
+        );
+        let far_2km = (lat0 + 2000.0 / METERS_PER_DEGREE_LATITUDE, lon0);
+
+        for (label, coord) in [("north", north_90m), ("east", east_95m)] {
+            let index = SurfaceNodeIndex::new(&[coord]);
+            let found = index
+                .nearest_within(lat0, lon0, SURFACE_EVIDENCE_RADIUS_METERS)
+                .unwrap_or_else(|| panic!("a street 90-95 m to the {label} must be found"));
+            assert!(
+                (80..=SURFACE_EVIDENCE_RADIUS_METERS).contains(&found),
+                "{label}: distance {found} m must be the true ~90 m, not a grid artifact"
+            );
+            assert!(
+                index.nearest_within(lat0, lon0, 50).is_none(),
+                "{label}: a street ~90 m away must not satisfy a 50 m radius"
+            );
+        }
+
+        let far = SurfaceNodeIndex::new(&[far_2km]);
+        assert!(
+            far.nearest_within(lat0, lon0, SURFACE_EVIDENCE_RADIUS_METERS)
+                .is_none(),
+            "a street 2 km away must not satisfy the neighbourhood radius"
+        );
+        assert!(
+            SurfaceNodeIndex::new(&[])
+                .nearest_within(lat0, lon0, SURFACE_EVIDENCE_RADIUS_METERS)
+                .is_none(),
+            "an extract with no street geometry can never report a nearby street"
+        );
+    }
+
+    /// The shape `scripts/fetch-osm.sh` emits today: context ways arrive as node-ID lists, so
+    /// the only surface nodes with coordinates are ramp/mainline nodes. The evaluator must then
+    /// refuse to confirm "no connection" — a shared node still proves a connection, but its
+    /// absence must fall through to the node tag and the conservative default (issue #37).
+    #[test]
+    fn shared_node_id_only_extract_cannot_confirm_absence() {
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":1,"lat":35.6800,"lon":139.7600},
+                {"type":"node","id":5,"lat":35.6815,"lon":139.7620},
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"node","id":20,"lat":35.6849,"lon":139.7600},
+                {"type":"node","id":25,"lat":35.6835,"lon":139.7620},
+                {"type":"way","id":1,"nodes":[0,1],"tags":{"highway":"secondary","oneway":"yes"}},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":200,"nodes":[1,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}},
+                {"type":"way","id":300,"nodes":[11,25,20],"tags":{"highway":"motorway_link","oneway":"yes"}}
+            ]
+        }"#,
+        );
+        let (graph, _snap, report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let kinds: std::collections::HashMap<&str, crate::model::EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        // n:0 has no node element (and n:1 is also a ramp node), so the extract carries no
+        // street geometry even though a surface way is present.
+        assert_eq!(
+            kinds.get("e:w200:0:f"),
+            Some(&crate::model::EdgeKind::Entry),
+            "a shared node still proves a street connection"
+        );
+        assert_eq!(
+            kinds.get("e:w300:1:f"),
+            Some(&crate::model::EdgeKind::Shutoko),
+            "an unshared node without street data falls back to the conservative default"
+        );
+        assert_eq!(
+            report.undecidable_ramp_edges, 1,
+            "the exit endpoint must be reported as undecidable, not confirmed"
+        );
+        assert_eq!(
+            report.surface_evidence_unavailable_ramp_edges, 1,
+            "node-ID-only extracts must report every unshared endpoint as missing evidence"
+        );
+    }
+
     /// Without surface road data, an entry/exit candidate whose endpoint node has no
     /// discriminating OSM tag is classified as Shutoko (conservative default) and
     /// counted as undecidable.
@@ -2335,13 +2732,14 @@ mod tests {
         );
     }
 
-    /// Surface road data is present but the exit to-node is NOT connected to any surface
-    /// road (primary=Some(false)) → confirmed Shutoko. This correctly rejects a JCT
-    /// connector whose end-point is entirely within the motorway network.
+    /// Surface road data is present, but the exit to-node is not connected to any surface road
+    /// and no street is mapped in its neighbourhood either, so the primary signal cannot be
+    /// evaluated there (issue #37): the endpoint falls back to the conservative Shutoko default
+    /// and is counted as undecidable rather than being confirmed as a JCT connector.
     #[test]
     fn test_surface_context_present_no_connection_shutoko() {
         // Entry ramp has a surface connection (n:2 in primary way).
-        // Exit candidate n:20 is NOT connected to any surface road → Shutoko.
+        // Exit candidate n:20 is NOT connected to any surface road → conservative Shutoko.
         let resp = build_response_from_json(
             r#"{
             "elements": [
@@ -2374,13 +2772,123 @@ mod tests {
             kinds.get("e:w200:0:f"),
             Some(&crate::model::EdgeKind::Entry)
         );
-        // Exit candidate n:20 NOT in surface_nodes (surface context IS present) → Shutoko
+        // Exit candidate n:20 is not in surface_nodes, and the only street node in the extract
+        // (n:1) is ~555 m away, so the extract cannot speak for n:20's neighbourhood: the primary
+        // signal is unavailable rather than a confident "no connection" (issue #37). The
+        // conservative default still yields Shutoko, but the gap is now counted as undecidable
+        // instead of passing for evidence.
         assert_eq!(
             kinds.get("e:w300:1:f"),
             Some(&crate::model::EdgeKind::Shutoko),
-            "exit to-node n:20 not in surface_nodes despite surface context being present → Shutoko (JCT)"
+            "exit to-node n:20 not in surface_nodes → Shutoko (conservative default)"
         );
-        assert_eq!(report.undecidable_ramp_edges, 0);
+        assert_eq!(
+            report.undecidable_ramp_edges, 1,
+            "no mapped street within the evidence radius → undecidable, not confirmed"
+        );
+        assert_eq!(
+            report.surface_evidence_unavailable_ramp_edges, 1,
+            "the exit candidate's primary signal must be reported as unavailable"
+        );
+    }
+
+    /// Companion to the test above: when the extract *does* map a street in the endpoint's own
+    /// neighbourhood, the absence of a shared node is real evidence and the endpoint stays
+    /// decidable. Placing n:30/n:31 ~33 m from n:20 without sharing its node is what separates
+    /// "no street connection" from "no street data here" (issue #37).
+    #[test]
+    fn test_confirmed_no_connection_near_a_mapped_street_is_decidable() {
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":1,"lat":35.6800,"lon":139.7600},
+                {"type":"node","id":2,"lat":35.6810,"lon":139.7600},
+                {"type":"node","id":5,"lat":35.6815,"lon":139.7620},
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"node","id":20,"lat":35.6850,"lon":139.7600},
+                {"type":"node","id":25,"lat":35.6835,"lon":139.7620},
+                {"type":"node","id":30,"lat":35.6853,"lon":139.7600},
+                {"type":"node","id":31,"lat":35.6853,"lon":139.7603},
+                {"type":"way","id":1,"nodes":[1,2],"tags":{"highway":"primary","oneway":"yes"}},
+                {"type":"way","id":2,"nodes":[30,31],"tags":{"highway":"secondary","name":"Street beside the ramp","oneway":"yes"}},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":200,"nodes":[2,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}},
+                {"type":"way","id":300,"nodes":[11,25,20],"tags":{"highway":"motorway_link","oneway":"yes"}}
+            ]
+        }"#,
+        );
+        let (graph, _snap, report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let kinds: std::collections::HashMap<&str, crate::model::EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        assert_eq!(
+            kinds.get("e:w300:1:f"),
+            Some(&crate::model::EdgeKind::Shutoko),
+            "a mapped street 33 m away that does not share n:20 confirms no street connection"
+        );
+        assert_eq!(
+            report.undecidable_ramp_edges, 0,
+            "with street data in the neighbourhood the endpoint is decidable"
+        );
+        assert_eq!(
+            report.surface_evidence_unavailable_ramp_edges, 0,
+            "the primary signal must be available when a street is mapped nearby"
+        );
+    }
+
+    /// The failure mode issue #37 closes: an endpoint whose neighbourhood carries no street data
+    /// must let the OSM node tag decide instead of being overruled by "no shared node". Before
+    /// the fix this fixture classified the exit as Shutoko with confidence; now the
+    /// `highway=traffic_signals` tag decides it as a real Exit.
+    #[test]
+    fn test_missing_neighbourhood_data_lets_the_node_tag_decide() {
+        let resp = build_response_from_json(
+            r#"{
+            "elements": [
+                {"type":"node","id":1,"lat":35.6800,"lon":139.7600},
+                {"type":"node","id":2,"lat":35.6810,"lon":139.7600},
+                {"type":"node","id":5,"lat":35.6815,"lon":139.7620},
+                {"type":"node","id":10,"lat":35.6820,"lon":139.7640},
+                {"type":"node","id":11,"lat":35.6820,"lon":139.7680},
+                {"type":"node","id":12,"lat":35.6840,"lon":139.7660},
+                {"type":"node","id":20,"lat":35.6850,"lon":139.7600,"tags":{"highway":"traffic_signals"}},
+                {"type":"node","id":25,"lat":35.6835,"lon":139.7620},
+                {"type":"way","id":1,"nodes":[1,2],"tags":{"highway":"primary","oneway":"yes"}},
+                {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":101,"nodes":[11,12],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":102,"nodes":[12,10],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
+                {"type":"way","id":200,"nodes":[2,5,10],"tags":{"highway":"motorway_link","oneway":"yes"}},
+                {"type":"way","id":300,"nodes":[11,25,20],"tags":{"highway":"motorway_link","oneway":"yes"}}
+            ]
+        }"#,
+        );
+        let (graph, _snap, report) =
+            build_topology_with_report(&resp, &TopologyConfig::default()).unwrap();
+        let kinds: std::collections::HashMap<&str, crate::model::EdgeKind> = graph
+            .edges
+            .iter()
+            .map(|e| (e.id.as_str(), e.kind))
+            .collect();
+        assert_eq!(
+            kinds.get("e:w300:1:f"),
+            Some(&crate::model::EdgeKind::Exit),
+            "highway=traffic_signals at an endpoint with no street data must decide → Exit"
+        );
+        assert_eq!(
+            report.surface_evidence_unavailable_ramp_edges, 1,
+            "the surface signal must still be reported as unavailable at this location"
+        );
+        assert_eq!(
+            report.undecidable_ramp_edges, 0,
+            "the node tag decides the edge, so it is not undecidable"
+        );
     }
 
     /// Verify that surface road ways do NOT produce graph edges — only motorway and

@@ -47,8 +47,8 @@
 
 - **全24路線**: `network=首都高速道路` のrelationを正本とし、tagの欠落routeを既知relation IDで補完する。C1はrelation `4256008`、C1/JCTを含む2号目黒線はrelation `4256339`を使う。
 - **接続ランプ（`motorway_link`）**: 全路線の本線wayから最大4 hopで到達するwayを展開する。
-- **context way**: 展開済みの`motorway_link`とnodeを共有し、`motorway` / `motorway_link`以外の`highway`を持つway。ルーティンググラフには入れず、ランプ終端が車両通行可能な一般道へ接続するかの証明に使う。way要素の`nodes`と`tags`だけを出力し、context nodeの座標は含めない。
-- **現行スナップショットの実測**: `motorway_link` way 1,619件、context way 712件、両者が共有するnode 557件。context wayの内訳は`secondary` 114、`trunk` 111、`tertiary` 110、`footway` 72、`service` 56、`unclassified` 33、`primary` 107、`primary_link` 14、`tertiary_link` 11、`trunk_link` 38、`secondary_link` 9、`residential` 19、`pedestrian` 3、`proposed` 11、`construction` 2、`rest_area` 1、`steps` 1。
+- **context way**: 展開済みの`motorway_link`とnodeを共有し、`motorway` / `motorway_link`以外の`highway`を持つway。ルーティンググラフには入れず、ランプ終端が車両通行可能な一般道へ接続するかの証明に使う。way要素の`nodes`と`tags`に加えてcontext nodeの座標（`node(w.ctx_ways)`）も出力する。座標は「その端点の近傍に地表道路が写っているか」を地点ごとに評価するために必要で、欠けると共有ノードの不在を「接続なし」と確定できなくなる（issue #37）。ビルド入力に限られ、配布成果物には含まれない。取得後、車両通行可能な一般道のノード座標が 1 つも無ければ `scripts/fetch-osm.sh` が警告する。
+- **現行スナップショットの実測**: `motorway_link` way 1,619件、context way 712件、両者が共有するnode 557件。context wayの内訳は`secondary` 114、`trunk` 111、`tertiary` 110、`footway` 72、`service` 56、`unclassified` 33、`primary` 107、`primary_link` 14、`tertiary_link` 11、`trunk_link` 38、`secondary_link` 9、`residential` 19、`pedestrian` 3、`proposed` 11、`construction` 2、`rest_area` 1、`steps` 1。コミット済みの `fixtures/osm/*.json` は座標付き context way を持たないため、`surface_evidence_unavailable_ramp_edges` が 0 でない形（地点ごとの評価ができない形）でテストされる。
 - **右左折・Uターン禁止制限**: 高速道路本線およびランプ（`ew_all`・`links`）に関連する `type=restriction` リレーション
   - `no_*`（via=node）: from エッジから to エッジへの禁止遷移ペア（長さ 2）を生成。
   - `only_*`（via=node）: via ノードにおける to 以外の代替流出エッジを自動特定し、禁止遷移ペアとして生成。
@@ -70,6 +70,21 @@
 3. 一次シグナルが決定的ならそれを採用。二次と矛盾する場合は警告を記録
 4. どちらでも決まらない場合は `undecidable_ramp_edges` を加算し警告を出したうえで保守的に Shutoko に分類
 
+**地点ごとの一次シグナル評価（issue #37）**:
+
+ノード共有テストは「接続がある」ことは証明できるが、「接続がない」ことは証明できない。地表道路の取得は `motorway_link` ノードを共有する way に限られるため、共有ノードを持たない端点は「地表接続なし（JCT 連絡路）」と「その地点の地表道路データが無い」の区別がつかない。そこで一次シグナルを地点ごとに評価し、次の 3 値で扱う。
+
+| 判定 | 条件 | 遷移 |
+|------|------|------|
+| 接続あり | 端点ノードが `surface_nodes`（車両通行可能な一般道のノード）に含まれる | `primary = Some(true)` → Entry/Exit |
+| 接続なし（確定） | 共有ノードは無いが、車両通行可能な一般道のノードが端点から `SURFACE_EVIDENCE_RADIUS_METERS`（100 m、都市部の街区 1 つ分）以内に存在する | `primary = Some(false)` → Shutoko |
+| 判定不能 | 上記の近傍地表道路ノードが存在しない（または抽出データが地表道路の座標を一切持たない） | `primary = None` → 二次シグナル、無ければ `undecidable_ramp_edges` を加算して保守的に Shutoko |
+
+- 近傍判定は地表道路ノードの座標を一様グリッドで索引して行う（`SurfaceNodeIndex`）。返す距離は常に半径以下であるため、「近傍に道路がある」という結論が探索打ち切りの産物になることはない
+- 地表道路の座標は `scripts/fetch-osm.sh` の context way パスが `node(w.ctx_ways)` で取得する。座標が無い抽出データ（`fixtures/osm/*.json` はこの形）では全ノードが首都高・ランプのノードを兼ねるため、一次シグナルは「共有ノードがあれば接続あり、無ければ判定不能」に縮退し、その旨を警告する
+- 判定不能になった候補の数は `surface_evidence_unavailable_ramp_edges` に記録し、マニフェストの `unverifiedSections` に `incomplete-surface-evidence` として現れる。抽出データの品質シグナルであり、0 でない場合は地表道路の座標がランプ端点の近傍まで届いていない
+- 抽出データに車両通行可能な一般道のノード座標が 1 つも無い場合、`scripts/fetch-osm.sh` はフェッチ直後に警告する（`node(w.ctx_ways)` の欠落を公開前に検出するため）
+
 **現行 `all-real-v5` の結果**:
 
 | 種別 | エッジ数 |
@@ -78,9 +93,12 @@
 | Exit | 198 |
 | Shutoko | 22,621 |
 | Local | 0 |
-| undecidable_ramp_edges | 0 |
+| undecidable_ramp_edges | 54 |
+| surface_evidence_unavailable_ramp_edges | 66 |
 
 合計 22,987 エッジのうち、ランプ端点として一般道へ接続しない内部 `motorway_link` 601 エッジは dropped としてグラフ不入である。グラフの端点分類は `firstPublicRoadConnection/v1` の判定結果に従うため、`all-real-v3` と比べて Shutoko エッジが減り Exit エッジが増えている。
+
+`all-real-v5` の抽出データは地表道路を way 要素のみ（ノード座標なし）で持つため、共有ノードを持たない 66 候補（無名のランプ末端。料金所・休憩所・管理用道路の脇に終わるものが大半）は地点ごとの一次シグナルを評価できない。うち 12 は `highway=motorway_junction` により Shutoko と確定し、残る 54 は判定不能として保守的に Shutoko のまま据え置かれる。いずれも従来と同じ種別に落ちるためエッジ数は変わらないが、この 54 は「確信をもった Shutoko」ではなく「判定不能」として記録される（issue #37）。抽出データを `node(w.ctx_ways)` 付きで再取得すれば、近傍に地表道路が写っている端点は再び確定判定に戻る。
 
 **C1限定 `c1-real-v1` の結果（歴史）**:
 
@@ -90,7 +108,8 @@
 | Exit | 17 |
 | Shutoko | 1,687 |
 | Local | 0 |
-| undecidable_ramp_edges | 0 |
+| undecidable_ramp_edges | 3 |
+| surface_evidence_unavailable_ramp_edges | 5 |
 
 旧ロジックとの差異: `e:w4848898:0:f`（way 4848898「首都高速都心環状線」`ref=C1` の先頭セグメント）が Entry の誤分類から正しく Shutoko に修正された（始端ノードが車両通行可能な一般道と接続していないため）。
 
@@ -734,7 +753,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
 | `pair-candidates.json` | 2 | 導出レポート（候補 14 件 = eligible 13 / hold 1、relation coverage 26 件 = pass 11 / fail 15） | 91,097 bytes |
 | `ramps.json` | 1 | 正規台帳399件、うちbound 238件 | 278,803 bytes |
 | `snap-index.json` | 2 | Entryアクセス地点168件 | 15,244 bytes |
-| `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections、provenance 13件 | 49,308 bytes |
+| `manifest.json` | 1 | release、schema/route-plan/tariff/hash、pairDerivation、artifact hash、byte length、unverified sections（`incomplete-surface-evidence` 66件、`undecidable-ramp-classification` 54件を含む）、provenance 13件 | 49,965 bytes |
 
 `graph.json` 単体は10MiBの転送予算より小さい。`manifest.artifacts[]` は 5 成果物（`graph.json` / `od-tariffs.json` / `pair-candidates.json` / `ramps.json` / `snap-index.json`）の path・SHA-256・byte length を固定し、manifest 自身のサイズと schema は別情報として扱う。`all-real-v5` の `routeMembershipsSha256` は `50764c134ef6315f633310e40adc5bb41203dd90b3609e5c9fa63b12c9b49029` であり、同一入力の2回の生成で一致する。3 世代分のバイト一致は `cargo test --release -p shutoko-graph-builder --test release_contract --locked -- --ignored` の `release_artifacts_are_byte_identical_across_three_generations` が担保する。
 

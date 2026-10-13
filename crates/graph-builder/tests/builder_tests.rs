@@ -1769,13 +1769,21 @@ fn test_real_c1_first_exit_and_benchmark() {
         );
     }
 
-    // --- undecidable_ramp_edges must be 0 for real C1 data --------------------
-    // The new fixture includes 88 surface-road context ways.  Every ramp endpoint
-    // must be decidable — if this count ever grows it means the OSM extract is
-    // missing surface context and ramp classification has silently degraded.
+    // --- Ramp endpoints the extract cannot judge must be reported, not assumed --------
+    // The C1 fixture ships surface-road context ways as node-ID lists only (see the
+    // context-ways pass in scripts/fetch-osm.sh), so every surface node that carries
+    // coordinates is also a ramp/mainline node.  The node-sharing test can therefore prove a
+    // street connection but never disprove one: the five C1 ramp candidates that share no
+    // surface node carry no per-location evidence (issue #37), two of them are decided by
+    // highway=motorway_junction, and the remaining three are undecidable and keep the
+    // conservative Shutoko default — so the edge kinds asserted above are unchanged.
     assert_eq!(
-        report.undecidable_ramp_edges, 0,
-        "real C1 fixture must have 0 undecidable ramp edges (surface context fully available)"
+        report.surface_evidence_unavailable_ramp_edges, 5,
+        "C1 ramp candidates without per-location surface evidence changed"
+    );
+    assert_eq!(
+        report.undecidable_ramp_edges, 3,
+        "C1 ramp endpoints without surface-node coverage must be reported as undecidable"
     );
 
     // --- Individual billing-pair edge classification ---------------------------
@@ -4046,12 +4054,19 @@ fn test_footway_only_connected_ramp_not_classified_as_exit() {
             {"type": "node", "id": 20, "lat": 35.6849, "lon": 139.7600},
             // Footway-only node alongside ramp dead-end (should NOT count as surface evidence)
             {"type": "node", "id": 99, "lat": 35.6850, "lon": 139.7601},
+            // Mapped street ~33 m from the ramp dead-end that does NOT share its node.
+            // This is what makes the "no vehicle surface connection" conclusion decidable
+            // per location (issue #37): the extract demonstrably maps this neighbourhood.
+            {"type": "node", "id": 30, "lat": 35.6852, "lon": 139.7600},
+            {"type": "node", "id": 31, "lat": 35.6852, "lon": 139.7603},
 
             // Surface road: n0 → n1 (highway=secondary) — gives surface context so
             // has_surface_context = true; n1 ∈ surface_nodes → Entry ramp is classified Entry.
             {"type":"way","id":1,"nodes":[0,1],"tags":{"highway":"secondary","oneway":"yes"}},
             // Footway touching the JCT dead-end n20 — must NOT add n20 to surface_nodes.
             {"type":"way","id":2,"nodes":[20,99],"tags":{"highway":"footway"}},
+            // Street beside the dead-end: context only, no shared node with n20.
+            {"type":"way","id":3,"nodes":[30,31],"tags":{"highway":"secondary","name":"Street beside the dead end","oneway":"yes"}},
 
             // Shutoko mainline loop: n10 → n11 → n12 → n10
             {"type":"way","id":100,"nodes":[10,11],"tags":{"highway":"motorway","ref":"C1","oneway":"yes"}},
@@ -4087,10 +4102,16 @@ fn test_footway_only_connected_ramp_not_classified_as_exit() {
         Some(&EdgeKind::Shutoko),
         "JCT ramp to-node n20 shares only a footway (non-vehicle) → must be Shutoko, not Exit"
     );
-    // No undecidable ramps — has_surface_context=true; n20 is confirmed not-surface → Shutoko
+    // Decidable: a mapped street 33 m away (way 3) that does not share n20 confirms that the
+    // footway is not a vehicle surface connection (issue #37) — the verdict rests on street
+    // data covering this neighbourhood, not on a global "some surface road exists" flag.
     assert_eq!(
         report.undecidable_ramp_edges, 0,
-        "ramp must be decidable (confirmed no vehicle surface connection) when surface context present"
+        "ramp must be decidable (confirmed no vehicle surface connection) when a street is mapped nearby"
+    );
+    assert_eq!(
+        report.surface_evidence_unavailable_ramp_edges, 0,
+        "the primary signal must be available for every candidate in this fixture"
     );
 }
 

@@ -49,10 +49,12 @@ mkdir -p "$(dirname "${OUTPUT_PATH}")"
 #    or with nothing). Scope is limited to motorway_link nodes because ramp termini
 #    are always nodes of motorway_link ways; expanding from main-line motorway nodes
 #    would pull in large numbers of surface roads running under the elevated C1 loop
-#    that contribute nothing to terminus classification. Context ways are output in
-#    a separate "out body" pass without their node elements — the builder needs only
-#    the nd-ref lists (contained in way elements) for node-ID matching, not
-#    coordinates. Context ways are NOT added to the routing graph.
+#    that contribute nothing to terminus classification. Context ways are output with
+#    their node elements (way tags + nd refs + node coordinates) so that the builder can
+#    evaluate the surface-connection signal per location (issue #37): a shared node proves
+#    a street connection, but its absence only counts as evidence where the extract maps
+#    streets in that endpoint's own neighbourhood. Context ways are NOT added to the
+#    routing graph.
 # Target expressway selection:
 # By default, fetch all routes of the Tokyo Metropolitan Expressway network via
 # relation["network"="首都高速道路"], plus the few route relations whose tags lack that
@@ -143,12 +145,13 @@ way(bn.link_nodes)["highway"]["highway"!="motorway"]["highway"!="motorway_link"]
   relation(bw.links)["type"="restriction"];
 );
 out body;
-// Context ways: output way elements only (tags + nd refs).
-// "out body" for ways includes the nodes[] array (nd refs) which is all
-// the builder needs for terminus-node detection. Node coordinates are NOT
-// output — the builder performs node-ID containment checks, not geometry
-// operations, so omitting node(w.ctx_ways) saves the bulk of the extra data.
-( .ctx_ways; );
+// Context ways: way elements (tags + nd refs) plus the coordinates of their nodes.
+// The way elements carry the nd-ref lists the builder needs for shared-node matching; the node
+// elements are what let it decide whether the *absence* of a shared node is evidence at all
+// (issue #37). Without them every surface node that has coordinates is also a ramp/mainline
+// node, so "no shared node" degrades from "no street connection" to "the extract cannot tell",
+// and the gap is reported as incomplete-surface-evidence in the manifest.
+( .ctx_ways; node(w.ctx_ways); );
 out body;
 EOF
 )"
@@ -169,6 +172,62 @@ echo "  Timestamp (UTC): ${FETCH_TIME}"
 echo "  Endpoint:        ${ENDPOINT}"
 echo "  Query SHA-256:   ${QUERY_SHA256}"
 echo "  File size:       ${FILE_SIZE} bytes"
+
+# --- Surface-geometry check (Issue #37) ----------------------------------------------
+# The context-ways pass must return the coordinates of the surface-road nodes it fetches, not
+# just the way elements: the graph builder can prove a street connection from a shared node,
+# but it can only *disprove* one where it can see that streets are mapped around the ramp
+# endpoint. An extract without that geometry makes every unshared endpoint undecidable and
+# every release manifest report incomplete-surface-evidence, so check the fetched file locally
+# (no network) and say so instead of letting the degradation pass silently.
+python3 - "${OUTPUT_PATH}" <<'PY'
+import json
+import sys
+
+# Mirrors is_vehicle_highway() in crates/graph-builder/src/topology.rs: only these highway
+# values count as vehicle-accessible surface-road evidence for the builder. Keep the two in
+# step — a surface way this check accepts but the builder rejects would hide the degradation.
+VEHICLE_HIGHWAYS = {
+    "trunk", "trunk_link", "primary", "primary_link", "secondary", "secondary_link",
+    "tertiary", "tertiary_link", "unclassified", "residential", "living_street",
+}
+PUBLIC_SERVICE_SUBTAGS = {"alley"}
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+
+motorway_nodes: set = set()
+surface_nodes: set = set()
+node_ids: set = set()
+for element in payload.get("elements", []):
+    if element.get("type") == "node":
+        node_ids.add(element["id"])
+        continue
+    if element.get("type") != "way":
+        continue
+    tags = element.get("tags") or {}
+    highway = tags.get("highway")
+    if highway in ("motorway", "motorway_link"):
+        motorway_nodes.update(element.get("nodes") or [])
+    elif highway in VEHICLE_HIGHWAYS or (
+        highway == "service" and tags.get("service") in PUBLIC_SERVICE_SUBTAGS
+    ):
+        surface_nodes.update(element.get("nodes") or [])
+
+# Street geometry = vehicle-accessible surface-road nodes that the motorway network does not
+# already cover, i.e. nodes that only exist because the context ways were fetched together with
+# their geometry.
+street_only = [node for node in surface_nodes - motorway_nodes if node in node_ids]
+print(f"  Surface-road nodes outside the motorway network with coordinates: {len(street_only)}")
+if not street_only:
+    print(
+        "  WARNING: the extract carries no surface-road node geometry. Ramp endpoint classification\n"
+        "  will report every unshared endpoint as missing per-location surface evidence\n"
+        "  (incomplete-surface-evidence in the manifest) and fall back to OSM node tags. Check that\n"
+        "  the context-ways pass still ends with 'node(w.ctx_ways);' before publishing a release.",
+        file=sys.stderr,
+    )
+PY
 
 # --- Hop-cap probe (Issue #39) -------------------------------------------------------
 # The expansion walks at most ${SHUTOKO_LINK_HOPS} hops beyond the contact hop. If a

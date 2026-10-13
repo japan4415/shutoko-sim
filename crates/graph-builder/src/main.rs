@@ -1213,10 +1213,26 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if top_report.undecidable_ramp_edges > 0 {
         all_unverified.push(format!(
             "undecidable-ramp-classification: {} ramp edge(s) could not be classified \
-             as Entry/Exit (no vehicle-accessible surface road context and no discriminating \
-             OSM node tag); conservatively classified as Shutoko — re-run with updated OSM \
-             extract for accurate classification",
+             as Entry/Exit (no per-location surface-connection evidence and no discriminating \
+             OSM node tag); conservatively classified as Shutoko — re-run with an updated OSM \
+             extract that maps surface roads around the ramp endpoints for accurate \
+             classification",
             top_report.undecidable_ramp_edges
+        ));
+    }
+
+    // Note ramp candidates whose per-location surface-connection evidence was unavailable even
+    // though (in part) a node tag decided the edge. This is the extract-quality signal for
+    // issue #37: the node-sharing test proves a street connection when it succeeds, so a
+    // non-zero count means the extract's surface data does not reach every ramp endpoint's
+    // neighbourhood and some verdicts rest on the OSM node tag alone.
+    if top_report.surface_evidence_unavailable_ramp_edges > 0 {
+        all_unverified.push(format!(
+            "incomplete-surface-evidence: {} ramp endpoint candidate(s) had no per-location \
+             surface-connection evidence; those ramp edges were classified by their OSM node tag \
+             or conservatively as Shutoko — fetch the surface-road node geometry (see the \
+             context-ways pass in scripts/fetch-osm.sh) to restore per-location evaluation",
+            top_report.surface_evidence_unavailable_ramp_edges
         ));
     }
 

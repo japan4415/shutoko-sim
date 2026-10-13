@@ -126,6 +126,6 @@ export interface UiSearchMessage {
 
 /** Worker → UI の応答。 */
 export type WorkerResponse =
-  | { type: "ready"; releaseId: string }
+  | { type: "ready"; releaseId: string; sourceDate?: string | null }
   | { type: "result"; requestId: string; result: SearchResult; bench?: BenchPayload }
   | { type: "error"; requestId: string; code: string; message?: string };

@@ -15,6 +15,7 @@ import {
   loadRelease,
   MAX_ACCESS_DISTANCE_METERS,
   parseGraphDocument,
+  parseSourceDate,
   parseWasmError,
   PipelineError,
   routeMembershipsSha256,
@@ -250,6 +251,7 @@ describe("parseGraphDocument", () => {
   async function schema4Files(
     releaseId: string,
     billingPairsVersion: string,
+    sourceDate?: unknown,
   ): Promise<Record<string, Uint8Array>> {
     const graphBytes = encoder.encode(schema4Graph);
     const wasmBytes = new Uint8Array([0, 0x61, 0x73, 0x6d]);
@@ -269,6 +271,7 @@ describe("parseGraphDocument", () => {
           routePlanVersion: 1,
           billingPairsVersion,
           routeMembershipsSha256: routeHash,
+          ...(sourceDate === undefined ? {} : { sourceDate }),
           artifacts: [{ path: "graph.json", ...graphExpected }],
         }),
       ),
@@ -322,6 +325,46 @@ describe("parseGraphDocument", () => {
     // 5 件は先読みされる（Issue #43）。検証は manifest → engine → graph の順で止まり、
     // graph は prepare されず glue も初期化されない。
     expect(calls).toEqual(prefetchedArtifacts(releaseId));
+  });
+
+  // フッターのデータ基準日（Issue #16）。manifest の値をそのまま出すのではなく、
+  // 書式と暦上の妥当性を確認してから渡す。
+  it("manifest の sourceDate を検証して LoadedRelease へ渡す", async () => {
+    const releaseId = "graph-v4-fixture-v1";
+    const { fetch } = mockFetch(await schema4Files(releaseId, "v3", "2026-09-16"));
+    const loaded = await loadRelease(fetch, releaseId, async () => recordingGlue({ json: "" }));
+    expect(loaded.sourceDate).toBe("2026-09-16");
+    loaded.free();
+  });
+
+  it("sourceDate が無い・不正な manifest では null を返す（推測した日付を出さない）", async () => {
+    const invalidValues: unknown[] = ["2026-9-16", "2026-02-30", "2023-02-29", 20260916, {}];
+    for (const value of [undefined, ...invalidValues]) {
+      const releaseId = "graph-v4-fixture-v1";
+      const { fetch } = mockFetch(await schema4Files(releaseId, "v3", value));
+      const loaded = await loadRelease(fetch, releaseId, async () => recordingGlue({ json: "" }));
+      expect(loaded.sourceDate, `sourceDate=${JSON.stringify(value) ?? "undefined"}`).toBeNull();
+      loaded.free();
+    }
+  });
+
+  it("parseSourceDate は YYYY-MM-DD だけを受け入れる", () => {
+    expect(parseSourceDate("2026-09-16")).toBe("2026-09-16");
+    expect(parseSourceDate("2024-02-29")).toBe("2024-02-29");
+    for (const bad of [
+      undefined,
+      null,
+      "",
+      "2026-9-16",
+      "2026-13-01",
+      "2026-02-30",
+      "2023-02-29",
+      "2026-09-16T00:00:00Z",
+      20260916,
+      {},
+    ]) {
+      expect(parseSourceDate(bad)).toBeNull();
+    }
   });
 });
 

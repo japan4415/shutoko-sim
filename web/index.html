@@ -298,6 +298,31 @@
       <!-- 候補カードはテキストでも選択でき、地図と同じ候補 ID に紐づく。 -->
       <div id="results" role="list"></div>
     </main>
+
+    <!-- 帰属・前提・免責は常時表示する（Issue #16、docs/requirements.md の公開条件）。
+         帰属は地図領域と重複してよい: 地図を閉じたり読み込めなかった場合でも、
+         ライセンス表示と前提が画面から消えないようにする。対応範囲の文言は
+         ui/model.ts の SUPPORTED_AREA_TEXT を単一の出典として起動時に流し込む。 -->
+    <footer class="site-footer" aria-labelledby="footer-heading">
+      <h2 id="footer-heading" class="visually-hidden">この版の前提と帰属</h2>
+      <p id="footer-area" class="footer-line"></p>
+      <p class="footer-line">
+        料金は普通車 ETC 基本料金（割引適用前）です。所要時間は休憩を含まない概算で、
+        実際の経路・所要時間・料金を保証するものではありません。
+      </p>
+      <p id="footer-source-date" class="footer-line" hidden>
+        データ基準日: <time id="footer-source-date-value"></time>
+      </p>
+      <p class="footer-line">
+        地図・道路データ:
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener"
+          >&copy; OpenStreetMap contributors</a
+        >（ODbL）／
+        <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener"
+          >国土地理院</a
+        >
+      </p>
+    </footer>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

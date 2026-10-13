@@ -126,7 +126,7 @@ export function createSearchWorkerHandler(options: SearchWorkerHandlerOptions) {
       state = await store.acquire(releaseId, msg.bench?.cacheBust);
       if (!readySent) {
         readySent = true;
-        post({ type: "ready", releaseId });
+        post({ type: "ready", releaseId, sourceDate: state.sourceDate });
       }
       const requestJson = JSON.stringify(buildSearchRequest(msg));
       if (benchState !== null) {
@@ -173,7 +173,7 @@ export function createSearchWorkerHandler(options: SearchWorkerHandlerOptions) {
           state.release();
           if (!readySent) {
             readySent = true;
-            post({ type: "ready", releaseId: DEFAULT_RELEASE_ID });
+            post({ type: "ready", releaseId: DEFAULT_RELEASE_ID, sourceDate: state.sourceDate });
           }
         })
         .catch((err: unknown) => {

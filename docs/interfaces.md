@@ -417,7 +417,7 @@ Issue #72のrelease gateは上記bindingと4 recordがすべて`passed`で、リ
 
 ## 地図・住所検索のデータ利用
 
-OSM のデータライセンスとタイルサーバーの利用条件は別に扱う。地図に OpenStreetMap contributors の帰属と著作権ページへのリンクを表示する。派生グラフの公開時は ODbL に基づく帰属・提供義務を確認し、元データと生成方法を追える形にする。[OpenStreetMap copyright](https://www.openstreetmap.org/copyright)
+OSM のデータライセンスとタイルサーバーの利用条件は別に扱う。地図に OpenStreetMap contributors の帰属と著作権ページへのリンクを表示し、同じ帰属・料金と所要時間の前提・免責・対応範囲・データ基準日を画面フッター（`web/index.html` の `footer.site-footer`）にも常時表示する（Issue #16。データ基準日は manifest の `sourceDate` を `web/src/worker/pipeline.ts` の `parseSourceDate` で検証してから、worker の ready 応答経由で表示する。検証できない値では日付行を出さない）。派生グラフの公開時は ODbL に基づく帰属・提供義務を確認し、元データと生成方法を追える形にする。[OpenStreetMap copyright](https://www.openstreetmap.org/copyright)
 
 標準タイルサーバーを本番用の無制限基盤とはみなさない。大量先読み・オフライン取得を行わず、必要な帰属とキャッシュ条件を守る。実際のタイル提供元は利用量・可用性・条件を確認して選ぶ。[OSMF Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)
 

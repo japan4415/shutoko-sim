@@ -26,3 +26,25 @@ export async function stubTiles(page: Page): Promise<void> {
 export async function abortTiles(page: Page): Promise<void> {
   await page.route(TILE_URL, (route) => route.abort());
 }
+
+/** [`gateTiles`] のゲート。`allow` を true にすると以降のタイル要求が成功する。 */
+export interface TileGate {
+  allow: boolean;
+}
+
+/**
+ * 「ゲートが開くまで失敗、開いたらスタブ PNG を返す」ルートを 1 本だけ登録する。
+ *
+ * abort → stub の切り替えを `unrouteAll` で行うと、解除した瞬間に実タイル（GSI）が読めて
+ * アプリが自然回復し、再読み込みボタンが消えた状態で `click` が待ち続けてテスト全体が
+ * タイムアウトする（(10) が 2026-10-13 に CI とローカルで再現）。1 本のルート内で
+ * 切り替えれば、その隙間が存在しない。
+ */
+export async function gateTiles(page: Page, gate: TileGate): Promise<void> {
+  await page.route(TILE_URL, (route) => {
+    if (!gate.allow) {
+      return route.abort();
+    }
+    return route.fulfill({ status: 200, contentType: "image/png", body: TINY_TILE_PNG });
+  });
+}

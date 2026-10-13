@@ -187,7 +187,7 @@ Google マップは iPhone の Safari と Android の Chrome を対象に、ア�
 | 条件 | 状態 | 担保・根拠 |
 | --- | --- | --- |
 | 地図領域の ODbL 帰属表示とライセンスへのリンクが常時見える | 充足 | `web/src/map/tiles.ts` の `OSM_ATTRIBUTION` / 国土地理院帰属（どちらも `openstreetmap.org/copyright` と地理院の利用規約へリンク）。E2E `(6)` がテキストとリンクを実測 |
-| フッターへの帰属表示 | 未実施 | 地図領域のみ。フッター複製は UI 変更として別途判断する |
+| フッターへの帰属表示 | 充足 | `web/index.html` の `<footer class="site-footer">` が OSM・国土地理院へのリンク付き帰属を常時表示する。E2E `(75)` が探索前の初期状態で帰属リンク・ODbL 表記・料金/所要時間の前提・免責・対応範囲を検証する |
 | HTTP セキュリティヘッダー（CSP / nosniff / HSTS 等） | 充足 | 静的アセットは `web/public/_headers`、Worker 応答は `workers/src/security.ts`。`workers/test/security-headers.test.ts` が両者の一致と全経路のヘッダーを、E2E `(74)` が実測を担う（[インターフェース](interfaces.md) の「セキュリティヘッダー」） |
 | CSP 違反なく WASM・タイル・API が動く | 充足（Chromium のみ） | E2E `(74)` がコンソールの CSP 違反ゼロと、ヘッダー付きで読み込んだアプリの実探索成立を確認する。Safari / Firefox は未計測 |
 | アプリ由来のログに座標・住所・検索語を残さない | 充足 | Worker の構造化ログはイベント名・status・duration・releaseId・成果物名だけを持つ（クエリ文字列を含めない）。`workers/test/security-headers.test.ts` が検索語・緯度経度・`q=` を含まないことを固定 |
@@ -195,6 +195,7 @@ Google マップは iPhone の Safari と Android の Chrome を対象に、ア�
 | 住所検索 API の IP 単位レート制限と月間上限アラート | 一部充足 | `IP_RATE_LIMITER`（10 req/60 s）と `GLOBAL_RATE_LIMITER`（600 req/60 s）は `workers/cloudflare.config.ts` の binding で設定済み・`workers/test/geocode.test.ts` が 429 を検証。月間上限アラートは Cloudflare の通知設定（外部作業） |
 | releaseId 切り替えによるロールバック | 手順は充足・実演は未実施 | 切り戻しは `web/src/worker/artifact-hashes.ts` の `DEFAULT_RELEASE_ID` 1 行で、`web/test/release-rollback.test.ts` が allowlist 同期と既定の隣接関係を固定する。本番での切り戻し実演はデプロイ作業後 |
 | 外部ナビ（Google マップ）の実機引き継ぎ | 未実施 | 下の「Google マップ実機引き継ぎの検証記録」を参照（Issue #72） |
+| データ基準日・前提が読める | 充足 | フッターが manifest の `sourceDate`（`YYYY-MM-DD` を検証、不正なら日付行を出さない）と料金・時間の前提を常時表示する。E2E `(75)` が実 worker 経由で `datetime="2026-09-16"` を検証する |
 | 未検証区間を候補に含めない | 充足 | 成果物の候補は `eligible_for_review` のみを商品候補にし、`hold` の 1 件（`bp:c1-outer:shibakoen-iikura`）と `topologyOnly` の動的 OD は金額なし・商品対象外で表示する。E2E `(73)` が未価格候補の表示、`(45)` が商品 cohort 外の表示を固定する |
 
 ## Google マップ実機引き継ぎの検証記録

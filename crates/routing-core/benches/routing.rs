@@ -450,8 +450,10 @@ fn bench_prepared_large(c: &mut Criterion) {
 
     // 成功探索ベンチ: max_expanded_states=1_000_000 に引き上げて候補が返る探索を計測する。
     // 起点は bp:c1-outer:kasumigaseki-daikancho のエントリーノード (n:577255402)。
-    // large_graph_smoke_search_extended_limits で status=ok (expanded≈856k) が確認済み。
-    // このノードが大規模グラフに存在しない場合は「no node」エラーになりベンチをスキップする。
+    // 上限値の経路は tests/extended_limits.rs が合成グラフで非回帰として監視している
+    // （旧 large_graph_smoke は Issue #33 で削除。当時の大規模グラフでは expanded≈856k で
+    // status=ok だった記録がある）。このノードが与えたグラフに存在しない場合は
+    // 「no node」エラーになりベンチをスキップする。
     {
         let success_origin = "n:577255402";
         let limits_ext = SearchLimits {

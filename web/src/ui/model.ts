@@ -1,5 +1,5 @@
 // UI 用の純粋関数群。DOM を触らず、Vitest から決定論的に検証できる。
-// 文言対応表は scout-002 F5（docs/interfaces.md:96-104 の status/reason コード）に従う。
+// 文言対応表は scout-002 F5（docs/interfaces.md「探索結果の status と reason コード」）に従う。
 import type {
   Candidate,
   EstimatedLeg,
@@ -27,7 +27,7 @@ export { PRODUCT_FARE_LABEL };
  */
 export const MAX_DISPLAY_CANDIDATES = 3;
 
-/** 神田橋プリセット（crates/routing-core/tests/real_graph_contract.rs:520-528）。 */
+/** 神田橋プリセット（`real_graph_contract::real_graph_search_json_wasm_contract_parity` と同じ座標）。 */
 export const PRESET_KANDABASHI = { lat: 35.6896727, lon: 139.7644248 } as const;
 
 /** 探索タイムアウト（毫秒）。超過で UI 側が terminate する。 */
@@ -445,7 +445,7 @@ export function errorMessage(code: string): string {
   }
 }
 
-/** 警告コードの日本語文言（docs/interfaces.md:130-133）。 */
+/** 警告コードの日本語文言（docs/interfaces.md「警告コード（warnings）一覧」）。 */
 export function warningText(code: string): string {
   switch (code) {
     case "HANDOFF_WAYPOINTS_UNVERIFIED":
@@ -458,7 +458,7 @@ export function warningText(code: string): string {
 }
 
 /**
- * 料金表示。amountYen が null なら「料金額: 未算出」（docs/requirements.md:28）。
+ * 料金表示。amountYen が null なら「料金額: 未算出」（docs/requirements.md「候補の表示内容」の料金額: 未算出・データ基準日）。
  * 桁数の異なる金額を比較しやすいよう 3 桁区切りにする（design-review-002 C3）。
  */
 export function tollText(toll: Toll): string {
@@ -478,7 +478,7 @@ export function fareLabelNote(toll: Toll): string | null {
   return toll.amountYen === null ? null : `上記は${PRODUCT_FARE_LABEL}です`;
 }
 
-/** 推薦理由コードの日本語文言（docs/interfaces.md:148-151）。未知コードはそのまま返す。 */
+/** 推薦理由コードの日本語文言（docs/interfaces.md「推薦理由コード（reasons）一覧」）。未知コードはそのまま返す。 */
 export function reasonText(code: string): string {
   switch (code) {
     case "BEST_TIME_PER_YEN":
@@ -512,7 +512,7 @@ export function distanceText(meters: number): string {
 
 /**
  * 最安順位ラベル。料金未算出の候補が 1 件でもあると集合全体で金額比較が
- * できないため、allPriced が false なら null（順位を出さない）。docs/requirements.md:24。
+ * できないため、allPriced が false なら null（順位を出さない）。docs/requirements.md「候補の表示内容」。
  */
 export function formatRank(allPriced: boolean, index: number): string | null {
   return allPriced ? `最安順位 ${String(index)} 位` : null;
@@ -549,7 +549,7 @@ export function recommendedLabel(candidate: { reasons: string[] }): string | nul
     : null;
 }
 
-/** 住所検索クエリの検査。空白除去後 1〜200 文字（docs/interfaces.md:53）。 */
+/** 住所検索クエリの検査。空白除去後 1〜200 文字（docs/interfaces.md「住所検索仕様と制約」）。 */
 export function validateAddressQuery(text: string): string | null {
   const trimmed = text.trim();
   if (trimmed === "") {
@@ -561,7 +561,7 @@ export function validateAddressQuery(text: string): string | null {
   return null;
 }
 
-/** ジオコーダー Worker のエラーコード → 日本語文言（docs/interfaces.md:63-70）。 */
+/** ジオコーダー Worker のエラーコード → 日本語文言（docs/interfaces.md「エラーコード一覧」）。 */
 export function geocodeErrorMessage(code: string): string {
   switch (code) {
     case "INVALID_QUERY":

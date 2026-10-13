@@ -40,7 +40,7 @@ export function isMemorySource(value: unknown): value is BenchMemorySource {
   );
 }
 
-/** 性能目標（docs/delivery.md:37-40）。 */
+/** 性能目標（docs/delivery.md「性能目標と測定」）。 */
 export interface BenchTargets {
   /** 成果物取得済みの探索時間 p95（ms）。 */
   searchP95Ms: number;

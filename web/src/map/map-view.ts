@@ -132,7 +132,7 @@ export function createMapView(
   // 探索前から地図を見せ、タイル取得を開始するための初期表示（東京中心）。
   map.setView([35.6812, 139.7671], 12);
 
-  // 帰属表示は常時可視。タイル提供元の帰属と OSM 帰属を併記する（docs/interfaces.md:169）。
+  // 帰属表示は常時可視。タイル提供元の帰属と OSM 帰属を併記する（docs/interfaces.md「地図・住所検索のデータ利用」）。
   // レイヤー依存で消えないよう、固定文言の帰属コントロールを明示的に設置する。
   L.control
     .attribution({ position: "bottomright", prefix: false })

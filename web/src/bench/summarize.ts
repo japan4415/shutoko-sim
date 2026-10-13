@@ -261,7 +261,7 @@ function verdictOf(actual: number | null, target: number): "pass" | "fail" | "un
 }
 
 /**
- * 集計結果を目標（docs/delivery.md:37-40）と突き合わせる。
+ * 集計結果を目標（docs/delivery.md「性能目標と測定」）と突き合わせる。
  *
  * - 探索 p95: 全試行の `tSearchMs` p95
  * - 初回ロード p95: cold 試行の `firstLoadMs` p95

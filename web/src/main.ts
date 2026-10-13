@@ -149,7 +149,7 @@ let origin: LatLng | null = null;
 // 現在表示中の探索結果（地図とカードの選択状態を同期するため保持）。
 let currentResult: SearchResult | null = null;
 let selectedCandidateId: string | null = null;
-// 地図がタイル取得に失敗したか。失敗中は出発を無効化する（docs/requirements.md:44）。
+// 地図がタイル取得に失敗したか。失敗中は出発を無効化する（docs/requirements.md「例外と復帰」の地図取得失敗）。
 let mapFailed = false;
 let mapView: MapView | null = null;
 // 位置情報が拒否られたか。一旦拒否されたら許可要求を繰り返さない。
@@ -339,7 +339,7 @@ function clearRecovery(): void {
  * 条件変更で失効させるべき復帰導線だけを消す。
  * `result`（探索結果の候補ゼロに基づく導線）は前回結果が無効になった時点で消すが、
  * `error`（結果取得前の成果物不一致・通信失敗）の再読み込み案内は、時間や出発地点を
- * 変えても有効なままなので消さない（review R3-01 / docs/requirements.md:43,52）。
+ * 変えても有効なままなので消さない（review R3-01 / docs/requirements.md「例外と復帰」のデータ/WASM 不整合）。
  */
 function clearResultRecovery(): void {
   if (recoveryOrigin === "result") {
@@ -349,7 +349,7 @@ function clearResultRecovery(): void {
 
 /**
  * 再読み込みでしか復帰できない成果物不整合・通信失敗・探索結果契約不一致の案内
- * （docs/requirements.md:43）。部分データでは探索しない。
+ * （docs/requirements.md「例外と復帰」のデータ/WASM 不整合）。部分データでは探索しない。
  * RESULT_CONTRACT_MISMATCH は「成果物（エンジン成果物）が読めない」のではなく、探索結果 JSON が
  * 実行中エンジンの形式と合わない失敗なので、失敗種別を正しく名指しする（design D3-2）。
  */
@@ -512,7 +512,7 @@ function showAddressFallback(message: string): void {
 }
 
 /**
- * 出発地点が対応範囲外・到達不能なときの復帰導線（docs/requirements.md:39）。
+ * 出発地点が対応範囲外・到達不能なときの復帰導線（docs/requirements.md「候補の表示内容」の復帰導線の失効）。
  * 対応範囲を明示し、検証済みの有効な出発地点（神田橋）をワンタップで設定できるようにする。
  * 近い高速道路へ直線接続するような誤った代替は出さない。
  */
@@ -758,7 +758,7 @@ function setAddressBusy(busy: boolean): void {
   el.addressSearch.textContent = busy ? "検索中…" : "住所を検索";
 }
 
-/** 同名住所は候補から選ばせる。最初の候補へ無断で決定しない（docs/requirements.md:20）。 */
+/** 同名住所は候補から選ばせる。最初の候補へ無断で決定しない（docs/requirements.md「通常の流れ」の同名住所）。 */
 function renderAddressCandidates(candidates: GeocodeCandidate[]): void {
   el.addressCandidates.replaceChildren();
   if (candidates.length === 0) {
@@ -816,7 +816,7 @@ async function handleGeolocate(): Promise<void> {
     const message = geolocationErrorMessage(code);
     el.addressFeedback.textContent = message;
     showAddressFallback(message);
-    // 権限拒否（code 1）は許可要求を繰り返さない（docs/requirements.md:20,37）。
+    // 権限拒否（code 1）は許可要求を繰り返さない（docs/requirements.md「通常の流れ」の現在地要求と「例外と復帰」の GPS 拒否）。
     if (code === 1) {
       geolocationDenied = true;
       el.geolocate.disabled = true;
@@ -1471,7 +1471,7 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
   card.appendChild(head);
 
   // 比較の主指標は余裕込みの計画時間。総推定時間はその内訳として補助に落とす
-  // （docs/requirements.md:24「総推定時間と余裕込みの計画時間」）。
+  // （docs/requirements.md「候補の表示内容」の総推定時間と余裕込みの計画時間）。
   const plan = document.createElement("p");
   plan.className = "plan-time";
   plan.textContent = `計画時間: 約${String(model.planMinutes)}分`;
@@ -1544,7 +1544,7 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
     card.appendChild(estimatedLegs);
   }
 
-  // 円当たり効率は金額が算出できたときだけ示す（docs/requirements.md:24）。
+  // 円当たり効率は金額が算出できたときだけ示す（docs/requirements.md「候補の表示内容」）。
   // 比較に使うのは基本料金だと分かるよう、同じ行に注記を添える。
   if (model.timePerYen !== null) {
     const efficiency = document.createElement("p");
@@ -1652,7 +1652,7 @@ function selectCard(id: string, focusCard: boolean): void {
     }
   }
   mapView?.selectCandidate(id);
-  // 出発リンクは地図確認ができるまで無効化する（docs/requirements.md:44）。
+  // 出発リンクは地図確認ができるまで無効化する（docs/requirements.md「例外と復帰」の地図取得失敗）。
   updateDepartButtons();
 }
 
@@ -1714,7 +1714,7 @@ function initMap(): void {
 
 /**
  * Leaflet のタイル失敗は個別タイルで発火する。連続失敗で復帰不能とみなし、
- * 地図確認ができるまで出発を無効化する（docs/requirements.md:44）。
+ * 地図確認ができるまで出発を無効化する（docs/requirements.md「例外と復帰」の地図取得失敗）。
  */
 let tileErrorCount = 0;
 function markMapFailed(immediate: boolean): void {

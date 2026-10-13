@@ -1,5 +1,5 @@
 // 地図タイルの提供元定義。Leaflet には依存せず、URL と帰属表記だけをここへ集約する。
-// 帰属表示は docs/interfaces.md:167-171（地図・住所検索のデータ利用）に従い常時可視とする。
+// 帰属表示は docs/interfaces.md「地図・住所検索のデータ利用」に従い常時可視とする。
 
 /** 地図タイルの提供元 1 件分。 */
 export interface TileSource {
@@ -39,14 +39,14 @@ export const OSM_TILE_SOURCE: TileSource = {
 
 /**
  * OpenStreetMap contributors の帰属表記。地図上に常時表示する義務があるため、
- * どのタイル提供元を使う場合でも地図へ併記する（docs/interfaces.md:169）。
+ * どのタイル提供元を使う場合でも地図へ併記する（docs/interfaces.md「地図・住所検索のデータ利用」）。
  */
 export const OSM_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 /**
  * 利用可能なタイル提供元の一覧。先頭（GSI）を既定として使う。
- * 大量先読み・オフライン取得は行わない（docs/interfaces.md:171）。
+ * 大量先読み・オフライン取得は行わない（docs/interfaces.md「地図・住所検索のデータ利用」）。
  */
 export const TILE_SOURCES: readonly TileSource[] = [GSI_TILE_SOURCE, OSM_TILE_SOURCE];
 

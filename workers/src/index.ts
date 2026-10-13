@@ -2,6 +2,7 @@ import { createErrorResponse } from "./errors";
 import { handleBenchResult } from "./bench";
 import { handleGeocode } from "./geocode";
 import { handleReleases } from "./releases";
+import { withSecurityHeaders } from "./security";
 import { Env, HandlerResult, StructuredLog } from "./types";
 
 function getRawPath(urlStr: string): string {
@@ -134,6 +135,8 @@ export default {
 
     console.log(JSON.stringify(log));
 
-    return result.response;
+    // セキュリティヘッダーは最後に一括で付与する。静的アセットは Worker を経由しないため
+    // web/public/_headers が同じ役割を担う（Issue #16）。
+    return withSecurityHeaders(result.response, request);
   },
 };

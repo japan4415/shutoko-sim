@@ -3,10 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <!-- 地図タイル（国土地理院 / OpenStreetMap）と同一オリジンの住所検索プロキシだけを許可する。
-         住所検索は /api/geocode 経由のため connect-src に外部ジオコーダを直接許可しない。 -->
+         住所検索は /api/geocode 経由のため connect-src に外部ジオコーダを直接許可しない。
+         ここは Vite の dev サーバ（web/public/_headers が効かない）と、キャッシュされた古い
+         HTML のための二重の防御である。配信時は同じ内容が HTTP ヘッダーでも届く
+         （web/public/_headers）。frame-ancestors は meta では無視され、Chromium が警告を
+         出すためここには書かない。クリックジャッキング対策はヘッダー側の
+         frame-ancestors 'none' と X-Frame-Options: DENY が担う。両者のディレクティブの一致は
+         workers/test/security-headers.test.ts が検査する。 -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org; object-src 'none'; base-uri 'self'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>首都高 周回ルート探索</title>

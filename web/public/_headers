@@ -1,0 +1,21 @@
+# 静的アセットの応答ヘッダー（Cloudflare Workers Static Assets の _headers、Issue #16）。
+# vite build が public/ の中身を dist/ 直下へコピーするため、このファイルは配信物の
+# ルートに置かれ、アセット応答（HTML / JS / CSS / WASM glue）に適用される。
+#
+# このファイルは Worker コードを経由する応答（/releases/*、/api/*）には適用されない。
+# 同じ方針を workers/src/security.ts でも付与し、次の一致を
+# workers/test/security-headers.test.ts が検査する:
+#   - ここの Content-Security-Policy と web/index.html の meta タグのディレクティブが一致
+#   - ここの非 CSP ヘッダーが workers/src/security.ts の SECURITY_HEADERS を含む
+#
+# CSP は「同一オリジンのみ」を基本にし、地図タイル（国土地理院・OpenStreetMap）と
+# wasm-unsafe-eval / blob ワーカーだけを許可する。住所検索は同一オリジンの /api/geocode を
+# 経由するため connect-src に外部ジオコーダを許可しない。meta タグ側は Vite の dev サーバ
+# （_headers が効かない）と、キャッシュされた古い HTML のための二重の防御として残す。
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), payment=(), usb=(), geolocation=(self)
+  Strict-Transport-Security: max-age=31536000; includeSubDomains

@@ -76,16 +76,18 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
 
 4-2. C1 legacy 回帰と 9 件の verified pair: 9 件の `verified_one_section_ahead`（legacy 7 + radial 2）と未確定 1 件（`bp:c1-outer:shibakoen-iikura`、入口ランプは `supportState=unresolved`）が想定どおりであること、2026-10 改定をまたぐ単価（目黒→天現寺 790 円 → 860 円、C1 は 300 円のまま）を確認する。
 
-4-3. 4 地点の探索結果: 期待値は**最近接入口 tier 優先（Issue #57）の実測**であり、料金付き商品候補が出るのは東京駅と目黒駅だけである。時間窓は `fixtures/representative-locations.json` の値をそのまま使う（UI の既定 15〜60 分は目黒駅の窓と一致しない）。
+4-3. 4 地点の探索結果: 期待値は**最近接入口 tier 優先（Issue #57）の実測**であり、`fixtures/representative-locations.json` の値をそのまま使う（UI の既定 15〜60 分は目黒駅の窓と一致しない）。同 fixture は `web/test/integration-wasm.test.ts` と `crates/routing-core/tests/real_graph_contract.rs` が実 WASM / 実 engine で再計算して照合する。
 
    | 地点 | 最寄りの入口（距離） | 時間窓（fixture） | 候補 | 区分 |
    | --- | --- | --- | --- | --- |
    | 東京駅 | `ramp:c1-inner:takaracho-entry`（746 m） | 15〜60 分 | `bp:c1-inner:takaracho-kandabashi` 1 件 | 料金付き（300 円・改定前後とも）。`time_per_yen`、推薦 1 件 |
    | 目黒駅 | `ramp:2-inbound:meguro-entry`（313 m） | **15〜120 分** | `bp:2-inbound:meguro:c1-outer:tengenji`（推薦）と `bp:2-inbound:meguro:c1-inner:tengenji` の 2 件 | 料金付き（790 円 → 860 円）。`time_per_yen`、推薦は最大効率の 1 件だけ |
-   | 銀座 | `ramp:c1-inner:ginza-entry`（511 m） | 15〜60 分 | `od:ramp:c1-inner:ginza-entry:ramp:c1-inner:kasumigaseki-exit` 1 件 | **未価格の topologyOnly**。商品対象外・推薦なし・`shutoko_time` |
+   | 銀座 | `ramp:c1-inner:ginza-entry`（511 m） | 15〜60 分 | `bp:c1-inner:ginza-shintomicho` 1 件 | 料金付き（300 円・改定前後とも、区間距離 0.4 km）。`time_per_yen`、推薦 1 件 |
    | 六本木 | `ramp:c1-inner:iikura-entry`（663 m） | 15〜60 分 | `od:ramp:c1-inner:iikura-entry:ramp:c1-outer:iikura-exit` 1 件 | **未価格の topologyOnly**。商品対象外・推薦なし・`shutoko_time` |
 
-   銀座と六本木は最寄りの入口が**内回りランプ**（銀座入口・飯倉入口）で、そこからの 1 区間先に検証済みペアが無いため（内回り銀座入口 → 新富町出口は First Exit 検証が通らず未登録。`data-pipeline.md` の注記を参照）、1 区間先の確定ペアに到達せず動的 OD の未価格候補しか返らない。**この 2 地点では基本料金（割引適用前）の表示を検証できない**ので、未価格（金額なし）・商品対象外・推薦なしのまま表示されることを確認するのが正しい期待である。銀座・六本木にも料金付き候補が出ることを rollout 前の gate として求めるなら、Issue #57 の最近接 tier 制限か検証済みペアの登録を変更する必要がある（本 PR のスコープ外）。
+   六本木は最寄りの入口が**内回りランプ**（飯倉入口）で、そこからの 1 区間先に検証済みペアが無いため、動的 OD の未価格候補しか返らない。**この地点では基本料金（割引適用前）の表示を検証できない**ので、未価格（金額なし）・商品対象外・推薦なしのまま表示されることを確認するのが正しい期待である。六本木にも料金付き候補が出ることを rollout 前の gate として求めるなら、Issue #57 の最近接 tier 制限か検証済みペアの登録を変更する必要がある（本 PR のスコープ外）。
+
+   銀座は内回り銀座入口 → 新富町出口（`bp:c1-inner:ginza-shintomicho`）が登録済みのため料金付き候補が返る（Issue #34 はアンカーの再設定で解決済み。経緯は `data-pipeline.md` の注記）。3 地点すべてで金額ラベルと帰属表示が出ることを確認する。
 
 ### 5. 異常があれば `all-real-v4` へ切り戻す
 
@@ -177,6 +179,23 @@ Google マップは iPhone の Safari と Android の Chrome を対象に、ア�
 ## 公開条件
 
 全候補の必須制約を検証でき、未検証区間を含まないこと。対応地域、データ基準日、時間の仮定、課金対象1区間と金額の確認状態が読めること。外部ナビへの引き継ぎが代表端末で成立すること。位置拒否や候補なしから再操作できること。配信と住所検索の利用条件・費用を確定し、監視と直前版への復旧を実演できることを条件とする。
+
+### 公開条件の充足状況（Issue #16）
+
+条件ごとに、どの実装・テストが担保しているかを記録する。**実機・外部設定に依存する項目は未実施のまま残す**（このリポジトリの作業だけでは閉じられない）。
+
+| 条件 | 状態 | 担保・根拠 |
+| --- | --- | --- |
+| 地図領域の ODbL 帰属表示とライセンスへのリンクが常時見える | 充足 | `web/src/map/tiles.ts` の `OSM_ATTRIBUTION` / 国土地理院帰属（どちらも `openstreetmap.org/copyright` と地理院の利用規約へリンク）。E2E `(6)` がテキストとリンクを実測 |
+| フッターへの帰属表示 | 未実施 | 地図領域のみ。フッター複製は UI 変更として別途判断する |
+| HTTP セキュリティヘッダー（CSP / nosniff / HSTS 等） | 充足 | 静的アセットは `web/public/_headers`、Worker 応答は `workers/src/security.ts`。`workers/test/security-headers.test.ts` が両者の一致と全経路のヘッダーを、E2E `(74)` が実測を担う（[インターフェース](interfaces.md) の「セキュリティヘッダー」） |
+| CSP 違反なく WASM・タイル・API が動く | 充足（Chromium のみ） | E2E `(74)` がコンソールの CSP 違反ゼロと、ヘッダー付きで読み込んだアプリの実探索成立を確認する。Safari / Firefox は未計測 |
+| アプリ由来のログに座標・住所・検索語を残さない | 充足 | Worker の構造化ログはイベント名・status・duration・releaseId・成果物名だけを持つ（クエリ文字列を含めない）。`workers/test/security-headers.test.ts` が検索語・緯度経度・`q=` を含まないことを固定 |
+| プラットフォームのアクセスログに座標・検索語が出ないこと | 未確認 | Cloudflare 側のログ設定（Logpush / Workers Logs）はダッシュボードで確認する必要がある |
+| 住所検索 API の IP 単位レート制限と月間上限アラート | 一部充足 | `IP_RATE_LIMITER`（10 req/60 s）と `GLOBAL_RATE_LIMITER`（600 req/60 s）は `workers/cloudflare.config.ts` の binding で設定済み・`workers/test/geocode.test.ts` が 429 を検証。月間上限アラートは Cloudflare の通知設定（外部作業） |
+| releaseId 切り替えによるロールバック | 手順は充足・実演は未実施 | 切り戻しは `web/src/worker/artifact-hashes.ts` の `DEFAULT_RELEASE_ID` 1 行で、`web/test/release-rollback.test.ts` が allowlist 同期と既定の隣接関係を固定する。本番での切り戻し実演はデプロイ作業後 |
+| 外部ナビ（Google マップ）の実機引き継ぎ | 未実施 | 下の「Google マップ実機引き継ぎの検証記録」を参照（Issue #72） |
+| 未検証区間を候補に含めない | 充足 | 成果物の候補は `eligible_for_review` のみを商品候補にし、`hold` の 1 件（`bp:c1-outer:shibakoen-iikura`）と `topologyOnly` の動的 OD は金額なし・商品対象外で表示する。E2E `(73)` が未価格候補の表示、`(45)` が商品 cohort 外の表示を固定する |
 
 ## Google マップ実機引き継ぎの検証記録
 

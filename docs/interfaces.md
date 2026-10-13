@@ -39,6 +39,31 @@ R2 での格納形式はサイズ計測後に決める。スキーマと WASM �
 | `GET /releases/{releaseId}/{artifact}` | 成果物 allowlist に含まれるファイルのみ配信（`.wasm` は `application/wasm`、`.json` は `application/json; charset=utf-8`、`.js` は `text/javascript; charset=utf-8`、`.d.ts` は `text/plain; charset=utf-8`。`Cache-Control: public, max-age=31536000, immutable`、ETag 付与、`If-None-Match` 一致時 304、HEAD 対応）。未知版・allowlist 外・パストラバーサル（`..`、`%2e`）・manifest 未配置版はすべて 404 |
 | `POST /api/geocode` | `{ "query": "住所" }` → `{ "candidates": [{ "label": "住所", "lat": 35.0, "lon": 139.0 }] }`。0 件ヒット時は 200 で `{ "candidates": [] }`。全応答（成功・エラー問わず）`Cache-Control: no-store` |
 
+### セキュリティヘッダー（Issue #16）
+
+配信は 2 経路あり、ヘッダーの付与先も分かれる。静的アセット（HTML / JS / CSS / WASM glue）は
+Cloudflare Workers Static Assets が Worker コードを経由せずに返すため `web/public/_headers`
+（`vite build` が `dist/` 直下へコピーする）が、Worker が生成する応答（`/releases/*`、`/api/*`）
+には `workers/src/security.ts` が付与する。
+
+| ヘッダー | 値 | 付与先 | 理由 |
+| --- | --- | --- | --- |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'` | 静的アセットのみ | 同一オリジンの成果物と住所検索プロキシ、地図タイル、WASM 実行だけを許可する |
+| `X-Content-Type-Options` | `nosniff` | 両方 | R2 から返す成果物の MIME をブラウザに推測させない |
+| `X-Frame-Options` | `DENY` | 両方 | クリックジャッキング防止。CSP の `frame-ancestors` は meta タグでは無視されるため、ヘッダーでしか効かない |
+| `Referrer-Policy` | `no-referrer` | 両方 | 検索語・座標を含む URL を外部へ漏らさない |
+| `Permissions-Policy` | `camera=(), microphone=(), payment=(), usb=(), geolocation=(self)` | 両方 | 現在地検索のための位置情報だけを自オリジンに許可し、他は無効化する |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | 両方（HTTPS のみ） | workers.dev は HSTS preload 済みだが、独自ドメインへ移しても同じ保証を効かせる |
+
+- Worker 側は成果物の `Cache-Control` / `ETag` / `Content-Type` を保持したまま付与し、304 でも
+  本文を持たせない（`workers/test/security-headers.test.ts`）
+- `web/index.html` の meta タグにも同じ CSP を置く（Vite の dev サーバでは `_headers` が効かず、
+  キャッシュされた古い HTML もあり得るため）。meta では `frame-ancestors` が無視され Chromium が
+  警告を出すので meta 側には書かない。両者のディレクティブの一致と、`_headers` が Worker と
+  同じ非 CSP ヘッダーを持つことは `workers/test/security-headers.test.ts` が検査する
+- E2E `(74)` が文書・成果物の応答ヘッダーと、ヘッダー付きで読み込んだアプリの実探索
+  （WASM・Worker・タイル）を実測し、CSP 違反がコンソールに出ないことを確認する
+
 ### 成果物 allowlist
 成果物配信（`/releases/{releaseId}/{artifact}`）で許可されるファイル名は以下の固定リストに限定される:
 - `manifest.json`

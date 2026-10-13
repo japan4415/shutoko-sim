@@ -173,12 +173,22 @@ fn full_network_kind_counts_and_ramp_decidability_are_pinned() {
     // The output graph is Shutoko-only: surface roads are context, never edges.
     assert_eq!(counts.local, 0, "the graph must not contain Local edges");
 
-    // Every ramp endpoint is decidable with the full extract: classification is structural
-    // (surface connection or OSM node tag), so no endpoint falls back to the conservative
-    // Shutoko default. A non-zero count means the extract lost surface context.
+    // The node-sharing test proves a street connection when it succeeds, but the extract only
+    // ships surface ways as node-ID lists (see the context-ways pass in scripts/fetch-osm.sh),
+    // so it can never disprove one: every surface node with coordinates is also a ramp/mainline
+    // node. The 66 ramp candidates that share no surface node are therefore reported as missing
+    // per-location surface evidence (issue #37) rather than being confirmed as JCT connectors.
+    // 12 of them carry highway=motorway_junction and stay Shutoko on that tag alone; the
+    // remaining 54 are undecidable and keep the conservative Shutoko default — which is why the
+    // kind counts above are unchanged by the per-location rule. All 54 are unnamed ramp
+    // free-ends at toll plazas, rest areas or management roads.
     assert_eq!(
-        report.undecidable_ramp_edges, 0,
-        "the full-network extract must classify every ramp endpoint (no undecidable edges)"
+        report.surface_evidence_unavailable_ramp_edges, 66,
+        "ramp candidates without per-location surface evidence changed"
+    );
+    assert_eq!(
+        report.undecidable_ramp_edges, 54,
+        "ramp endpoints the extract cannot judge must be reported, not assumed (issue #37)"
     );
 }
 

@@ -579,6 +579,13 @@ test("(6) カード選択と地図が同期し帰属表示と経路線がある"
   const attribution = page.locator("#map .leaflet-control-attribution");
   await expect(attribution).toContainText("OpenStreetMap");
   await expect(attribution).toContainText("国土地理院");
+  // 帰属はテキストだけでなくライセンスページへのリンクであること（Issue #16）。
+  await expect(
+    attribution.locator('a[href="https://www.openstreetmap.org/copyright"]'),
+  ).toBeAttached();
+  await expect(
+    attribution.locator('a[href="https://maps.gsi.go.jp/development/ichiran.html"]'),
+  ).toBeAttached();
 
   // 経路の線が描画されている。
   await expect(page.locator("#map .leaflet-overlay-pane path").first()).toBeAttached();
@@ -1795,4 +1802,51 @@ test("(73) 未価格の候補には料金の注記を出さない（商品対象
   await expect(card.locator(".toll")).toHaveText("参考料金: 未算出");
   await expect(card.locator(".fare-label")).toHaveCount(0);
   await expect(card.locator(".recommended")).toHaveCount(0);
+});
+
+// (74) Issue #16: 限定公開前のセキュリティヘッダー整備の E2E 検証。
+// 文書（静的アセット = web/public/_headers）と、Worker が生成する成果物応答の両方に
+// ヘッダーが付くこと、そして CSP の下で実 WASM・実 graph の探索が動くことを確認する。
+test("(74) 配信ヘッダーが文書と成果物に付き、CSP 下で実探索が動く", async ({ page }) => {
+  const cspViolations: string[] = [];
+  page.on("console", (message) => {
+    if (/content security policy/i.test(message.text())) {
+      cspViolations.push(message.text());
+    }
+  });
+  page.on("pageerror", (error) => {
+    if (/content security policy/i.test(error.message)) {
+      cspViolations.push(error.message);
+    }
+  });
+
+  // 静的アセット（index.html）: _headers が適用される経路
+  const document = await page.request.get("/");
+  expect(document.status()).toBe(200);
+  const documentHeaders = document.headers();
+  expect(documentHeaders["content-security-policy"]).toContain("frame-ancestors 'none'");
+  expect(documentHeaders["x-frame-options"]).toBe("DENY");
+  expect(documentHeaders["x-content-type-options"]).toBe("nosniff");
+  expect(documentHeaders["referrer-policy"]).toBe("no-referrer");
+  expect(documentHeaders["permissions-policy"]).toContain("geolocation=(self)");
+
+  // Worker が生成する成果物: _headers は効かないので security.ts が付ける経路
+  const artifact = await page.request.get("/releases/all-real-v5/snap-index.json");
+  expect(artifact.status()).toBe(200);
+  const artifactHeaders = artifact.headers();
+  expect(artifactHeaders["x-content-type-options"]).toBe("nosniff");
+  expect(artifactHeaders["x-frame-options"]).toBe("DENY");
+  expect(artifactHeaders["referrer-policy"]).toBe("no-referrer");
+  // 成果物のキャッシュヘッダーは壊さない
+  expect(artifactHeaders["cache-control"]).toBe("public, max-age=31536000, immutable");
+
+  // ヘッダー付きで読み込んだアプリで、実際に探索が通ること（WASM / Worker / タイル）
+  await openApp(page);
+  await page.selectOption("#origin-preset", "kandabashi");
+  await page.fill("#min-minutes", "15");
+  await page.fill("#max-minutes", "60");
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card").first()).toBeVisible();
+
+  expect(cspViolations).toEqual([]);
 });

@@ -419,7 +419,8 @@ test("未知の billingPairsVersion と tariffModelVersion 欠落は投入前に
 test("generated graph and manifest use the same route membership hash", () => {
   const graph = JSON.parse(generatedGraph);
   const manifest = JSON.parse(generatedManifest);
-  assert.equal(graph.schemaVersion, 4);
+  // schema 5 はノード ID のワイヤ形式だけが違い、routeMemberships の意味論は schema 4 と同じ。
+  assert.equal(graph.schemaVersion, 5);
   assert.equal(manifest.releaseId, "all-real-v5");
   assert.equal(manifest.billingPairsVersion, "v3");
   assert.equal(manifest.tariffModelVersion, 1);

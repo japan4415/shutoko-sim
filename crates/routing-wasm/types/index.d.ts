@@ -518,7 +518,7 @@ export interface RouteMembershipIndex {
 }
 
 export interface GraphDocument {
-  schemaVersion: 2 | 3 | 4;
+  schemaVersion: 2 | 3 | 4 | 5;
   releaseId: string;
   vehicleProfile: string;
   nodes: unknown[];

@@ -1,6 +1,6 @@
 # 実データ道路グラフ・課金ペア生成パイプライン
 
-本ドキュメントでは、OpenStreetMap（OSM）実データから首都高速道路の全24路線と接続ランプを抽出し、決定論的な成果物（`graph.json`、`od-tariffs.json`、`pair-candidates.json`、`ramps.json`、`snap-index.json`、`manifest.json`）を生成するオフラインパイプラインの仕様と手順を記録する。一般道はルーティンググラフのエッジには含めないが、入口・出口ランプの分類コンテキストとして取得・参照し、ランプ端点の確定（`firstPublicRoadConnection/v1`）と 1 区間先出口の判定（relation 制約つきの First Exit）に使う。現行公開 release は `all-real-v5`（graph schema 4、`billingPairsVersion=v3`、`tariffModelVersion=1`）で、rollback 先は `all-real-v4`。
+本ドキュメントでは、OpenStreetMap（OSM）実データから首都高速道路の全24路線と接続ランプを抽出し、決定論的な成果物（`graph.json`、`od-tariffs.json`、`pair-candidates.json`、`ramps.json`、`snap-index.json`、`manifest.json`）を生成するオフラインパイプラインの仕様と手順を記録する。一般道はルーティンググラフのエッジには含めないが、入口・出口ランプの分類コンテキストとして取得・参照し、ランプ端点の確定（`firstPublicRoadConnection/v1`）と 1 区間先出口の判定（relation 制約つきの First Exit）に使う。現行公開 release は `all-real-v5`（graph schema 5、`billingPairsVersion=v3`、`tariffModelVersion=1`）で、rollback 先は `all-real-v4`（graph schema 4）。
 
 ## 1. ライセンスと帰属表示
 
@@ -26,7 +26,7 @@
 - **ファイル SHA-256**: `566f3d7910c3962600e05d0e9d442b0621ae2bcac817fd375b60267f8a22a4c9`
 - **ファイルサイズ**: 4,203,540 bytes
 - **要素数**: 合計 26,847 要素（ノード 23,661 / way 3,125 / リレーション 61）
-- **生成 release**: `all-real-v5`（graph schema 4）
+- **生成 release**: `all-real-v5`（graph schema 5）
 
 ### C1限定スナップショット（歴史・回帰用）
 
@@ -578,7 +578,7 @@ generated graph の `billingPairs[]` も同じ判別 union とする。schema 2/
 
 `resolvedRouteSegments` の role は `entry_approach`, `mandatory_lap`, `return_corridor`, `exit_approach` の4種類だけにする。Candidate では各 role を `edgeRouteLegs` の `startEdgeIndex`（含む）から `endEdgeIndexExclusive`（含まない）へ写す。一般道の surface access / return は Edge を持たないため、graph segment にも Candidate の Edge index にも入れない。
 
-schema 4 の manifest は `billingPairsVersion=v3`、`tariffModelVersion=1`、`graphSchemaVersion=4`、`routePlanVersion=1`、決定論的な `routeMembershipsSha256`、導出ルールの `pairDerivation`（`rule=billingPairDerivation/v2` と 5 入力の SHA-256、候補集計）を記録し、`graph.json`、`od-tariffs.json`、`pair-candidates.json`、`ramps.json` と release ID を結び付ける。旧 manifest の schema 1/2 record は上書きしない。`all-real-v5` はこの契約で生成し、`all-real-v4` / `all-real-v4` / `all-real-v3` は rollback 用に残す。公開 release の切替は、consumer reader と Web/Workers の検証、および R2 の read-back が通った後に行う。
+schema 4 / 5 の manifest は `billingPairsVersion=v3`、`tariffModelVersion=1`、`graphSchemaVersion`（現行 5、rollback 先の `all-real-v4` は 4）、`routePlanVersion=1`、決定論的な `routeMembershipsSha256`、導出ルールの `pairDerivation`（`rule=billingPairDerivation/v2` と 5 入力の SHA-256、候補集計）を記録し、`graph.json`、`od-tariffs.json`、`pair-candidates.json`、`ramps.json` と release ID を結び付ける。旧 manifest の schema 1/2 record は上書きしない。`all-real-v5` はこの契約で生成し、`all-real-v4` / `all-real-v4` / `all-real-v3` は rollback 用に残す。公開 release の切替は、consumer reader と Web/Workers の検証、および R2 の read-back が通った後に行う。
 
 ### 3.3 `RouteMembershipIndex` は本線 relation と ramp binding を別々に証明する
 
@@ -748,7 +748,7 @@ cargo run --bin shutoko-graph-builder --locked -- \
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
-| `graph.json` | 4 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 14件（legacy 12 + radial 2）、route memberships 52件、ramps 238件 | 7,655,199 bytes |
+| `graph.json` | 5 | 22,824 nodes / 22,987 edges（Shutoko 22,621、Entry 168、Exit 198）、billing pairs 14件（legacy 12 + radial 2）、route memberships 52件、ramps 238件。schema 5 はノード ID を昇順差分（`nodeIdDeltas`）、座標を `[lat, lon]`、edges の `from`/`to` を位置インデックスで持ち、整形なしで出力する（Issue #43。gzip 後 649,057 → 525,118 B） | 4,113,803 bytes |
 | `od-tariffs.json` | 3 | 料金表 v3（規則 2 件、evidence 26 件、assignment 13 件、deprecated 2 件） | 61,284 bytes |
 | `pair-candidates.json` | 2 | 導出レポート（候補 14 件 = eligible 13 / hold 1、relation coverage 26 件 = pass 11 / fail 15） | 91,097 bytes |
 | `ramps.json` | 1 | 正規台帳399件、うちbound 238件 | 278,803 bytes |

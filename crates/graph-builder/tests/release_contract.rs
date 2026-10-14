@@ -61,7 +61,10 @@ fn builder_command(out_dir: &Path, release_id: &str) -> Command {
         .arg("--coverage-area")
         .arg("Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)")
         .arg("--graph-version")
-        .arg("1.0.0");
+        .arg("1.0.0")
+        // full release（all-real-v5）は graph schema 5（Issue #43）。
+        .arg("--graph-schema")
+        .arg("5");
     command
 }
 
@@ -240,7 +243,7 @@ fn release_manifest_binds_every_artifact_and_input_hash() {
     let root = repo_root();
 
     assert_eq!(manifest["releaseId"], "all-real-v5");
-    assert_eq!(manifest["graphSchemaVersion"], 4);
+    assert_eq!(manifest["graphSchemaVersion"], 5);
     assert_eq!(manifest["routePlanVersion"], 1);
     assert_eq!(manifest["billingPairsVersion"], "v3");
     assert_eq!(manifest["tariffModelVersion"], 1);

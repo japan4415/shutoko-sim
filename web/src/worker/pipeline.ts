@@ -72,7 +72,9 @@ export class PipelineError extends Error {
   }
 }
 
-export const SUPPORTED_GRAPH_SCHEMA_VERSIONS = [2, 3, 4] as const;
+// schema 5 は nodes / edges のワイヤ形式だけが違い（nodeIdDeltas + 位置インデックス、
+// Issue #43）。意味論は schema 4 と同じで、reader（WASM 側）が n:<osmId> を再構築する。
+export const SUPPORTED_GRAPH_SCHEMA_VERSIONS = [2, 3, 4, 5] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -151,9 +153,9 @@ export function parseGraphDocument(graphJson: string): GraphDocument {
   const schemaVersion = value.schemaVersion;
   if (
     typeof schemaVersion !== "number" ||
-    !SUPPORTED_GRAPH_SCHEMA_VERSIONS.includes(schemaVersion as 2 | 3 | 4)
+    !SUPPORTED_GRAPH_SCHEMA_VERSIONS.includes(schemaVersion as 2 | 3 | 4 | 5)
   ) {
-    throw graphContractMismatch("graph.json: schemaVersion が 2 / 3 / 4 以外です");
+    throw graphContractMismatch("graph.json: schemaVersion が 2 / 3 / 4 / 5 以外です");
   }
   if (
     typeof value.releaseId !== "string" ||
@@ -164,9 +166,50 @@ export function parseGraphDocument(graphJson: string): GraphDocument {
   ) {
     throw graphContractMismatch("graph.json: 必須 field が欠落または型違いです");
   }
-  if (schemaVersion === 4) {
+  if (schemaVersion === 4 || schemaVersion === 5) {
     if (!Array.isArray(value.routeMemberships)) {
-      throw graphContractMismatch("graph.json: schema 4 の routeMemberships がありません");
+      throw graphContractMismatch(
+        `graph.json: schema ${String(schemaVersion)} の routeMemberships がありません`,
+      );
+    }
+    if (schemaVersion === 5) {
+      // ワイヤ形式の検証: 差分配列・[lat, lon] 配列・位置インデックスの整合。
+      // 実際の id 復元と範囲検査は reader（WASM 側）が fail-closed で行う。
+      if (
+        !Array.isArray(value.nodeIdDeltas) ||
+        value.nodeIdDeltas.length === 0 ||
+        value.nodeIdDeltas.some((delta: unknown) => typeof delta !== "number")
+      ) {
+        throw graphContractMismatch(
+          "graph.json: schema 5 の nodeIdDeltas が正の数値の配列ではありません",
+        );
+      }
+      if (
+        !Array.isArray(value.nodes) ||
+        value.nodes.length !== value.nodeIdDeltas.length ||
+        value.nodes.some(
+          (node: unknown) =>
+            !Array.isArray(node) || node.length !== 2 || node.some((v: unknown) => typeof v !== "number"),
+        )
+      ) {
+        throw graphContractMismatch(
+          "graph.json: schema 5 の nodes は nodeIdDeltas と同じ長さの [lat, lon] 配列が必要です",
+        );
+      }
+      if (
+        value.edges.some(
+          (edge: unknown) =>
+            !isRecord(edge) ||
+            typeof edge.from !== "number" ||
+            typeof edge.to !== "number" ||
+            edge.from < 0 ||
+            edge.to < 0,
+        )
+      ) {
+        throw graphContractMismatch(
+          "graph.json: schema 5 の edges の from / to は 0 以上の位置インデックスが必要です",
+        );
+      }
     }
     value.billingPairs.forEach(validateSchema4BillingPair);
   } else if (value.routeMemberships !== undefined) {
@@ -502,7 +545,7 @@ async function validateGraphManifestContract(
       `manifest.json: graphSchemaVersion が graph.json と一致しません（expected ${String(graphSchemaVersion)}）`,
     );
   }
-  if (graphSchemaVersion !== 4) return;
+  if (graphSchemaVersion !== 4 && graphSchemaVersion !== 5) return;
   if (manifest.schemaVersion !== 1) {
     throw graphContractMismatch("manifest.json: schemaVersion=1 の記録が必要です");
   }
@@ -511,8 +554,10 @@ async function validateGraphManifestContract(
       `manifest.json: releaseId が要求された releaseId と一致しません（expected ${releaseId}）`,
     );
   }
-  if (manifest.graphSchemaVersion !== 4) {
-    throw graphContractMismatch("manifest.json: graphSchemaVersion=4 の記録が必要です");
+  if (manifest.graphSchemaVersion !== 4 && manifest.graphSchemaVersion !== 5) {
+    throw graphContractMismatch(
+      "manifest.json: graphSchemaVersion=4 または 5 の記録が必要です",
+    );
   }
   if (manifest.billingPairsVersion !== "v2" && manifest.billingPairsVersion !== "v3") {
     // v2 は all-real-v3（rollback 先）、v3 は all-real-v4 / all-real-v5。両方の graph 契約が

@@ -243,13 +243,18 @@ cold 2 回・warm 2 回（40 試行、失敗 0 コンテキスト）。
    `Cargo.toml` の `opt-level` を `"s"` → `"z"` にすると gzip はさらに 310,156 B
    （strip 後 246,779 B）まで下がるが、`prepare` が 320 ms（+25%）、探索中央値が
    16.3 ms（+17%）になる。転送の利得 ≈0.19 秒を CPU の増分がほぼ食うため**採用しない**。
-5. **graph.json のノード ID インデックス化（未実装・実測見込み −136 KB ≈ −0.68 秒）**。
+5. **graph.json のノード ID インデックス化（2026-10-15 実装・schema 5）**。
    圧縮後の graph.json 649,057 B の内訳は edges 299,399（うち `from`/`to` の
    `"n:<osmId>"` 文字列が 155,084）、nodes 256,361（うち `id` が 56,017）で、
-   **ノード ID 文字列だけで 33%** を占める。nodes を配列位置で参照し edges の
-   `from`/`to` を整数インデックスにすると（`schemaVersion` 5 相当）、生 7.37 → 4.04 MB、
-   gzip 649,057 → 512,669 B（`JSON.parse` も 32.6 → 25.8 ms）。成果物の版を上げる作業が
-   必要だが、予算 691 ms のうち **約 0.68 秒**を 1 つの変更で賄える。
+   **ノード ID 文字列だけで 33%** を占める。graph schema 5 として、ノード id を
+   **昇順の差分**（`nodeIdDeltas`、id は 9 桁の乱数に近くそのままでは圧縮が効かないため
+   ソートして差分にする）、座標を `[lat, lon]` 配列、edges の `from`/`to` を位置インデックスで
+   持ち、整形なしで出力するようにした。実測（`fixtures/generated/graph.json`）:
+   生 7,655,199 → **4,113,803 B**、gzip -9 649,057 → **525,118 B（−123,939 B ≈ Slow 4G で
+   −0.62 秒）**。id を完全に落とす案（gzip 512,669 B）との差は 12 KB で、検索結果の
+   `nearestAccess.nodeId`（`"n:<osmId>"`）と snap-index・ramps・billingPairs の node 参照の
+   契約を保つ方を採った。reader は差分から `n:<osmId>` を再構築し、schema 2〜4 の読み込みは
+   rollback 先のために維持する。
 6. **WASM の探索コスト自体**。`expandedStates` は起点ごとに 232〜57,480 と約 250 倍の開きが
    ある（scout-003 F5）。最悪ケース（exp ≈ 57k）で p95 2 秒を判定する。探索アルゴリズムの
    改善は別 issue。

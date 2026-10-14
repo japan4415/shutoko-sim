@@ -23,7 +23,40 @@ fn real_graph_str() -> &'static str {
 
 fn real_graph() -> Graph {
     let mut wire: Value =
-        serde_json::from_str(real_graph_str()).expect("schema 4 graph JSON must deserialize");
+        serde_json::from_str(real_graph_str()).expect("schema 5 graph JSON must deserialize");
+    // schema 5 のワイヤ（nodeIdDeltas + 位置インデックス）を schema 2 形状へ正規化する。
+    // reader と同じ復元: 差分を累積して `n:<osmId>` を作り、edges の from / to を張り替える。
+    let deltas = wire["nodeIdDeltas"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|delta| delta.as_i64().expect("node id delta must be an integer"))
+        .collect::<Vec<i64>>();
+    let coordinates = wire["nodes"].as_array().unwrap().clone();
+    assert_eq!(deltas.len(), coordinates.len());
+    let mut node_ids = Vec::with_capacity(deltas.len());
+    let mut previous: i64 = 0;
+    for delta in &deltas {
+        previous += delta;
+        node_ids.push(format!("n:{previous}"));
+    }
+    wire["nodes"] = node_ids
+        .iter()
+        .zip(coordinates.iter())
+        .map(|(id, coordinate)| json!({"id": id, "lat": coordinate[0], "lon": coordinate[1]}))
+        .collect();
+    wire["edges"] = wire["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|edge| {
+            let mut rebuilt = edge.clone();
+            rebuilt["from"] = json!(node_ids[edge["from"].as_u64().unwrap() as usize]);
+            rebuilt["to"] = json!(node_ids[edge["to"].as_u64().unwrap() as usize]);
+            rebuilt
+        })
+        .collect();
+    wire.as_object_mut().unwrap().remove("nodeIdDeltas");
     wire["schemaVersion"] = json!(2);
     wire.as_object_mut().unwrap().remove("routeMemberships");
     wire.as_object_mut().unwrap().remove("odTariffsV3");
@@ -91,7 +124,19 @@ fn real_graph() -> Graph {
 #[test]
 fn real_graph_deserialization_and_schema_validation() {
     let wire: Value = serde_json::from_str(real_graph_str()).unwrap();
-    assert_eq!(wire["schemaVersion"], 4);
+    // schema 5: nodeIdDeltas + [lat, lon] のノード配列、edges の from / to は位置インデックス。
+    assert_eq!(wire["schemaVersion"], 5);
+    assert!(
+        wire["nodeIdDeltas"].as_array().unwrap().len() == wire["nodes"].as_array().unwrap().len()
+    );
+    assert!(
+        wire["nodes"][0].is_array(),
+        "schema 5 nodes must be [lat, lon] arrays"
+    );
+    assert!(
+        wire["edges"][0]["from"].is_u64(),
+        "schema 5 edge endpoints must be indices"
+    );
     assert_eq!(wire["releaseId"], "all-real-v5");
     assert_eq!(wire["billingPairs"].as_array().unwrap().len(), 14);
     assert!(wire["routeMemberships"].as_array().is_some());

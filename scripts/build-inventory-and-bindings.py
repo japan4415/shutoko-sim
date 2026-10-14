@@ -22,6 +22,11 @@ Requirements:
 import hashlib
 import json
 import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from graph_wire import load_graph  # noqa: E402  (repo-local helper)
 
 FACILITY_SLUG_MAP = {
     "神田橋": "kandabashi", "宝町": "takaracho", "京橋": "kyobashi",
@@ -233,8 +238,8 @@ def main():
 
     osm_ways = {e["id"]: e for e in osm.get("elements", []) if e["type"] == "way"}
     osm_nodes = {e["id"]: e for e in osm.get("elements", []) if e["type"] == "node"}
-    with open("fixtures/generated/graph.json", "r", encoding="utf-8") as f:
-        g = json.load(f)
+    # schema 5（nodeIdDeltas + 位置インデックス）を schema 4 形状へ正規化して読む。
+    g = load_graph()
 
     directed_edges = {}
     for e in g["edges"]:

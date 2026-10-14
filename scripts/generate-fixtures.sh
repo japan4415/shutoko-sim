@@ -36,4 +36,5 @@ cargo run --manifest-path "${REPO_ROOT}/Cargo.toml" --bin shutoko-graph-builder 
   --source-date "2026-09-16" \
   --vehicle-profile "passenger-car-etc" \
   --coverage-area "Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)" \
-  --graph-version "1.0.0"
+  --graph-version "1.0.0" \
+  --graph-schema 5

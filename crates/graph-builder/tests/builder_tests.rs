@@ -12,7 +12,46 @@ use std::collections::HashMap;
 fn generated_legacy_graph() -> Graph {
     let graph_json = include_str!("../../../fixtures/generated/graph.json");
     let mut wire: serde_json::Value = serde_json::from_str(graph_json).unwrap();
-    assert_eq!(wire["schemaVersion"], 4);
+    assert_eq!(wire["schemaVersion"], 5);
+    // schema 5 のワイヤ（nodeIdDeltas + 位置インデックス）を schema 2 形状へ正規化する。
+    // reader と同じ復元: 差分を累積して `n:<osmId>` を作り、edges の from / to を張り替える。
+    let deltas = wire["nodeIdDeltas"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|delta| delta.as_i64().expect("node id delta must be an integer"))
+        .collect::<Vec<i64>>();
+    let coordinates = wire["nodes"].as_array().unwrap().clone();
+    assert_eq!(deltas.len(), coordinates.len());
+    let mut node_ids = Vec::with_capacity(deltas.len());
+    let mut previous: i64 = 0;
+    for delta in &deltas {
+        previous += delta;
+        node_ids.push(format!("n:{previous}"));
+    }
+    wire["nodes"] = node_ids
+        .iter()
+        .zip(coordinates.iter())
+        .map(|(id, coordinate)| {
+            json!({
+                "id": id,
+                "lat": coordinate[0],
+                "lon": coordinate[1],
+            })
+        })
+        .collect();
+    wire["edges"] = wire["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|edge| {
+            let mut rebuilt = edge.clone();
+            rebuilt["from"] = json!(node_ids[edge["from"].as_u64().unwrap() as usize]);
+            rebuilt["to"] = json!(node_ids[edge["to"].as_u64().unwrap() as usize]);
+            rebuilt
+        })
+        .collect();
+    wire.as_object_mut().unwrap().remove("nodeIdDeltas");
     wire["schemaVersion"] = json!(2);
     wire.as_object_mut().unwrap().remove("routeMemberships");
     wire.as_object_mut().unwrap().remove("odTariffsV3");

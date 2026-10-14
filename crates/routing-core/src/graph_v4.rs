@@ -366,6 +366,8 @@ pub(crate) struct ParsedGraph {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct GraphEnvelope {
+    /// ワイヤ上の schemaVersion。意味論版（semantic_schema_version）と一致していなければ
+    /// 拒否する（schema 5 は 4 に正規化されて渡るため、ここは 2 / 3 / 4 のみ）。
     schema_version: u32,
     release_id: String,
     vehicle_profile: String,
@@ -394,6 +396,121 @@ struct GraphEnvelope {
     route_memberships: Option<Vec<RouteMembershipIndex>>,
 }
 
+/// graph schema 5 のワイヤ形式（Issue #43）。ノード ID を `"n:<osmId>"` の文字列で持つ代わりに、
+/// **id 昇順の差分**（`nodeIdDeltas`）と座標配列 `[lat, lon]` で持ち、edges の `from` / `to` は
+/// ノード配列の位置インデックスにする。意味論は schema 4 と同じ（routeMemberships 必須、
+/// billingPairs は pairKind 必須）で、reader が `"n:<osmId>"` を再構築して既存の検証へ流す。
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GraphEnvelopeV5 {
+    schema_version: u32,
+    release_id: String,
+    vehicle_profile: String,
+    /// 昇順に並べたノード id の差分。先頭が最小 id（絶対値）。
+    node_id_deltas: Vec<i64>,
+    /// `[lat, lon]`。`nodeIdDeltas` と同じ順（id 昇順）。
+    nodes: Vec<[f64; 2]>,
+    edges: Vec<EdgeWireV5>,
+    billing_pairs: Vec<Value>,
+    #[serde(default)]
+    forbidden_transitions: Vec<Vec<String>>,
+    #[serde(default)]
+    ramps: Vec<crate::Ramp>,
+    #[serde(default)]
+    od_tariffs: Option<Value>,
+    #[serde(default)]
+    tariff: Option<Value>,
+    #[serde(default)]
+    od_tariffs_v3: Option<Value>,
+    #[serde(default)]
+    tariff_catalog: Option<Value>,
+    #[serde(default)]
+    tariff_model: Option<Value>,
+    #[serde(default)]
+    billing_pairs_version: Option<String>,
+    #[serde(default)]
+    tariff_model_version: Option<u32>,
+    #[serde(default)]
+    route_memberships: Option<Vec<RouteMembershipIndex>>,
+}
+
+/// schema 5 の edge。`from` / `to` はノード配列の位置インデックス。
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct EdgeWireV5 {
+    id: String,
+    from: usize,
+    to: usize,
+    kind: crate::EdgeKind,
+    duration_seconds: u64,
+    distance_meters: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+}
+
+impl GraphEnvelopeV5 {
+    /// 差分から `n:<osmId>` を再構築する。空・繰り返し・非正は fail-closed。
+    fn decode_nodes(&self) -> Result<Vec<crate::Node>, String> {
+        if self.node_id_deltas.is_empty() {
+            return Err("graph schema 5 requires a non-empty nodeIdDeltas".to_string());
+        }
+        if self.nodes.len() != self.node_id_deltas.len() {
+            return Err(
+                "graph schema 5 requires nodeIdDeltas and nodes to have the same length"
+                    .to_string(),
+            );
+        }
+        let mut nodes = Vec::with_capacity(self.nodes.len());
+        let mut previous: i64 = 0;
+        for (index, (delta, coordinates)) in self
+            .node_id_deltas
+            .iter()
+            .zip(self.nodes.iter())
+            .enumerate()
+        {
+            if *delta <= 0 || (index == 0 && self.node_id_deltas[0] <= 0) {
+                return Err(format!(
+                    "graph schema 5 node id delta must be positive at {index} (got {delta})"
+                ));
+            }
+            previous += delta;
+            let [lat, lon] = coordinates;
+            nodes.push(crate::Node {
+                id: format!("n:{previous}"),
+                lat: *lat,
+                lon: *lon,
+            });
+        }
+        Ok(nodes)
+    }
+
+    /// edges の `from` / `to`（位置インデックス）を `n:<osmId>` へ張り替える。
+    fn decode_edges(&self, nodes: &[crate::Node]) -> Result<Vec<crate::Edge>, String> {
+        let node_count = nodes.len();
+        self.edges
+            .iter()
+            .enumerate()
+            .map(|(index, edge)| {
+                if edge.from >= node_count || edge.to >= node_count {
+                    return Err(format!(
+                        "edge {index} ({}) references a node index outside 0..{node_count}",
+                        edge.id
+                    ));
+                }
+                Ok(crate::Edge {
+                    id: edge.id.clone(),
+                    from: nodes[edge.from].id.clone(),
+                    to: nodes[edge.to].id.clone(),
+                    kind: edge.kind,
+                    duration_seconds: edge.duration_seconds,
+                    distance_meters: edge.distance_meters,
+                    name: edge.name.clone(),
+                })
+            })
+            .collect()
+    }
+}
+
 pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> {
     const MAX_GRAPH_JSON_BYTES: usize = 512 * 1024 * 1024;
     if input.len() > MAX_GRAPH_JSON_BYTES {
@@ -405,13 +522,51 @@ pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> 
         .and_then(Value::as_u64)
         .and_then(|version| u32::try_from(version).ok())
         .ok_or_else(|| invalid("unsupported graph schema version"))?;
-    if !(2..=4).contains(&schema_version) {
+    if !(2..=5).contains(&schema_version) {
         return Err(invalid("unsupported graph schema version"));
     }
     let has_route_memberships = value.get("routeMemberships").is_some();
-    let envelope: GraphEnvelope =
-        serde_json::from_value(value).map_err(|_| invalid("invalid graph JSON"))?;
-    if schema_version != 4 && has_route_memberships {
+    // schema 5 はワイヤ形式だけが違い、意味論は schema 4 と同じ（routeMemberships 必須、
+    // billingPairs は pairKind 必須）。reader が n:<osmId> を再構築して v4 相当の構造へ
+    // 正規化し、以降の検証・探索は v4 と同じ経路を通る。
+    let semantic_schema_version = if schema_version == 5 {
+        4
+    } else {
+        schema_version
+    };
+    let envelope: GraphEnvelope = if schema_version == 5 {
+        let v5: GraphEnvelopeV5 =
+            serde_json::from_value(value).map_err(|_| invalid("invalid graph JSON"))?;
+        if v5.schema_version != 5 {
+            return Err(invalid("unsupported graph schema version"));
+        }
+        let nodes = v5.decode_nodes().map_err(invalid)?;
+        let edges = v5.decode_edges(&nodes).map_err(invalid)?;
+        GraphEnvelope {
+            schema_version: 4,
+            release_id: v5.release_id,
+            vehicle_profile: v5.vehicle_profile,
+            nodes,
+            edges,
+            billing_pairs: v5.billing_pairs,
+            forbidden_transitions: v5.forbidden_transitions,
+            ramps: v5.ramps,
+            od_tariffs: v5.od_tariffs,
+            tariff: v5.tariff,
+            od_tariffs_v3: v5.od_tariffs_v3,
+            tariff_catalog: v5.tariff_catalog,
+            tariff_model: v5.tariff_model,
+            billing_pairs_version: v5.billing_pairs_version,
+            tariff_model_version: v5.tariff_model_version,
+            route_memberships: v5.route_memberships,
+        }
+    } else {
+        serde_json::from_value(value).map_err(|_| invalid("invalid graph JSON"))?
+    };
+    if envelope.schema_version != semantic_schema_version {
+        return Err(invalid("unsupported graph schema version"));
+    }
+    if semantic_schema_version != 4 && has_route_memberships {
         return Err(invalid("routeMemberships requires graph schema 4"));
     }
     if envelope
@@ -465,7 +620,7 @@ pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> 
     let mut radial_billing_pairs = Vec::new();
     let mut tariff_overrides = HashMap::new();
     for value in envelope.billing_pairs {
-        match schema_version {
+        match semantic_schema_version {
             2 | 3 => billing_pairs.push(
                 serde_json::from_value(value)
                     .map_err(|_| invalid("invalid legacy billing pair"))?,
@@ -505,7 +660,7 @@ pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> 
         }
     }
     let graph = Graph {
-        schema_version: envelope.schema_version,
+        schema_version: semantic_schema_version,
         release_id: envelope.release_id,
         vehicle_profile: envelope.vehicle_profile,
         nodes: envelope.nodes,
@@ -515,7 +670,7 @@ pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> 
         ramps: envelope.ramps,
         od_tariffs,
     };
-    let route_memberships = match schema_version {
+    let route_memberships = match semantic_schema_version {
         4 => envelope
             .route_memberships
             .ok_or_else(|| invalid("schema 4 graph requires routeMemberships"))?,

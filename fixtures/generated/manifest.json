@@ -3,7 +3,7 @@
   "releaseId": "all-real-v5",
   "engineVersion": "0.1.0",
   "graphVersion": "1.0.0",
-  "graphSchemaVersion": 4,
+  "graphSchemaVersion": 5,
   "routePlanVersion": 1,
   "routeMembershipsSha256": "50764c134ef6315f633310e40adc5bb41203dd90b3609e5c9fa63b12c9b49029",
   "builtAt": "2026-09-24T00:00:00Z",
@@ -912,8 +912,8 @@
   "artifacts": [
     {
       "path": "graph.json",
-      "sha256": "e245c7a8dabefe0cef6b4fb2e88d036f2bdd9936242975806990b46f2713fbd7",
-      "byteLength": 7655199
+      "sha256": "09f3e6871be81397ae6933191d9a8f541ff2bdc22bdd70d658e3689a83d09855",
+      "byteLength": 4113803
     },
     {
       "path": "od-tariffs.json",

@@ -37,6 +37,11 @@ import math
 from collections import Counter, defaultdict
 from pathlib import Path
 
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from graph_wire import load_graph  # noqa: E402  (repo-local helper)
+
 REPO = Path(__file__).resolve().parent.parent
 GEOM_M = 60.0
 COLLINEAR_COS = 0.99
@@ -67,7 +72,9 @@ FIELD_CHECK_SITES = [
 
 
 def load():
-    graph = json.load(open(f"{REPO}/fixtures/generated/graph.json"))
+    # schema 5（nodeIdDeltas + 位置インデックス）は reader と同じ規則で schema 4 形状へ
+    # 正規化してから読む（scripts/graph_wire.py）。
+    graph = load_graph()
     nodes = {
         n["id"]: (n["lat"] * 111320.0, n["lon"] * 111320.0 * math.cos(math.radians(n["lat"])))
         for n in graph["nodes"]

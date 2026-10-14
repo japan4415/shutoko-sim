@@ -1,8 +1,13 @@
 {
   "contractVersion": 5,
   "engineVersion": "0.1.0",
-  "graphSchemaVersion": 4,
-  "supportedGraphSchemaVersions": [2, 3, 4],
+  "graphSchemaVersion": 5,
+  "supportedGraphSchemaVersions": [
+    2,
+    3,
+    4,
+    5
+  ],
   "tariffModelVersion": 1,
   "requiredGraphFields": [
     "odTariffs",
@@ -39,5 +44,11 @@
     "fareLabel": "普通車ETC基本料金（割引適用前）",
     "tollSource": "official_distance_rule",
     "discountsExcluded": true
-  }
+  },
+  "requiredGraphSchema5Fields": [
+    "nodeIdDeltas",
+    "nodes",
+    "edges[].from",
+    "edges[].to"
+  ]
 }

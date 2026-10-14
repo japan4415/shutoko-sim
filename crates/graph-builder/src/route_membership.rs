@@ -216,38 +216,51 @@ pub struct GraphSchemaV4 {
     pub route_memberships: Vec<RouteMembershipIndex>,
 }
 
-fn clear_incomplete_v3_tariff_metadata(tariff: &mut shutoko_routing_core::Tariff) {
-    let has_v3_metadata = tariff.assignment_id.is_some()
-        || tariff.rule_id.is_some()
-        || tariff.evidence_id.is_some()
-        || tariff.distance_evidence_id.is_some()
-        || tariff.fare_label.is_some()
-        || tariff.vehicle_class.is_some()
-        || tariff.payment_method.is_some()
-        || tariff.fare_basis.is_some()
-        || tariff.toll_source.is_some();
-    let has_complete_priced_metadata = tariff.assignment_id.is_some()
-        && tariff.rule_id.is_some()
-        && tariff.evidence_id.is_some()
-        && tariff.distance_evidence_id.is_some()
-        && tariff.fare_label.is_some()
-        && tariff.vehicle_class.is_some()
-        && tariff.payment_method.is_some()
-        && tariff.fare_basis.is_some()
-        && tariff.discounts_excluded
-        && tariff.toll_source.is_some();
-    if has_v3_metadata && !has_complete_priced_metadata {
-        tariff.assignment_id = None;
-        tariff.rule_id = None;
-        tariff.evidence_id = None;
-        tariff.distance_evidence_id = None;
-        tariff.fare_label = None;
-        tariff.vehicle_class = None;
-        tariff.payment_method = None;
-        tariff.fare_basis = None;
-        tariff.discounts_excluded = false;
-        tariff.toll_source = None;
-    }
+/// graph schema 5 のワイヤ形式（Issue #43）。ノード ID を `"n:<osmId>"` 文字列で持つ代わりに、
+/// **id 昇順の差分**（`nodeIdDeltas`）で持ち、座標は `[lat, lon]`、edges の `from` / `to` は
+/// ノード配列の位置インデックスにする。意味論は schema 4 と同じ（routeMemberships 必須、
+/// billingPairs は pairKind 必須）で、reader が `n:<osmId>` を再構築する。
+///
+/// 圧縮後の転送量は schema 4 の 649,057 B から 524,752 B（−124,305 B ≈ Slow 4G で −0.62 秒）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GraphSchemaV5 {
+    pub schema_version: u32,
+    pub release_id: String,
+    pub vehicle_profile: String,
+    /// 昇順に並べたノード id の差分。先頭が最小 id（絶対値）。
+    pub node_id_deltas: Vec<i64>,
+    /// `[lat, lon]`。`nodeIdDeltas` と同じ順（id 昇順）。
+    pub nodes: Vec<[f64; 2]>,
+    pub edges: Vec<EdgeSchemaV5>,
+    pub billing_pairs: Vec<GraphSchemaV4BillingPair>,
+    #[serde(default)]
+    pub forbidden_transitions: Vec<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ramps: Vec<Ramp>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub od_tariffs: Vec<OdTariff>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub od_tariffs_v3: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_pairs_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tariff_model_version: Option<u32>,
+    pub route_memberships: Vec<RouteMembershipIndex>,
+}
+
+/// schema 5 の edge。`from` / `to` はノード配列の位置インデックス。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EdgeSchemaV5 {
+    pub id: String,
+    pub from: usize,
+    pub to: usize,
+    pub kind: EdgeKind,
+    pub duration_seconds: u64,
+    pub distance_meters: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 impl GraphSchemaV4 {
@@ -346,6 +359,143 @@ impl GraphSchemaV4 {
     }
 }
 
+fn clear_incomplete_v3_tariff_metadata(tariff: &mut shutoko_routing_core::Tariff) {
+    let has_v3_metadata = tariff.assignment_id.is_some()
+        || tariff.rule_id.is_some()
+        || tariff.evidence_id.is_some()
+        || tariff.distance_evidence_id.is_some()
+        || tariff.fare_label.is_some()
+        || tariff.vehicle_class.is_some()
+        || tariff.payment_method.is_some()
+        || tariff.fare_basis.is_some()
+        || tariff.toll_source.is_some();
+    let has_complete_priced_metadata = tariff.assignment_id.is_some()
+        && tariff.rule_id.is_some()
+        && tariff.evidence_id.is_some()
+        && tariff.distance_evidence_id.is_some()
+        && tariff.fare_label.is_some()
+        && tariff.vehicle_class.is_some()
+        && tariff.payment_method.is_some()
+        && tariff.fare_basis.is_some()
+        && tariff.discounts_excluded
+        && tariff.toll_source.is_some();
+    if has_v3_metadata && !has_complete_priced_metadata {
+        tariff.assignment_id = None;
+        tariff.rule_id = None;
+        tariff.evidence_id = None;
+        tariff.distance_evidence_id = None;
+        tariff.fare_label = None;
+        tariff.vehicle_class = None;
+        tariff.payment_method = None;
+        tariff.fare_basis = None;
+        tariff.discounts_excluded = false;
+        tariff.toll_source = None;
+    }
+}
+
+impl GraphSchemaV5 {
+    /// schema 4 の文書を schema 5 へ変換する。ノードを id 昇順に並べ替え、差分を作り、
+    /// edges の `from` / `to` を位置インデックスへ張り替える。billingPairs / ramps /
+    /// routeMemberships の node 参照は `"n:<osmId>"` のまま（reader が解決する）。
+    fn try_from_v4(v4: GraphSchemaV4) -> Result<Self, RouteMembershipError> {
+        if v4.schema_version != 4 {
+            return Err(RouteMembershipError::InvalidInput(format!(
+                "schema 5 conversion requires a schema 4 document (got {})",
+                v4.schema_version
+            )));
+        }
+        // ノード id は `n:<osmId>`。昇順に並べ替えて差分を取る（id は正なので i64 に収まる）。
+        // 1 件でも `n:<正整数>` でなければ fail-closed で落とす。
+        let osm_ids = v4
+            .nodes
+            .iter()
+            .map(|node| {
+                let raw = node.id.strip_prefix("n:").ok_or_else(|| {
+                    RouteMembershipError::InvalidInput(format!(
+                        "node id {} is not `n:<positive integer>`",
+                        node.id
+                    ))
+                })?;
+                raw.parse::<i64>().map_err(|_| {
+                    RouteMembershipError::InvalidInput(format!(
+                        "node id {} is not `n:<positive integer>`",
+                        node.id
+                    ))
+                })
+            })
+            .collect::<Result<Vec<i64>, RouteMembershipError>>()?;
+        let mut order: Vec<usize> = (0..v4.nodes.len()).collect();
+        order.sort_by_key(|index| osm_ids[*index]);
+
+        // 旧位置 → 新位置（id 昇順）。
+        let mut position_of: HashMap<usize, usize> = HashMap::with_capacity(order.len());
+        for (new_index, old_index) in order.iter().enumerate() {
+            position_of.insert(*old_index, new_index);
+        }
+
+        let mut node_id_deltas: Vec<i64> = Vec::with_capacity(order.len());
+        let mut nodes: Vec<[f64; 2]> = Vec::with_capacity(order.len());
+        let mut previous: i64 = 0;
+        for old_index in &order {
+            let osm_id = osm_ids[*old_index];
+            node_id_deltas.push(osm_id - previous);
+            nodes.push([v4.nodes[*old_index].lat, v4.nodes[*old_index].lon]);
+            previous = osm_id;
+        }
+
+        // edges の端点はノード id 文字列 → 旧位置 → 新位置。
+        let mut old_index_of: HashMap<&str, usize> = HashMap::with_capacity(v4.nodes.len());
+        for (index, node) in v4.nodes.iter().enumerate() {
+            old_index_of.insert(node.id.as_str(), index);
+        }
+        let edges = v4
+            .edges
+            .iter()
+            .map(|edge| {
+                let resolve = |node_id: &str| -> Result<usize, RouteMembershipError> {
+                    let old_index = *old_index_of.get(node_id).ok_or_else(|| {
+                        RouteMembershipError::InvalidInput(format!(
+                            "edge {} references unknown node {}",
+                            edge.id, node_id
+                        ))
+                    })?;
+                    position_of.get(&old_index).copied().ok_or_else(|| {
+                        RouteMembershipError::InvalidInput(format!(
+                            "edge {} references unmapped node {}",
+                            edge.id, node_id
+                        ))
+                    })
+                };
+                Ok(EdgeSchemaV5 {
+                    id: edge.id.clone(),
+                    from: resolve(&edge.from)?,
+                    to: resolve(&edge.to)?,
+                    kind: edge.kind,
+                    duration_seconds: edge.duration_seconds,
+                    distance_meters: edge.distance_meters,
+                    name: edge.name.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, RouteMembershipError>>()?;
+        Ok(Self {
+            schema_version: 5,
+            release_id: v4.release_id,
+            vehicle_profile: v4.vehicle_profile,
+            node_id_deltas,
+            nodes,
+            edges,
+            billing_pairs: v4.billing_pairs,
+            forbidden_transitions: v4.forbidden_transitions,
+            ramps: v4.ramps,
+            od_tariffs: v4.od_tariffs,
+            od_tariffs_v3: v4.od_tariffs_v3,
+            billing_pairs_version: v4.billing_pairs_version,
+            tariff_model_version: v4.tariff_model_version,
+            route_memberships: v4.route_memberships,
+        })
+    }
+}
+
 pub fn graph_schema_v4_to_deterministic_json(
     graph: &Graph,
     route_memberships: &[RouteMembershipIndex],
@@ -401,6 +551,70 @@ pub fn graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3(
         Some("v3".to_string()),
         Some(shutoko_routing_core::tariff::TARIFF_MODEL_VERSION),
     )
+}
+
+pub fn graph_schema_v5_to_deterministic_json_with_radial_and_catalog(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+    od_tariffs_v3: Option<serde_json::Value>,
+    tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+) -> Result<String, serde_json::Error> {
+    graph_schema_v5_to_deterministic_json_with_radial_and_catalog_wire(
+        graph,
+        route_memberships,
+        radial_billing_pairs,
+        od_tariffs_v3,
+        tariff_overrides,
+        None,
+        None,
+    )
+}
+
+pub fn graph_schema_v5_to_deterministic_json_with_radial_and_catalog_v3(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+    od_tariffs_v3: Option<serde_json::Value>,
+    tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+) -> Result<String, serde_json::Error> {
+    graph_schema_v5_to_deterministic_json_with_radial_and_catalog_wire(
+        graph,
+        route_memberships,
+        radial_billing_pairs,
+        od_tariffs_v3,
+        tariff_overrides,
+        Some("v3".to_string()),
+        Some(shutoko_routing_core::tariff::TARIFF_MODEL_VERSION),
+    )
+}
+
+fn graph_schema_v5_to_deterministic_json_with_radial_and_catalog_wire(
+    graph: &Graph,
+    route_memberships: &[RouteMembershipIndex],
+    radial_billing_pairs: Vec<shutoko_routing_core::RadialReturnBillingPair>,
+    od_tariffs_v3: Option<serde_json::Value>,
+    tariff_overrides: HashMap<String, shutoko_routing_core::Tariff>,
+    billing_pairs_version: Option<String>,
+    tariff_model_version: Option<u32>,
+) -> Result<String, serde_json::Error> {
+    let v4 = GraphSchemaV4::try_from_graph_with_radial_and_catalog_wire(
+        graph,
+        route_memberships.to_vec(),
+        radial_billing_pairs,
+        od_tariffs_v3,
+        tariff_overrides,
+        billing_pairs_version,
+        tariff_model_version,
+    )
+    .map_err(|error| serde_json::Error::io(std::io::Error::other(error.to_string())))?;
+    let document = GraphSchemaV5::try_from_v4(v4)
+        .map_err(|error| serde_json::Error::io(std::io::Error::other(error.to_string())))?;
+    // schema 5 は整形なし（compact）で出す。生バイトの ≈32% が整形の空白で、
+    // gzip 後でも数 KB の差になる（schema 4 の pretty は後方互換のために据え置き）。
+    let mut output = serde_json::to_string(&document)?;
+    output.push('\n');
+    Ok(output)
 }
 
 fn graph_schema_v4_to_deterministic_json_with_radial_and_catalog_wire(

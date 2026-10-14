@@ -231,9 +231,15 @@ describe("parseGraphDocument", () => {
 
   it("未知 version、未知 pairKind、routeMemberships 欠落を拒否する", () => {
     const graph = JSON.parse(schema4Graph) as Record<string, unknown>;
-    expect(() => parseGraphDocument(JSON.stringify({ ...graph, schemaVersion: 5 }))).toThrowError(
+    // schema 6 は未対応。schema 5 は nodeIdDeltas / 位置インデックスのワイヤ形状の検査に進む。
+    expect(() => parseGraphDocument(JSON.stringify({ ...graph, schemaVersion: 6 }))).toThrowError(
       /schemaVersion/,
     );
+    expect(() =>
+      parseGraphDocument(
+        JSON.stringify({ ...graph, schemaVersion: 5, nodeIdDeltas: [] }),
+      ),
+    ).toThrowError(/nodeIdDeltas/);
     const billingPairs = graph.billingPairs as Record<string, unknown>[];
     expect(() =>
       parseGraphDocument(

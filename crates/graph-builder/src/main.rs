@@ -11,7 +11,8 @@ use shutoko_graph_builder::{
     derive_pair_candidates_from_source_bytes, diagnostic_endpoint_for_ramp,
     generate_diagnostic_radial_route_plans, generate_explicit_lap_arc,
     graph_schema_v4_to_deterministic_json_with_radial_and_catalog,
-    graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3,
+    graph_schema_v5_to_deterministic_json_with_radial_and_catalog,
+    graph_schema_v5_to_deterministic_json_with_radial_and_catalog_v3,
     manifest_to_deterministic_json, pair_derivation_report_to_deterministic_json,
     parse_billing_pairs_seed, promote_verified_radial_pair, ramps_artifact_to_deterministic_json,
     route_memberships_sha256, snap_index_to_deterministic_json, tariff_overrides_from_catalog,
@@ -56,7 +57,7 @@ OPTIONS:
     --source-date <DATE>    Data capture date (YYYY-MM-DD) [default: "2026-09-10"]
     --coverage-area <STR>   Textual coverage scope description [default: "Tokyo Inner Circular Route (C1) and Metropolitan Expressway"]
     --graph-version <VER>   Graph dataset version [default: "1.0.0"]
-    --graph-schema <2|4>     Graph JSON schema [default: 4]
+    --graph-schema <2|4|5>   Graph JSON schema [default: 4]。full release は 5 が必要
     --unverified-section <S> Unverified section to record in manifest (can be specified multiple times)
     --emit-lap-boundaries <membershipId>
                             Print the relationMainline chain boundaries of one carriageway
@@ -392,11 +393,11 @@ fn parse_args() -> Result<CliArgs, String> {
             "--graph-schema" => {
                 i += 1;
                 if i >= raw_args.len() {
-                    return Err("--graph-schema requires 2 or 4".into());
+                    return Err("--graph-schema requires 2, 4 or 5".into());
                 }
                 graph_schema = raw_args[i]
                     .parse::<u32>()
-                    .map_err(|_| "--graph-schema requires 2 or 4".to_string())?;
+                    .map_err(|_| "--graph-schema requires 2, 4 or 5".to_string())?;
             }
             "--unverified-section" => {
                 i += 1;
@@ -417,8 +418,8 @@ fn parse_args() -> Result<CliArgs, String> {
 
     let osm_path = osm_path.ok_or_else(|| "missing required argument: --osm".to_string())?;
     let out_dir = out_dir.ok_or_else(|| "missing required argument: --out-dir".to_string())?;
-    if graph_schema != 2 && graph_schema != 4 {
-        return Err("--graph-schema must be 2 or 4".into());
+    if graph_schema != 2 && graph_schema != 4 && graph_schema != 5 {
+        return Err("--graph-schema must be 2, 4 or 5".into());
     }
 
     Ok(CliArgs {
@@ -463,8 +464,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let release_id = args.release_id.clone();
     let full_release = is_full_release(&release_id);
     if full_release {
-        if args.graph_schema != 4 {
-            return Err(format!("release {} requires --graph-schema 4", args.release_id).into());
+        if args.graph_schema != 5 {
+            return Err(format!("release {} requires --graph-schema 5", args.release_id).into());
         }
         if args.seed_path.is_none()
             || args.inventory_path.is_none()
@@ -695,7 +696,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let (bound_ramps, ramp_artifact_entries, unbound_notes) =
             bind_ramps_to_graph(&mut graph, &inv, &bindings_file);
         graph.ramps = bound_ramps;
-        if args.graph_schema == 4 {
+        if args.graph_schema == 4 || args.graph_schema == 5 {
             route_membership_evidence =
                 bound_ramp_evidence_from_inventory(&graph, &inv, &bindings_file)
                     .map_err(|error| format!("route membership binding build failed: {}", error))?;
@@ -834,7 +835,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. Serialize graph.json and snap-index.json deterministically
     let mut route_relation_coverage = None;
-    let route_memberships = if args.graph_schema == 4 {
+    // schema 5 は schema 4 と意味論が同じ（routeMemberships 必須）なので、membership /
+    // coverage の構築も schema 4 と同じ経路を通す（Issue #43）。
+    let route_memberships = if args.graph_schema == 4 || args.graph_schema == 5 {
         let source_snapshot_sha256 = shutoko_graph_builder::compute_sha256(osm_raw.as_bytes());
         let options = RouteMembershipBuildOptions {
             source_snapshot_sha256,
@@ -857,16 +860,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Vec::new()
     };
     if let Some(membership_id) = args.lap_boundaries_query.as_deref() {
-        if args.graph_schema != 4 {
-            return Err("--emit-lap-boundaries requires --graph-schema 4".into());
+        if args.graph_schema != 4 && args.graph_schema != 5 {
+            return Err("--emit-lap-boundaries requires --graph-schema 4 or 5".into());
         }
         let boundaries = carriageway_lap_boundaries(&graph, &route_memberships, membership_id)?;
         print!("{}", serde_json::to_string_pretty(&boundaries)?);
         return Ok(());
     }
     if let Some(query) = args.lap_arc_query.as_deref() {
-        if args.graph_schema != 4 {
-            return Err("--emit-lap-arc requires --graph-schema 4".into());
+        if args.graph_schema != 4 && args.graph_schema != 5 {
+            return Err("--emit-lap-arc requires --graph-schema 4 or 5".into());
         }
         let parts = query.split(',').collect::<Vec<_>>();
         if parts.len() != 3 {
@@ -880,8 +883,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if let Some(ramp_id) = args.ramp_endpoint_query.as_deref() {
-        if args.graph_schema != 4 {
-            return Err("--emit-ramp-endpoint requires --graph-schema 4".into());
+        if args.graph_schema != 4 && args.graph_schema != 5 {
+            return Err("--emit-ramp-endpoint requires --graph-schema 4 or 5".into());
         }
         let inventory_path = args
             .inventory_path
@@ -899,7 +902,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         print!("{}", serde_json::to_string_pretty(&endpoint)?);
         return Ok(());
     }
-    if args.graph_schema == 4
+    if (args.graph_schema == 4 || args.graph_schema == 5)
         && !full_release
         && (args.inventory_path.is_some() || args.bindings_path.is_some())
     {
@@ -959,7 +962,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         })?;
     }
     let mut radial_billing_pairs = Vec::new();
-    if args.graph_schema == 4 {
+    if args.graph_schema == 4 || args.graph_schema == 5 {
         if let Some(seed_file) = &parsed_seed_file {
             for plan in
                 generate_diagnostic_radial_route_plans(&graph, &route_memberships, seed_file)
@@ -1075,7 +1078,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             .as_ref()
             .ok_or_else(|| {
                 format!(
-                    "release {} requires schema 4 route relation coverage",
+                    "release {} requires schema 4/5 route relation coverage",
                     release_id
                 )
             })?
@@ -1100,7 +1103,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         pair_derivation_report = Some(report);
     }
 
-    let route_memberships_digest = if args.graph_schema == 4 {
+    let route_memberships_digest = if args.graph_schema == 4 || args.graph_schema == 5 {
         Some(
             route_memberships_sha256(&route_memberships)
                 .map_err(|error| format!("route membership manifest hash failed: {}", error))?,
@@ -1108,9 +1111,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
-    let graph_json = if args.graph_schema == 4 {
+    let graph_json = if args.graph_schema == 5 {
+        // full release（all-real-v*）は schema 5（nodeIdDeltas + 位置インデックス、Issue #43）。
+        // full release 以外の schema 4 相当出力は v5 writer の v3 無し版で出す。
         if full_release {
-            graph_schema_v4_to_deterministic_json_with_radial_and_catalog_v3(
+            graph_schema_v5_to_deterministic_json_with_radial_and_catalog_v3(
                 &graph,
                 &route_memberships,
                 radial_billing_pairs,
@@ -1118,7 +1123,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 tariff_overrides,
             )
         } else {
-            graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
+            graph_schema_v5_to_deterministic_json_with_radial_and_catalog(
                 &graph,
                 &route_memberships,
                 radial_billing_pairs,
@@ -1126,6 +1131,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 tariff_overrides,
             )
         }
+        .map_err(|e| format!("graph schema 5 serialization failed: {}", e))?
+    } else if args.graph_schema == 4 {
+        graph_schema_v4_to_deterministic_json_with_radial_and_catalog(
+            &graph,
+            &route_memberships,
+            radial_billing_pairs,
+            od_tariffs_v3,
+            tariff_overrides,
+        )
         .map_err(|e| format!("graph schema 4 serialization failed: {}", e))?
     } else {
         to_deterministic_json(&graph).map_err(|e| format!("graph serialization failed: {}", e))?
@@ -1308,14 +1322,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         engine_version: shutoko_routing_core::VERSION.into(),
         graph_version: args.graph_version,
         graph_schema_version: args.graph_schema,
-        route_plan_version: (args.graph_schema == 4).then_some(1),
+        route_plan_version: (args.graph_schema == 4 || args.graph_schema == 5).then_some(1),
         route_memberships_sha256: route_memberships_digest,
         built_at: args.built_at,
         source_date: args.source_date,
         coverage_area: args.coverage_area,
         vehicle_profile: args.vehicle_profile,
         time_model_version: "v1-static-speeds".into(),
-        billing_pairs_version: if args.graph_schema == 4 {
+        billing_pairs_version: if args.graph_schema == 4 || args.graph_schema == 5 {
             if full_release {
                 "v3"
             } else {

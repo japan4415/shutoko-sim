@@ -56,9 +56,9 @@ assert.equal(searchPrepared(schema4Pg, radialRequest), radialJson);
 schema4Pg.free();
 const generatedPg = prepare(generatedGraph, '{}');
 generatedPg.free();
-assert.equal(JSON.parse(generatedGraph).schemaVersion, 4);
+assert.equal(JSON.parse(generatedGraph).schemaVersion, 5);
 assert.equal(generatedManifest.releaseId, 'all-real-v5');
-assert.equal(generatedManifest.graphSchemaVersion, 4);
+assert.equal(generatedManifest.graphSchemaVersion, 5);
 assert.equal(generatedManifest.billingPairsVersion, 'v3');
 assert.equal(generatedManifest.tariffModelVersion, 1);
 assert.equal(generatedManifest.routePlanVersion, 1);
@@ -97,9 +97,50 @@ assert.deepEqual(
   deviceVerificationManifest.legs.map((leg) => leg.urlSha256),
 );
 verifiedSchema4Pg.free();
+// schema 4 は rollback 先（all-real-v4 など）のために読み続ける。schema 6 は未対応。
+assert.doesNotThrow(
+  () => prepare(schema4Graph, '{}'),
+  'schema 4 must stay readable for rollback releases',
+);
 assert.throws(
-  () => prepare(JSON.stringify({ ...JSON.parse(schema4Graph), schemaVersion: 5 }), '{}'),
+  () => prepare(JSON.stringify({ ...JSON.parse(schema4Graph), schemaVersion: 6 }), '{}'),
   'unknown graph schema version must throw',
+);
+// schema 5 の fail-closed 検査（差分配列の破れ・範囲外インデックス）。
+assert.throws(
+  () =>
+    prepare(
+      JSON.stringify({ ...JSON.parse(schema4Graph), schemaVersion: 5, nodeIdDeltas: [] }),
+      '{}',
+    ),
+  'empty nodeIdDeltas must throw',
+);
+assert.throws(
+  () =>
+    prepare(
+      JSON.stringify({
+        ...JSON.parse(schema4Graph),
+        schemaVersion: 5,
+        nodeIdDeltas: [1, 2],
+        nodes: [[35.6, 139.7]],
+      }),
+      '{}',
+    ),
+  'nodeIdDeltas/nodes length mismatch must throw',
+);
+assert.throws(
+  () =>
+    prepare(
+      JSON.stringify({
+        ...JSON.parse(schema4Graph),
+        schemaVersion: 5,
+        nodeIdDeltas: [10090465568],
+        nodes: [[35.6471924, 139.7574236]],
+        edges: [{ id: 'e:t:0:f', from: 5, to: 0, kind: 'entry', durationSeconds: 1, distanceMeters: 11 }],
+      }),
+      '{}',
+    ),
+  'out-of-range node index must throw',
 );
 const first = search(graph, request, '{}');
 const result = JSON.parse(first);
@@ -252,5 +293,5 @@ pg.free();
 assert.throws(() => searchPrepared(pg, request), 'use-after-free on WasmPreparedGraph must throw');
 
 console.log(`[bench] prepare=${avgPrepareMs.toFixed(2)}ms / search=${avgSearchMs.toFixed(2)}ms / searchPrepared=${avgSearchPreparedMs.toFixed(2)}ms`);
-console.log('Web-target WASM loaded; schema 2/4 readers, synthetic search, coordinate snap, determinism, PreparedGraph and errors passed.');
+console.log('Web-target WASM loaded; schema 2/4/5 readers, synthetic search, coordinate snap, determinism, PreparedGraph and errors passed.');
 

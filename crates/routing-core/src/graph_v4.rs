@@ -540,8 +540,8 @@ pub(crate) fn read_graph_json(input: &str) -> Result<ParsedGraph, RoutingError> 
         if v5.schema_version != 5 {
             return Err(invalid("unsupported graph schema version"));
         }
-        let nodes = v5.decode_nodes().map_err(|error| invalid(error))?;
-        let edges = v5.decode_edges(&nodes).map_err(|error| invalid(error))?;
+        let nodes = v5.decode_nodes().map_err(invalid)?;
+        let edges = v5.decode_edges(&nodes).map_err(invalid)?;
         GraphEnvelope {
             schema_version: 4,
             release_id: v5.release_id,

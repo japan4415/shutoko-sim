@@ -9,7 +9,7 @@
     "seed:local": "node scripts/seed-local-r2.mjs"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "@cloudflare/vitest-pool-workers": "0.23.0",
     "@cloudflare/workers-types": "5.20261011.1",
     "cf": "1.0.0-beta.14",
     "typescript": "7.0.2",

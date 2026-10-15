@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-expected_version=0.2.128
+expected_version=0.2.129
 if [[ "$(wasm-bindgen --version)" != "wasm-bindgen ${expected_version}" ]]; then
   echo "Install matching CLI: cargo install wasm-bindgen-cli --version ${expected_version} --locked" >&2
   exit 1

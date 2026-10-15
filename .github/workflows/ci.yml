@@ -43,7 +43,7 @@ jobs:
           package_dir="$(mktemp -d)"
           python3 scripts/build-osm-changeset.py --out-dir "${package_dir}"
           rm -rf "${package_dir}"
-      - run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
+      - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
       - run: bash scripts/build-wasm.sh
       - run: node scripts/test-wasm.mjs
       - uses: actions/upload-artifact@v7
@@ -77,7 +77,7 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
           rustup default stable
-          cargo install wasm-bindgen-cli --version 0.2.128 --locked
+          cargo install wasm-bindgen-cli --version 0.2.129 --locked
       - name: Build WASM artifacts
         run: bash scripts/build-wasm.sh
       - uses: actions/setup-node@v7

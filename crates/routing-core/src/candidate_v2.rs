@@ -12,6 +12,16 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
+/// バイト列を小文字 hex へ（sha2 0.11 の finalize() 戻り値は LowerHex を実装しない）。
+fn hex_lower(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(char::from_digit((byte >> 4) as u32, 16).expect("high nibble"));
+        out.push(char::from_digit((byte & 0x0f) as u32, 16).expect("low nibble"));
+    }
+    out
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CandidateResolvedRouteSegment {
@@ -500,7 +510,7 @@ fn ordered_edge_ids_sha256(edge_ids: &[String]) -> Option<String> {
     let bytes = serde_json::to_vec(edge_ids).ok()?;
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    Some(format!("{:x}", hasher.finalize()))
+    Some(hex_lower(&hasher.finalize()))
 }
 
 fn validate_tariff_contract_fields(

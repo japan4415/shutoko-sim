@@ -154,10 +154,20 @@ pub struct ManifestArtifact {
 }
 
 /// Compute the lowercase hex-encoded SHA-256 digest of a byte buffer.
+/// バイト列を小文字 hex へ（sha2 0.11 の finalize() 戻り値は LowerHex を実装しない）。
+fn hex_lower(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(char::from_digit((byte >> 4) as u32, 16).expect("high nibble"));
+        out.push(char::from_digit((byte & 0x0f) as u32, 16).expect("low nibble"));
+    }
+    out
+}
+
 pub fn compute_sha256(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    format!("{:x}", hasher.finalize())
+    hex_lower(&hasher.finalize())
 }
 
 /// Configuration parameters for generating a release manifest.

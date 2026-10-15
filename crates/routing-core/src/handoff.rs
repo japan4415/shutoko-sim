@@ -8,6 +8,16 @@ use crate::{Edge, LatLng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// バイト列を小文字 hex へ（sha2 0.11 の finalize() 戻り値は LowerHex を実装しない）。
+fn hex_lower(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(char::from_digit((byte >> 4) as u32, 16).expect("high nibble"));
+        out.push(char::from_digit((byte & 0x0f) as u32, 16).expect("low nibble"));
+    }
+    out
+}
+
 pub const MAX_MAPS_URL_LENGTH: usize = 2048;
 pub const MAX_MAPS_WAYPOINTS: usize = 3;
 pub const URL_BUILDER_VERSION: &str = "google-maps-split/v1";
@@ -63,7 +73,7 @@ pub enum MapsHandoffError {
 pub fn maps_url_sha256(maps_url: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(maps_url.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex_lower(&hasher.finalize())
 }
 
 fn valid_lat_lng(point: &LatLng) -> bool {

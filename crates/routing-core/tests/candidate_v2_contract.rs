@@ -5,6 +5,16 @@ use shutoko_routing_core::{
     RadialReturnCandidate, TopologyOnlyCandidate,
 };
 
+/// バイト列を小文字 hex へ（sha2 0.11 の finalize() 戻り値は LowerHex を実装しない）。
+fn hex_lower(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(char::from_digit((byte >> 4) as u32, 16).expect("high nibble"));
+        out.push(char::from_digit((byte & 0x0f) as u32, 16).expect("low nibble"));
+    }
+    out
+}
+
 fn valid() -> Value {
     serde_json::from_str(include_str!(
         "../../../fixtures/candidate-v2/radial-valid.json"
@@ -42,7 +52,7 @@ fn edge_hash(edge_ids: &[&str]) -> String {
         .collect::<Vec<_>>();
     let mut hasher = Sha256::new();
     hasher.update(serde_json::to_vec(&edge_ids).unwrap());
-    format!("{:x}", hasher.finalize())
+    hex_lower(&hasher.finalize())
 }
 
 #[test]

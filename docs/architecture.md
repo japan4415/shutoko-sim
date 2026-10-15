@@ -91,7 +91,7 @@ Cloudflare Workers の通常の WASM 利用は事前コンパイル済みモジ�
 
 ### Cloudflare Workers Builds
 
-Git 連携ビルドは Root directory `/`、Build command `bash scripts/cloudflare-build.sh`、Deploy command `cd workers && npx wrangler deploy`、Preview deploy command `cd workers && npx wrangler versions upload` で構成する。環境変数は `NODE_VERSION=22` と `SKIP_DEPENDENCY_INSTALL=1` を設定し、non-production branch builds は OFF にする。ビルドスクリプトが `workers` / `web` の lockfile 固定依存を `npm ci` で導入し、`web/dist` を生成する。deploy command が使う pinned Wrangler もこの workers の依存導入で準備される。
+Git 連携ビルドは Root directory `/`、Build command `bash scripts/cloudflare-build.sh`、Deploy command `cd workers && npx cf deploy`（2026-10-16 に `npx wrangler deploy` から切り替え。preview deploy は未設定）で構成する。環境変数は `NODE_VERSION=22` と `SKIP_DEPENDENCY_INSTALL=1` を設定し、non-production branch builds は OFF にする。ビルドスクリプトが `workers` / `web` の lockfile 固定依存を `npm ci` で導入し、`web/dist` を生成する。deploy command が使う pinned cf もこの workers の依存導入で準備される。
 
 Workers Builds は Rust/WASM を生成せず、本番 R2 へ seed しない。R2 の更新は CI/CD と分離し、新しい versioned release ID の配下へ WASM・graph・manifest・engine の全成果物を先に投入・検証してから、Worker と Web が参照する release を切り替える。CI/CD は既存 release を上書きしない。
 
@@ -101,7 +101,7 @@ R2 は非公開バケットとし、Workers が配信用の許可パスだけ公
 
 ### 静的 SPA と Worker の同一オリジン配信（`[assets]`）
 
-同一 Worker が静的ファイル（Vite ビルド後の `web/dist`）と Worker API（`/releases`・`/api`）を同一オリジンで配信する（full-stack 構成）。本番デプロイが読む旧設定は `workers/wrangler.toml` の `[assets] directory = "../web/dist"`、ローカル / `cf dev`・`cf deploy` が読む新設定系は `workers/wrangler.config.ts` の `assetsDirectory` と `workers/cloudflare.config.ts` の `assets` であり、両者の一致を `workers/test/cloudflare-config.test.ts` が検査する。リクエストはまず assets に一致を試し、不一致（`/releases/...`、`/api/geocode` など）は従来どおり Worker の fetch ハンドラへフォールバックする。`not_found_handling = "single-page-application"` で 1 ページ構成の SPA とし、未一致パスは index.html を返す。ローカルでは `npm --prefix workers run seed:local` 後に `npx cf dev --port 8787` を 1 台起動すれば静的 + API が揃い、E2E もこの単一ポートで行う。開発時は Vite(5173) の `server.proxy` 中継も維持する。
+同一 Worker が静的ファイル（Vite ビルド後の `web/dist`）と Worker API（`/releases`・`/api`）を同一オリジンで配信する（full-stack 構成）。本番デプロイ（`cf deploy`）とローカル / `cf dev` が読む新設定系は `workers/wrangler.config.ts` の `assetsDirectory` と `workers/cloudflare.config.ts` の `assets` であり、workers の vitest-pool-workers だけが読む `workers/wrangler.toml` との一致を `workers/test/cloudflare-config.test.ts` が検査する。リクエストはまず assets に一致を試し、不一致（`/releases/...`、`/api/geocode` など）は従来どおり Worker の fetch ハンドラへフォールバックする。`not_found_handling = "single-page-application"` で 1 ページ構成の SPA とし、未一致パスは index.html を返す。ローカルでは `npm --prefix workers run seed:local` 後に `npx cf dev --port 8787` を 1 台起動すれば静的 + API が揃い、E2E もこの単一ポートで行う。開発時は Vite(5173) の `server.proxy` 中継も維持する。
 
 ### ローカル開発用シード手順
 ローカル開発時（cf dev）は、`workers/scripts/seed-local-r2.mjs`（`npm --prefix workers run seed:local`）により、`fixtures/generated/*.json` の SHA-256 チェックサムおよびバイト長を `manifest.json` と照合した上で、Miniflare のローカル R2 エミュレータへ成果物一式（および WASM ビルド成果物）を一括投入できる。同時に `dist/wasm/` の実ファイルから wasm / JS glue の `sha256`・`byteLength` を計算し、`releases/<releaseId>/engine.json` として投入する（投入モードに関係なく共通）。`--remote` は新しい versioned release を本番 R2 へ事前投入する明示的な公開作業だけで使う。`--remote` の投入は cf CLI が担う（Issue #98）。ローカル投入は wrangler `--local` のままで、書き先のバケット名は cf dev の r2 バインディングと同じ `shutoko-artifacts`（`.wrangler/state` は wrangler と cf で共通）。本番では既存 manifest がある ID を拒否し、payload と engine を全件 read-back 検証してから manifest を最後に置くため、未完了 release は公開条件を満たさない。
@@ -109,7 +109,7 @@ R2 は非公開バケットとし、Workers が配信用の許可パスだけ公
 ### 実際の本番デプロイ（2026-09-11 実施）
 - R2 バケット: `shutoko-artifacts`（本番。ローカルのシミュレーションも同名の名前空間を使う）/ `shutoko-artifacts-preview`（`wrangler.toml` の `preview_bucket_name`。preview deploy 用で、ローカル開発は使わない）。いずれも `cf r2 buckets create --name <bucket>` で新規作成する。
 - キー配置: `releases/c1-real-v1/{manifest.json, engine.json, graph.json, snap-index.json, shutoko_routing_bg.wasm, shutoko_routing.js, shutoko_routing.d.ts, index.d.ts}`（`workers/src/releases.ts` が読む `releases/<releaseId>/<artifact>` と一致。バケット名はキーに含めない）。これは当時の固定 ID であり、以後の成果物更新では新しい release ID を使う。
-- Workers Builds: Root directory `/`、Build command `bash scripts/cloudflare-build.sh`、Deploy command `cd workers && npx wrangler deploy`（pinned wrangler 4.149.0 を使用。旧設定 `wrangler.toml` を読む）。`cf deploy`（新設定系を読む。`--dry-run` でのビルド・assets・bindings 検証済み）へ切り替えるにはダッシュボードの deploy command 更新が先に要る。本番 R2 の seed は build command に含めない。
+- Workers Builds: Root directory `/`、Build command `bash scripts/cloudflare-build.sh`、Deploy command `cd workers && npx cf deploy`（2026-10-16 に `cf builds workers update` で `npx wrangler deploy` から切り替え。新設定系 `cloudflare.config.ts` / `wrangler.config.ts` を読む）。本番 R2 の seed は build command に含めない。
 - 配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（workers.dev サブドメインは既に有効化済みだったため追加設定不要）。
 
 ## 運用・プライバシー・セキュリティ

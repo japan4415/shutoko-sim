@@ -9,10 +9,12 @@ ALLOWED_RELEASES = "c1-real-v1,c1-real-v2,all-real-v1,all-real-v2,all-real-v3,al
 
 [[r2_buckets]]
 binding = "ARTIFACTS_BUCKET"
-# この wrangler.toml は Workers Builds の deploy command（`npx wrangler deploy`、旧設定）が
-# 読み続ける。cf dev / cf deploy は新設定系の cloudflare.config.ts / wrangler.config.ts を
-# 読む。新設定系に preview_bucket_name は無く、ローカル（cf dev の R2 シミュレーション）は
-# bucket_name を名前空間として使い、seed-local-r2.mjs も同じ名前へ書く。
+# この wrangler.toml は workers の vitest-pool-workers（cloudflare:test）だけが読む。
+# vitest-pool-workers は wrangler 形式の config しか受け付けないため、本番 deploy が
+# cf deploy（新設定系 cloudflare.config.ts / wrangler.config.ts）へ切り替わった後も残す。
+# 両者の一致は workers/test/cloudflare-config.test.ts が検査する。新設定系に
+# preview_bucket_name は無く、ローカル（cf dev の R2 シミュレーション）は bucket_name を
+# 名前空間として使い、seed-local-r2.mjs も同じ名前へ書く。
 bucket_name = "shutoko-artifacts"
 preview_bucket_name = "shutoko-artifacts-preview"
 

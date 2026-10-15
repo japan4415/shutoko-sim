@@ -1,8 +1,8 @@
 // Issue #98: cf dev / cf deploy が読む新設定系（cloudflare.config.ts と wrangler.config.ts）と、
-// Workers Builds の deploy command（`npx wrangler deploy`）が読み続ける wrangler.toml の
-// drift を止める。wrangler.toml を削除できるのは、deploy command を `cf deploy` へ切り替える
-// Workers Builds のダッシュボード作業（外部作業）の後である。併存期間中はこのテストが
-// 両設定が同じ Worker を定義していることを強制する。
+// workers の vitest-pool-workers だけが読む wrangler.toml の drift を止める
+// （pool-workers は wrangler 形式の config しか受け付けないため、本番 deploy を cf deploy に
+// 切り替えた後も wrangler.toml は残る）。このテストが両設定が同じ Worker を定義している
+// ことを強制する。
 import { expect, test } from "vitest";
 import cloudflareConfig from "../cloudflare.config";
 import wranglerConfig from "../wrangler.config";

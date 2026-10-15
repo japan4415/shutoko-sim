@@ -85,13 +85,13 @@ Cloudflare Workers Builds では、Git リポジトリを接続して次の値�
 | --- | --- |
 | Root directory | `/` |
 | Build command | `bash scripts/cloudflare-build.sh` |
-| Deploy command | `cd workers && npx wrangler deploy` |
+| Deploy command | `cd workers && npx cf deploy`（2026-10-16 に `cf builds workers update` で切り替え。新設定系 `cloudflare.config.ts` / `wrangler.config.ts` を読む） |
 | Preview deploy command | `cd workers && npx wrangler versions upload` |
 | Node version | `NODE_VERSION=22` |
 | Automatic dependency install | `SKIP_DEPENDENCY_INSTALL=1` |
 | Non-production branch builds | OFF |
 
-`SKIP_DEPENDENCY_INSTALL=1` でプラットフォーム側の自動インストールを止め、`scripts/cloudflare-build.sh` が `workers` と `web` の lockfile 固定依存を `npm ci` で導入して `web/dist` を生成する。これにより deploy command が使う pinned Wrangler も `workers/node_modules` に用意される。Deploy command は wrangler を使い続ける（Issue #98）。`cf deploy` は新設定系（`cloudflare.config.ts` / `wrangler.config.ts`）を読み、`cf deploy --dry-run` でのビルド・assets・bindings 検証は済ませてある。wrangler.toml を削除して `cf deploy` に切り替えるには、Workers Builds の deploy command をダッシュボードで更新する外部作業が先に要る（それまで wrangler.toml が deploy の正で、新設定との一致は `workers/test/cloudflare-config.test.ts` が検査する）。
+`SKIP_DEPENDENCY_INSTALL=1` でプラットフォーム側の自動インストールを止め、`scripts/cloudflare-build.sh` が `workers` と `web` の lockfile 固定依存を `npm ci` で導入して `web/dist` を生成する。これにより deploy command が使う pinned Wrangler も `workers/node_modules` に用意される。Deploy command は wrangler を使い続ける（Issue #98）。`cf deploy` は新設定系（`cloudflare.config.ts` / `wrangler.config.ts`）を読み、`cf deploy --dry-run` でのビルド・assets・bindings 検証を経て本番の deploy command に採用した。wrangler.toml は workers の vitest-pool-workers（wrangler 形式 config のみ対応）だけが読むため残し、新設定との一致は `workers/test/cloudflare-config.test.ts` が検査する。
 
 Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 release を上書きしない。R2 成果物を更新する場合は、別の versioned release ID で WASM・graph・manifest・engine を先にすべて投入して検証し、その後に Worker と Web の参照先を新しい release へ切り替える。公開済み release ID へ再投入すると、複数オブジェクトの非原子的な上書きによって新旧ファイルが一時的に混在するため、自動 CI/CD では実行しない。
 
@@ -109,7 +109,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
    詳細手順と manifest を最後に置く atomic release の runbook は [`docs/delivery.md`](docs/delivery.md#all-real-v5-の-atomic-release-runbook) を参照する。先に未使用の `all-real-v5` へ client allowlist を更新し、payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。既存の本番 release ID があれば上書きを拒否する。本番への投入（`--remote`）は wrangler ではなく cf CLI で行う（Issue #98）。seed script は投入前に `cf --version` をログへ出す。cf は package.json で 1.0.0-beta.14 に固定し（npm 運用へ切り替え済み。初回確認時点版 1.0.0-beta.10 の記録は `docs/delivery.md` の runbook にある）、`CF_BIN` → PATH の順で解決し `npx` フォールバックは無い。cf のトークン期限が切れて `cf auth whoami` が `authenticated: false` を返すときは `cf auth login` で再ログインする。ローカル投入（`seed:local`、E2E / `cf dev` が読む `.wrangler/state` への書き込み）は引き続き wrangler を使う。ローカルの投入先バケット名は cf dev の r2 バインディングと同じ `shutoko-artifacts` で、wrangler と cf はローカル状態を共有する。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。このリポジトリの変更作業では R2 upload / deploy / Cloudflare 書き込みを実行しない。
 3. **デプロイ**:
    ```bash
-   cd workers && npx wrangler deploy
+   cd workers && npx cf deploy
    ```
    デプロイ完了時に表示される `https://<worker>.<subdomain>.workers.dev` が配信 URL です。
 4. **疎通確認**: `GET /releases/{releaseId}/manifest.json` と `GET /releases/{releaseId}/engine.json` が `200`・`application/json`・`Cache-Control: max-age=300` で返ること、`GET /releases/{releaseId}/graph.json` が `immutable` キャッシュと `ETag` 付きで返り本文の `sha256` が `manifest.json` と一致すること、存在しない release / 二重スラッシュが `404` になること、`POST /api/geocode` が正常クエリで `200`、空クエリで `400 INVALID_QUERY` を返すことを確認する。
@@ -140,7 +140,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
 
 ## Web アプリ（`web/`）
 
-Vite + Vanilla TypeScript の製品 UI。探索はブラウザの専用 Web Worker 内で WASM を実行する。地図は Leaflet、タイルは国土地理院（GSI）標準地図を既定とし（提供元は差し替え可能）、経路データの帰属として `© OpenStreetMap contributors` を地図上に常時表示する。住所検索は同一オリジンの `POST /api/geocode`（国土地理院ジオコーディングのプロキシ）を確定時のみ呼ぶ。ローカル開発は `cf dev`（新設定系 `cloudflare.config.ts` の assets と `wrangler.config.ts` の `assetsDirectory`）1 台（ポート 8787）で静的ファイルと `/releases`・`/api` を同一オリジン配信する（本番デプロイは旧設定 `wrangler.toml` の `[assets]` を読む）。
+Vite + Vanilla TypeScript の製品 UI。探索はブラウザの専用 Web Worker 内で WASM を実行する。地図は Leaflet、タイルは国土地理院（GSI）標準地図を既定とし（提供元は差し替え可能）、経路データの帰属として `© OpenStreetMap contributors` を地図上に常時表示する。住所検索は同一オリジンの `POST /api/geocode`（国土地理院ジオコーディングのプロキシ）を確定時のみ呼ぶ。ローカル開発は `cf dev`（新設定系 `cloudflare.config.ts` の assets と `wrangler.config.ts` の `assetsDirectory`）1 台（ポート 8787）で静的ファイルと `/releases`・`/api` を同一オリジン配信する（本番デプロイは新設定系 `cloudflare.config.ts` の assets を読む）。
 
 ### 起動手順（ローカル）
 

@@ -1,8 +1,7 @@
 // Cloudflare の新設定系（--experimental-new-config）で cf dev / cf deploy が読む
-// Worker 定義。wrangler.toml（Workers Builds の deploy command が読み続ける旧設定）と
-// 併存し、両者の一致は workers/test/cloudflare-config.test.ts が検査する。
-// wrangler.toml を削除できるのは、Workers Builds の deploy command を `cf deploy` へ
-// 切り替えるダッシュボード作業（外部作業）の後である。
+// Worker 定義。Workers Builds の deploy command は `cf deploy`（2026-10-16 に cf builds
+// workers update で切り替え）。wrangler.toml は workers の vitest-pool-workers だけが読む
+// ため残し、両者の一致は workers/test/cloudflare-config.test.ts が検査する。
 export default {
   worker: {
     name: "shutoko-sim-workers",

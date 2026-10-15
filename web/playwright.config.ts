@@ -4,7 +4,7 @@
 // `npm --prefix workers run seed:local` 済みとする。
 // dev サーバを cf dev にしたのは Issue #98 の E2E 移行。seed（wrangler --local）が書く
 // .wrangler/state は cf dev と共通なので、seed は wrangler のままでよい。
-// wrangler.toml は Workers Builds の deploy command（旧設定）が読み続けるため残す。
+// workers/vitest-pool-workers 用の wrangler.toml は残り、本番 deploy は cf deploy（新設定系）が読む。
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({

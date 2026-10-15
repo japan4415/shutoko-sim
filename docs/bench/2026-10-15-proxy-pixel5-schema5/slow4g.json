@@ -1,0 +1,3253 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-15T01:17:19.652Z",
+  "releaseId": "all-real-v5",
+  "device": {
+    "ua": "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Mobile Safari/537.36",
+    "platform": "MacIntel",
+    "deviceName": "Pixel 5 emulation",
+    "os": "desktop macOS",
+    "browser": "Chromium 153.0.8010.12",
+    "network": "slow4g (CDP)",
+    "cpuThrottle": 4,
+    "note": "CDP Network.emulateNetworkConditions Slow 4G: download 180,000 B/s / upload 84,375 B/s / latency 562.5 ms. CPU ×4 は暫定値で、実機機種の確定後に較正する。なお Emulation.setCPUThrottlingRate はレンダラのメインスレッドにのみ作用し、探索（WASM）が走る Web Worker には効かない（rate 1 と 20 で tSearch が変わらないことを実測）。cold はコンテキストごとに newContext で分離し、warm は同一コンテキストで cold の直後に 1 回。 CDP JSHeapUsedSize のピーク（メインアイソレートのみ。参考値）: 2.18〜2.41 MiB（20 コンテキストで取得）。"
+  },
+  "memorySource": "performance.memory",
+  "memoryManualMiB": null,
+  "pageLoad": {
+    "url": "http://localhost:8787/bench?auto=1&patterns=0&repeats=1",
+    "navigation": {
+      "startTime": 0,
+      "responseEnd": 1157.5999999940395,
+      "loadEventEnd": 1920.5999999940395,
+      "domContentLoadedEventEnd": 1919.8999999910593,
+      "transferSize": 2191,
+      "encodedBodySize": 1891,
+      "decodedBodySize": 4518
+    },
+    "resources": [
+      {
+        "name": "http://localhost:8787/assets/bench-DethXaHk.js",
+        "transferSize": 7174,
+        "encodedBodySize": 6874,
+        "decodedBodySize": 20197,
+        "deliveryType": "",
+        "responseStatus": 200,
+        "duration": 690.7999999970198
+      },
+      {
+        "name": "http://localhost:8787/assets/model-DyXrjeos.js",
+        "transferSize": 5787,
+        "encodedBodySize": 5487,
+        "decodedBodySize": 14180,
+        "deliveryType": "",
+        "responseStatus": 200,
+        "duration": 683.9000000059605
+      },
+      {
+        "name": "http://localhost:8787/assets/bench-DpRFL09V.css",
+        "transferSize": 817,
+        "encodedBodySize": 517,
+        "decodedBodySize": 1022,
+        "deliveryType": "",
+        "responseStatus": 200,
+        "duration": 581.9000000059605
+      },
+      {
+        "name": "http://localhost:8787/assets/model-Ch-kzfdy.css",
+        "transferSize": 3849,
+        "encodedBodySize": 3549,
+        "decodedBodySize": 13887,
+        "deliveryType": "",
+        "responseStatus": 200,
+        "duration": 648.4000000059605
+      },
+      {
+        "name": "http://localhost:8787/assets/search-worker-CkoOpfGY.js",
+        "transferSize": 9989,
+        "encodedBodySize": 9689,
+        "decodedBodySize": 32352,
+        "deliveryType": "",
+        "responseStatus": 200,
+        "duration": 39.29999999701977
+      },
+      {
+        "name": "http://localhost:8787/assets/search-worker-CkoOpfGY.js",
+        "transferSize": 300,
+        "encodedBodySize": 9689,
+        "decodedBodySize": 32352,
+        "deliveryType": "cache",
+        "responseStatus": 200,
+        "duration": -1.7000000029802322
+      }
+    ]
+  },
+  "targets": {
+    "searchP95Ms": 2000,
+    "firstLoadP95Ms": 8000,
+    "transferBytesMax": 10485760,
+    "memoryMiBMax": 128
+  },
+  "trials": [
+    {
+      "patternIndex": 0,
+      "patternId": "kandabashi-short",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "cold",
+      "repeat": 1,
+      "tTransferMs": 6452.300048828125,
+      "tSearchMs": 33.199951171875,
+      "tFirstCandidateMs": 6534,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=b4d1c6f7-e6e6-4496-89d7-b5ee65f1117c",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 781.7999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=b4d1c6f7-e6e6-4496-89d7-b5ee65f1117c",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 591.0999999940395
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=b4d1c6f7-e6e6-4496-89d7-b5ee65f1117c",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4098.4000000059605
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=b4d1c6f7-e6e6-4496-89d7-b5ee65f1117c",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5440.4000000059605
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=b4d1c6f7-e6e6-4496-89d7-b5ee65f1117c",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 657.3000000119209
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=b4d1c6f7-e6e6-4496-89d7-b5ee65f1117c",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        }
+      ]
+    },
+    {
+      "patternIndex": 0,
+      "patternId": "kandabashi-short",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "warm",
+      "repeat": 1,
+      "tTransferMs": 896.10009765625,
+      "tSearchMs": 37,
+      "tFirstCandidateMs": 943,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.9000000059604645
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        }
+      ]
+    },
+    {
+      "patternIndex": 0,
+      "patternId": "kandabashi-short",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "cold",
+      "repeat": 2,
+      "tTransferMs": 6354.60009765625,
+      "tSearchMs": 42.400146484375,
+      "tFirstCandidateMs": 6425.199951171875,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=92420431-a0dd-4a47-b819-e2007ec3f656",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 590.2000000029802
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=92420431-a0dd-4a47-b819-e2007ec3f656",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 782
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=92420431-a0dd-4a47-b819-e2007ec3f656",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4098
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=92420431-a0dd-4a47-b819-e2007ec3f656",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5440.0999999940395
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=92420431-a0dd-4a47-b819-e2007ec3f656",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 655.0999999940395
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=92420431-a0dd-4a47-b819-e2007ec3f656",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        }
+      ]
+    },
+    {
+      "patternIndex": 0,
+      "patternId": "kandabashi-short",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "warm",
+      "repeat": 2,
+      "tTransferMs": 1077.7998046875,
+      "tSearchMs": 45.400146484375,
+      "tFirstCandidateMs": 1129.39990234375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 8
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.1000000089406967
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.4000000059604645
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.3999999910593033
+        }
+      ]
+    },
+    {
+      "patternIndex": 1,
+      "patternId": "kandabashi-mid",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "cold",
+      "repeat": 1,
+      "tTransferMs": 6650.400146484375,
+      "tSearchMs": 48.199951171875,
+      "tFirstCandidateMs": 6732.400146484375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=703381cc-2712-4f32-9640-afb2bbf3f1d1",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 780.9000000059605
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=703381cc-2712-4f32-9640-afb2bbf3f1d1",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 588.8999999910593
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=703381cc-2712-4f32-9640-afb2bbf3f1d1",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5439.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=703381cc-2712-4f32-9640-afb2bbf3f1d1",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4097.79999999702
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=703381cc-2712-4f32-9640-afb2bbf3f1d1",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 656.7000000029802
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=703381cc-2712-4f32-9640-afb2bbf3f1d1",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        }
+      ]
+    },
+    {
+      "patternIndex": 1,
+      "patternId": "kandabashi-mid",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "warm",
+      "repeat": 1,
+      "tTransferMs": 1060.599853515625,
+      "tSearchMs": 49,
+      "tFirstCandidateMs": 1123.5,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.2000000029802322
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.4000000059604645
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 7.9000000059604645
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 2.0999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.0999999940395355
+        }
+      ]
+    },
+    {
+      "patternIndex": 1,
+      "patternId": "kandabashi-mid",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "cold",
+      "repeat": 2,
+      "tTransferMs": 6399.39990234375,
+      "tSearchMs": 41.60009765625,
+      "tFirstCandidateMs": 6469.599853515625,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=7811d129-8dfc-4617-8668-d6fc6e33cb0e",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 781.2000000029802
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=7811d129-8dfc-4617-8668-d6fc6e33cb0e",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 590.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=7811d129-8dfc-4617-8668-d6fc6e33cb0e",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5438.70000000298
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=7811d129-8dfc-4617-8668-d6fc6e33cb0e",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 656.7999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=7811d129-8dfc-4617-8668-d6fc6e33cb0e",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4097.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=7811d129-8dfc-4617-8668-d6fc6e33cb0e",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 1,
+      "patternId": "kandabashi-mid",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "warm",
+      "repeat": 2,
+      "tTransferMs": 904.099853515625,
+      "tSearchMs": 41.699951171875,
+      "tFirstCandidateMs": 960.099853515625,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.200000002980232
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.30000001192092896
+        }
+      ]
+    },
+    {
+      "patternIndex": 2,
+      "patternId": "kandabashi-long",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "cold",
+      "repeat": 1,
+      "tTransferMs": 6310.800048828125,
+      "tSearchMs": 29.199951171875,
+      "tFirstCandidateMs": 6367.5,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=89002add-d624-49dc-a9ae-09f42a4a0901",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 588.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=89002add-d624-49dc-a9ae-09f42a4a0901",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 780.2999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=89002add-d624-49dc-a9ae-09f42a4a0901",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4097.0999999940395
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=89002add-d624-49dc-a9ae-09f42a4a0901",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5438.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=89002add-d624-49dc-a9ae-09f42a4a0901",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 656.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=89002add-d624-49dc-a9ae-09f42a4a0901",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 2,
+      "patternId": "kandabashi-long",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "warm",
+      "repeat": 1,
+      "tTransferMs": 834.300048828125,
+      "tSearchMs": 41.60009765625,
+      "tFirstCandidateMs": 879.89990234375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.699999988079071
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.299999997019768
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.9000000059604645
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 2,
+      "patternId": "kandabashi-long",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "cold",
+      "repeat": 2,
+      "tTransferMs": 6312.900146484375,
+      "tSearchMs": 29.199951171875,
+      "tFirstCandidateMs": 6369.60009765625,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=c0c6e03a-c407-4e24-b294-68745c5d320f",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 589.7999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=c0c6e03a-c407-4e24-b294-68745c5d320f",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 781.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=c0c6e03a-c407-4e24-b294-68745c5d320f",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5438.79999999702
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=c0c6e03a-c407-4e24-b294-68745c5d320f",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4097.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=c0c6e03a-c407-4e24-b294-68745c5d320f",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 654.4000000059605
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=c0c6e03a-c407-4e24-b294-68745c5d320f",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 2,
+      "patternId": "kandabashi-long",
+      "originId": "kandabashi",
+      "origin": {
+        "lat": 35.689673,
+        "lon": 139.764425
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "warm",
+      "repeat": 2,
+      "tTransferMs": 827.099853515625,
+      "tSearchMs": 34.89990234375,
+      "tFirstCandidateMs": 877.89990234375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.3999999910593033
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.699999988079071
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.299999997019768
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.0999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.7000000029802322
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 3,
+      "patternId": "takaracho-short",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "cold",
+      "repeat": 1,
+      "tTransferMs": 6313.89990234375,
+      "tSearchMs": 27.099853515625,
+      "tFirstCandidateMs": 6370.5,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=f40d8a16-1454-4a13-8f2d-078f4925da81",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 782
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=f40d8a16-1454-4a13-8f2d-078f4925da81",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 580.5999999940395
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=f40d8a16-1454-4a13-8f2d-078f4925da81",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 673.7000000029802
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=f40d8a16-1454-4a13-8f2d-078f4925da81",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4089.7999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=f40d8a16-1454-4a13-8f2d-078f4925da81",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5439
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=f40d8a16-1454-4a13-8f2d-078f4925da81",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 3,
+      "patternId": "takaracho-short",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "warm",
+      "repeat": 1,
+      "tTransferMs": 831.89990234375,
+      "tSearchMs": 29.900146484375,
+      "tFirstCandidateMs": 875,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.8999999910593033
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.2999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 4
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.30000001192092896
+        }
+      ]
+    },
+    {
+      "patternIndex": 3,
+      "patternId": "takaracho-short",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "cold",
+      "repeat": 2,
+      "tTransferMs": 6320,
+      "tSearchMs": 32.099853515625,
+      "tFirstCandidateMs": 6379.099853515625,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=97836985-b11b-4d0b-8b92-ec58f3c248f8",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 781.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=97836985-b11b-4d0b-8b92-ec58f3c248f8",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 590.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=97836985-b11b-4d0b-8b92-ec58f3c248f8",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4098.70000000298
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=97836985-b11b-4d0b-8b92-ec58f3c248f8",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5438.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=97836985-b11b-4d0b-8b92-ec58f3c248f8",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 655.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=97836985-b11b-4d0b-8b92-ec58f3c248f8",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        }
+      ]
+    },
+    {
+      "patternIndex": 3,
+      "patternId": "takaracho-short",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "warm",
+      "repeat": 2,
+      "tTransferMs": 833.199951171875,
+      "tSearchMs": 33.89990234375,
+      "tFirstCandidateMs": 875.89990234375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.200000002980232
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 4,
+      "patternId": "takaracho-mid",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "cold",
+      "repeat": 1,
+      "tTransferMs": 6389.7998046875,
+      "tSearchMs": 37.5,
+      "tFirstCandidateMs": 6457.199951171875,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=a360c9b0-834a-4273-b2bb-42c91fbc2051",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 782
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=a360c9b0-834a-4273-b2bb-42c91fbc2051",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 590.4000000059605
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=a360c9b0-834a-4273-b2bb-42c91fbc2051",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 656.2999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=a360c9b0-834a-4273-b2bb-42c91fbc2051",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4098.70000000298
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=a360c9b0-834a-4273-b2bb-42c91fbc2051",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5439.79999999702
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=a360c9b0-834a-4273-b2bb-42c91fbc2051",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.30000001192092896
+        }
+      ]
+    },
+    {
+      "patternIndex": 4,
+      "patternId": "takaracho-mid",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "warm",
+      "repeat": 1,
+      "tTransferMs": 897.099853515625,
+      "tSearchMs": 36.800048828125,
+      "tFirstCandidateMs": 941.39990234375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7000000029802322
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.800000011920929
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 4,
+      "patternId": "takaracho-mid",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "cold",
+      "repeat": 2,
+      "tTransferMs": 6405.099853515625,
+      "tSearchMs": 46,
+      "tFirstCandidateMs": 6482.39990234375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=5e0b4fda-8bca-4595-9e60-7af00e70b1ac",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 782.2000000029802
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=5e0b4fda-8bca-4595-9e60-7af00e70b1ac",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 590.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=5e0b4fda-8bca-4595-9e60-7af00e70b1ac",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4099
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=5e0b4fda-8bca-4595-9e60-7af00e70b1ac",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5439.100000008941
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=5e0b4fda-8bca-4595-9e60-7af00e70b1ac",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 657.2999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=5e0b4fda-8bca-4595-9e60-7af00e70b1ac",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 4,
+      "patternId": "takaracho-mid",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "warm",
+      "repeat": 2,
+      "tTransferMs": 894,
+      "tSearchMs": 36.89990234375,
+      "tFirstCandidateMs": 940.699951171875,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7000000029802322
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.399999991059303
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.1000000089406967
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        }
+      ]
+    },
+    {
+      "patternIndex": 5,
+      "patternId": "takaracho-long",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "cold",
+      "repeat": 1,
+      "tTransferMs": 6410.699951171875,
+      "tSearchMs": 38.5,
+      "tFirstCandidateMs": 6480.60009765625,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=78683ede-e062-43ed-be4e-f4dc1a58e35f",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 781.4000000059605
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=78683ede-e062-43ed-be4e-f4dc1a58e35f",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 589.4000000059605
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=78683ede-e062-43ed-be4e-f4dc1a58e35f",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4097.399999991059
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=78683ede-e062-43ed-be4e-f4dc1a58e35f",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5439.0999999940395
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=78683ede-e062-43ed-be4e-f4dc1a58e35f",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 655.7000000029802
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=78683ede-e062-43ed-be4e-f4dc1a58e35f",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        }
+      ]
+    },
+    {
+      "patternIndex": 5,
+      "patternId": "takaracho-long",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "warm",
+      "repeat": 1,
+      "tTransferMs": 921.900146484375,
+      "tSearchMs": 39.199951171875,
+      "tFirstCandidateMs": 972.400146484375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.299999997019768
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 5,
+      "patternId": "takaracho-long",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "cold",
+      "repeat": 2,
+      "tTransferMs": 6492.199951171875,
+      "tSearchMs": 41.39990234375,
+      "tFirstCandidateMs": 6568.300048828125,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=9484e47c-b9ac-4cd3-9ad5-3912941331b3",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 591.1999999880791
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=9484e47c-b9ac-4cd3-9ad5-3912941331b3",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 782.8999999910593
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=9484e47c-b9ac-4cd3-9ad5-3912941331b3",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5440.199999988079
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=9484e47c-b9ac-4cd3-9ad5-3912941331b3",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4099.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=9484e47c-b9ac-4cd3-9ad5-3912941331b3",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 674
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=9484e47c-b9ac-4cd3-9ad5-3912941331b3",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.699999988079071
+        }
+      ]
+    },
+    {
+      "patternIndex": 5,
+      "patternId": "takaracho-long",
+      "originId": "takaracho",
+      "origin": {
+        "lat": 35.678188,
+        "lon": 139.774484
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "warm",
+      "repeat": 2,
+      "tTransferMs": 1033.599853515625,
+      "tSearchMs": 69.39990234375,
+      "tFirstCandidateMs": 1108.7998046875,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.6000000089406967
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 7.9000000059604645
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 4.799999997019768
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.199999988079071
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5
+        }
+      ]
+    },
+    {
+      "patternIndex": 6,
+      "patternId": "kasumigaseki-in-short",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "cold",
+      "repeat": 1,
+      "tTransferMs": 6724.300048828125,
+      "tSearchMs": 39.10009765625,
+      "tFirstCandidateMs": 6781.10009765625,
+      "timeout": false,
+      "resultStatus": "no_candidates",
+      "reason": "TIME_WINDOW",
+      "candidateCount": 0,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=461a4696-616f-40f8-996a-336fc3e2e09a",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 778.6999999880791
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=461a4696-616f-40f8-996a-336fc3e2e09a",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 579.2999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=461a4696-616f-40f8-996a-336fc3e2e09a",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5435.70000000298
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=461a4696-616f-40f8-996a-336fc3e2e09a",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4095
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=461a4696-616f-40f8-996a-336fc3e2e09a",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 661.4000000059605
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=461a4696-616f-40f8-996a-336fc3e2e09a",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.6000000089406967
+        }
+      ]
+    },
+    {
+      "patternIndex": 6,
+      "patternId": "kasumigaseki-in-short",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "warm",
+      "repeat": 1,
+      "tTransferMs": 1095,
+      "tSearchMs": 48.39990234375,
+      "tFirstCandidateMs": 1149.699951171875,
+      "timeout": false,
+      "resultStatus": "no_candidates",
+      "reason": "TIME_WINDOW",
+      "candidateCount": 0,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 8.200000002980232
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.699999988079071
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5
+        }
+      ]
+    },
+    {
+      "patternIndex": 6,
+      "patternId": "kasumigaseki-in-short",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "cold",
+      "repeat": 2,
+      "tTransferMs": 6554.5,
+      "tSearchMs": 38.800048828125,
+      "tFirstCandidateMs": 6598.10009765625,
+      "timeout": false,
+      "resultStatus": "no_candidates",
+      "reason": "TIME_WINDOW",
+      "candidateCount": 0,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=9a269666-babb-4a52-abb7-a18fcec92a77",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 780.6000000089407
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=9a269666-babb-4a52-abb7-a18fcec92a77",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 588.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=9a269666-babb-4a52-abb7-a18fcec92a77",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5439.100000008941
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=9a269666-babb-4a52-abb7-a18fcec92a77",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4097.70000000298
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=9a269666-babb-4a52-abb7-a18fcec92a77",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 655.2000000029802
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=9a269666-babb-4a52-abb7-a18fcec92a77",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        }
+      ]
+    },
+    {
+      "patternIndex": 6,
+      "patternId": "kasumigaseki-in-short",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "warm",
+      "repeat": 2,
+      "tTransferMs": 1054.10009765625,
+      "tSearchMs": 48.10009765625,
+      "tFirstCandidateMs": 1113.699951171875,
+      "timeout": false,
+      "resultStatus": "no_candidates",
+      "reason": "TIME_WINDOW",
+      "candidateCount": 0,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.3999999910593033
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.800000011920929
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 8.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 2
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        }
+      ]
+    },
+    {
+      "patternIndex": 7,
+      "patternId": "kasumigaseki-in-mid",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "cold",
+      "repeat": 1,
+      "tTransferMs": 6430.10009765625,
+      "tSearchMs": 50.800048828125,
+      "tFirstCandidateMs": 6516.199951171875,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=2b5471db-588f-41ca-86d3-333f29ac6e58",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 782.1999999880791
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=2b5471db-588f-41ca-86d3-333f29ac6e58",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 590.2999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=2b5471db-588f-41ca-86d3-333f29ac6e58",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4098.5999999940395
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=2b5471db-588f-41ca-86d3-333f29ac6e58",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5440
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=2b5471db-588f-41ca-86d3-333f29ac6e58",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 656.7999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=2b5471db-588f-41ca-86d3-333f29ac6e58",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.4000000059604645
+        }
+      ]
+    },
+    {
+      "patternIndex": 7,
+      "patternId": "kasumigaseki-in-mid",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "warm",
+      "repeat": 1,
+      "tTransferMs": 957.900146484375,
+      "tSearchMs": 43.7998046875,
+      "tFirstCandidateMs": 1013.60009765625,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7000000029802322
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.3999999910593033
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 7.0999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 7,
+      "patternId": "kasumigaseki-in-mid",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "cold",
+      "repeat": 2,
+      "tTransferMs": 6369.300048828125,
+      "tSearchMs": 33.2001953125,
+      "tFirstCandidateMs": 6436.699951171875,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=4dc9058e-e036-455f-b77a-19d84e13cd52",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 782.3999999910593
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=4dc9058e-e036-455f-b77a-19d84e13cd52",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 591
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=4dc9058e-e036-455f-b77a-19d84e13cd52",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 657.0999999940395
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=4dc9058e-e036-455f-b77a-19d84e13cd52",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4099.899999991059
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=4dc9058e-e036-455f-b77a-19d84e13cd52",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5440
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=4dc9058e-e036-455f-b77a-19d84e13cd52",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 7,
+      "patternId": "kasumigaseki-in-mid",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 60,
+      "cache": "warm",
+      "repeat": 2,
+      "tTransferMs": 863.89990234375,
+      "tSearchMs": 33.199951171875,
+      "tFirstCandidateMs": 908.2998046875,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7000000029802322
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.0999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.800000011920929
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 8,
+      "patternId": "kasumigaseki-in-long",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "cold",
+      "repeat": 1,
+      "tTransferMs": 6351.5,
+      "tSearchMs": 41.7001953125,
+      "tFirstCandidateMs": 6422.300048828125,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=4d9c15c9-734f-4752-a3c1-edda0a5a108e",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 591.5999999940395
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=4d9c15c9-734f-4752-a3c1-edda0a5a108e",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 782
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=4d9c15c9-734f-4752-a3c1-edda0a5a108e",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 657.9000000059605
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=4d9c15c9-734f-4752-a3c1-edda0a5a108e",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4098.4000000059605
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=4d9c15c9-734f-4752-a3c1-edda0a5a108e",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5440.100000008941
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=4d9c15c9-734f-4752-a3c1-edda0a5a108e",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    },
+    {
+      "patternIndex": 8,
+      "patternId": "kasumigaseki-in-long",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "warm",
+      "repeat": 1,
+      "tTransferMs": 901.60009765625,
+      "tSearchMs": 48.199951171875,
+      "tFirstCandidateMs": 966,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5999999940395355
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.1000000089406967
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.7000000029802322
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.300000011920929
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.19999998807907104
+        }
+      ]
+    },
+    {
+      "patternIndex": 8,
+      "patternId": "kasumigaseki-in-long",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "cold",
+      "repeat": 2,
+      "tTransferMs": 6359.099853515625,
+      "tSearchMs": 41.400146484375,
+      "tFirstCandidateMs": 6429.89990234375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=c4751302-b2ac-4da0-b9d1-1c3f627ac914",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 588.1999999880791
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=c4751302-b2ac-4da0-b9d1-1c3f627ac914",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 781.6999999880791
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=c4751302-b2ac-4da0-b9d1-1c3f627ac914",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5439.29999999702
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=c4751302-b2ac-4da0-b9d1-1c3f627ac914",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 655.1000000089407
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=c4751302-b2ac-4da0-b9d1-1c3f627ac914",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4097.800000011921
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=c4751302-b2ac-4da0-b9d1-1c3f627ac914",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.30000001192092896
+        }
+      ]
+    },
+    {
+      "patternIndex": 8,
+      "patternId": "kasumigaseki-in-long",
+      "originId": "kasumigaseki-in",
+      "origin": {
+        "lat": 35.673967,
+        "lon": 139.747932
+      },
+      "minMinutes": 15,
+      "maxMinutes": 120,
+      "cache": "warm",
+      "repeat": 2,
+      "tTransferMs": 856.39990234375,
+      "tSearchMs": 31.7001953125,
+      "tFirstCandidateMs": 898.599853515625,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.699999988079071
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.8999999910593033
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.2000000029802322
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 4
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.600000008940697
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.20000000298023224
+        }
+      ]
+    },
+    {
+      "patternIndex": 9,
+      "patternId": "shibakoen-in-short",
+      "originId": "shibakoen-in",
+      "origin": {
+        "lat": 35.6535,
+        "lon": 139.749818
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "cold",
+      "repeat": 1,
+      "tTransferMs": 6362.89990234375,
+      "tSearchMs": 30,
+      "tFirstCandidateMs": 6423,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=24d3bf99-dad3-4ee6-a861-d3f3af724895",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 589.2000000029802
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=24d3bf99-dad3-4ee6-a861-d3f3af724895",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 780.7000000029802
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=24d3bf99-dad3-4ee6-a861-d3f3af724895",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 655.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=24d3bf99-dad3-4ee6-a861-d3f3af724895",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4097.20000000298
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=24d3bf99-dad3-4ee6-a861-d3f3af724895",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5438.79999999702
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=24d3bf99-dad3-4ee6-a861-d3f3af724895",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.3999999910593033
+        }
+      ]
+    },
+    {
+      "patternIndex": 9,
+      "patternId": "shibakoen-in-short",
+      "originId": "shibakoen-in",
+      "origin": {
+        "lat": 35.6535,
+        "lon": 139.749818
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "warm",
+      "repeat": 1,
+      "tTransferMs": 889.89990234375,
+      "tSearchMs": 29.60009765625,
+      "tFirstCandidateMs": 923.39990234375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 3.7000000029802322
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.30000001192092896
+        }
+      ]
+    },
+    {
+      "patternIndex": 9,
+      "patternId": "shibakoen-in-short",
+      "originId": "shibakoen-in",
+      "origin": {
+        "lat": 35.6535,
+        "lon": 139.749818
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "cold",
+      "repeat": 2,
+      "tTransferMs": 6368.300048828125,
+      "tSearchMs": 30.699951171875,
+      "tFirstCandidateMs": 6430.900146484375,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json?bench=53174350-9b48-4f1e-8516-b41930de8409",
+          "transferSize": 11762,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 781.7999999970198
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json?bench=53174350-9b48-4f1e-8516-b41930de8409",
+          "transferSize": 664,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 590.0999999940395
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json?bench=53174350-9b48-4f1e-8516-b41930de8409",
+          "transferSize": 549463,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 5438.300000011921
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=53174350-9b48-4f1e-8516-b41930de8409",
+          "transferSize": 3496,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 655
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm?bench=53174350-9b48-4f1e-8516-b41930de8409",
+          "transferSize": 307835,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "",
+          "responseStatus": 200,
+          "duration": 4096.399999991059
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js?bench=53174350-9b48-4f1e-8516-b41930de8409",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.3999999910593033
+        }
+      ]
+    },
+    {
+      "patternIndex": 9,
+      "patternId": "shibakoen-in-short",
+      "originId": "shibakoen-in",
+      "origin": {
+        "lat": 35.6535,
+        "lon": 139.749818
+      },
+      "minMinutes": 15,
+      "maxMinutes": 30,
+      "cache": "warm",
+      "repeat": 2,
+      "tTransferMs": 884.800048828125,
+      "tSearchMs": 35.800048828125,
+      "tFirstCandidateMs": 934,
+      "timeout": false,
+      "resultStatus": "ok",
+      "reason": null,
+      "candidateCount": 1,
+      "errorCode": null,
+      "memoryPeakMiB": 9.5367431640625,
+      "memorySource": "performance.memory",
+      "resources": [
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/manifest.json",
+          "transferSize": 0,
+          "encodedBodySize": 11462,
+          "decodedBodySize": 49965,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.5
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/engine.json",
+          "transferSize": 0,
+          "encodedBodySize": 364,
+          "decodedBodySize": 712,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.7999999970197678
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 1.2000000029802322
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing_bg.wasm",
+          "transferSize": 0,
+          "encodedBodySize": 307535,
+          "decodedBodySize": 1026418,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 4.200000002980232
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/graph.json",
+          "transferSize": 0,
+          "encodedBodySize": 549163,
+          "decodedBodySize": 4113803,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 5.9000000059604645
+        },
+        {
+          "name": "http://localhost:8787/releases/all-real-v5/shutoko_routing.js",
+          "transferSize": 0,
+          "encodedBodySize": 3196,
+          "decodedBodySize": 11858,
+          "deliveryType": "cache",
+          "responseStatus": 200,
+          "duration": 0.29999999701976776
+        }
+      ]
+    }
+  ]
+}

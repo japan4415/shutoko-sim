@@ -6,6 +6,16 @@
 //! deduced from OSM geometry alone, billing pairs are defined in a declarative seed
 //! file curated with human verification and authoritative tariff citations.
 
+/// バイト列を小文字 hex へ（sha2 0.11 の digest() 戻り値は LowerHex を実装しない）。
+fn hex_lower(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(char::from_digit((byte >> 4) as u32, 16).expect("high nibble"));
+        out.push(char::from_digit((byte & 0x0f) as u32, 16).expect("low nibble"));
+    }
+    out
+}
+
 use crate::model::VerificationStatus;
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -562,7 +572,7 @@ impl RadialReturnBillingPairSeed {
                     self.id, error
                 )
             })?;
-            let expected_hash = format!("{:x}", Sha256::digest(encoded));
+            let expected_hash = hex_lower(&Sha256::digest(encoded));
             if explicit.edge_ids_sha256 != expected_hash {
                 return Err(format!(
                     "radial pair {} explicit lap arc edgeIdsSha256 does not match edgeIds",
@@ -681,7 +691,7 @@ fn validate_directed_segment(segment: &DirectedEndpointSegment) -> Result<(), St
             segment.segment_id, error
         )
     })?;
-    let expected_hash = format!("{:x}", Sha256::digest(encoded));
+    let expected_hash = hex_lower(&Sha256::digest(encoded));
     if segment.edge_ids_sha256 != expected_hash {
         return Err(format!(
             "directed segment {} edgeIdsSha256 does not match edgeIds",

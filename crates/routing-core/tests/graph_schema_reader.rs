@@ -2,6 +2,16 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use shutoko_routing_core::prepare_json;
 
+/// バイト列を小文字 hex へ（sha2 0.11 の finalize() 戻り値は LowerHex を実装しない）。
+fn hex_lower(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(char::from_digit((byte >> 4) as u32, 16).expect("high nibble"));
+        out.push(char::from_digit((byte & 0x0f) as u32, 16).expect("low nibble"));
+    }
+    out
+}
+
 fn full_graph() -> Value {
     serde_json::from_str(include_str!(
         "../../../fixtures/graph-v4/graph-radial-fixture.json"
@@ -57,7 +67,7 @@ fn string_list(value: &Value) -> Vec<String> {
 fn edge_hash(edge_ids: &[String]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(serde_json::to_vec(edge_ids).unwrap());
-    format!("{:x}", hasher.finalize())
+    hex_lower(&hasher.finalize())
 }
 
 fn refresh_edge_hashes(graph: &mut Value) {

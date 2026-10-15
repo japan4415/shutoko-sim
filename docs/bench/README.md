@@ -95,7 +95,13 @@ npm run build                              # dist に bench.html を出す
 bash ../scripts/build-wasm.sh              # dist/wasm（seed:local の入力）
 npm --prefix ../workers ci
 npm --prefix ../workers run seed:local     # ローカル R2 へ成果物を投入
-(cd ../workers && npx wrangler dev --port 8787 &)   # 計測中は立てたままにする
+(cd ../workers && npx cf dev --port 8787 &)   # 計測中は立てたままにする
+
+> **`cf dev` を使う理由**: `seed:local` と `wrangler dev` で wrangler のバージョンが違う
+> （pinned 4.149 と global 4.92 など）と、miniflare の R2 namespace ファイルが分かれて
+> seed の成果物が配信されない（2026-10-15 に実際に発生。`wrangler r2 object put --local`
+> と `wrangler dev` で unique key の導出が異なる）。E2E（`npm run e2e`）と同じ `cf dev`
+> なら seed の状態を確実に読む。
 
 npm run bench -- --network fast4g --repeats 3 --out ../docs/bench/<date>-proxy/fast4g.json
 npm run bench -- --network slow4g --repeats 3 --out ../docs/bench/<date>-proxy/slow4g.json

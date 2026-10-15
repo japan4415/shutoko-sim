@@ -19,7 +19,7 @@ Rust の stable toolchain、rustfmt、clippy、Node.js 22 を使用する。WASM
 ```sh
 rustup target add wasm32-unknown-unknown
 rustup component add rustfmt clippy
-cargo install wasm-bindgen-cli --version 0.2.128 --locked
+cargo install wasm-bindgen-cli --version 0.2.129 --locked
 ```
 
 ## 検証とビルド

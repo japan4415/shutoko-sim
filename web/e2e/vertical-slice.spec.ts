@@ -95,7 +95,7 @@ test("(a) 神田橋プリセット 15〜60 で候補カードと Maps URL が表
       return null;
     };
   });
-  await firstCard.locator("button").click();
+  await firstCard.locator(".depart").click();
   const calls = await page.evaluate(() => {
     const w = window as unknown as { __openCalls: string[][] };
     return w.__openCalls;

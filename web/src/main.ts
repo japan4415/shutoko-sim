@@ -34,6 +34,7 @@ import type { GeocodeCandidate } from "./geocode";
 import { getCurrentPosition } from "./geolocation";
 import { createMapView } from "./map/map-view";
 import type { MapView } from "./map/map-view";
+import { hasWebgl2, loadPreviewConfig, openPreview } from "./map/machgl-preview";
 import "leaflet/dist/leaflet.css";
 import type { Candidate, LatLng, SearchResult, UiSearchMessage, WorkerResponse } from "./worker/types";
 import {
@@ -48,6 +49,17 @@ import {
   type RampItem,
   type RampsDataset,
 } from "./ui/ramps";
+
+/** 3Dプレビューを出せるか。WebGL2 と /machgl-preview/config.json の両方を見る。 */
+let previewAvailable = false;
+
+/** モーション低減の設定。プレビューの自動再生を止めるのに使う。 */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 const el = {
   addressQuery: mustGet<HTMLInputElement>("address-query"),
@@ -1445,6 +1457,37 @@ function renderMapsLegs(model: CardModel): HTMLElement | null {
   return section;
 }
 
+/** 3Dプレビューの起動ボタン。カード選択のクリックとは分離する。 */
+function previewButton(model: CardModel, candidate: Candidate): HTMLElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "preview-open";
+  button.textContent = "3Dで見る";
+  button.setAttribute(
+    "aria-label",
+    `候補${String(model.index)}を3Dで見る（新しいタブで開きます）`,
+  );
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (!previewAvailable) {
+      return;
+    }
+    const opened = openPreview(candidate, model, { reducedMotion: prefersReducedMotion() });
+    if (opened) {
+      return;
+    }
+    let note = button.parentElement?.querySelector<HTMLParagraphElement>(".preview-error");
+    if (note === undefined || note === null) {
+      note = document.createElement("p");
+      note.className = "preview-error";
+      note.setAttribute("role", "status");
+      note.textContent = "3Dプレビューを開けませんでした。ポップアップの許可を確認してください。";
+      button.insertAdjacentElement("afterend", note);
+    }
+  });
+  return button;
+}
+
 function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
   const card = document.createElement("article");
   card.className = "card";
@@ -1602,6 +1645,10 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
   const mapsLegs = renderMapsLegs(model);
   if (mapsLegs !== null) {
     card.appendChild(mapsLegs);
+  }
+
+  if (previewAvailable) {
+    card.appendChild(previewButton(model, candidate));
   }
 
   if (model.mapsUrl !== "") {
@@ -1881,6 +1928,13 @@ renderFooterArea();
 setSearching(false);
 setStatus("成果物を読み込み中…");
 initMap();
+// 3Dプレビューの可用性は、地図本体の初期化を妨げないよう非同期で確かめる。
+void (async () => {
+  if (!hasWebgl2()) {
+    return;
+  }
+  previewAvailable = await loadPreviewConfig();
+})();
 // 地図生成後にプリセットを適用し、出発地マーカーと要約を同期させる。
 applyPreset();
 createWorker(); // ブート: ready が来たらステータスへ反映される

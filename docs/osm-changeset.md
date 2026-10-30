@@ -88,7 +88,7 @@ python3 scripts/build-osm-changeset.py --out-dir /tmp/osm-changeset
 ## 4. 提案を適用した場合の効果
 
 スナップショットのコピーに提案を適用し、同じ入力で graph-builder を回した実測
-（`all-real-v4` の入力、relation だけ差し替え）:
+（`all-real-v5` の入力、relation だけ差し替え。2026-10-30 に再測）:
 
 | 指標 | 現行（role 無し） | 提案適用後 |
 | --- | --- | --- |
@@ -98,9 +98,38 @@ python3 scripts/build-osm-changeset.py --out-dir /tmp/osm-changeset
 | pair 候補 | 14 件（review 13 / hold 1） | 14 件（review 13 / hold 1） |
 
 内回り・外回りの辺数が数十辺変わるのは、role 展開が分割の推定ではなく relation の記載順を
-使うためである。**商品の候補（課金ペアと料金）は変わらない**ので、3 ペアの mandatory lap と
-代表 4 地点の実測は現行のまま使える。上流が role を持つまでの間、graph 側の推定
+使うためである。**商品の候補（課金ペアと料金）は変わらない**。pair 候補は件数だけでなく
+`pairId` の集合も現行と一致するので、3 ペアの mandatory lap と代表 4 地点の実測は現行の
+まま使える。上流が role を持つまでの間、graph 側の推定
 （`fill_carriageway_labels_by_pairing`）は現行のまま残す。
+
+### 再現手順
+
+`all-real-v5` の relation 4256077 だけを差し替えて build し、表の値を確かめる。
+
+```sh
+python3 scripts/apply-osm-relation-repairs.py --osm fixtures/osm/shutoko-all.json \
+    --repairs data/osm-relation-repairs.json --out /tmp/applied-snapshot.json
+bash scripts/generate-fixtures.sh /tmp/applied-build /tmp/applied-snapshot.json
+python3 - <<'PY'
+import json
+
+with open("/tmp/applied-build/graph.json") as f:
+    graph = json.load(f)
+for membership in graph["routeMemberships"]:
+    if membership["routeId"] != "C2":
+        continue
+    mainline = [s for s in membership["segments"] if s["sourceKind"] == "relationMainline"]
+    print(membership["membershipId"], len(mainline), sum(len(s["orderedEdgeIds"]) for s in mainline))
+
+with open("/tmp/applied-build/pair-candidates.json") as f:
+    print(json.load(f)["summary"])
+PY
+```
+
+`route:C2:inner 7 1201`、`route:C2:outer 9 1264`、`candidateTotal 14`（review 13 / hold 1）が
+出れば表と一致する。build の出力は `/tmp/applied-build` に書き、`fixtures/generated` は
+変更しない。
 
 ## 5. 更新のしかた
 

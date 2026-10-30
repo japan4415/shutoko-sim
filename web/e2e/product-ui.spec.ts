@@ -1892,3 +1892,39 @@ test("(75) フッターに帰属・前提・免責とデータ基準日が常時
   await expect(page.locator("#footer-source-date")).toBeVisible();
   await expect(page.locator("#footer-source-date time")).toHaveAttribute("datetime", "2026-09-16");
 });
+
+test("(76) 候補から3Dプレビューを新しいタブで開ける", async ({ page, context }) => {
+  // 正式版前の MachGL プレビューはビルド時にデモから生成する。取得に失敗したビルドでは
+  // config.json が enabled: false になり、ボタン自体が出ないためテストを飛ばす。
+  const configResponse = await page.request.get("/machgl-preview/config.json");
+  const config: unknown = configResponse.ok() ? await configResponse.json() : null;
+  test.skip(
+    config === null ||
+      typeof config !== "object" ||
+      (config as { enabled?: unknown }).enabled !== true,
+    "MachGL プレビューの生成物がこのビルドに含まれていない",
+  );
+
+  // プレビューの地図タイルは CI のネットワークに依存させない。ヘッダーとペイロードの
+  // 受け渡しだけを検証し、タイル要求は aborted にする（地図の style はローカル）。
+  await context.route(
+    /tileserver\.geolonia\.com|\.cloudfront\.net|stars\.optgeo\.org|api\.geolonia\.com|cdn\.geolonia\.com|glyphs\.geolonia\.com/,
+    (route) => route.abort(),
+  );
+
+  await prepareSearch(page);
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card")).toHaveCount(1);
+
+  const previewButton = page.locator('#results .card .preview-open');
+  await expect(previewButton).toBeVisible();
+  const [preview] = await Promise.all([
+    context.waitForEvent("page"),
+    previewButton.click(),
+  ]);
+  await preview.waitForLoadState("domcontentloaded");
+  await expect(preview).toHaveURL(/\/machgl-preview\//);
+  await expect(preview.locator(".mp-title")).toContainText("候補1");
+  await expect(preview.locator(".mp-meta")).toContainText("神田橋");
+  await preview.close();
+});

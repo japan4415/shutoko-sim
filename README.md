@@ -3,7 +3,7 @@
 「今からこの時間で、首都高をどれくらい楽しめるだろう？」を考えるためのドライブルート提案サービスです。
 首都高を一周したうえで入口の1区間先で降りると、1区間分の料金になるという原案の前提を活かし、時間予算内で長く楽しめるルートを探します。出発地点と最小・最大時間から候補を比較し、Google マップへ引き継ぐ体験を目指します。
 
-現在は Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用道路グラフを決定論的に生成するオフラインビルダー（`crates/graph-builder`）、Cloudflare Workers による成果物配信・住所検索プロキシ、および製品 UI（`web/`）を実装しています。製品 UI は住所検索（国土地理院ジオコーディング）または現在地取得による出発地点指定、分単位の時間範囲、Leaflet + 国土地理院タイルによる地図描画、最大3件の候補比較、Google マップへの引き継ぎ、例外系からの復帰を備えます。
+現在は Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用道路グラフを決定論的に生成するオフラインビルダー（`crates/graph-builder`）、Cloudflare Workers による成果物配信・住所検索プロキシ、および製品 UI（`web/`）を実装しています。製品 UI は住所検索（国土地理院ジオコーディング）または現在地取得による出発地点指定、分単位の時間範囲、Leaflet + 国土地理院タイルによる地図描画、最大3件の候補比較、Google マップへの引き継ぎ、例外系からの復帰を備えます。候補カードの「3Dで見る」から、MachGL 先行版の3Dプレビューを別タブで開けます。正式版前のデモバンドルをビルド時に取得する暫定構成で、ビルド環境に `GEOLONIA_API_KEY` を設定します（[docs/machgl-preview.md](docs/machgl-preview.md)）。
 
 ## 想定する使い方
 
@@ -89,6 +89,7 @@ Cloudflare Workers Builds では、Git リポジトリを接続して次の値�
 | Preview deploy command | `cd workers && npx wrangler versions upload` |
 | Node version | `NODE_VERSION=22` |
 | Automatic dependency install | `SKIP_DEPENDENCY_INSTALL=1` |
+| 環境変数 | `GEOLONIA_API_KEY`（3Dプレビューのビルド用。未設定ならデモキーで生成する） |
 | Non-production branch builds | OFF |
 
 `SKIP_DEPENDENCY_INSTALL=1` でプラットフォーム側の自動インストールを止め、`scripts/cloudflare-build.sh` が `workers` と `web` の lockfile 固定依存を `npm ci` で導入して `web/dist` を生成する。これにより deploy command が使う pinned Wrangler も `workers/node_modules` に用意される。Deploy command は wrangler を使い続ける（Issue #98）。`cf deploy` は新設定系（`cloudflare.config.ts` / `wrangler.config.ts`）を読み、`cf deploy --dry-run` でのビルド・assets・bindings 検証を経て本番の deploy command に採用した。wrangler.toml は workers の vitest-pool-workers（wrangler 形式 config のみ対応）だけが読むため残し、新設定との一致は `workers/test/cloudflare-config.test.ts` が検査する。

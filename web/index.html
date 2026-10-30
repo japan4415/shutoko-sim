@@ -2,8 +2,10 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <!-- 地図タイル（国土地理院 / OpenStreetMap）と同一オリジンの住所検索プロキシだけを許可する。
-         住所検索は /api/geocode 経由のため connect-src に外部ジオコーダを直接許可しない。
+    <!-- 地図タイル（国土地理院 / OpenStreetMap / 3Dプレビューの Geolonia）と
+         同一オリジンの住所検索プロキシだけを許可する。住所検索は /api/geocode 経由のため
+         connect-src に外部ジオコーダを直接許可しない。3Dプレビューは /machgl-preview/ の
+         別タブで動き、CSS は外部ファイルなので style-src は 'self' のままにする。
          ここは Vite の dev サーバ（web/public/_headers が効かない）と、キャッシュされた古い
          HTML のための二重の防御である。配信時は同じ内容が HTTP ヘッダーでも届く
          （web/public/_headers）。frame-ancestors は meta では無視され、Chromium が警告を
@@ -12,7 +14,7 @@
          workers/test/security-headers.test.ts が検査する。 -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org; object-src 'none'; base-uri 'self'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; worker-src 'self' blob:; connect-src 'self' https://tileserver.geolonia.com https://api.geolonia.com https://cdn.geolonia.com https://glyphs.geolonia.com https://d23l04mwnd60ho.cloudfront.net https://stars.optgeo.org; img-src 'self' data: blob: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org https://cdn.geolonia.com https://api.geolonia.com; object-src 'none'; base-uri 'self'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>首都高 周回ルート探索</title>
@@ -283,12 +285,14 @@
           地図を読み込めませんでした。条件は保持されています。
           <button type="button" id="map-retry-btn" class="secondary">地図を再読み込み</button>
         </p>
-        <!-- 地図追従に伴う外部通信の説明。新しい提供元は追加せず、既存のタイル提供元へ
-             表示範囲のタイルを要求することを利用者に知らせる。 -->
+        <!-- 地図追従と3Dプレビューに伴う外部通信の説明。通常の地図は国土地理院へ、
+             3Dプレビューを開いた場合だけ Geolonia Maps へ表示範囲を要求する。 -->
         <p class="field-note">
           地図の表示範囲は、出発地点の確定（現在地・住所・地図タップ・座標）や候補の表示に
           合わせて移動し、移動後の範囲の地図タイルを国土地理院へ要求します。
           「現在地を使う」を押すと、取得した位置の周辺のタイル要求が発生します。
+          「3Dで見る」を押すと別タブで3Dプレビューが開き、表示範囲（出発地点を含む）を
+          Geolonia Maps の地図タイルへ要求します。
         </p>
       </section>
 
@@ -321,6 +325,17 @@
         <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener"
           >国土地理院</a
         >
+      </p>
+      <p class="footer-line">
+        3Dプレビュー: 地図タイル
+        <a href="https://geolonia.com/" target="_blank" rel="noopener">Geolonia</a> /
+        国土地理院 / &copy; OpenStreetMap contributors ・ 3D都市モデル
+        <a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener"
+          >国土交通省 Project PLATEAU</a
+        >（
+        <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener"
+          >CC BY 4.0</a
+        >）を加工
       </p>
     </footer>
     <script type="module" src="/src/main.ts"></script>

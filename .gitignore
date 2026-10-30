@@ -9,6 +9,8 @@
 /workers/.dev.vars
 /web/node_modules/
 /web/dist/
+# MachGL 先行版プレビューの生成物（scripts/prepare-machgl-preview.mjs が作る）。
+/web/public/machgl-preview/
 /web/playwright-report/
 /web/test-results/
 # 代理計測（npm run bench）の生出力。レポートする成果物は docs/bench/ 配下に置く。

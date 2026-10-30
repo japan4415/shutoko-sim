@@ -107,18 +107,35 @@ describe("Delivery security headers (Issue #16)", () => {
     expect(assetHeaders.get(hstsName.toLowerCase())).toBe(hstsValue);
   });
 
-  it("アセット向け CSP は WASM・ワーカー・タイル・同一オリジン API を許可する", () => {
+  it("アセット向け CSP は WASM・ワーカー・地図タイル・同一オリジン API を許可する", () => {
     const directives = parseCsp(assetHeaders.get("content-security-policy")!);
     expect(directives.get("default-src")).toEqual(["'self'"]);
-    expect(directives.get("script-src")).toContain("'wasm-unsafe-eval'");
+    expect(directives.get("script-src")).toEqual(["'self'", "'wasm-unsafe-eval'"]);
+    // 3Dプレビューの CSS は外部ファイルなので、通常 UI と同じくインラインスタイルは許さない。
+    expect(directives.get("style-src")).toEqual(["'self'"]);
     expect(directives.get("worker-src")).toEqual(["'self'", "blob:"]);
-    expect(directives.get("connect-src")).toEqual(["'self'"]);
-    expect(directives.get("img-src")).toEqual([
-      "'self'",
-      "data:",
-      "https://cyberjapandata.gsi.go.jp",
-      "https://*.tile.openstreetmap.org",
-    ]);
+    expect(directives.get("connect-src")).toEqual(
+      expect.arrayContaining([
+        "'self'",
+        "https://tileserver.geolonia.com",
+        "https://api.geolonia.com",
+        "https://cdn.geolonia.com",
+        "https://glyphs.geolonia.com",
+        "https://d23l04mwnd60ho.cloudfront.net",
+        "https://stars.optgeo.org",
+      ]),
+    );
+    expect(directives.get("img-src")).toEqual(
+      expect.arrayContaining([
+        "'self'",
+        "data:",
+        "blob:",
+        "https://cyberjapandata.gsi.go.jp",
+        "https://*.tile.openstreetmap.org",
+        "https://cdn.geolonia.com",
+        "https://api.geolonia.com",
+      ]),
+    );
     expect(directives.get("frame-ancestors")).toEqual(["'none'"]);
     expect(directives.get("object-src")).toEqual(["'none'"]);
     expect(directives.get("base-uri")).toEqual(["'self'"]);

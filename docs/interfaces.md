@@ -48,13 +48,17 @@ Cloudflare Workers Static Assets が Worker コードを経由せずに返すた
 
 | ヘッダー | 値 | 付与先 | 理由 |
 | --- | --- | --- | --- |
-| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'` | 静的アセットのみ | 同一オリジンの成果物と住所検索プロキシ、地図タイル、WASM 実行だけを許可する |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; worker-src 'self' blob:; connect-src 'self' https://tileserver.geolonia.com https://api.geolonia.com https://cdn.geolonia.com https://glyphs.geolonia.com https://d23l04mwnd60ho.cloudfront.net https://stars.optgeo.org; img-src 'self' data: blob: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org https://cdn.geolonia.com https://api.geolonia.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'` | 静的アセットのみ | 同一オリジンの成果物と住所検索プロキシ、地図タイル、WASM 実行だけを許可する。3Dプレビューの Geolonia タイルも含む |
 | `X-Content-Type-Options` | `nosniff` | 両方 | R2 から返す成果物の MIME をブラウザに推測させない |
 | `X-Frame-Options` | `DENY` | 両方 | クリックジャッキング防止。CSP の `frame-ancestors` は meta タグでは無視されるため、ヘッダーでしか効かない |
 | `Referrer-Policy` | `no-referrer` | 両方 | 検索語・座標を含む URL を外部へ漏らさない |
 | `Permissions-Policy` | `camera=(), microphone=(), payment=(), usb=(), geolocation=(self)` | 両方 | 現在地検索のための位置情報だけを自オリジンに許可し、他は無効化する |
 | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | 両方（HTTPS のみ） | workers.dev は HSTS preload 済みだが、独自ドメインへ移しても同じ保証を効かせる |
 
+- 3Dプレビューは `/machgl-preview/` の別タブで動かす。Cloudflare の `_headers` は `/*` と
+  パス別ブロックを重複適用し、CSP は積集合になるため、パス別に緩めるのではなく全体の
+  `connect-src` / `img-src` に Geolonia の配信元を足す。プレビューの CSS は外部ファイルに
+  して `style-src` は `'self'` のままにする。スクリプトは `'self'` のまま。
 - Worker 側は成果物の `Cache-Control` / `ETag` / `Content-Type` を保持したまま付与し、304 でも
   本文を持たせない（`workers/test/security-headers.test.ts`）
 - `web/index.html` の meta タグにも同じ CSP を置く（Vite の dev サーバでは `_headers` が効かず、
@@ -421,7 +425,9 @@ OSM のデータライセンスとタイルサーバーの利用条件は別に�
 
 標準タイルサーバーを本番用の無制限基盤とはみなさない。大量先読み・オフライン取得を行わず、必要な帰属とキャッシュ条件を守る。実際のタイル提供元は利用量・可用性・条件を確認して選ぶ。[OSMF Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)
 
-地図の表示範囲は、出発地点の確定（現在地・住所・地図タップ・座標）および候補表示への追従で移動し、移動後の範囲のタイルを既存の提供元（国土地理院）へ要求する。新しい提供元は追加しない。現在地取得を契機とする位置依存のタイル要求が発生し得るため、UI は地図操作・出発地点確定時の外部通信を説明する文言を表示する。位置情報そのもの（緯度経度）を成果物・ログ・成果物 URL に含めない方針は従来どおりで、現在地は検索リクエストの座標として WASM に渡すだけである。
+地図の表示範囲は、出発地点の確定（現在地・住所・地図タップ・座標）および候補表示への追従で移動し、移動後の範囲のタイルを既存の提供元（国土地理院）へ要求する。通常 UI では新しい提供元を追加しない。現在地取得を契機とする位置依存のタイル要求が発生し得るため、UI は地図操作・出発地点確定時の外部通信を説明する文言を表示する。位置情報そのもの（緯度経度）を成果物・ログ・成果物 URL に含めない方針は従来どおりで、現在地は検索リクエストの座標として WASM に渡すだけである。
+
+候補カードの「3Dで見る」から開く3Dプレビュー（先行版 MachGL）は別タブで動かし、そのときだけ Geolonia Maps の地図タイル、PLATEAU の3D都市モデル、DEM を要求する。候補の区間座標は `localStorage` を介して同一オリジンのプレビューへ渡し、プレビューが読み取った時点で削除する。プレビューには表示範囲（出発地点を含む）が Geolonia へ送られること、地図・3D都市モデルの帰属を常時表示する。正式版の MachGL が出たら取得元と CSP を見直す。
 
 公開 Nominatim は絶対上限1リクエスト/秒で、クライアント側オートコンプリートは禁止されている。本番はプロバイダー契約または自前運用を選定し、この制約を前提としない構成を確定するまで公開しない。[Nominatim Usage Policy](https://operations.osmfoundation.org/policies/nominatim/)
 

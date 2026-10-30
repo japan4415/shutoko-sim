@@ -8,12 +8,14 @@
 #   - ここの Content-Security-Policy と web/index.html の meta タグのディレクティブが一致
 #   - ここの非 CSP ヘッダーが workers/src/security.ts の SECURITY_HEADERS を含む
 #
-# CSP は「同一オリジンのみ」を基本にし、地図タイル（国土地理院・OpenStreetMap）と
-# wasm-unsafe-eval / blob ワーカーだけを許可する。住所検索は同一オリジンの /api/geocode を
-# 経由するため connect-src に外部ジオコーダを許可しない。meta タグ側は Vite の dev サーバ
-# （_headers が効かない）と、キャッシュされた古い HTML のための二重の防御として残す。
+# CSP は「同一オリジンのスクリプト」を基本にし、地図タイル（国土地理院・OpenStreetMap）と
+# 3Dプレビュー（/machgl-preview/）の Geolonia タイル、wasm-unsafe-eval / blob ワーカーだけを
+# 許可する。住所検索は同一オリジンの /api/geocode を経由するため connect-src に外部
+# ジオコーダを許可しない。プレビューの CSS は外部ファイルにして style-src は 'self' の
+# ままにする。meta タグ側は Vite の dev サーバ（_headers が効かない）と、キャッシュされた
+# 古い HTML のための二重の防御として残す。
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; worker-src 'self' blob:; connect-src 'self' https://tileserver.geolonia.com https://api.geolonia.com https://cdn.geolonia.com https://glyphs.geolonia.com https://d23l04mwnd60ho.cloudfront.net https://stars.optgeo.org; img-src 'self' data: blob: https://cyberjapandata.gsi.go.jp https://*.tile.openstreetmap.org https://cdn.geolonia.com https://api.geolonia.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer

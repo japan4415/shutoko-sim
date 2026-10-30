@@ -598,6 +598,26 @@ button.chip {
   width: 100%;
 }
 
+/* 3Dプレビューは補助的な導線。出発（主操作）より弱い見た目にする。 */
+.card .preview-open {
+  margin-top: 8px;
+  width: 100%;
+  background: #fff;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+
+.card .preview-open:hover {
+  background: var(--accent-soft);
+}
+
+.card .preview-error {
+  margin: 6px 0 0;
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
 .card .depart[disabled] {
   pointer-events: none;
 }

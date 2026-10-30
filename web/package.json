@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node ../scripts/prepare-machgl-preview.mjs",
     "dev": "vite",
+    "prebuild": "node ../scripts/prepare-machgl-preview.mjs",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "e2e": "vite build && playwright test",
+    "e2e": "npm run build && playwright test",
     "bench": "node bench/run-bench.mjs",
     "bench:summarize": "node bench/summarize.mjs"
   },

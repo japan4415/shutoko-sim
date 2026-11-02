@@ -14,7 +14,7 @@
     "@types/node": "^24.19.2",
     "cf": "^1.0.0-beta.17",
     "typescript": "7.0.2",
-    "vitest": "4.1.11",
+    "vitest": "4.1.12",
     "wrangler": "^4.151.0"
   }
 }

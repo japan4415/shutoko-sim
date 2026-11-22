@@ -55,6 +55,7 @@ test.afterEach(async ({ page }) => {
 });
 
 test("(a) 神田橋プリセット 15〜60 で候補カードと Maps URL が表示される", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-22T01:00:00Z"));
   await openApp(page);
   await page.selectOption("#origin-preset", "kandabashi");
   await page.fill("#min-minutes", "15");
@@ -63,25 +64,40 @@ test("(a) 神田橋プリセット 15〜60 で候補カードと Maps URL が表
 
   const firstCard = page.locator("#results .card").first();
   await expect(firstCard).toBeVisible();
-  await expect(firstCard).toContainText("神田橋入口");
-  await expect(firstCard).toContainText("300");
+  await expect(page.locator("#results-scope")).toBeVisible();
+  await expect(page.locator("#results-scope")).toContainText("すべての入口を比較した結果ではありません");
+  await expect(firstCard.locator(".charging")).toHaveText("課金対象: 神田橋入口 → 宝町出口 の1区間");
+  await expect(firstCard.locator(".toll")).toContainText("300 円");
+  await expect(firstCard.locator(".distance--billing")).toHaveText("料金表上の距離: 1.7 km");
+  await expect(firstCard.locator(".distance--shutoko")).toHaveText("首都高距離: 16.1 km");
+  await expect(firstCard.locator(".distance--total")).toHaveCount(0);
   await expect(page.locator("#results .card")).toHaveCount(1);
+  // 実走行の線は残すが、走行全体を課金線として重ねない。
+  await expect(page.locator('#map .leaflet-overlay-pane path[stroke="#0b5cad"]').first()).toBeVisible();
+  await expect(page.locator('#map .leaflet-overlay-pane path[stroke="#c2410c"]')).toHaveCount(0);
 
-  // 強調は所要時間の数値だけに当たり、但し書きは別要素の補助テキスト（design-review-002 C2）。
-  await expect(firstCard.locator(".duration")).toHaveText(/^総所要時間: 約\d+分$/);
-  await expect(firstCard.locator(".duration-note")).toHaveText(
-    "アクセス・帰着を含み（概算）、休憩は含みません",
-  );
-
-  // 同じ但し書きを時間の入力欄にも併記し、両 input から aria-describedby で結ぶ
-  // （design-review-002 D1 / 修正 6）。
-  await expect(page.locator("#time-note")).toHaveText("アクセス・帰着を含み（概算）、休憩は含みません");
+  await expect(firstCard.locator(".duration")).toHaveText("往復所要時間（余裕なし）: 約24分");
+  await expect(firstCard.locator(".plan-time")).toHaveText("計画時間（帰着・余裕込み）: 約29分");
+  await expect(firstCard.locator(".breakdown")).toContainText("帰り 4分（概算）");
+  await expect(firstCard.locator(".duration-note")).toContainText("出発地点に戻るまで");
+  const timeNote = page.locator("#time-note");
+  await expect(timeNote).toContainText("同じ地点に戻るまで");
+  await expect(timeNote).toContainText("最小時間は余裕なし、最大時間は余裕込み");
   await expect(page.locator("#min-minutes")).toHaveAttribute("aria-describedby", "time-note");
   await expect(page.locator("#max-minutes")).toHaveAttribute("aria-describedby", "time-note");
 
   const mapsUrl = await firstCard.getAttribute("data-maps-url");
-  expect(mapsUrl, "data-maps-url 属性").not.toBeNull();
-  expect(mapsUrl?.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);
+  const url = new URL(mapsUrl ?? "");
+  expect(url.origin + url.pathname).toBe("https://www.google.com/maps/dir/");
+  expect(url.searchParams.get("api")).toBe("1");
+  expect(url.searchParams.get("travelmode")).toBe("driving");
+  expect(url.searchParams.get("origin")).toBe("35.689673,139.764425");
+  expect(url.searchParams.get("destination")).toBe(url.searchParams.get("origin"));
+  // 入口付近 → 周回を誘導する経由地 → 出口の順。外部アプリでの再現性は別に確認する。
+  expect(url.searchParams.get("waypoints")?.split("|")).toEqual([
+    "35.689673,139.764425", "35.654776,139.744043", "35.677890,139.775197",
+  ]);
+  await expect(firstCard.locator(".maps-handoff-notice")).toContainText("出発前に");
 
   // window.open の引数をスタブで検証（外部遷移せず決定論的）。
   await page.evaluate(() => {
@@ -101,9 +117,23 @@ test("(a) 神田橋プリセット 15〜60 で候補カードと Maps URL が表
     return w.__openCalls;
   });
   expect(calls).toHaveLength(1);
-  expect(calls[0]?.[0]?.startsWith("https://www.google.com/maps/dir/?api=1")).toBe(true);
+  expect(calls[0]?.[0]).toBe(mapsUrl);
   expect(calls[0]?.[1]).toBe("_blank");
   expect(calls[0]?.[2]).toBe("noopener");
+});
+
+test("(g) 神田橋は帰着と余裕込みで、最大28分には収まらず29分には収まる", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-22T01:00:00Z"));
+  await openApp(page);
+  await page.fill("#min-minutes", "23");
+  await page.fill("#max-minutes", "28");
+  await page.click("#search-btn");
+  await expect(page.locator("#status")).toContainText("候補がありません");
+  await expect(page.locator("#results-scope")).toBeHidden();
+  await expect(page.locator("#results .card")).toHaveCount(0);
+  await page.fill("#max-minutes", "29");
+  await page.click("#search-btn");
+  await expect(page.locator("#results .card")).toHaveCount(1);
 });
 
 test("(b) 60〜90 分は TIME_WINDOW の文言が表示される", async ({ page }) => {
@@ -119,6 +149,12 @@ test("(b) 60〜90 分は TIME_WINDOW の文言が表示される", async ({ page
   await expect(page.locator("#status")).toContainText(
     "指定時間枠（60〜90 分）に収まる候補がありません",
   );
+  const alternate = page.getByRole("button", { name: "別の入口・出口を指定する" });
+  await expect(alternate).toBeVisible();
+  await alternate.click();
+  await expect(page.locator("#explicit-od-section")).toBeVisible();
+  await expect(page.locator("#min-minutes")).toHaveValue("60");
+  await expect(page.locator("#max-minutes")).toHaveValue("90");
 });
 
 test("(f) 240/240 の指定枠は TIME_WINDOW 診断と最小時間の復帰導線を出す", async ({ page }) => {

@@ -1,14 +1,14 @@
 # データ・インターフェース設計
 
-以下は完成版に向けた契約案。初期 Rust/WASM コアは座標入力や外部連携を含まないため、現時点で呼べる契約は [Rust / WASM 開発](wasm-development.md)を参照する。実データ生成パイプラインの仕様と手順については [実データ生成パイプライン](data-pipeline.md) を参照。JSON の座標オブジェクトは `lat` / `lon`、GeoJSON の座標配列は `[経度, 緯度]`、距離は m、時間は秒、時刻は UTC の ISO 8601 を使う。
+現行の配信・探索・表示の契約と、互換性のために残す旧形式を記載する。WASM の呼び出し方は[Rust / WASM 開発](wasm-development.md)を参照。実データ生成パイプラインの仕様と手順については [実データ生成パイプライン](data-pipeline.md) を参照。JSON の座標オブジェクトは `lat` / `lon`、GeoJSON の座標配列は `[経度, 緯度]`、距離は m、時間は秒、時刻は UTC の ISO 8601 を使う。
 
 ## 公開成果物
 
-マニフェスト（`manifest.json`）は `schemaVersion`、`releaseId`、`engineVersion`、`graphVersion`、`graphSchemaVersion`、`routePlanVersion`、`routeMembershipsSha256`、`builtAt`、`sourceDate`、`coverage`、`vehicleProfile`、`timeModelVersion`、`billingPairsVersion`、`tariffModelVersion`、`pairDerivation`、`attribution`（`© OpenStreetMap contributors`）、`odblLicenseUrl`、`unverifiedSections`、`provenance`、`artifacts` を持つ。schema 4 の `all-real-v5` では `graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v3`、`tariffModelVersion=1`、`pairDerivation`（導出ルール `billingPairDerivation/v2` と 5 入力の SHA-256、候補集計）を記録し、`routeMembershipsSha256` は graph の `routeMemberships[]` を決定論的に直列化した SHA-256 とする。`artifacts` は生成成果物（`graph.json`、`snap-index.json` 等）それぞれの相対パス、SHA-256、バイト数を持つ。`builtAt` は再現性を担保するため外部から与えられた固定値を用いる。`coverage` は対応領域（`area`）、検証済み課金端点（`verifiedEntries`、`verifiedExits`）、および全verified-boundランプの `endpointCapabilities` を持つ。後者は `routable` と `structuralNoLoop` の入口・出口ID一覧と件数を機械可読に公開する。
+マニフェスト（`manifest.json`）は `schemaVersion`、`releaseId`、`engineVersion`、`graphVersion`、`graphSchemaVersion`、`routePlanVersion`、`routeMembershipsSha256`、`builtAt`、`sourceDate`、`coverage`、`vehicleProfile`、`timeModelVersion`、`billingPairsVersion`、`tariffModelVersion`、`pairDerivation`、`attribution`（`© OpenStreetMap contributors`）、`odblLicenseUrl`、`unverifiedSections`、`provenance`、`artifacts` を持つ。公開版 `all-real-v5` では `graphSchemaVersion=4`、同名のローカル生成物では `graphSchemaVersion=5`。別成果物であり、[ハッシュと公開手順](delivery.md#公開版とローカル生成物を区別する)を参照。両版とも `routePlanVersion=1`、`billingPairsVersion=v3`、`tariffModelVersion=1`、`pairDerivation`（導出ルール `billingPairDerivation/v2` と 5 入力の SHA-256、候補集計）を記録し、`routeMembershipsSha256` は graph の `routeMemberships[]` を決定論的に直列化した SHA-256 とする。`artifacts` は生成成果物（`graph.json`、`snap-index.json` 等）それぞれの相対パス、SHA-256、バイト数を持つ。`builtAt` は再現性を担保するため外部から与えられた固定値を用いる。`coverage` は対応領域（`area`）、検証済み課金端点（`verifiedEntries`、`verifiedExits`）、および全verified-boundランプの `endpointCapabilities` を持つ。後者は `routable` と `structuralNoLoop` の入口・出口ID一覧と件数を機械可読に公開する。
 
 グラフにはノード座標、エッジ ID、始終点、距離、時間、道路種別、路線名、形状、車両制限、遷移制限、入口/出口区分、引き継ぎ検証済み経由地点を格納する。生成元 OSM スナップショット、追加の人手検証情報とその出典・日付を追跡できるようにする。
 
-R2 での格納形式はサイズ計測後に決める。スキーマと WASM の互換性がない場合は探索前に停止する。ネットワークの Content-Length だけに依存せず取得後のサイズとハッシュを照合する。
+R2 の成果物はバージョン付きパスで配信する。スキーマと WASM の互換性がない場合は探索前に停止する。ネットワークの Content-Length だけに依存せず取得後のサイズとハッシュを照合する。
 
 ## 課金対象1区間のデータ
 
@@ -152,7 +152,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 - スナップ対象: Entry エッジの from ノード（入口アクセス地点）のみ。一般道ノードはスナップ対象に含まない。また境界 JCT（`boundary_in`）は地表スナップ対象から除外。
 - スナップ距離計算: 等距円筒近似（Equirectangular approximation、東京付近 `cos(lat)` 補正）。
 - 選択件数: 近い順に最大 `SearchLimits.max_access_entries` 件（デフォルト 0 = 無制限、グラフ内の全 Entry アクセス地点）。スナップ半径（200m 固定）の概念は廃止。
-- 距離キャップ: `SearchLimits.max_access_distance_meters`（デフォルト 30,000 m、0 は無制限）を超える最寄り入口は探索対象外とし、`status: "no_candidates"`, `reason: "NO_CONNECTION"` を返す。このときも最近接の入口アクセス地点を `nearestAccess` として返す。
+- 距離キャップ: `SearchLimits.max_access_distance_meters`（コア既定は 30,000 m、Web は 46,000 m を指定、0 は無制限）を超える最寄り入口は探索対象外とし、`status: "no_candidates"`, `reason: "NO_CONNECTION"` を返す。このときも最近接の入口アクセス地点を `nearestAccess` として返す。
 - 入口アクセス地点が1件も得られない場合: エラーとせず、`status: "no_candidates"`, `reason: "NO_CONNECTION"`, `candidates: []`, `nearestAccess: null` を正常返却する。
 
 ### 探索制限パラメータ（`SearchLimits`）
@@ -161,7 +161,7 @@ Web Worker は `ready`、`result`、`error` を返し、各探索応答に reque
 - `max_loop_edges`: 本線閉路探索エッジ数上限（デフォルト 2,000、入力として受理する上限 5,000）
 - `min_loop_meters`: 最小ループ距離（デフォルト 5,000m、マイクロループ排除）
 - `max_pairs`: 課金ペア探索対象上限（デフォルト 10）。座標検索（入口 tier 探索）では各 tier 内で評価する検証済み課金ペア数の上限として tier 単位に適用される。従来のノード検索（`originNodeId`）や、`origin` 座標を伴わない片側ランプ指定では全体の課金ペア探索対象上限として機能する。`origin` 座標と片側ランプ指定を併用した場合は座標検索として tier 単位に適用される。入口・出口双方を指定する明示OD探索には適用しない
-- `max_access_distance_meters`: 最大アクセス距離（デフォルト 30,000m）
+- `max_access_distance_meters`: 最大アクセス距離（コア既定 30,000 m、Web 46,000 m）
 - `max_access_entries`: 最大アクセス入口数（デフォルト 0 = 無制限）
 - `device_verification`: リリース時固定の`manifestJson`とUTCの`evaluatedAt`。省略時はdevice verification gateを閉じ、検索要求の`pricingAt`を判定時刻に代用しない
 
@@ -229,7 +229,7 @@ WASM / Webの`Candidate` unionは`LegacyCandidate | TopologyOnlyCandidate | Radi
 
 `edgeRouteLegs`のroleは`entry_approach`、`mandatory_lap`、`return_corridor`、`exit_approach`の4種類だけとする。`startEdgeIndex`は含み、`endEdgeIndexExclusive`は含まない。各legは`resolvedSegmentId`で`routePlan.resolvedRouteSegments[]`を参照し、参照先の`edgeIdsSha256`がCandidateの`edgeIds`スライスと一致することを確認する。4区間は`[0, edgeIds.length)`を重複も欠落もなく覆う。一般道のsurface access / returnは`estimatedLegs`に置き、`estimated=true`、`distanceMeters`、`durationSeconds`を持たせ、Edge indexとgeometryを持たない。`edgeRouteLegs`と`routePlan`は`RadialCandidate`専用で、`TopologyOnlyCandidate`は宣言済みmandatory lapを意味付けないため持たない。graph-builder は `routePlanLapV1` の順序付き Edge 列と hash、return corridor の declared Exit candidate を検証する。declared candidateの`fromNodeId`へ到達できない場合はunresolved成功を返さず、verified bindingと4 resolved segmentがすべて揃った場合だけgraph schema 4の`radialReturn`として昇格する。unresolved / unsupported binding は公開候補に昇格させない。
 
-Issue #70でWeb consumerの表示を実装した。radialは4 roleを契約順に番号・名称・線種で提示し、地図も各roleを別の線種で描く。`estimatedLegs`は「一般道の概算区間」として推定距離と時間を別に提示し、地図の線には追加しない。カードと地図は`distanceMeters`を「総距離」、`shutokoDistanceMeters`を「首都高距離」として扱う。`TopologyOnlyCandidate`はedge route legを作らず、商品対象外の道路形状として3段の経路順序を表示する。unpriced radialとtopology-onlyは1区間の商品名・最低料金・円あたり効率を表示しない。
+Issue #70でWeb consumerの表示を実装した。radialは4 roleを契約順に番号・名称・線種で提示し、地図も各roleを別の線種で描く。`estimatedLegs`は「一般道の概算区間」として推定距離と時間を別に提示し、地図の線には追加しない。`shutokoDistanceMeters` は「首都高距離」として表示する。`distanceMeters` は一般道の往路・復路の推定距離が揃う場合のみ「往復距離（概算）」とし、legacy の値を往復距離と呼ばない。`billingDistanceMeters` は料金を確認できた1区間の商品候補で「料金表上の距離」として表示し、2D・3D の線に変換しない。`TopologyOnlyCandidate` は edge route leg を持たず、「参考経路・料金の比較対象外」として経路順序を表示する。unpriced radial と topology-only は料金効率の比較に入れない。
 
 以下はreader fixture用のwire-level Candidateである。IDと座標はsynthetic valueで、公開可能な2号bindingや料金を表さない。`toll`に`chargedSectionCount`はなく、4 legのindex、segment hash、距離式が一致する。
 
@@ -403,7 +403,7 @@ Issue #70でWeb consumerの表示を実装した。radialは4 roleを契約順�
 
 `edgeIdsSha256`は順序を保ったEdge IDの空白なしJSON arrayをSHA-256化した値で、generated graphの`resolvedRouteSegments`とCandidateの`routePlan`で同じ値を使う。core reader / Candidate validator は hash を再計算し、membership / binding 参照、role、index 範囲、各 status、不正または欠落した `chargedSectionCount` を検証する。Web Worker は受信した Candidate の判別、hash 形式、4 leg の完全分割、reference、status を再検証してから UI へ返す。
 
-core、WASM型、Web Workerはgraph schema 2 / 3 / 4を読む。schema 2 / 3の`pairKind`なしは`legacyRing`、schema 4のbuilder出力は`pairKind`を必須とし、未知のkind / versionは部分データを返さず停止する。readerとconsumer契約はIssue #65で実装し、builderの既定schema 4への切替と versioned release への wiring はIssue #66で完了した。Web reader は `billingPairsVersion` の v2（`all-real-v3`）と v3（`all-real-v4` / `all-real-v5`）のどちらでも受理し、`tariffModelVersion` を記録している release だけを料金契約つきで照合する（記録が無い旧 release は後方互換で受け入れる）。
+コア・WASM・Web Worker は graph schema 2 / 3 / 4 / 5 を読む。schema 2 / 3 の `pairKind` なしは `legacyRing`、schema 4 / 5 の builder 出力は `pairKind` を必須とし、未知のkind / versionは部分データを返さず停止する。readerとconsumer契約はIssue #65で実装し、builderの既定schema 4への切替と versioned release への wiring はIssue #66で完了した。Web reader は `billingPairsVersion` の v2（`all-real-v3`）と v3（`all-real-v4` / `all-real-v5`）のどちらでも受理し、`tariffModelVersion` を記録している release だけを料金契約つきで照合する（記録が無い旧 release は後方互換で受け入れる）。
 
 ## Google マップへの引き継ぎ
 

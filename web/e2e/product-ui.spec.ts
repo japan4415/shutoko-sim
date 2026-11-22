@@ -789,10 +789,13 @@ test("(13) 住所検索が 0 件なら見つからない文言を出し時間入
   await openApp(page);
   await setTimeRange(page, "30", "90");
 
-  await page.fill("#address-query", "存在しない住所");
+  const addressQuery = page.getByRole("searchbox", { name: "住所で検索" });
+  await expect(addressQuery).toHaveAccessibleDescription(/駅名・施設名では検索できません/);
+  await addressQuery.fill("東京駅");
   await page.click("#address-search-btn");
 
   await expect(page.locator("#address-feedback")).toContainText("見つかりませんでした");
+  await expect(page.locator("#address-feedback")).toContainText("都道府県から入力するか、現在地や地図で指定");
   await expect(page.locator("#min-minutes")).toHaveValue("30");
   await expect(page.locator("#max-minutes")).toHaveValue("90");
 });
@@ -892,7 +895,7 @@ test("(18) 八王子駅は最近接の横浜青葉入口 tier から 15〜240 �
   await expect(await firstCard.getAttribute("data-candidate-id")).toContain("yokohama-aoba-entry");
   await expect(firstCard).toContainText("横浜青葉");
   // 動的 OD は商品対象外で、参考料金も未算出（amountYen=null）。
-  await expect(firstCard).toContainText("道路形状のみ（商品対象外）");
+  await expect(firstCard).toContainText("参考経路・料金の比較対象外");
   await expect(firstCard).toContainText("参考料金: 未算出");
 });
 
@@ -1582,7 +1585,7 @@ test("(41) 明示ODのTIME_WINDOWと遠隔originのNO_CONNECTIONを理由・復�
   await page.click("#search-btn");
   await expect(page.locator("#status")).toContainText("指定時間枠");
   await expect(page.locator("#recovery-actions")).toContainText("TIME_WINDOW");
-  await expect(page.locator("#recovery-actions")).toContainText("出発地点または時間条件");
+  await expect(page.locator("#recovery-actions")).toContainText("一般道の行き帰りを含めると");
 
   await setCoordinateOrigin(page, "36.37", "140.47");
   await page.locator("#entry-ramp-search").fill("ramp:c1-inner:ginza-entry");
@@ -1608,15 +1611,16 @@ test("(42) 2候補fixtureでクリック・Enter選択、aria-current、地図�
   await expect(cards.nth(0)).toHaveAttribute("aria-current", "true");
   await expect(cards.nth(1)).toHaveAttribute("aria-current", "false");
   const paths = page.locator("#map .leaflet-overlay-pane path");
-  await expect(paths).toHaveCount(4);
+  // 1候補につき走行経路だけを描く。課金区間の重ね描きはしない。
+  await expect(paths).toHaveCount(2);
   const firstOpacityBefore = await paths.nth(0).getAttribute("stroke-opacity");
-  const secondOpacityBefore = await paths.nth(2).getAttribute("stroke-opacity");
+  const secondOpacityBefore = await paths.nth(1).getAttribute("stroke-opacity");
 
   await cards.nth(1).click();
   await expect(cards.nth(0)).toHaveAttribute("aria-current", "false");
   await expect(cards.nth(1)).toHaveAttribute("aria-current", "true");
   expect(await paths.nth(0).getAttribute("stroke-opacity")).not.toBe(firstOpacityBefore);
-  expect(await paths.nth(2).getAttribute("stroke-opacity")).not.toBe(secondOpacityBefore);
+  expect(await paths.nth(1).getAttribute("stroke-opacity")).not.toBe(secondOpacityBefore);
 
   await cards.nth(0).focus();
   await page.keyboard.press("Enter");
@@ -1645,7 +1649,7 @@ test("(43) radialReturn は4区間と一般道概算を番号・線種・距離�
 
   const card = page.locator("#results .card").first();
   await expect(card).toBeVisible();
-  await expect(card.locator(".charging")).toHaveText("首都高区間: 入口 → 周回 → 戻り");
+  await expect(card.locator(".charging")).toHaveText("入出口: 目黒入口 → 天現寺出口");
   const routeLegs = card.locator(".route-order-list li");
   await expect(routeLegs).toHaveCount(4);
   await expect(routeLegs.nth(0)).toContainText("1");
@@ -1677,7 +1681,7 @@ test("(43) radialReturn は4区間と一般道概算を番号・線種・距離�
   }
   await expect(card.locator(".estimated-legs li")).toHaveCount(2);
   await expect(card.locator(".estimated-legs")).toContainText("地図の線に含めていません");
-  await expect(card.locator(".distance--total")).toHaveText("総距離: 12.5 km");
+  await expect(card.locator(".distance--total")).toHaveText("往復距離（概算）: 12.5 km");
   await expect(card.locator(".distance--shutoko")).toHaveText("首都高距離: 11.5 km");
   const overflow = await page.evaluate(() => {
     const root = document.scrollingElement ?? document.documentElement;
@@ -1713,7 +1717,7 @@ test("(72) 実機確認済みの radialReturn は3区間順の Maps ボタンを
   await expect(card.locator(".maps-legs .maps-leg-depart").nth(0)).toContainText("出発地 → 入口");
   await expect(card.locator(".maps-legs .maps-leg-depart").nth(1)).toContainText("入口 → 周回 → 戻り");
   await expect(card.locator(".maps-legs .maps-leg-depart").nth(2)).toContainText("出口 → 出発地");
-  await expect(card.locator(".maps-handoff-notice")).toHaveCount(0);
+  await expect(card.locator(".maps-handoff-notice")).toContainText("別の経路が表示されることがあります");
 });
 
 test("(44) topologyOnly は1区間文言と課金区間のオーバーレイを描画しない", async ({ page }) => {
@@ -1724,7 +1728,7 @@ test("(44) topologyOnly は1区間文言と課金区間のオーバーレイを�
 
   const card = page.locator("#results .card").first();
   await expect(card).toBeVisible();
-  await expect(card.locator(".charging")).toHaveText("道路形状のみ（商品対象外）");
+  await expect(card.locator(".charging")).toHaveText("目黒入口 → 天現寺出口（参考経路・料金の比較対象外）");
   await expect(card.locator(".toll")).toHaveText("参考料金: 500 円");
   const routeSteps = card.locator(".route-order-list li");
   await expect(routeSteps).toHaveCount(3);
@@ -1754,10 +1758,10 @@ for (const { label, pricingAt, amountYen } of [
     await expect(card).toBeVisible();
     await expect(card).toContainText("目黒入口");
     await expect(card).toContainText("天現寺出口");
-    await expect(card.locator(".charging")).toHaveText("首都高区間: 入口 → 周回 → 戻り");
-    await expect(card.locator(".toll")).toHaveText(`料金額: ${amountYen} 円（最安順位 1 位）`);
+    await expect(card.locator(".charging")).toHaveText("課金対象: 目黒入口 → 天現寺出口 の1区間");
+    await expect(card.locator(".toll")).toHaveText(`料金額: ${amountYen} 円（料金効率 1 位）`);
     // 金額は割引適用前の基本料金。円あたり効率も同じ料金での比較だと分かるようにする。
-    await expect(card.locator(".fare-label")).toHaveText("上記は普通車ETC基本料金（割引適用前）です");
+    await expect(card.locator(".fare-label")).toHaveText("上記は普通車ETC基本料金（割引適用前）です。実際のETC請求額を保証するものではありません。");
     // 効率の数値は各期間の料金から決まるため、ここでは書き方と注記を固定する。
     await expect(card.locator(".efficiency")).toHaveText(
       /^1 円あたり 約 [\d.]+ 分（普通車ETC基本料金（割引適用前）で比較）$/,
@@ -1769,7 +1773,7 @@ for (const { label, pricingAt, amountYen } of [
     await expect(routeSteps.nth(2)).toContainText("戻り経路");
     await expect(routeSteps.nth(3)).toContainText("出口アプローチ");
     await expect(card.locator(".estimated-legs li")).toHaveCount(2);
-    await expect(card.locator(".distance--total")).toContainText("総距離:");
+    await expect(card.locator(".distance--total")).toContainText("往復距離（概算）:");
     await expect(card.locator(".distance--shutoko")).toContainText("首都高距離:");
     await expect(card.locator(".depart")).toHaveCount(0);
     await expect(card.locator(".maps-handoff-notice")).toHaveText(
@@ -1779,7 +1783,7 @@ for (const { label, pricingAt, amountYen } of [
   });
 }
 
-test("(46) pricedでも商品cohort外のradialは効率と最安順位を表示しない", async ({ page }) => {
+test("(46) pricedでも商品cohort外のradialは効率と料金効率を表示しない", async ({ page }) => {
   await stubWorkerWithRadialCandidate(page, "pricedIneligible");
   await openApp(page);
   await setTimeRange(page, "15", "60");
@@ -1788,12 +1792,12 @@ test("(46) pricedでも商品cohort外のradialは効率と最安順位を表示
   const card = page.locator("#results .card").first();
   await expect(card).toBeVisible();
   await expect(card.locator(".charging")).toHaveText(
-    "首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）",
+    "目黒入口 → 天現寺出口（参考経路・料金の比較対象外）",
   );
   // 金額は決まっていても商品対象外なので、金額のラベルは「参考料金」に揃える。
   // 「料金額」のままだと、その下の注記が購入可能な金額のように読める。
   await expect(card.locator(".toll")).toHaveText("参考料金: 500 円");
-  await expect(card.locator(".fare-label")).toHaveText("上記は普通車ETC基本料金（割引適用前）です");
+  await expect(card.locator(".fare-label")).toHaveText("上記は普通車ETC基本料金（割引適用前）です。実際のETC請求額を保証するものではありません。");
   await expect(card.locator(".efficiency")).toHaveCount(0);
   await expect(card.locator(".rank")).toHaveCount(0);
   await expect(card.locator(".recommended")).toHaveCount(0);
@@ -1809,7 +1813,7 @@ test("(73) 未価格の候補には料金の注記を出さない（商品対象
 
   const card = page.locator("#results .card").first();
   await expect(card).toBeVisible();
-  await expect(card.locator(".charging")).toHaveText("道路形状のみ（商品対象外）");
+  await expect(card.locator(".charging")).toHaveText("目黒入口 → 天現寺出口（参考経路・料金の比較対象外）");
   // 金額が未算出なら、どの料金の額か示せないので注記も付けない。
   await expect(card.locator(".toll")).toHaveText("参考料金: 未算出");
   await expect(card.locator(".fare-label")).toHaveCount(0);

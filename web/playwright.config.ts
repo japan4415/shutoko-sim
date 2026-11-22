@@ -7,19 +7,26 @@
 // workers/vitest-pool-workers 用の wrangler.toml は残り、本番 deploy は cf deploy（新設定系）が読む。
 import { defineConfig } from "@playwright/test";
 
+// 別の作業ツリーやアプリが既定ポートを使っている場合も、ローカル R2 で検証できるようにする。
+const port = Number(process.env.SHUTOKO_E2E_PORT ?? 8787);
+if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+  throw new Error("SHUTOKO_E2E_PORT must be an integer between 1024 and 65535");
+}
+const baseURL = `http://localhost:${String(port)}`;
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
   expect: { timeout: 15_000 },
   reporter: [["list"]],
   use: {
-    baseURL: "http://localhost:8787",
+    baseURL,
   },
   webServer: {
-    // workers/node_modules/.bin の cf（package.json で固定した 1.0.0-beta.14）を使う。
-    command: "npx cf dev --port 8787",
+    // workers/node_modules/.bin の cf（package.json で固定）を使う。
+    command: `npx cf dev --port ${String(port)}`,
     cwd: "../workers",
-    url: "http://localhost:8787/releases/all-real-v5/manifest.json",
+    url: `${baseURL}/releases/all-real-v5/manifest.json`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

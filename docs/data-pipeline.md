@@ -1,6 +1,6 @@
 # 実データ道路グラフ・課金ペア生成パイプライン
 
-本ドキュメントでは、OpenStreetMap（OSM）実データから首都高速道路の全24路線と接続ランプを抽出し、決定論的な成果物（`graph.json`、`od-tariffs.json`、`pair-candidates.json`、`ramps.json`、`snap-index.json`、`manifest.json`）を生成するオフラインパイプラインの仕様と手順を記録する。一般道はルーティンググラフのエッジには含めないが、入口・出口ランプの分類コンテキストとして取得・参照し、ランプ端点の確定（`firstPublicRoadConnection/v1`）と 1 区間先出口の判定（relation 制約つきの First Exit）に使う。現行公開 release は `all-real-v5`（graph schema 5、`billingPairsVersion=v3`、`tariffModelVersion=1`）で、rollback 先は `all-real-v4`（graph schema 4）。
+本ドキュメントでは、OpenStreetMap（OSM）実データから首都高速道路の全24路線と接続ランプを抽出し、決定論的な成果物（`graph.json`、`od-tariffs.json`、`pair-candidates.json`、`ramps.json`、`snap-index.json`、`manifest.json`）を生成するオフラインパイプラインの仕様と手順を記録する。一般道はルーティンググラフのエッジには含めないが、入口・出口ランプの分類コンテキストとして取得・参照し、ランプ端点の確定（`firstPublicRoadConnection/v1`）と 1 区間先出口の判定（relation 制約つきの First Exit）に使う。公開版 `all-real-v5` は graph schema 4、同名のローカル生成物は schema 5。いずれも `billingPairsVersion=v3`、`tariffModelVersion=1`。バイト列は異なるので、[公開版とローカル生成物のハッシュ](delivery.md#公開版とローカル生成物を区別する)で識別する。
 
 ## 1. ライセンスと帰属表示
 
@@ -709,7 +709,7 @@ B から全グラフの最短 Exit を選ぶ処理は使わない。実データ
 ```bash
 ./scripts/generate-fixtures.sh
 ```
-`generate-fixtures.sh` は既定で `all-real-v5` を生成する。rollback 先など別の release ID を再現するときは第 7 引数または `SHUTOKO_RELEASE_ID` で release ID を渡す。
+`generate-fixtures.sh` は既定 ID `all-real-v5`、graph schema 5 のローカル成果物を生成する。公開中の同名 ID は schema 4 で、バイト列は異なる。第 7 引数または `SHUTOKO_RELEASE_ID` で ID を指定できるが、旧 ID を指定しても旧版のバイト列は再現できない。実際の確認値と次の公開手順は[実装・検証計画](delivery.md#公開版とローカル生成物を区別する)を参照。
 
 または直接 CLI を実行する（`scripts/generate-fixtures.sh` が内部で呼んでいる内容と同じ）。
 ```bash
@@ -727,24 +727,25 @@ cargo run --bin shutoko-graph-builder --locked -- \
   --source-date "2026-09-16" \
   --vehicle-profile "passenger-car-etc" \
   --coverage-area "Metropolitan Expressway network (Tokyo, Kanagawa, Saitama)" \
-  --graph-version "1.0.0"
+  --graph-version "1.0.0" \
+  --graph-schema 5
 ```
 上流の relation 4256077（C2）は方向ロールを持たないため、builder は推定した分割を
 そのまま使い、提案する role は `data/osm-relation-repairs.json` に分けて持つ。提案の生成・
 検証・投稿手順は [OSM changeset 提案](osm-changeset.md) を参照する。
 
-`--graph-schema` の既定は 4 なので省略してよい（明示的に 4 を渡しても同じ）。`--graph-schema 2` を指定すると legacy schema 2 を生成するが、`all-real-v5` を指定した場合は schema 4 以外を拒否する。検証済み課金ペアが1件以上生成されていることを強制したい場合は `--strict` を付ける。検証済みペアが0件の場合に非ゼロで終了する。
+ビルダー CLI 単体では `--graph-schema` の既定は 4 だが、フルリリースの ID（`all-real-v4`、`all-real-v5`）には schema 5 が必須。`--graph-schema 2` はそれ以外の ID で使える legacy 出力。検証済み課金ペアが1件以上生成されていることを強制したい場合は `--strict` を付ける。検証済みペアが0件の場合に非ゼロで終了する。
 
-### 現行 graph schema 4 が保持する情報
+### ローカル成果物（graph schema 5）が保持する情報
 
-- **Node の地理座標 (`lat`, `lon`)**: 全ノードに必須fieldとして出力する。WASMの空間snapとGeoJSON LineStringの合成で使う。
+- **Node の地理座標**: schema 5 ではノード座標を `[lat, lon]` で格納する。WASM の空間スナップと GeoJSON LineString の合成で使う。
 - **Edge の日本語道路名 (`name`)**: OSMの`name`、なければ`name:ja`を`Edge.name: Option<String>`として伝播する。名前がないEdgeはJSON keyを省略する。
 - **課金ペアの公式ランプ名 (`entryName`, `exitName`)**: `data/billing-pairs-seed.json`の値を`graph.json`の`billingPairs[]`へ伝播する。
 - **RouteMembershipIndex**: `graph.json` の `routeMemberships[]` に relation mainline と bound ramp の順序付き Edge、source snapshot、binding evidence、各 hash を記録する。今回の `all-real-v5` は 52 memberships を出力する（双方向 46 件に、全 route relation cover の `forward` 6 件）。
 - **料金カタログ**: `graph.json` は後方互換の `odTariffs` に加え、料金表 v3 の正本 `odTariffsV3`（`tariffRules` / `distanceEvidence` / `assignments` / `deprecatedAssignments`）と `billingPairsVersion`、`tariffModelVersion` を埋め込む。
-- **schema 4 manifest**: `graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v3`、`tariffModelVersion=1` と、決定論的な `routeMembershipsSha256`、および `pairDerivation`（導出ルールと 5 入力の SHA-256、候補集計）を `manifest.json` に記録する。
+- **ローカルの manifest**: `graphSchemaVersion=5`、`routePlanVersion=1`、`billingPairsVersion=v3`、`tariffModelVersion=1` と、決定論的な `routeMembershipsSha256`、および `pairDerivation`（導出ルールと 5 入力の SHA-256、候補集計）を `manifest.json` に記録する。
 
-現行 `all-real-v5` の生成済みファイルは次のとおりである。数値は `fixtures/generated/` の実測値であり、C1限定fixtureの数値ではない。**ファイルサイズ列は `fixtures/generated/manifest.json` の `artifacts[].byteLength` と実ファイルから機械的に取り直した値**（`manifest.json` 自身は `fixtures/generated/manifest.json` の実サイズ）で、`cargo test -p shutoko-graph-builder --test release_contract` の `documented_artifact_sizes_match_the_generated_files` が本表を実測値と照合するので、数値を手書きで写し直してずれると落ちる。
+ローカルの `all-real-v5` 生成済みファイルは次のとおりである。数値は `fixtures/generated/` の実測値であり、C1限定fixtureの数値ではない。**ファイルサイズ列は `fixtures/generated/manifest.json` の `artifacts[].byteLength` と実ファイルから機械的に取り直した値**（`manifest.json` 自身は `fixtures/generated/manifest.json` の実サイズ）で、`cargo test -p shutoko-graph-builder --test release_contract` の `documented_artifact_sizes_match_the_generated_files` が本表を実測値と照合するので、数値を手書きで写し直してずれると落ちる。
 
 | 成果物 | schema | 内容 | ファイルサイズ |
 | --- | ---: | --- | ---: |
@@ -764,10 +765,10 @@ cargo run --bin shutoko-graph-builder --locked -- \
 ### 再現性・決定論的検証
 同一入力から2回実行し、`diff -r`で成果物がバイト単位で一致することを確認する。
 
-- `graph.json`: route memberships の hash と禁止遷移・BillingPair のソート順を決定論的に出力する（`schemaVersion: 4`）。
+- `graph.json`: route memberships の hash と禁止遷移・BillingPair のソート順を決定論的に出力する（`schemaVersion: 5`）。
 - `snap-index.json`: Entryアクセス地点を安定順序で出力する（`schemaVersion: 2`、168件）。
 - `ramps.json`: 正規台帳とbinding結果を安定順序で出力する（`schemaVersion: 1`）。
-- `manifest.json`: `graphSchemaVersion=4`、`routePlanVersion=1`、`billingPairsVersion=v3`、`tariffModelVersion=1`、`routeMembershipsSha256`、`pairDerivation` と 5 成果物の SHA-256、byte length、unverified sections、verified pair の provenance を記録する。
+- `manifest.json`: `graphSchemaVersion=5`、`routePlanVersion=1`、`billingPairsVersion=v3`、`tariffModelVersion=1`、`routeMembershipsSha256`、`pairDerivation` と 5 成果物の SHA-256、byte length、unverified sections、verified pair の provenance を記録する。
 
 ## 5. 未検証区間（Unverified Sections）
 

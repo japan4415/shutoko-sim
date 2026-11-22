@@ -1,16 +1,16 @@
 # Rust / WASM 開発
 
-ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、schema 2 / 3 / 4 の対応表、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。schema 4 では `routeMemberships` と `billingPairs[].pairKind` / anchor kind も必須にする。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
+ローカルの `npm test` は `crates/routing-wasm/wasm-contract.json` と `dist/wasm/wasm-contract.json` の contract/engine/graph schema version、schema 2 / 3 / 4 / 5 の対応表、および現行 `graph.json` の `odTariffs`・explicit ramp ID・`mainlineNodeId` 契約を比較する。schema 4 では `routeMemberships` と `billingPairs[].pairKind` / anchor kind も必須にする。schema 5 では `nodeIdDeltas`・座標と `edges[].from` / `edges[].to` の位置インデックスを検証する。不一致・欠落時は `scripts/build-wasm.sh` を自動実行し、欠損したbuild contractからもfresh rebuildする。
 
-ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65 で WASM 境界が schema 4 pair union と Candidate v2 契約を受け付けるため `graphSchemaVersion=4`、`supportedGraphSchemaVersions=[2,3,4]` に更新した。engine package version は C1 release との互換性維持のため `engineVersion=0.1.0` のままにする。Issue #69 で `LegacyCandidate | TopologyOnlyCandidate | RadialCandidate` の3種類、dynamic topology-only、synthetic radial検索を追加し、Issue #71 でradial handoffの`disabledReason`と将来gate用の`MapsHandoffLegWire` wire型を追加したため `contractVersion=4` へ更新した。Issue #72 では `SearchLimits.deviceVerification` をリリース時固定のmanifest / 判定時刻の入力として追加し、`RadialHandoff` を enabled / disabled の判別可能な型へ修正した。search requestや`SearchResult`の既定shapeは変えず、設定なしではradial handoffが閉じる。Issue #66 で公開 graph の既定 schema を4へ切り替え、versioned release のmanifestに`graphSchemaVersion=4`、`routePlanVersion=1`、`routeMembershipsSha256` を記録する。現行の versioned release は `all-real-v5`（`billingPairsVersion=v3`）。Web Worker はmanifestのgraph schema、billing pair version、route plan version、route membership hashをgraph artifactと照合してからWASM prepareを実行する。料金 v3（tariff model 1）では候補の toll に `fareLabel` / `vehicleClass` / `paymentMethod` / `fareBasis` / `discountsExcluded` と、`amountYen` に加えて `assignmentId` / `ruleId` / `evidenceId` / `distanceEvidenceId` / `tollSource` / 適用期間が付く。Web reader は同じ組合せを `productTariff` として実行時に検証し、ずれた候補は `RESULT_CONTRACT_MISMATCH` で捨てる。この契約を build contract にも記すため `tariffModelVersion`、`requiredCandidateTollFields`、`productTariff` を追加し `contractVersion=5` へ更新した。manifest に `tariffModelVersion` を記録する release だけが照合され、記録が無い旧 release は後方互換で受け入れる。
+ただし、この鮮度判定はsource hashではなく手動更新する `contractVersion` / `engineVersion` / `graphSchemaVersion` に依存する。Issue #65 で WASM 境界が schema 4 pair union と Candidate v2 契約を受け付けるため `graphSchemaVersion=4`、`supportedGraphSchemaVersions=[2,3,4]` に更新した。engine package version は C1 release との互換性維持のため `engineVersion=0.1.0` のままにする。Issue #69 で `LegacyCandidate | TopologyOnlyCandidate | RadialCandidate` の3種類、dynamic topology-only、synthetic radial検索を追加し、Issue #71 でradial handoffの`disabledReason`と将来gate用の`MapsHandoffLegWire` wire型を追加したため `contractVersion=4` へ更新した。Issue #72 では `SearchLimits.deviceVerification` をリリース時固定のmanifest / 判定時刻の入力として追加し、`RadialHandoff` を enabled / disabled の判別可能な型へ修正した。search requestや`SearchResult`の既定shapeは変えず、設定なしではradial handoffが閉じる。Issue #66 で公開 graph の既定 schema を4へ切り替え、versioned release のmanifestに`graphSchemaVersion=4`、`routePlanVersion=1`、`routeMembershipsSha256` を記録する。公開版 `all-real-v5`（`billingPairsVersion=v3`）は schema 4、同名のローカル生成物と現在の WASM 契約は schema 5。両者の違いは[実装・検証計画](delivery.md#公開版とローカル生成物を区別する)を参照。Web Worker はmanifestのgraph schema、billing pair version、route plan version、route membership hashをgraph artifactと照合してからWASM prepareを実行する。料金 v3（tariff model 1）では候補の toll に `fareLabel` / `vehicleClass` / `paymentMethod` / `fareBasis` / `discountsExcluded` と、`amountYen` に加えて `assignmentId` / `ruleId` / `evidenceId` / `distanceEvidenceId` / `tollSource` / 適用期間が付く。Web reader は同じ組合せを `productTariff` として実行時に検証し、ずれた候補は `RESULT_CONTRACT_MISMATCH` で捨てる。この契約を build contract にも記すため `tariffModelVersion`、`requiredCandidateTollFields`、`productTariff` を追加し `contractVersion=5` へ更新した。manifest に `tariffModelVersion` を記録する release だけが照合され、記録が無い旧 release は後方互換で受け入れる。
 
-## 今回の実装範囲
+## WASM と Web の責務
 
-初回の探索コアは、人工グラフを使って「首都高を一周し、入口の1区間先で退出する」経路を生成するためのもの。実在の入出口・料金の検証や Google マップへの引き継ぎを済ませた公開ルート検索ではない。
+探索コアは人工 fixture と OSM 実データの両方で検証する。入力グラフ上で周回が成立することは、Google マップ上での経路や実走後の ETC 請求の検証とは別である。
 
-`crates/routing-core` は Rust の純粋な探索処理、`crates/routing-wasm` は JSON 文字列を受け渡す JavaScript 向け境界。ネットワーク、DOM、住所検索には依存しない。`fixtures` は架空の道路・料金データで、実走行案内には使わない。
+`crates/routing-core` は Rust の純粋な探索処理、`crates/routing-wasm` は JSON 文字列を受け渡す JavaScript 向け境界。ネットワーク、DOM、住所検索には依存しない。`fixtures` には合成データに加え、OSM からの生成物もある。
 
-出発地点は `origin: { lat, lon }` または `originNodeId` のどちらかで指定する（排他）。座標指定時は WASM 内部の空間グリッドから構造的に利用できる一般道Entryを距離順に選択し、固定の200m半径では切り捨てない。Entryノードが存在しない場合だけ `NO_CONNECTION` になる。OSM 実データからのグラフ生成、幾何データ合成、Google マップ引き継ぎ URL 生成に対応している。ブラウザ Web Worker はdevice manifestをbuild時にbundleしてgateへ渡す。実機検証の完了と公開handoffの有効化はユーザー作業待ちである。[インターフェース設計](interfaces.md)に詳細な契約表を記載している。
+出発地点は `origin: { lat, lon }` または `originNodeId` のどちらかで指定する（排他）。座標指定時は WASM 内部の空間グリッドから構造的に利用できる一般道Entryを距離順に選択し、固定の200m半径では切り捨てない。入口がない場合や最寄り入口までの距離が上限を超える場合に `NO_CONNECTION` となる。探索コアでは 30 km が既定、Web は 46 km を指定する。OSM 実データからのグラフ生成、幾何データ合成、Google マップ引き継ぎ URL 生成に対応している。ブラウザ Web Worker はdevice manifestをbuild時にbundleしてgateへ渡す。実機検証の完了と公開handoffの有効化はユーザー作業待ちである。[インターフェース設計](interfaces.md)に詳細な契約表を記載している。
 
 ## 準備
 
@@ -67,11 +67,11 @@ Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `sear
 
 ## 初期データ契約
 
-公開中・生成 fixture の現行 graph は `schemaVersion: 4`、`releaseId`、`vehicleProfile`、ノード、エッジ、billing pairs（`legacyRing` 12 件（C1 9 + C2 3）+ `radialReturn` 2 件）、route memberships、料金表 v3（`odTariffsV3`）、`billingPairsVersion`、`tariffModelVersion`、禁止エッジ列を格納する。reader は schema 2 / 3 の legacy pair と schema 4 の `legacyRing` / `radialReturn` union を受理する。エッジ種別は `local` / `entry` / `shutoko` / `exit`。上下線は異なるノード・エッジで表す。legacy 料金ペアは入口から基準点への経路、基準点から出口への経路を明示し、間に非空の一周を挿入する。`entryId` / `exitId` は実際の入退出エッジ ID と一致させる。二つの接続路を結んだ直接経路は単純路とし、そこに追加の周回を埋め込めない。一方、挿入する一周と接続路のエッジ共有は許す。
+公開版 graph は `schemaVersion: 4`、ローカル生成物は `schemaVersion: 5`。どちらも `releaseId`、`vehicleProfile`、ノード、エッジ、billing pairs（`legacyRing` 12 件（C1 9 + C2 3）+ `radialReturn` 2 件）、route memberships、料金表 v3（`odTariffsV3`）、`billingPairsVersion`、`tariffModelVersion`、禁止エッジ列を格納する。reader は schema 2 / 3 の legacy pair と schema 4 / 5 の `legacyRing` / `radialReturn` union を受理する。エッジ種別は `local` / `entry` / `shutoko` / `exit`。上下線は異なるノード・エッジで表す。legacy 料金ペアは入口から基準点への経路、基準点から出口への経路を明示し、間に非空の一周を挿入する。`entryId` / `exitId` は実際の入退出エッジ ID と一致させる。二つの接続路を結んだ直接経路は単純路とし、そこに追加の周回を埋め込めない。一方、挿入する一周と接続路のエッジ共有は許す。
 
 時間と距離は正の整数で秒・mを用いる。料金は実走行距離から計算せず、ペアに登録された有効期間の金額を使う。期間は開始を含み終了を含まない。検索入力の `pricingAt` に固定して判定する。入力検証はデータの構造を検証するもので、実際の道路や課金関係を認定しない。
 
-出力の周回候補は、外部ナビ引き継ぎ未検証の探索コア結果である。完成版で予定する GeoJSON、住所、経由地点、料金根拠の表示データを補った後に公開候補へ変換する。
+探索結果は地図用の GeoJSON、引き継ぎ条件、料金根拠を含む。放射線候補の Google マップ引き継ぎは実機検証ゲートが閉じているため無効。C1 legacy の単一リンクでも Google マップでの周回再現を保証しない。
 
 ## 探索の上限と完成版との差分
 
@@ -90,7 +90,7 @@ Rust からは `shutoko_routing_core::search`、JSON 境界の確認には `sear
 
 全候補で料金が分かる場合の `rankingMode` は `time_per_yen`、未確認額を含む場合は `shutoko_time`。`loop.validated` は入力グラフ内で非空の一周が成立した意味で、実際の道路やナビの検証済みを意味しない。候補に `HANDOFF_WAYPOINTS_UNVERIFIED` と `STATIC_TRAVEL_TIME` の警告コードを付ける。
 
-実道路網に対するブラウザの処理時間・ピークメモリ目標は未検証で、人工グラフのテスト成功から実道路網での性能を推定しない。同期呼び出しの10秒キャンセルはこのコアではなく、今後の Web Worker 呼び出し元で実装する。
+実道路網に対するブラウザの処理時間・ピークメモリ目標は未検証で、人工グラフのテスト成功から実道路網での性能を推定しない。同期呼び出しの10秒キャンセルはコアではなく、Web Worker を呼び出す UI で行う。
 
 ## ブラウザ Web Worker 側の実装範囲（#12）
 

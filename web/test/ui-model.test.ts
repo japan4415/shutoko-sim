@@ -517,6 +517,18 @@ describe("toCardModel", () => {
     expect(model.toll).toBe("料金額: 1,320 円");
   });
 
+  it("料金表の課金距離と首都高の走行距離を分け、1区間でも最低料金とは扱わない", () => {
+    const candidate = sampleCandidate({ shutokoDistanceMeters: 16091 });
+    candidate.toll.amountYen = 370;
+    candidate.toll.billingDistanceMeters = 1700;
+    const model = toCardModel(candidate);
+    expect(model.toll).toBe("料金額: 370 円");
+    expect(model.reasons).toContain("入出口に対応する1区間分の料金");
+    expect(model.billingDistanceKm).toBe(1.7);
+    expect(model.shutokoDistanceKm).toBe(16.1);
+    expect(model.roundTripDistanceKm).toBeNull();
+  });
+
   it("料金 null は「料金額: 未算出」", () => {
     const model = toCardModel(
       sampleCandidate({
@@ -531,6 +543,8 @@ describe("toCardModel", () => {
       }),
     );
     expect(model.toll).toBe("料金額: 未算出");
+    expect(model.billingDistanceKm).toBeNull();
+    expect(model.chargedSection).not.toContain("課金対象");
   });
 
   it("radialReturn は4区間・一般道概算・距離定義を分けて表示する", () => {
@@ -539,7 +553,7 @@ describe("toCardModel", () => {
     expect(model.mapsUrl).toBe("");
     expect(model.mapsLegUrls).toEqual([]);
     expect(model.mapsHandoffNotice).toBe(RADIAL_HANDOFF_NOTICE);
-    expect(model.chargedSection).toBe("首都高区間: 入口 → 周回 → 戻り");
+    expect(model.chargedSection).toBe("入出口: fixture entry → fixture exit");
     expect(model.loopEdgeIds).toEqual(["fixture:edge:lap:1", "fixture:edge:lap:2"]);
     expect(model.tollShort).toBe("未算出");
     expect(model.routeLegs.map((leg) => [leg.number, leg.role, leg.lineStyle, leg.edgeCount])).toEqual([
@@ -553,7 +567,7 @@ describe("toCardModel", () => {
       { role: "surface_return", label: "出口 → 出発地", distanceKm: 0.8, durationMinutes: 3 },
     ]);
     expect(model.pathSummary).toContain("首都高4区間");
-    expect(model.distanceKm).toBe(25.4);
+    expect(model.roundTripDistanceKm).toBe(25.4);
     expect(model.shutokoDistanceKm).toBe(23.4);
   });
 
@@ -600,7 +614,7 @@ describe("toCardModel", () => {
     expect(model.chargedSection).not.toContain("1区間");
   });
 
-  it("pricedでも商品cohort外のradialは効率・最安順位を表示しない", () => {
+  it("pricedでも商品cohort外のradialは効率・料金効率を表示しない", () => {
     const radial = JSON.parse(radialCandidateJson) as RadialCandidate;
     radial.eligibilityStatus = "unverified";
     radial.loopValidationStatus = "unresolved";
@@ -615,7 +629,7 @@ describe("toCardModel", () => {
     expect(model.toll).toBe("参考料金: 500 円");
     expect(model.fareLabelNote).toBe("上記は普通車ETC基本料金（割引適用前）です");
     expect(model.timePerYen).toBeNull();
-    expect(model.chargedSection).toBe("首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）");
+    expect(model.chargedSection).toBe("fixture entry → fixture exit（参考経路・料金の比較対象外）");
     expect(canRankByPrice("time_per_yen", [radial])).toBe(false);
     expect(canRankByPrice("shutoko_time", [sampleCandidate()])).toBe(false);
     expect(canRankByPrice("time_per_yen", [sampleCandidate()])).toBe(true);
@@ -660,7 +674,7 @@ describe("toCardModel", () => {
     delete topology.edgeRouteLegs;
     const candidate = topology as unknown as TopologyOnlyCandidate;
     const model = toCardModel(candidate);
-    expect(model.chargedSection).toBe("道路形状のみ（商品対象外）");
+    expect(model.chargedSection).toBe("fixture entry → fixture exit（参考経路・料金の比較対象外）");
     expect(model.chargedSection).not.toContain("1区間");
     expect(model.toll).toBe("参考料金: 500 円");
     expect(model.mapsUrl).toBe("");
@@ -696,7 +710,7 @@ describe("toCardModel の新フィールド", () => {
     expect(model.shutokoMinutes).toBe(25); // 1503s → 25 分
     expect(model.returnMinutes).toBe(2); // 120s
     expect(model.bufferMinutes).toBe(2); // 121s → 2 分
-    expect(model.distanceKm).toBe(8); // 8000m → 8 km（小数 1 桁）
+    expect(model.roundTripDistanceKm).toBeNull(); // legacy の距離を往復とは表示しない
     expect(model.shutokoDistanceKm).toBe(5);
     expect(model.routeLegs).toEqual([]);
     expect(model.estimatedLegs).toEqual([]);
@@ -704,7 +718,7 @@ describe("toCardModel の新フィールド", () => {
     expect(model.pathSummary).toBeNull();
     expect(model.tollShort).toBe("300 円");
     expect(model.timePerYen).toBe("1 円あたり 約 0.08 分");
-    expect(model.reasons).toEqual(["時間あたりの料金効率が最良", "1区間料金（最低料金）"]);
+    expect(model.reasons).toEqual(["1円あたりの首都高走行時間が候補内で最長", "入出口に対応する1区間分の料金"]);
     expect(model.rankLabel).toBeNull();
     expect(model.geometry).toEqual({ type: "LineString", coordinates: [] });
     expect(model.entryId).toBe("e:1");
@@ -714,9 +728,9 @@ describe("toCardModel の新フィールド", () => {
   });
 
   it("index 省略時は 1、距離は小数 1 桁へ丸める", () => {
-    const model = toCardModel(sampleCandidate({ distanceMeters: 12345 }));
+    const model = toCardModel(sampleCandidate({ shutokoDistanceMeters: 12345 }));
     expect(model.index).toBe(1);
-    expect(model.distanceKm).toBe(12.3);
+    expect(model.shutokoDistanceKm).toBe(12.3);
     expect(distanceText(12345)).toBe("12.3 km");
   });
 
@@ -784,8 +798,8 @@ describe("formatRank / recommendedLabel", () => {
   it("全候補の料金が確定しているときだけ順位を出す", () => {
     expect(formatRank(false, 1)).toBeNull();
     expect(formatRank(false, 2)).toBeNull();
-    expect(formatRank(true, 1)).toBe("最安順位 1 位");
-    expect(formatRank(true, 3)).toBe("最安順位 3 位");
+    expect(formatRank(true, 1)).toBe("料金効率 1 位");
+    expect(formatRank(true, 3)).toBe("料金効率 3 位");
   });
 
   it("BEST_* の理由で推薦ラベルを付ける", () => {
@@ -798,9 +812,9 @@ describe("formatRank / recommendedLabel", () => {
 
 describe("reasonText / timeBreakdownText", () => {
   it("推薦理由コードの対応表と未知コードの透過", () => {
-    expect(reasonText("BEST_TIME_PER_YEN")).toBe("時間あたりの料金効率が最良");
-    expect(reasonText("BEST_SHUTOKO_TIME")).toBe("首都高滞在時間が最長");
-    expect(reasonText("ONE_SECTION_TOLL")).toBe("1区間料金（最低料金）");
+    expect(reasonText("BEST_TIME_PER_YEN")).toBe("1円あたりの首都高走行時間が候補内で最長");
+    expect(reasonText("BEST_SHUTOKO_TIME")).toBe("首都高走行時間が候補内で最長");
+    expect(reasonText("ONE_SECTION_TOLL")).toBe("入出口に対応する1区間分の料金");
     expect(reasonText("TOPOLOGY_ONLY")).toBe("商品対象外（道路形状のみ）");
     expect(reasonText("UNKNOWN")).toBe("UNKNOWN");
   });

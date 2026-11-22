@@ -12,22 +12,12 @@ export interface RouteSegment {
 
 /** セグメント種別ごとの座標列。各区間は連続した座標ラン。 */
 export interface DerivedSegments {
-  /**
-   * 出発地点から入口までのアクセス区間。
-   * 一般道排除後（feat/drop-local-roads）はグラフに一般道エッジが含まれないため、
-   * 現在は常に空配列になる。将来の拡張用に残している。
-   */
+  /** 周回に入るまでの走行区間。 */
   access: Coords[];
   /** 首都高を周回する区間。 */
   loop: Coords[];
-  /**
-   * 出口から出発地点へ戻る帰路区間。
-   * 一般道排除後（feat/drop-local-roads）はグラフに一般道エッジが含まれないため、
-   * 現在は常に空配列になる。将来の拡張用に残している。
-   */
+  /** 周回を終えてからの走行区間。 */
   return: Coords[];
-  /** legacyRing の課金対象の 1 区間（入口エッジ〜出口エッジ）。 */
-  charged: Coords[];
   routeLegs: RouteSegment[];
   /** セグメント分解できなかった全経路（フォールバック描画用）。 */
   main: Coords[];
@@ -42,10 +32,11 @@ export interface DerivedSegments {
  *
  * loop.edgeIds は edgeIds の連続部分列として現れる（access → loop → return の順）。
  * その開始 index と長さから access / loop / return の 3 区間に分ける。
- * 課金対象は entryId と exitId が edgeIds 上で作る range を使う（loop の部分列）。
+ * legacyRing の入口から出口までの走行経路には周回が含まれる。
+ * 料金には別の根拠があり、課金区間の座標列は候補に含まれないため、走行経路からは推定しない。
  *
- * edgeIds・loop.edgeIds・entryId / exitId のいずれかが幾何と整合しない場合は、
- * 分解を諦めて全座標を main に入れ、他は空配列にする（地図は必ず描ける）。
+ * edgeIds と座標数が整合しない場合や loop の境界が見つからない場合も、
+ * main に全座標を入れることで経路全体を表示できる。
  */
 export function deriveSegments(candidate: Candidate): DerivedSegments {
   const all = candidate.geometry.coordinates as Coords[];
@@ -53,7 +44,6 @@ export function deriveSegments(candidate: Candidate): DerivedSegments {
     access: [],
     loop: [],
     return: [],
-    charged: [],
     routeLegs: [],
     main: [],
   };
@@ -86,23 +76,10 @@ export function deriveSegments(candidate: Candidate): DerivedSegments {
     return { ...empty, routeLegs, main: all.slice() };
   }
 
-  // 課金区間は entry エッジから exit エッジまで（entry/exit は loop に含まれる）。
-  const entryIndex = edgeIds.indexOf(candidate.entryId);
-  const exitIndex = edgeIds.indexOf(candidate.exitId);
-  const charged =
-    candidate.pairKind !== "radialReturn" &&
-    candidate.pairKind !== "topologyOnly" &&
-    entryIndex !== -1 &&
-    exitIndex !== -1 &&
-    entryIndex <= exitIndex
-      ? sliceEdges(all, entryIndex, exitIndex + 1)
-      : [];
-
   return {
     access: sliceEdges(all, 0, loopStart),
     loop: sliceEdges(all, loopStart, loopEndExclusive),
     return: sliceEdges(all, loopEndExclusive, edgeIds.length),
-    charged,
     routeLegs,
     main: all.slice(),
   };

@@ -2,7 +2,7 @@
 
 調査日: 2026-10-30。対象は [INTERNET Watch の記事](https://internet.watch.impress.co.jp/docs/column/chizu3/2151651.html)、[Geolonia のリリース告知](https://www.geolonia.com/news/2026-10-21-machgl-release/)、[MachGL デモ](https://geolonia.github.io/machgl-demo/)。
 
-> 2026-10-30 追記: 正式版前の先行リリースとして、デモのバンドルをビルド時に取得する3Dプレビューを実装した。実装と撤去手順は [machgl-preview.md](machgl-preview.md) にある。以下の結論は、正式版の配布物を前提にした調査時点の判断である。
+> 2026-10-30 追記: 正式版前の先行リリースとして、デモのバンドルをビルド時に取得する3Dプレビューを実装した。実装と撤去手順は [machgl-preview.md](machgl-preview.md) にある。以下は調査時点の記録。画像中の課金区間は当時の試作であり、現在の2D・3D実装では料金区間の線を推定して描かない。
 
 ## 結論
 

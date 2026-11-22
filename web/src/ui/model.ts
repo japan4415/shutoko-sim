@@ -482,11 +482,11 @@ export function fareLabelNote(toll: Toll): string | null {
 export function reasonText(code: string): string {
   switch (code) {
     case "BEST_TIME_PER_YEN":
-      return "時間あたりの料金効率が最良";
+      return "1円あたりの首都高走行時間が候補内で最長";
     case "BEST_SHUTOKO_TIME":
-      return "首都高滞在時間が最長";
+      return "首都高走行時間が候補内で最長";
     case "ONE_SECTION_TOLL":
-      return "1区間料金（最低料金）";
+      return "入出口に対応する1区間分の料金";
     case "TOPOLOGY_ONLY":
       return "商品対象外（道路形状のみ）";
     default:
@@ -511,11 +511,11 @@ export function distanceText(meters: number): string {
 }
 
 /**
- * 最安順位ラベル。料金未算出の候補が 1 件でもあると集合全体で金額比較が
- * できないため、allPriced が false なら null（順位を出さない）。docs/requirements.md「候補の表示内容」。
+ * 料金効率の順位。並び順は料金の安さではなく、首都高走行時間 ÷ 基本料金。
+ * 料金未算出や参考経路が混在する場合は順位を表示しない。
  */
 export function formatRank(allPriced: boolean, index: number): string | null {
-  return allPriced ? `最安順位 ${String(index)} 位` : null;
+  return allPriced ? `料金効率 ${String(index)} 位` : null;
 }
 
 export function isProductEligible(candidate: Candidate): boolean {
@@ -553,7 +553,7 @@ export function recommendedLabel(candidate: { reasons: string[] }): string | nul
 export function validateAddressQuery(text: string): string | null {
   const trimmed = text.trim();
   if (trimmed === "") {
-    return "住所または地名を入力してください。";
+    return "住所を入力してください。";
   }
   if (trimmed.length > 200) {
     return "住所検索は 200 文字以内で入力してください。";
@@ -663,7 +663,8 @@ export interface CardModel {
   shutokoMinutes: number;
   returnMinutes: number;
   bufferMinutes: number;
-  distanceKm: number;
+  /** 一般道の概算距離を両方向とも含められる候補だけに表示する。 */
+  roundTripDistanceKm: number | null;
   shutokoDistanceKm: number;
   routeLegs: RouteLegModel[];
   estimatedLegs: EstimatedLegModel[];
@@ -681,6 +682,7 @@ export interface CardModel {
   route: string;
   roadNames: string[];
   chargedSection: string;
+  billingDistanceKm: number | null;
   warnings: string[];
   mapsUrl: string;
   mapsLegUrls: MapsLegModel[];
@@ -846,13 +848,14 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     : suppressTopologyHandoff
       ? TOPOLOGY_HANDOFF_NOTICE
       : null;
-  const chargedSection = isTopologyOnly
-    ? "道路形状のみ（商品対象外）"
-    : isRadial && !productEligible
-      ? "首都高の道路形状: 入口 → 周回 → 戻り（商品対象外）"
-      : isRadial
-        ? "首都高区間: 入口 → 周回 → 戻り"
-        : `課金対象: ${entry} → ${exit} の1区間`;
+  const pricedOneSection = productEligible && candidate.toll.amountYen !== null &&
+    (isRadial || ("chargedSectionCount" in candidate.toll && candidate.toll.chargedSectionCount === 1));
+  const chargedSection = !productEligible
+    ? `${entry} → ${exit}（参考経路・料金の比較対象外）`
+    : pricedOneSection
+      ? `課金対象: ${entry} → ${exit} の1区間`
+      : `入出口: ${entry} → ${exit}`;
+  const billingMeters = candidate.toll.billingDistanceMeters;
   const loopEdgeIds = isRadial
     ? candidate.edgeRouteLegs
         .filter((leg) => leg.role === "mandatory_lap")
@@ -872,7 +875,11 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     shutokoMinutes: minutesFromSeconds(candidate.duration.shutokoSeconds),
     returnMinutes: minutesFromSeconds(candidate.duration.returnSeconds),
     bufferMinutes: minutesFromSeconds(candidate.duration.bufferSeconds),
-    distanceKm: Number((candidate.distanceMeters / 1000).toFixed(1)),
+    roundTripDistanceKm:
+      estimatedLegs.some((leg) => leg.role === "surface_access") &&
+      estimatedLegs.some((leg) => leg.role === "surface_return")
+        ? Number((candidate.distanceMeters / 1000).toFixed(1))
+        : null,
     shutokoDistanceKm: Number((candidate.shutokoDistanceMeters / 1000).toFixed(1)),
     routeLegs,
     estimatedLegs,
@@ -890,13 +897,16 @@ export function toCardModel(candidate: Candidate, index = 1): CardModel {
     reasons: candidate.reasons
       .filter(
         (code) =>
-          (candidate.pairKind !== "radialReturn" && candidate.pairKind !== "topologyOnly") ||
-          code !== "ONE_SECTION_TOLL",
+          code !== "ONE_SECTION_TOLL" || (pricedOneSection && !isRadial),
       )
       .map(reasonText),
     route: `${entry} → ${exit}`,
     roadNames: candidate.roadNames,
     chargedSection,
+    billingDistanceKm:
+      pricedOneSection && typeof billingMeters === "number" && Number.isFinite(billingMeters) && billingMeters > 0
+        ? Number((billingMeters / 1000).toFixed(3))
+        : null,
     warnings: candidate.warnings.map(warningText),
     mapsUrl,
     mapsLegUrls,

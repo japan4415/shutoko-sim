@@ -1,16 +1,33 @@
 # 実装・検証計画
 
-## 現在地
+## 公開版とローカル生成物を区別する
 
-Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用グラフを構築するオフライン道路グラフビルダー（`crates/graph-builder`）を実装した。公式母集団 snapshot は active 一般入口182・一般出口189を収録し、境界JCT 24件・閉鎖済み4件を加えた正規台帳は399件である。全線 OSM fixture から生成した `all-real-v5` は graph schema 4 で、22,824 nodes / 22,987 edges、52 route memberships（双方向 46 件に全 route relation cover の forward 6 件）、C1 legacy 9 件・2 号 radial 2 件・C2 3 件からなる 14 billing pairs（うち `verified_one_section_ahead` 13 件、`billingPairsVersion=v3`、`tariffModelVersion=1`）、証拠がある236件（単一 way binding 235件 + 天現寺の multi-way candidate 1件）だけを exact directed segment に bind する。残るactive一般134件は理由・証拠付き `unsupported`、1件（芝公園入口外回り、way `40969792` の `access:conditional`）は reason code `CONDITIONAL_ACCESS_RESTRICTION` 付きの `unresolved`、boundary/closedは `not_routable` として公開選択対象から除外する。bind済み236件は `routable` 201件と構造的 `NO_LOOP` 35件（入口13・出口22）へ全件分類する。この13件の `pairEligibility` は `verified_one_section_ahead` 12 件と `unverified` 1 件（`bp:c1-outer:shibakoen-iikura`、public way が access:conditional）である。導出レポートの `hold` はその 1 件だけで、C2 五反田→初台南 は run に分割された mainline でも一意な M→B 弧として mandatory lap を解決し `eligible_for_review` になる。manifest は graph.json / od-tariffs.json / pair-candidates.json / ramps.json / snap-index.json の 5 成果物と、料金表 v3 の正本（`tariffModelVersion=1`、12 件の OD assignment（C2 五反田→初台南 が 350/370 円、C2 滝野川→中野長者橋 が 410/440 円）と期間別 evidence）、導出ルールの `pairDerivation`（5 入力の SHA-256、候補 13 件 = eligible 12 / hold 1、relation 26 件のうち 11 件展開）を結ぶ。Cloudflare Workers と Web UI の既存機能・性能値は従来の検証範囲に限る。パイプラインの詳細は [実データ生成パイプライン](data-pipeline.md)、探索コアの実装範囲とコマンドは [Rust / WASM 開発](wasm-development.md) を参照する。
+公開中の [all-real-v5 マニフェスト](https://shutoko-sim-workers.raiden000discord.workers.dev/releases/all-real-v5/manifest.json) は graph schema 4。現在のローカル生成手順は `all-real-v5` を既定 ID として残しているが、出力は graph schema 5。名前が同じでも、以下の2つを同じ成果物として扱わない。
 
-このverified pairの縮退と最近接入口優先（Issue #57）は正確性優先の設計である。座標検索は最近接の構造的に利用可能な入口 tier を優先し、東京駅の現行実測は最近接の宝町入口 tier（`ramp:c1-inner:takaracho-entry` → `ramp:c1-outer:takaracho-exit`）が選択され、`minPlanSeconds=1,610`秒（約26.83分）となる。15〜26分窓では最近接 tier の周回が上限を超えるため `no_candidates/TIME_WINDOW` 診断となり、15〜27分窓で成立する。また、30〜60分窓でも同一の宝町 tier から計画時間 2,795 秒・周回 20,205 m の候補が成立する（料金は未算出、`shutoko_time`）。release real-graph test はこの26/27分境界および30〜60分窓の成立、さらに目黒代表座標での最近接目黒ランプ選択を明示的に固定する。
+| 確認対象 | `releaseId` | graph schema | `graph.json` の SHA-256 |
+| --- | --- | --- | --- |
+| 公開配信 | `all-real-v5` | 4 | `e245c7a8dabefe0cef6b4fb2e88d036f2bdd9936242975806990b46f2713fbd7` |
+| リポジトリの [ローカル生成物](../fixtures/generated/manifest.json) | `all-real-v5` | 5 | `09f3e6871be81397ae6933191d9a8f541ff2bdc22bdd70d658e3689a83d09855` |
+
+両グラフとも課金ペアは14件（`legacyRing` は検証済み11件・未検証1件、`radialReturn` は検証済み2件）。これらはデータ上の検証であり、実走後の ETC 請求や Google マップの再現性を示さない。探索結果の比較は[東京駅の実測と最近接入口の契約](routing.md#東京駅の実測と最近接入口の契約)、生成手順は[実データ生成パイプライン](data-pipeline.md)を参照する。
+
+## 新しい成果物を本番へ切り替える手順
+
+以下は公開を承認された担当者の手順。今回の変更では公開済みのファイルを変更せず、R2 への投入、Cloudflare 設定の変更、本番デプロイは実行しない。ユーザー向けの検証項目は[神田橋入口から宝町出口までの手順](#神田橋入口から宝町出口まで実機と実走を別に検証する)を先に読む。
+
+1. **未使用の release ID を割り当てる。** R2 の prefix に既存の成果物がないことも確認する。グラフビルダーの `FULL_RELEASE_IDS`、Web の `KNOWN_RELEASES`、Worker の `ALLOWED_RELEASES`（配信設定とテスト用設定）をそろえ、公開中の `all-real-v5` を切り戻し用に残す。`SHUTOKO_RELEASE_ID` の指定だけでは、ビルダーのフルリリース検証や各読込側の許可が揃わない。
+2. **新 ID で別々の作業用出力に2回生成し、バイト比較する。** `scripts/generate-fixtures.sh` は第1引数で出力先を、第7引数または `SHUTOKO_RELEASE_ID` で ID を指定できる。使用予定の WASM と Web をビルドし、5 成果物の SHA-256・バイト数、graph schema、`routeMembershipsSha256`、料金契約、候補の表示と警告をローカルまたは分離したプレビューで確認する。投入用コマンドのバイト照合だけで合格にせず、schema 5 の graph と manifest が一致し、Web Worker が実 WASM で読めることを確認する。同じ成果物で実機検証の結果と未検証範囲を記録する。
+3. **承認後に R2 へ投入し、全件を読み戻す。** `workers/scripts/seed-local-r2.mjs` は作業ツリーの `fixtures/generated/` と `dist/wasm/` を読むため、実行前にそこにある manifest が新 ID であり、ローカル検証に使った成果物と同一であることを再確認する。本番投入は固定版の cf CLI を使う（`--remote`）。単一の担当が payload と `engine.json` を先に置き、全件の読み戻しとハッシュ・バイト数の照合に成功してから、最後に `manifest.json` を置いて再照合する。公開済みの ID を再投入しない。
+4. **R2 の確認後にだけ Web の既定を切り替える。** main へのマージが配信を起動する構成では、R2 の読み戻し完了までマージしない。切り替え後に公開 URL で manifest、engine、graph、WASM の ID・schema・ハッシュを照合し、代表検索と未検証の引き継ぎ制限を確認する。旧版の URL も読み取り可能であることを確かめる。
+5. **異常時は直前の公開版へ戻す。** Web の `DEFAULT_RELEASE_ID` を `all-real-v5`（公開中の schema 4）に戻して再デプロイする。Worker の許可リストや既存 R2 オブジェクトは変更しない。戻した版のハッシュ、読み込み、代表検索を再確認する。
 
 ## `all-real-v5` の atomic release runbook
 
-**重要: 順序は (1) 2026-10 版 PDF の人手レビュー（`all-real-v4` で完了済み・記録済み。v5 は同じ入力を読む） → (2) 同一入力で成果物を再生成して決定性を確認し、`all-real-v5` を R2 へ投入して read-back する（payload と `engine.json` が先、`manifest.json` は最後） → (3) PR を merge する（これで本番デプロイと allowlist・既定 release の切り替えが起きる） → (4) 本番を確認する → (5) 異常があれば `all-real-v5` へ切り戻す。R2 への投入と read-back が終わるまで merge も production deploy もしない。マージの前に allowlist を切り替える工程は無い（切り替えは merge 後の deploy で起きる）。**
+> **当時の公開手順の記録（schema 4）。以下のコマンドは現在の手順として実行しない。** 同じ ID で生成される現在のローカル成果物は schema 5。次の公開は[新しい成果物を本番へ切り替える手順](#新しい成果物を本番へ切り替える手順)を使う。
 
-この節が `all-real-v5` 公開の正本である。`all-real-v4`（直前の版）と `all-real-v3` の runbook は下に残す（切り戻し時に参照する）。今回の実装作業では R2 への upload、Wrangler deploy、Cloudflare への書き込みを行わない。
+**当時の手順: 順序は (1) 2026-10 版 PDF の人手レビュー（`all-real-v4` で完了済み・記録済み。v5 は同じ入力を読む） → (2) 同一入力で成果物を再生成して決定性を確認し、`all-real-v5` を R2 へ投入して read-back する（payload と `engine.json` が先、`manifest.json` は最後） → (3) PR を merge する（これで本番デプロイと allowlist・既定 release の切り替えが起きる） → (4) 本番を確認する → (5) 異常があれば `all-real-v4` へ切り戻す。R2 への投入と read-back が終わるまで merge も production deploy もしない。マージの前に allowlist を切り替える工程は無い（切り替えは merge 後の deploy で起きる）。**
+
+`all-real-v4` と `all-real-v3` の runbook も当時の記録として下に残す。
 
 ### 1. 2026-10 版 PDF の OD セルと金額の人手レビュー（完了済み）
 
@@ -74,7 +91,7 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
 
 4-1. 取得と hash / schema 4 の照合: manifest → `engine.json` → `graph.json` → WASM/glue の取得・hash・schema 4 照合、`billingPairsVersion=v3` と `tariffModelVersion=1` の受理を確認する。
 
-4-2. C1 legacy 回帰と 9 件の verified pair: 9 件の `verified_one_section_ahead`（legacy 7 + radial 2）と未確定 1 件（`bp:c1-outer:shibakoen-iikura`、入口ランプは `supportState=unresolved`）が想定どおりであること、2026-10 改定をまたぐ単価（目黒→天現寺 790 円 → 860 円、C1 は 300 円のまま）を確認する。
+4-2. C1 legacy 回帰と 13 件の verified pair: 13 件の `verified_one_section_ahead`（legacy 11 + radial 2）と未確定 1 件（`bp:c1-outer:shibakoen-iikura`、入口ランプは `supportState=unresolved`）が想定どおりであること、2026-10 改定をまたぐ単価（目黒→天現寺 790 円 → 860 円、C1 は 300 円のまま）を確認する。
 
 4-3. 4 地点の探索結果: 期待値は**最近接入口 tier 優先（Issue #57）の実測**であり、`fixtures/representative-locations.json` の値をそのまま使う（UI の既定 15〜60 分は目黒駅の窓と一致しない）。同 fixture は `web/test/integration-wasm.test.ts` と `crates/routing-core/tests/real_graph_contract.rs` が実 WASM / 実 engine で再計算して照合する。
 
@@ -97,9 +114,9 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
 
 `all-real-v5` の公開後に異常を確認した場合は、R2 上の旧 release manifest を上書き・削除せず、Web の `DEFAULT_RELEASE_ID` を `all-real-v4` へ戻す rollback commit を作成して再 deploy する。Worker の `ALLOWED_RELEASES` は `all-real-v4` を残したままにする（allowlist を狭めない）ため、戻すのは Web の既定 1 行である。`web/test/release-rollback.test.ts` のアサーションはすべて rollback 不変に書いてあるので（公開 fixture は新しい版のままであるため「既定 = fixture の releaseId」は rollback 後に成立しない）、**この 1 行だけの変更で web の test は green を保つ**。実行時に release pointer を切り替える運用は行わない。rollback 後も `all-real-v4` の manifest → engine → graph → WASM/glue の hash/schema、C1 legacy 回帰、4 地点の探索結果を再確認し、古い Web/Worker cache が新しい release 参照を保持していないことを確認する。Web の reader は `billingPairsVersion` の v2（`all-real-v3`）と v3（`all-real-v4` / `all-real-v5`）のどちらでも読むため、既定を戻すだけで確実に前の版へ戻る。
 
-## `all-real-v4` の atomic release runbook（公開済み・切り戻し時の参照）
+## `all-real-v4` の atomic release runbook（当時の記録）
 
-`all-real-v4` は `all-real-v5` と同じ入力から作られた同じ成果物で、release ID だけが違う。
+`all-real-v4` は `all-real-v5` より前の公開版である。現在の生成コマンドで過去の公開バイト列を再現できるとは限らない。
 手順・検証項目・rollback は v5 と同一で、投入先を `releases/all-real-v4/`、release ID を
 `all-real-v4` に読み替える。v4 公開時の実測記録（2026-10 PDF のレビュー、決定性の確認、
 代表 4 地点の実測、`all-real-v3` への切り戻し手順）は v4 を公開した commit の本文にある。
@@ -107,7 +124,9 @@ Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に�
 
 ## `all-real-v3` の atomic release runbook
 
-**重要: `all-real-v3` の R2 投入とread-backが完了するまで、v3をmergeしない。manifestは全artifactのread-back後に最後に投入する。**
+> **当時の手順の記録。現在の公開作業には使わない。**
+
+**当時の前提: `all-real-v3` の R2 投入とread-backが完了するまで、v3をmergeしない。manifestは全artifactのread-back後に最後に投入する。**
 
 Issue #66 のコード変更だけでは本番の release は切り替わらない。`all-real-v3` の公開を承認済みの Manager が、次の順序で単一の R2 seed プロセスを実行する。今回の実装作業では R2 への upload、Wrangler deploy、Cloudflare への書き込みを行わない。release artifactの投入完了・read-back・manifestの最終投入がmergeとproduction deployの前提となる。
 
@@ -178,11 +197,11 @@ Google マップは iPhone の Safari と Android の Chrome を対象に、ア�
 
 ## 公開条件
 
-全候補の必須制約を検証でき、未検証区間を含まないこと。対応地域、データ基準日、時間の仮定、課金対象1区間と金額の確認状態が読めること。外部ナビへの引き継ぎが代表端末で成立すること。位置拒否や候補なしから再操作できること。配信と住所検索の利用条件・費用を確定し、監視と直前版への復旧を実演できることを条件とする。
+料金付きの商品候補は、周回・入出口の対応・公式料金の根拠を確認できること。参考候補を同じ推薦や順位に入れないこと。対応範囲、データ基準日、時間の前提、料金の確認状況が読め、位置拒否や候補なしから再操作できること。外部ナビは代表端末での引き継ぎが成立して初めて「実機確認済み」とできる。未検証の C1 legacy リンクには注意を表示し、放射線（radial）のリンクは専用ゲートが開くまで無効にする。配信と住所検索の利用条件・費用を確定し、監視・直前版への復旧を確認する。
 
 ### 公開条件の充足状況（Issue #16）
 
-条件ごとに、どの実装・テストが担保しているかを記録する。**実機・外部設定に依存する項目は未実施のまま残す**（このリポジトリの作業だけでは閉じられない）。
+条件ごとに、どの実装・テストが担保しているかを記録する。実機や外部設定に依存する項目は、このリポジトリ内のテストだけで合格にしない。
 
 | 条件 | 状態 | 担保・根拠 |
 | --- | --- | --- |
@@ -194,9 +213,33 @@ Google マップは iPhone の Safari と Android の Chrome を対象に、ア�
 | プラットフォームのアクセスログに座標・検索語が出ないこと | 未確認 | Cloudflare 側のログ設定（Logpush / Workers Logs）はダッシュボードで確認する必要がある |
 | 住所検索 API の IP 単位レート制限と月間上限アラート | 一部充足 | `IP_RATE_LIMITER`（10 req/60 s）と `GLOBAL_RATE_LIMITER`（600 req/60 s）は `workers/cloudflare.config.ts` の binding で設定済み・`workers/test/geocode.test.ts` が 429 を検証。月間上限アラートは Cloudflare の通知設定（外部作業） |
 | releaseId 切り替えによるロールバック | 手順は充足・実演は未実施 | 切り戻しは `web/src/worker/artifact-hashes.ts` の `DEFAULT_RELEASE_ID` 1 行で、`web/test/release-rollback.test.ts` が allowlist 同期と既定の隣接関係を固定する。本番での切り戻し実演はデプロイ作業後 |
-| 外部ナビ（Google マップ）の実機引き継ぎ | 未実施 | 下の「Google マップ実機引き継ぎの検証記録」を参照（Issue #72） |
+| 外部ナビ（Google マップ）の実機引き継ぎ | 一部のみ・公開条件は未充足 | C1 legacy の旧 Android サンプル1件のみ。対象版での再検証と、放射線の4環境での検証（Issue #72）が必要 |
+| 周回後の ETC 実請求 | 未確認 | 公式料金表と周回経路のデータ検証は済んでいるが、実走後の利用明細は別途確認する |
 | データ基準日・前提が読める | 充足 | フッターが manifest の `sourceDate`（`YYYY-MM-DD` を検証、不正なら日付行を出さない）と料金・時間の前提を常時表示する。E2E `(75)` が実 worker 経由で `datetime="2026-09-16"` を検証する |
-| 未検証区間を候補に含めない | 充足 | 成果物の候補は `eligible_for_review` のみを商品候補にし、`hold` の 1 件（`bp:c1-outer:shibakoen-iikura`）と `topologyOnly` の動的 OD は金額なし・商品対象外で表示する。E2E `(73)` が未価格候補の表示、`(45)` が商品 cohort 外の表示を固定する |
+| 商品推薦に未検証ペアを含めない | 充足 | `hold` の芝公園入口 → 飯倉出口を商品推薦に含めない。動的 OD は `topology_only` の参考候補とし、料金根拠がある場合も「参考料金」として商品比較から外す |
+
+## 神田橋入口から宝町出口まで実機と実走を別に検証する
+
+対象は `bp:c1-outer:kandabashi-takaracho`（神田橋入口 → C1 外回りを一周 → 宝町出口）。東京駅の既定検索で出る逆向きの宝町入口 → 神田橋出口とは別のペアなので、対象を ID または入口・出口・方向で照合する。検証には「神田橋」プリセット（緯度 `35.689673`、経度 `139.764425`）と既定の 15〜60 分を使う。出発地点を変更する場合も自宅などの私的な地点は使わない。実機の担当者は下の順に確認し、結果を公開担当者に渡す。
+
+| 確認項目 | 現在わかっていること |
+| --- | --- |
+| 公式の入口・出口間料金 | 普通車 ETC 基本料金（割引適用前）は **1.7 km / 300 円**。料金距離は入口・出口間の料金計算用で、地図に描く線の長さではない。[料金カタログ](../data/od-tariffs.json)の `assignment:c1-outer:kandabashi-takaracho` を参照。 |
+| アプリ内の首都高周回 | 確認した神田橋 → 宝町の表示例は **約 16.1 km**。これは地図に描いたランプ・周回・退出を含む首都高の経路長で、一般道の往復や実測走行距離ではない。ローカルの schema 5 では推定 1,418 秒、余裕 300 秒、計画時間 1,718 秒。実走にかかった時間ではない。 |
+| Google マップへの引き継ぎ | 2026年9月に Android Chrome から Google マップアプリへ渡した旧版の1例で、周回維持を確認した。版や当日の条件の記録が足りず、今回の版や他の環境の合格には使えない。 |
+| 実走後の ETC 請求 | **未確認**。料金表、リンクを開いた結果、アプリの距離のいずれも、実走後の利用明細の代わりにはならない。 |
+
+### 停車中に Google マップの表示を確認する
+
+1. 検証対象の配信元、`releaseId`、graph schema・SHA-256、Web ビルド識別子を記録する。公開地点・時間条件で検索し、対象ペアの入口、出口、方向、周回距離、公式料金の表示と、実機検証の注意を確認する。2D・3D とも、料金表の距離から推定した料金区間の線を描いていないことも確かめる。
+2. Android Chrome と iOS Safari で、Google マップアプリあり／なし（モバイル Web）の4通りを別々に試す。端末の OS、ブラウザ・アプリの版、検証日時とタイムゾーン、利用した経由地点数・URL 長、入口・方向・出口と帰着先の期待／実結果を記録する。実機に届く URL を使い、到達した先が Web かアプリかも確認する。
+3. Google マップで入口から C1 外回りの一周を維持し、途中退出・再入場なしで宝町出口に達し、出発地点へ向かう場合だけ、その組み合わせを合格とする。地図が開いただけでは合格にしない。最短経路への短絡、向きや出入口の変更は不合格。未試行、目的の表示先で開けない、挙動を確認できない場合も合格にせず、理由を記録する。検証した版・端末・条件の範囲でのみ結果を報告する。
+
+### 実走できた場合は利用明細を別に照合する
+
+実走は任意。交通規制や案内標識に従い、経路や支払い条件に疑問があれば実施しない。運転中に画面を操作したり記録を取ったりせず、走行の確認と明細の照合は停車後に行う。普通車 ETC、実際の入口・出口、C1 外回りを一周したか、途中退出・再入場の有無、適用された割引の有無、確定後の利用明細の金額を確認する。ルートを変更した、内訳がわからない、明細が未確定、割引のため基本料金と比較できない場合は、公式料金どおりだったとは判定しない。条件が一致しても、確認した1件の観測値として報告する。
+
+記録は「対象版／実機環境／入口・方向・出口の期待と実結果／引き継ぎの判定／実走の有無と ETC 照合の判定／差異の理由」に絞る。個人住所、正確な GPS 履歴・出発時刻、アカウント名、車両番号、ETC カード・車載器・取引の識別番号、未加工の URL・画面・明細画像は、リポジトリや共有記録に載せない。端末と検証の日時は記録しても、走行や支払いの個人記録と結び付けて公開しない。
 
 ## Google マップ実機引き継ぎの検証記録
 
@@ -257,30 +300,29 @@ Issue #72のコード実装、release設定、物理端末の4系列検証、公
 - 料金表 v3（`data/od-tariffs.json`、`tariffModelVersion=1`）: 規則 2 期間、evidence 20 件、assignment 10 件、deprecated 2 件。2025-04 / 2026-10 の両版を人手レビュー済みで `pendingEvidence` は空。
 - 端点解決 `firstPublicRoadConnection/v1`: 天現寺を 4 way / 16 Edge・hash `bb9114f49d...` で `verified_bound` にし、芝公園入口外回りの `access:conditional` は reason code `CONDITIONAL_ACCESS_RESTRICTION` 付きの `unresolved` として fail-closed にした（`supportState` は `unsupported` ではなく `unresolved`）。
 - 課金ペアの自動導出 `billingPairDerivation/v2`: `pair-candidates.json`（候補 11 / eligible 9 / hold 2、relation 11 展開・15 失敗）、seed の自動変更なし。
-- `all-real-v5` の 5 成果物と manifest: 決定論的再生成、3 世代のバイト一致、route relation coverage、C1 legacy 回帰（神田橋・霞が関）、代表 4 地点の実測（`fixtures/representative-locations.json`）、web 統合テスト 261 件、E2E 55 件。
+- ローカルの5成果物と manifest: 決定論的な再生成、route relation coverage、C1 legacy 回帰（神田橋・霞が関）、[代表4地点](../fixtures/representative-locations.json)をテストする。実機での再現性を検証するテストではない。
 - Web / Workers の release 許可リスト: `DEFAULT_RELEASE_ID` と `ALLOWED_RELEASES` は `all-real-v5` を含み、`all-real-v4` / `all-real-v3` を残したまま運用する。rollback は Web の既定 1 行だけで成立する。
 - 本番 R2 投入（`seed:local -- --remote`）は cf CLI（npm パッケージ `cf` を `1.0.0-beta.14` に固定。`CF_BIN` 上書き可、`npx` フォールバックなし、版は seed ログへ出力）。
 - ローカル投入（E2E / `cf dev` が読む Miniflare 状態）は wrangler 照合を維持（4.149.0、`WRANGLER_BIN` 上書き可、`npx` フォールバックなし、`SHUTOKO_REQUIRE_PINNED_WRANGLER=1` で完全一致要求）。E2E の dev サーバは `cf dev` に移行済み（詳細は v5 runbook 2-4）。
 
 ### 未実施（外部実施が必要）
 
-- `releases/all-real-v5/` への R2 投入と read-back、`all-real-v5` manifest の本番配置。
-- Cloudflare Workers と Web の production deploy。
+- ローカル生成物を公開する場合に、未使用 ID での R2 投入・読み戻しと参照切り替えを行う。この作業では未実施。公開中の `all-real-v5` は上書きしない。
+- 神田橋入口 → 宝町出口の対象版での実機検証と、実走後の ETC 利用明細の確認。
 - 2026-10 版 PDF の再取得（hash 検証と監査トレースの再現用。`data/od-tariffs.json` のレビュー済み値はすでに固定済みで、10 OD セルは一致済みなので残条件ではない。再取得した PDF の SHA-256 が `documents[shutoko-2026-10-od-fare-table].documentSha256` と一致することだけを確認する）。
 - 放射線（radial）3 leg split URL の実機 4 環境検証（Android / iOS × Web / app）。完了まで `data/device-verification-manifest.json` の 4 レコードは `missing` のままで、radial の公開 handoff は `enabled=false` を保つ。
 
 ### 保留（根拠 evidence が揃うまで昇格しない）
 
 - `bp:c1-outer:shibakoen-iikura`: 接続一般道 way `40969792` の `access:conditional=no @ (08:00-20:00)`。入口ランプは `supportState=unresolved`（reason code `CONDITIONAL_ACCESS_RESTRICTION`）、導出レポートの entry gate は `Unresolved` / `ENTRY_BINDING_UNRESOLVED`。時間帯モデルが導入されるまで `unverified` のまま商品推薦から外す。
-- `bp:c1-inner:ginza-shintomicho`（#34）: 料金セルは `assignment:c1-inner:ginza-shintomicho`（0.4km / 300円）として残るが、relation 制約つきの First Exit 検証が通らないため商品ペアとして登録しない。隣接関係証跡は `blocked`、導出レポートは `hold`。
-- 銀座・六本木での料金付き商品候補: 最寄りの入口が内回りランプで 1 区間先に検証済みペアが無いため、現状は未価格の `topology_only` になる。有料候補を gate として求めるなら Issue #57 の最近接 tier 制限か検証済みペアの登録を変更する必要がある（本フェーズの範囲外）。
+- 銀座入口 → 新富町出口（#34）はアンカーの再設定で解決し、商品ペアに登録済み。六本木の代表検索は同じ意味ではなく、未価格の `topology_only` を返す。
 - 未展開の 15 route relation: reason code 付きで記録され、無言でスキップはしない。relation ごとに proof と manifest を要求してから公開を広げる。
 
-## 未決事項と判断時点
+## 設計の決定事項と残る検証
 
 | 論点 | 現在の提案 | 判断時点・判断材料 |
 | --- | --- | --- |
-| 帰着先 | 出発地点へ戻る | 段階0、利用者の使い方 |
+| 帰着先 | 出発地点へ戻る | 決定済み。一般道の帰路を時間予算に含める |
 | コスパの順位 | 1区間分の料金で得られる首都高走行時間 | 段階0、金額確認済み同士の比較と未確認の扱い |
 | 課金対象の入出口 | 一周後に1区間先で降りる検証済みペア | 段階1、方向・車両・支払い条件と根拠 |
 | 車両 | 普通乗用車・ETC | 段階0、対象利用者と入口制約 |

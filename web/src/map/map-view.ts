@@ -56,8 +56,6 @@ interface CandidateLayer {
   id: string;
   /** 役割ごとの線。 */
   lines: { role: LineStyleRole; line: L.Polyline }[];
-  /** 課金対象区間。選択状態に依らず常時強調する。特定できなければ null。 */
-  charged: L.Polyline | null;
   /** 経路全体の外接矩形算出に使う。 */
   bounds: L.LatLngBounds;
 }
@@ -81,9 +79,6 @@ const SELECTED_STYLE: Record<LineStyleRole, L.PathOptions> = {
   return_corridor: { color: "#0b5cad", weight: 7, opacity: 1, dashArray: "12 6" },
   exit_approach: { color: "#0b5cad", weight: 6, opacity: 1, dashArray: "10 4 2 4" },
 };
-// 課金対象は色と破線の二重符号化で示す（色覚多様性に配慮）。
-const CHARGED_STYLE: L.PathOptions = { color: "#c2410c", weight: 6, opacity: 0.95, dashArray: "2 8" };
-const CHARGED_DIM_STYLE: L.PathOptions = { ...CHARGED_STYLE, opacity: 0.45 };
 const DIM_STYLE: Record<LineStyleRole, L.PathOptions> = {
   access: { ...BASE_STYLE.access, opacity: 0.18 },
   loop: { ...BASE_STYLE.loop, opacity: 0.25 },
@@ -195,10 +190,6 @@ export function createMapView(
           selected ? SELECTED_STYLE[role] : hasSelection ? DIM_STYLE[role] : BASE_STYLE[role],
         );
       }
-      // 課金区間は選択に関わらず常時強調する。非選択の候補ではやや抑える。
-      if (layer.charged !== null) {
-        layer.charged.setStyle(selected || !hasSelection ? CHARGED_STYLE : CHARGED_DIM_STYLE);
-      }
     }
   }
 
@@ -285,9 +276,6 @@ export function createMapView(
 
   function renderCandidates(candidates: Candidate[]): void {
     for (const layer of candidateLayers) {
-      if (layer.charged !== null) {
-        map.removeLayer(layer.charged);
-      }
       for (const { line } of layer.lines) {
         map.removeLayer(line);
       }
@@ -340,19 +328,7 @@ export function createMapView(
         extendBounds(bounds, latlngs);
       }
 
-      let charged: L.Polyline | null = null;
-      if (segments.charged.length >= 2) {
-        const chargedLatLngs = toLatLngs(segments.charged);
-        charged = L.polyline(chargedLatLngs, CHARGED_STYLE);
-        charged.addTo(map);
-        charged.bindTooltip(
-          candidate.pairKind === "radialReturn" ? "首都高区間" : "課金対象 1区間",
-          { sticky: true },
-        );
-        extendBounds(bounds, chargedLatLngs);
-      }
-
-      candidateLayers.push({ id: candidate.id, lines, charged, bounds });
+      candidateLayers.push({ id: candidate.id, lines, bounds });
     }
 
     applyStyles();
@@ -361,10 +337,6 @@ export function createMapView(
   function selectCandidate(id: string | null): void {
     selectedId = id;
     applyStyles();
-    if (id !== null) {
-      const layer = candidateLayers.find((l) => l.id === id);
-      layer?.charged?.openTooltip();
-    }
   }
 
   function fitToCandidates(): void {

@@ -33,6 +33,7 @@ export interface PreviewPayload {
     exitLabel: string;
   };
   segments: PreviewSegment[];
+  /** v1 ブリッジ互換用。料金を裏づける座標列は候補に含まれない。 */
   charged: Coords[];
   origin: PreviewPoint | null;
   entry: PreviewPoint | null;
@@ -94,11 +95,8 @@ export async function loadPreviewConfig(): Promise<boolean> {
   }
 }
 
-/** 1 始まりの候補番号を含む、地図に渡す線分を作る。 */
-function buildPreviewSegments(candidate: Candidate): {
-  segments: PreviewSegment[];
-  charged: Coords[];
-} {
+/** 地図に渡す実走経路の線分を作る。 */
+function buildPreviewSegments(candidate: Candidate): PreviewSegment[] {
   const derived = deriveSegments(candidate);
   const segments: PreviewSegment[] = [];
   if (derived.routeLegs.length > 0) {
@@ -118,7 +116,7 @@ function buildPreviewSegments(candidate: Candidate): {
       }
     }
   }
-  return { segments, charged: derived.charged };
+  return segments;
 }
 
 function firstCoord(segments: readonly PreviewSegment[]): Coords | null {
@@ -165,14 +163,14 @@ function originPoint(candidate: Candidate): PreviewPoint | null {
 
 /**
  * 候補から、プレビューのタブが読む JSON を作る。
- * 点の位置は正確な入口・出口の座標ではなく、ルートの区間端を使う近似である。
+ * 入口・出口の点には、走行経路上の端点を使う。料金計算上の区間は示さない。
  */
 export function buildPreviewPayload(
   candidate: Candidate,
   model: CardModel,
   options: PreviewOptions,
 ): PreviewPayload {
-  const { segments, charged } = buildPreviewSegments(candidate);
+  const segments = buildPreviewSegments(candidate);
   const entryLabel = candidate.entry.name ?? candidate.entry.rampId ?? candidate.entryId;
   const exitLabel = candidate.exit.name ?? candidate.exit.rampId ?? candidate.exitId;
 
@@ -183,10 +181,21 @@ export function buildPreviewPayload(
     const exitLeg = segments.find((segment) => segment.role === "exit_approach");
     entryCoords = entryLeg?.coords.at(-1) ?? firstCoord(segments);
     exitCoords = exitLeg?.coords[0] ?? lastCoord(segments);
-  } else {
+  } else if (candidate.pairKind === "topologyOnly") {
     const loop = segments.find((segment) => segment.role === "loop");
     entryCoords = loop?.coords[0] ?? firstCoord(segments);
     exitCoords = loop?.coords.at(-1) ?? lastCoord(segments);
+  } else {
+    // 周回の始点・終点は同じ合流地点になり得る。入口・出口は実際のランプ端を使う。
+    const coords = candidate.geometry.coordinates;
+    if (coords.length === candidate.edgeIds.length + 1) {
+      const entryIndex = candidate.edgeIds.indexOf(candidate.entryId);
+      const exitIndex = candidate.edgeIds.lastIndexOf(candidate.exitId);
+      if (entryIndex >= 0 && exitIndex >= entryIndex) {
+        entryCoords = coords[entryIndex];
+        exitCoords = coords[exitIndex + 1];
+      }
+    }
   }
 
   return {
@@ -200,7 +209,7 @@ export function buildPreviewPayload(
       exitLabel,
     },
     segments,
-    charged,
+    charged: [],
     origin: originPoint(candidate),
     entry: pointOf(entryCoords, entryLabel),
     exit: pointOf(exitCoords, exitLabel),

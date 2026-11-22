@@ -91,6 +91,7 @@ const el = {
   footerArea: mustGet<HTMLParagraphElement>("footer-area"),
   footerSourceDate: mustGet<HTMLParagraphElement>("footer-source-date"),
   footerSourceDateValue: mustGet<HTMLTimeElement>("footer-source-date-value"),
+  resultsScope: mustGet<HTMLParagraphElement>("results-scope"),
   results: mustGet<HTMLDivElement>("results"),
   explicitOdSection: mustGet<HTMLElement>("explicit-od-section"),
   explicitOriginCurrent: mustGet<HTMLSpanElement>("explicit-origin-current"),
@@ -400,7 +401,7 @@ function showReloadRecovery(code: string): void {
  */
 function showTimeWindowRecovery(result: SearchResult, minMinutes: number, maxMinutes: number): void {
   const actions = timeWindowActions(result, minMinutes, maxMinutes);
-  if (actions.lowerMinMinutes === null && actions.widenMaxMinutes === null) {
+  if (actions.lowerMinMinutes === null && actions.widenMaxMinutes === null && searchMode === "explicit") {
     showAreaRecovery(
       "指定時間枠に収まる周回候補が見つかりませんでした。時間枠を広げても見つかるとは限らないため、出発地点や条件を見直してください。",
     );
@@ -423,11 +424,23 @@ function showTimeWindowRecovery(result: SearchResult, minMinutes: number, maxMin
     hints.push("時間の上限を広げる");
   }
   const p = document.createElement("p");
-  const explicitContext =
-    searchMode === "explicit"
-      ? "選択した入口・出口は端点単体では利用可能ですが、出発地点からのアクセス・帰着概算を含めると TIME_WINDOW になりました。"
-      : "";
-  p.textContent = `${explicitContext}指定時間枠に収まる周回候補が見つかりませんでした。${hints.join("か、")}と見つかる可能性があります。出発地点または時間条件を見直してください。`;
+  const context = searchMode === "explicit"
+    ? "選択した入口・出口では、一般道の行き帰りを含めると指定時間内の周回候補がありません（TIME_WINDOW）。"
+    : "近い入口を優先して探しましたが、指定時間内の周回候補がありません。別の入口・出口を選んで試せます。";
+  const timeHint = hints.length > 0 ? `${hints.join("か、")}と見つかる可能性があります。` : "";
+  if (searchMode === "coord") {
+    const chooseRamps = document.createElement("button");
+    chooseRamps.type = "button";
+    chooseRamps.className = "secondary";
+    chooseRamps.textContent = "別の入口・出口を指定する";
+    chooseRamps.addEventListener("click", () => {
+      const explicit = document.querySelector<HTMLInputElement>('input[name="search-mode"][value="explicit"]');
+      explicit?.click();
+      explicit?.focus();
+    });
+    buttons.push(chooseRamps);
+  }
+  p.textContent = `${context}${timeHint}`;
   recoveryOrigin = "result";
   el.recovery.replaceChildren(p, wrapActions(...buttons));
   revealRecovery(buttons[0] ?? null);
@@ -775,7 +788,7 @@ function renderAddressCandidates(candidates: GeocodeCandidate[]): void {
   el.addressCandidates.replaceChildren();
   if (candidates.length === 0) {
     el.addressFeedback.textContent =
-      "住所が見つかりませんでした。表記を変えて再検索してください。時間の入力は保持されています。";
+      "住所が見つかりませんでした。都道府県から入力するか、現在地や地図で指定してください。時間の入力は保持されています。";
     el.addressCandidatesField.hidden = true;
     return;
   }
@@ -1259,6 +1272,7 @@ function cancelSearch(): void {
 // --- 結果描画 ---
 
 function clearResults(): void {
+  el.resultsScope.hidden = true;
   el.results.replaceChildren();
   currentResult = null;
   selectedCandidateId = null;
@@ -1272,6 +1286,7 @@ function renderResult(result: SearchResult): void {
   setStatus(statusMessage(result, min, max));
 
   const candidates = result.candidates.slice(0, MAX_DISPLAY_CANDIDATES);
+  el.resultsScope.hidden = searchMode !== "coord" || candidates.length === 0;
   if (candidates.length === 0) {
     el.results.replaceChildren();
     mapView?.renderCandidates([]);
@@ -1517,17 +1532,17 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
   // （docs/requirements.md「候補の表示内容」の総推定時間と余裕込みの計画時間）。
   const plan = document.createElement("p");
   plan.className = "plan-time";
-  plan.textContent = `計画時間: 約${String(model.planMinutes)}分`;
+  plan.textContent = `計画時間（帰着・余裕込み）: 約${String(model.planMinutes)}分`;
   card.appendChild(plan);
 
   const duration = document.createElement("p");
   duration.className = "duration";
-  duration.textContent = `総所要時間: 約${String(model.baseMinutes)}分`;
+  duration.textContent = `往復所要時間（余裕なし）: 約${String(model.baseMinutes)}分`;
   card.appendChild(duration);
 
   const durationNote = document.createElement("p");
   durationNote.className = "duration-note";
-  durationNote.textContent = "アクセス・帰着を含み（概算）、休憩は含みません";
+  durationNote.textContent = "出発地点に戻るまでの概算です。現在の渋滞や休憩時間は反映しません。";
   card.appendChild(durationNote);
 
   const breakdown = document.createElement("p");
@@ -1542,11 +1557,11 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
     model.rankLabel === null ? model.toll : `${model.toll}（${model.rankLabel}）`;
   card.appendChild(toll);
 
-  // 金額が確定した候補には、割引適用前の基本料金であることを添える。
+  // OD 料金表の表示であり、個別の走行に対する請求額ではない。
   if (model.fareLabelNote !== null) {
     const fareLabel = document.createElement("p");
     fareLabel.className = "fare-label";
-    fareLabel.textContent = model.fareLabelNote;
+    fareLabel.textContent = `${model.fareLabelNote}。実際のETC請求額を保証するものではありません。`;
     card.appendChild(fareLabel);
   }
 
@@ -1555,23 +1570,31 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
   charging.className = "charging";
   charging.textContent = model.chargedSection;
   card.appendChild(charging);
+  if (model.billingDistanceKm !== null) {
+    const billingDistance = document.createElement("p");
+    billingDistance.className = "distance distance--billing";
+    billingDistance.textContent = `料金表上の距離: ${String(model.billingDistanceKm)} km`;
+    card.appendChild(billingDistance);
+  }
 
-  const distance = document.createElement("p");
-  distance.className = "distance distance--total";
-  distance.textContent = `総距離: ${String(model.distanceKm)} km`;
-  card.appendChild(distance);
+  if (model.roundTripDistanceKm !== null) {
+    const distance = document.createElement("p");
+    distance.className = "distance distance--total";
+    distance.textContent = `往復距離（概算）: ${String(model.roundTripDistanceKm)} km`;
+    card.appendChild(distance);
+  }
 
   const shutokoDistance = document.createElement("p");
   shutokoDistance.className = "distance distance--shutoko";
   shutokoDistance.textContent = `首都高距離: ${String(model.shutokoDistanceKm)} km`;
   card.appendChild(shutokoDistance);
 
-  if (model.estimatedLegs.length > 0) {
-    const distanceNote = document.createElement("p");
-    distanceNote.className = "distance-note";
-    distanceNote.textContent = "総距離には一般道の推定距離を含みます。";
-    card.appendChild(distanceNote);
-  }
+  const distanceNote = document.createElement("p");
+  distanceNote.className = "distance-note";
+  distanceNote.textContent = model.roundTripDistanceKm === null
+    ? "この候補の距離表示には、一般道の行き帰りを含めていません。"
+    : "往復距離には一般道の行き帰りの概算を含みます。";
+  card.appendChild(distanceNote);
 
   const accessDist = document.createElement("p");
   accessDist.className = "access-distance";
@@ -1642,6 +1665,12 @@ function renderCard(model: CardModel, candidate: Candidate): HTMLElement {
     card.appendChild(notice);
   }
 
+  if (model.mapsUrl !== "" || model.mapsLegUrls.length > 0) {
+    const notice = document.createElement("p");
+    notice.className = "maps-handoff-notice";
+    notice.textContent = "Google マップでは別の経路が表示されることがあります。出発前に、この地図と同じ入口・周回・出口か確認してください。";
+    card.appendChild(notice);
+  }
   const mapsLegs = renderMapsLegs(model);
   if (mapsLegs !== null) {
     card.appendChild(mapsLegs);

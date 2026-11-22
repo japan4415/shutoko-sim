@@ -451,11 +451,7 @@ pub fn is_shutoko_motorway(element: &OsmElement) -> bool {
         .get_tag("name")
         .or_else(|| element.get_tag("name:ja"))
         .unwrap_or("");
-    if name.contains("首都高速") || name.contains("首都高") {
-        return true;
-    }
-
-    false
+    name.contains("首都高速") || name.contains("首都高")
 }
 
 /// Classifies an OSM `highway` value (and, for `highway=service`, the `service=*` sub-tag)

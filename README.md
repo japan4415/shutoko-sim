@@ -1,20 +1,20 @@
 # shutoko-sim
 
 「今からこの時間で、首都高をどれくらい楽しめるだろう？」を考えるためのドライブルート提案サービスです。
-首都高を一周したうえで入口の1区間先で降りると、1区間分の料金になるという原案の前提を活かし、時間予算内で長く楽しめるルートを探します。出発地点と最小・最大時間から候補を比較し、Google マップへ引き継ぐ体験を目指します。
+首都高を一周して入口の1区間先で降りるという[原案](docs/original.md)をもとに、**出発地点に戻るまでの時間**に収まる候補を探します。周回経路と入口・出口間の公式料金は分けて表示し、実際の ETC 請求額は保証しません。
 
 現在は Rust/WASM の探索コア（`crates/routing-core`, `crates/routing-wasm`）に加え、実 OSM データから探索用道路グラフを決定論的に生成するオフラインビルダー（`crates/graph-builder`）、Cloudflare Workers による成果物配信・住所検索プロキシ、および製品 UI（`web/`）を実装しています。製品 UI は住所検索（国土地理院ジオコーディング）または現在地取得による出発地点指定、分単位の時間範囲、Leaflet + 国土地理院タイルによる地図描画、最大3件の候補比較、Google マップへの引き継ぎ、例外系からの復帰を備えます。候補カードの「3Dで見る」から、MachGL 先行版の3Dプレビューを別タブで開けます。正式版前のデモバンドルをビルド時に取得する暫定構成で、ビルド環境に `GEOLONIA_API_KEY` を設定します（[docs/machgl-preview.md](docs/machgl-preview.md)）。
 
 ## 想定する使い方
 
-1. 住所または現在地から出発地点を指定します。
-2. ドライブに使える時間を分単位で指定します。
-3. 首都高を周回して入口の1区間先で降りる候補を、実走行時間と課金対象区間を見ながら比較します。
-4. 候補を選び、「出発」から Google マップを開いて経路を確認し、ナビを設定します。
+1. 住所、現在地、地図、座標から出発地点を指定します。検索欄は住所用です。駅名・施設名から探す機能（POI 検索）ではありません。
+2. 時間は出発地点から入口まで、首都高の周回、出口から出発地点への帰路を合わせて指定します。**最小は余裕なしの推定時間、最大は余裕込みの計画時間**で判定します。
+3. 首都高の周回と、料金の根拠になる入口・出口を見比べます。一般道は直線距離をもとにした概算で、道路に沿った経路探索はしません。渋滞・当日の規制・休憩は時間に含みません。
+4. Google マップを開ける候補では、停車中に一周する向き・入口・出口を確認してからナビを設定してください。Google マップが周回を維持する保証はなく、引き継ぎには実機未検証の組み合わせがあります。
 
-「実際に走る周回経路」と「料金の対象となる1区間」を分けることが設計の中心です。一般道で出発地点に戻ることは今回の企画案です。所要時間は予測で、Google マップでの周回再現は先行検証が必要です。
+座標検索では、周回可能な近い入口を優先します。その入口で時間条件に合わなければ、遠い入口の候補があっても表示しない場合があります。比較はこの探索で得た最大3件の中で行い、首都高全体の最適解を示すものではありません。料金・商品適格性が未確認の参考候補は、料金付きの推薦とは区別します。
 
-表示する料金は **普通車 ETC 基本料金（割引適用前）** に固定しています（車種 `ordinary` / 支払方法 `etc` / 料金種別 `base_toll_excluding_discounts`、適用する割引は列挙して除外）。深夜割引・都心流入割引・環境道路料金割引・ETC2.0 割引・ETC フリート割引は含みません。検証済みの商品課金ペアは 13 件（C1 8 + C2 3 + 2 号 radial 2）で、2026-10-01 の改定をまたぐ期間を保持し、1 件が未検証（`bp:c1-outer:shibakoen-iikura`）として商品推薦から外れています。金額（`amountYen`）が確認済みの候補集合では時間効率（`time_per_yen`）順に並びます。
+表示する金額は **普通車 ETC 基本料金（割引適用前）** です。「最低料金」や実際の ETC 請求額を示すラベルではありません。深夜割引・都心流入割引・環境道路料金割引・ETC2.0 割引・ETC フリート割引は含みません。カタログ上の検証済み課金ペアは 13 件（C1 8 + C2 3 + 2 号の放射線ルート 2）、未検証は 1 件（芝公園入口 → 飯倉出口）です。料金根拠を確認できた商品候補同士は、1 円で走れる首都高の時間（`time_per_yen`）で比較します。課金ペアのデータ検証は、実走行での ETC 明細や Google マップ引き継ぎの検証とは別です。
 
 ## 実データ生成パイプラインと graph-builder
 
@@ -26,7 +26,7 @@
 - route membership の hash、料金表 v3 の期間別 evidence と規則検算の整合
 - 出典情報（`provenance`）と、5 入力（OSM snapshot / ランプ台帳 / route membership index / 隣接関係 / 料金カタログ）の SHA-256
 
-公開既定は graph schema 4、release ID は `all-real-v5`（`billingPairsVersion=v3`、`tariffModelVersion=1`）です。rollback 先は `all-real-v4` で、その前の `all-real-v3` とあわせて allowlist に残します。
+公開既定の `all-real-v5` は graph schema 4 です。ローカルで既定の手順から再生成した成果物にも `all-real-v5` と入りますが、こちらは graph schema 5 で、公開版とはハッシュが異なります。確認した版とハッシュは[実装・検証計画](docs/delivery.md#公開版とローカル生成物を区別する)を参照してください。公開済み ID を上書きせず、次の公開には未使用の ID を割り当てます。
 
 ### 再現手順
 
@@ -86,13 +86,13 @@ Cloudflare Workers Builds では、Git リポジトリを接続して次の値�
 | Root directory | `/` |
 | Build command | `bash scripts/cloudflare-build.sh` |
 | Deploy command | `cd workers && npx cf deploy`（2026-10-16 に `cf builds workers update` で切り替え。新設定系 `cloudflare.config.ts` / `wrangler.config.ts` を読む） |
-| Preview deploy command | `cd workers && npx wrangler versions upload` |
+| Preview deploy command | 未設定 |
 | Node version | `NODE_VERSION=22` |
 | Automatic dependency install | `SKIP_DEPENDENCY_INSTALL=1` |
 | 環境変数 | `GEOLONIA_API_KEY`（3Dプレビューのビルド用。未設定ならデモキーで生成する） |
 | Non-production branch builds | OFF |
 
-`SKIP_DEPENDENCY_INSTALL=1` でプラットフォーム側の自動インストールを止め、`scripts/cloudflare-build.sh` が `workers` と `web` の lockfile 固定依存を `npm ci` で導入して `web/dist` を生成する。これにより deploy command が使う pinned Wrangler も `workers/node_modules` に用意される。Deploy command は wrangler を使い続ける（Issue #98）。`cf deploy` は新設定系（`cloudflare.config.ts` / `wrangler.config.ts`）を読み、`cf deploy --dry-run` でのビルド・assets・bindings 検証を経て本番の deploy command に採用した。wrangler.toml は workers の vitest-pool-workers（wrangler 形式 config のみ対応）だけが読むため残し、新設定との一致は `workers/test/cloudflare-config.test.ts` が検査する。
+`SKIP_DEPENDENCY_INSTALL=1` でプラットフォーム側の自動インストールを止め、`scripts/cloudflare-build.sh` が `workers` と `web` の lockfile 固定依存を `npm ci` で導入して `web/dist` を生成する。これにより deploy command の cf CLI も固定版が `workers/node_modules` に用意される（Issue #98）。`cf deploy` は新設定系（`cloudflare.config.ts` / `wrangler.config.ts`）を読み、`cf deploy --dry-run` でのビルド・assets・bindings 検証を経て本番の deploy command に採用した。wrangler.toml は workers の vitest-pool-workers（wrangler 形式 config のみ対応）だけが読むため残し、新設定との一致は `workers/test/cloudflare-config.test.ts` が検査する。
 
 Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 release を上書きしない。R2 成果物を更新する場合は、別の versioned release ID で WASM・graph・manifest・engine を先にすべて投入して検証し、その後に Worker と Web の参照先を新しい release へ切り替える。公開済み release ID へ再投入すると、複数オブジェクトの非原子的な上書きによって新旧ファイルが一時的に混在するため、自動 CI/CD では実行しない。
 
@@ -101,13 +101,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
    cf r2 buckets create --name shutoko-artifacts
    cf r2 buckets create --name shutoko-artifacts-preview
    ```
-2. **新しい versioned release のビルドと本番 R2 への投入**（`sha256`・`byteLength` を `manifest.json` と照合してからアップロード）:
-   ```bash
-   bash scripts/generate-fixtures.sh
-   bash scripts/build-wasm.sh
-   node workers/scripts/seed-local-r2.mjs --remote
-   ```
-   詳細手順と manifest を最後に置く atomic release の runbook は [`docs/delivery.md`](docs/delivery.md#all-real-v5-の-atomic-release-runbook) を参照する。先に未使用の `all-real-v5` へ client allowlist を更新し、payload と `engine.json` を投入して全件を read-back 検証した後、公開条件となる `manifest.json` を最後に投入・再検証する。既存の本番 release ID があれば上書きを拒否する。本番への投入（`--remote`）は wrangler ではなく cf CLI で行う（Issue #98）。seed script は投入前に `cf --version` をログへ出す。cf は package.json で 1.0.0-beta.14 に固定し（npm 運用へ切り替え済み。初回確認時点版 1.0.0-beta.10 の記録は `docs/delivery.md` の runbook にある）、`CF_BIN` → PATH の順で解決し `npx` フォールバックは無い。cf のトークン期限が切れて `cf auth whoami` が `authenticated: false` を返すときは `cf auth login` で再ログインする。ローカル投入（`seed:local`、E2E / `cf dev` が読む `.wrangler/state` への書き込み）は引き続き wrangler を使う。ローカルの投入先バケット名は cf dev の r2 バインディングと同じ `shutoko-artifacts` で、wrangler と cf はローカル状態を共有する。Web Worker は `engine.json` で wasm / glue を照合するため、**engine.json が無い版はブラウザ側で `ARTIFACT_MISMATCH` になる**。このリポジトリの変更作業では R2 upload / deploy / Cloudflare 書き込みを実行しない。
+2. **新しい版の検証と R2 投入**: 公開を承認された担当者は、[新しい成果物を本番へ切り替える手順](docs/delivery.md#新しい成果物を本番へ切り替える手順)に従います。公開中の `all-real-v5` にローカル生成物を投入しないでください。未使用の ID でビルドし、payload と `engine.json` を読み戻して照合してから、`manifest.json` を最後に置きます。`engine.json` を取得・照合できない版はブラウザ側で `ARTIFACT_MISMATCH` になります。
 3. **デプロイ**:
    ```bash
    cd workers && npx cf deploy
@@ -115,7 +109,7 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
    デプロイ完了時に表示される `https://<worker>.<subdomain>.workers.dev` が配信 URL です。
 4. **疎通確認**: `GET /releases/{releaseId}/manifest.json` と `GET /releases/{releaseId}/engine.json` が `200`・`application/json`・`Cache-Control: max-age=300` で返ること、`GET /releases/{releaseId}/graph.json` が `immutable` キャッシュと `ETag` 付きで返り本文の `sha256` が `manifest.json` と一致すること、存在しない release / 二重スラッシュが `404` になること、`POST /api/geocode` が正常クエリで `200`、空クエリで `400 INVALID_QUERY` を返すことを確認する。
 
-現在の配信 URL: `https://shutoko-sim-workers.raiden000discord.workers.dev`（2026-09-17 `all-real-v2` デプロイ, wrangler 4.131.0）。`all-real-v3` / `all-real-v4` / `all-real-v5` の R2 投入と production deploy はこのリポジトリの作業範囲外であり、`docs/delivery.md` の runbook の read-back 確認と本番デプロイが完了するまで本番参照は切り替えない。Web（`DEFAULT_RELEASE_ID`）と Worker（`ALLOWED_RELEASES`）の許可リストはすでに `all-real-v5` を含んでおり、異常時は Worker の許可リストを狭めずに Web の既定 1 行を `all-real-v4` へ戻すだけで前の版へ切り戻せる（連鎖は `all-real-v5` → `all-real-v4` → `all-real-v3`）。
+現在の配信先は [shutoko-sim](https://shutoko-sim-workers.raiden000discord.workers.dev) です。次の公開で異常が出たら、R2 のファイルや Worker の許可リストを変更せず、Web の既定参照を直前の公開版（現時点では schema 4 の `all-real-v5`）に戻します。今回の作業では R2 投入、Cloudflare 設定の変更、本番デプロイを行いません。
 
 > **レート制限の本番挙動に関する注記**: `wrangler.toml` の `[[ratelimits]]`（IP: 10 req/60s、Global: 600 req/60s）は Cloudflare Workers Rate Limiting binding のベストエフォート仕様であり、ローカル dev サーバ（cf dev。wrangler dev と同じ workerd のシミュレーション）では決定論的に遮断するのに対し、本番環境では正確な即時遮断を保証しない（同一 IP から短時間に 15 リクエストを送っても `429` が発生しない場合がある）。アプリケーション側の防御としては機能するが、厳密なレート保証が必要な用途には追加の対策を検討すること。
 
@@ -134,9 +128,9 @@ Workers Builds は Rust/WASM の生成や R2 への投入を行わず、既存 r
 - **検証済み課金区間**: 13 ペア。C1 8 ペア（`bp:c1-outer:kandabashi-takaracho`、`bp:c1-outer:kasumigaseki-daikancho`、`bp:c1-outer:ginza-shibakoen`、`bp:c1-inner:kasumigaseki-shibakoen`、`bp:c1-inner:daikancho-kasumigaseki`、`bp:c1-inner:shibakoen-shiodome`、`bp:c1-inner:takaracho-kandabashi`、`bp:c1-inner:ginza-shintomicho`）、C2 3 ペア（`bp:c2-outer:gotanda-hatsudai-minami`、`bp:c2-inner:takinogawa-nakano-chojabashi`、`bp:c2-outer:kosuge-hirai-ohashi`）と radial 2 ペア（`bp:2-inbound:meguro:c1-inner:tengenji`、`bp:2-inbound:meguro:c1-outer:tengenji`）。いずれも公式路線図と公式料金表のセル証跡（版ごとに別の `evidenceId`）を保持し、2026-10-01 改定の期間別金額を区別します。出典はペアごとに異なり、C1 8 ペアは `fixtures/generated/manifest.json` の `provenance`、radial 2 ペアは `data/billing-pairs-seed.json` の `billingPairs[].provenance` と `data/od-tariffs.json` の `assignmentId: assignment:2:meguro-tengenji`（`prices[].evidenceId` / `prices[].distanceEvidenceId`）と `documents[]` にあります。radial 2 ペアの出典を `manifest.json` の `provenance` へ伝播させる実装はまだないため、manifest だけを読む検証者には該当 2 件の出典が伝わりません。一覧と値は [`docs/data-pipeline.md`](docs/data-pipeline.md) を参照してください。
 - **未検証のまま残す項目**:
   - `bp:c1-outer:shibakoen-iikura`（芝公園入口 → 飯倉出口）は、接続する一般道 way `40969792` に `access:conditional` があるため端点が unresolved で、**商品推薦から外したうえで未検証を保持**します。時間帯モデルが導入されるまで昇格は凍結です。
-  - 上記以外の C1 ランプ区間（新富町、京橋、北の丸等）と他の首都高速路線（湾岸線・羽田線等）は未検証であり、`manifest.json` の `unverifiedSections` に未検証エッジとして自動列挙されます。ルート relation は 26 件のうち 11 件のみ展開済みで、残り 15 件は理由付きで `fail` として記録され、無言でスキップされません。
-  - 検証済みペアに到達できない動的 OD は `topology_only` として道路形状だけを返し、金額も商品推薦も付けません。
-  - 放射線（radial）候補の Google マップ引き継ぎ（3 leg split URL）は**実機検証が完了していないため `enabled=false`** です。Web は出発ボタンを出さず「実機検証待ち」の理由を表示します。C1 legacy の単一 URL は従来どおり動作します。
+  - 上記以外の C1 ランプ区間（京橋、北の丸等）と他の首都高速路線（湾岸線・羽田線等）は未検証であり、`manifest.json` の `unverifiedSections` に未検証エッジとして自動列挙されます。ルート relation は 26 件のうち 11 件のみ展開済みで、残り 15 件は理由付きで `fail` として記録され、無言でスキップされません。
+  - 動的な入口・出口の組み合わせは、周回が成立しても `topology_only` の参考候補です。公式料金の根拠がなければ金額を表示せず、金額を確認できても商品推薦には含めません。
+  - 放射線（radial）の料金付き候補も、実機検証が完了するまで Google マップへの引き継ぎ（3 分割 URL）は無効です。C1 legacy の単一 URL は別扱いで、実機未検証の警告付きです。[神田橋入口 → 宝町出口の実機・実走検証](docs/delivery.md#神田橋入口から宝町出口まで実機と実走を別に検証する)に確認手順を示します。
   - リアルタイム渋滞情報、交通規制、天候による所要時間変動、中型・大型車等の料金区分は対象外です。
 
 ## Web アプリ（`web/`）
@@ -147,7 +141,7 @@ Vite + Vanilla TypeScript の製品 UI。探索はブラウザの専用 Web Work
 
 1. **WASM 成果物と依存の準備**（リポジトリルートで実行）:
    ```bash
-   bash scripts/build-wasm.sh          # dist/wasm/ を生成（wasm-bindgen 0.2.128 が必要）
+   bash scripts/build-wasm.sh          # dist/wasm/ を生成（wasm-bindgen 0.2.129 が必要）
    npm --prefix workers ci
    npm --prefix workers run seed:local # Miniflare のローカル R2 へ成果物を投入
    ```
@@ -173,7 +167,7 @@ Vite + Vanilla TypeScript の製品 UI。探索はブラウザの専用 Web Work
    cd web && npm run e2e   # vite build → cf dev(8787) 起動 → 全シナリオ
    ```
 
-UI の操作: 住所・地名で検索して候補を選ぶ、または「現在地を使う」で出発地点を確定する（座標の直接入力・神田橋プリセットも折りたたみ内に用意）→ 最小/最大分（既定 15〜60、`1 ≤ 最小 ≤ 最大 ≤ 240`、プリセットボタンあり）→「ルートを探す」→ 地図と候補カード（計画時間・総所要時間・時間内訳・料金・実走行距離・課金対象1区間・推薦理由・警告）が同じ候補 ID で連動し、カード選択で該当経路を強調 →「出発する（Google マップを開く）」。探索は 10 秒でタイムアウトし、キャンセルも可能。候補なし・GPS 拒否・住所検索失敗・地図取得失敗・成果物不整合の各状態から、リロードなしで再操作・再検索できる。
+時間入力の既定は 15〜60 分で、`1 ≤ 最小 ≤ 最大 ≤ 240` の整数を指定できます。探索は 10 秒で打ち切り、キャンセルもできます。候補なし・GPS 拒否・住所検索失敗の場合は条件を見直して再検索できます。成果物が不整合の場合は、不整合なデータのまま探索せず、再読み込みを案内します。
 
 ### 性能計測ページ（`bench.html`、#13）
 

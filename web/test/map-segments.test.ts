@@ -70,7 +70,7 @@ function sampleCandidate(overrides: Partial<LegacyCandidate> = {}): LegacyCandid
 }
 
 describe("deriveSegments", () => {
-  it("edgeIds と loop の連続部分列から access/loop/return/charged を切り出す", () => {
+  it("legacy の実走経路を分解し、課金区間の線は推定しない", () => {
     const segments = deriveSegments(sampleCandidate());
     expect(segments.access).toEqual([
       [139.0, 35.0],
@@ -85,12 +85,7 @@ describe("deriveSegments", () => {
       [139.3, 35.3],
       [139.4, 35.4],
     ]);
-    // entry(e:L1) から exit(e:L2) までの課金 1 区間。
-    expect(segments.charged).toEqual([
-      [139.1, 35.1],
-      [139.2, 35.2],
-      [139.3, 35.3],
-    ]);
+    expect(segments).not.toHaveProperty("charged");
     // main はセグメントに依らず全経路。
     expect(segments.main).toEqual(sampleCandidate().geometry.coordinates);
   });
@@ -115,7 +110,7 @@ describe("deriveSegments", () => {
       ["return_corridor", 2],
       ["exit_approach", 2],
     ]);
-    expect(segments.charged).toEqual([]);
+    expect(segments).not.toHaveProperty("charged");
   });
 
   it("topologyOnly は道路形状を描画しても課金区間のオーバーレイを生成しない", () => {
@@ -137,7 +132,7 @@ describe("deriveSegments", () => {
     const segments = deriveSegments(value as unknown as TopologyOnlyCandidate);
     expect(segments.loop).toHaveLength(3);
     expect(segments.routeLegs).toEqual([]);
-    expect(segments.charged).toEqual([]);
+    expect(segments).not.toHaveProperty("charged");
   });
 
   it("loop が先頭・末尾でも境界が成立する", () => {
@@ -180,7 +175,7 @@ describe("deriveSegments", () => {
     expect(segments.access).toEqual([]);
     expect(segments.loop).toEqual([]);
     expect(segments.return).toEqual([]);
-    expect(segments.charged).toEqual([]);
+    expect(segments).not.toHaveProperty("charged");
   });
 
   it("loop が edgeIds の連続部分列でないなら main フォールバック", () => {
@@ -196,39 +191,19 @@ describe("deriveSegments", () => {
     expect(segments.access).toEqual([]);
   });
 
-  it("entry/exit が edgeIds に無い場合は charged のみ空、他は分解する", () => {
-    const segments = deriveSegments(sampleCandidate({ entryId: "e:zzz" }));
-    expect(segments.charged).toEqual([]);
-    expect(segments.loop).toHaveLength(3);
-  });
-
   it("空 geometry は main も空で例外を出さない", () => {
     const segments = deriveSegments(
       sampleCandidate({ geometry: { type: "LineString", coordinates: [] } }),
     );
-    expect(segments).toEqual({ access: [], loop: [], return: [], charged: [], routeLegs: [], main: [] });
+    expect(segments).toEqual({ access: [], loop: [], return: [], routeLegs: [], main: [] });
   });
 
-  it("exit index < entry index なら charged のみ空、他は分解する", () => {
-    // entry=e:L2, exit=e:L1 と逆転させる（edgeIds 上で exit < entry）。
-    const segments = deriveSegments(sampleCandidate({ entryId: "e:L2", exitId: "e:L1" }));
-    expect(segments.charged).toEqual([]);
-    // access / loop / return は loop の連続部分列から変わらず分解できる。
-    expect(segments.access).toEqual([
-      [139.0, 35.0],
-      [139.1, 35.1],
-    ]);
-    expect(segments.loop).toEqual([
-      [139.1, 35.1],
-      [139.2, 35.2],
-      [139.3, 35.3],
-    ]);
-    expect(segments.return).toEqual([
-      [139.3, 35.3],
-      [139.4, 35.4],
-    ]);
-    expect(segments.main).toEqual(sampleCandidate().geometry.coordinates);
-  });
+  it.each([{ entryId: "e:zzz" }, { entryId: "e:L2", exitId: "e:L1" }])(
+    "入口・出口の ID が不整合でも実走経路は分解する (%j)",
+    (overrides) => {
+      expect(deriveSegments(sampleCandidate(overrides))).toEqual(deriveSegments(sampleCandidate()));
+    },
+  );
 
   it("loop が edgeIds の末尾にあるとき return は空になる", () => {
     // access(e:acc) → loop(e:L1,e:L2) の順で return エッジを持たない。

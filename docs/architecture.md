@@ -10,7 +10,7 @@ flowchart LR
   W --> R[R2: WASM・道路データ]
   W --> G[住所検索プロバイダー]
   U --> B[ブラウザ Web Worker: Rust/WASM]
-  U --> T[OSM 系タイル配信]
+  U --> T[国土地理院の 2D タイル]
   U --> M[Google マップ: 出発操作]
 ```
 
@@ -63,7 +63,7 @@ flowchart LR
 5. **課金ペアの自動導出レポート**:
    同じビルダーが `data/billing-pair-adjacency.json`（reviewed 済みの公式路線順の隣接関係と directed route-plan 証跡）を入力に、gate 8 個（official adjacency / route / direction / first exit / mandatory lap / entry binding / exit binding / tariff assignment）をすべて通過した候補を列挙し、`pair-candidates.json` に出力する。seed ファイルは自動変更せず（`automaticSeedWrite: false`）、レビューを経て人手で更新する。OSM 幾何が公式意味を修復・昇格させることはない。
 6. **料金カタログ v3 の期間別 evidence**:
-   `data/od-tariffs.json` は `tariffRules`（2 期間）、期間ごとの `distanceEvidence`（版・ページ・行・列・セル・観測基本料金・SHA-256）、10 件の一意 OD `assignments`、および deprecate した 2 件を分離して保持する。金額は OSM 実走距離から作らず、規則検算と PDF セルが一致した記録だけを `priced` とする。
+   `data/od-tariffs.json` は `tariffRules`（2 期間）、期間ごとの `distanceEvidence`（版・ページ・行・列・セル・観測基本料金・SHA-256）、13 件の `assignments`、および deprecate した 2 件を分離して保持する。金額は OSM 実走距離から作らず、規則検算と PDF セルが一致した記録だけを `priced` とする。
 7. **スナップインデックス**:
    ユーザーが指定した出発座標から最寄りの入口アクセス地点（Entry エッジの from ノード）を効率的に検索するため、空間インデックス（`snap-index.json`、`schemaVersion: 2`）を構築する。現行データは 168 ノード。
 8. **完全決定論的成果物ビルド**:
@@ -80,8 +80,8 @@ Cloudflare Workers の通常の WASM 利用は事前コンパイル済みモジ�
 1. UI がアプリに固定された release ID のマニフェストを取得する。
 2. Web Worker が同じ release の WASM、glue、グラフを取得し、サイズ・ハッシュ・スキーマを検証する。
 3. UI が確定済み出発地点と時間を Web Worker に渡す。GPS 座標を探索 API へ送る必要はない。
-4. WASM が入口アクセス地点の選定（直線距離概算）、首都高の一周、入口の1区間先での退出を満たす候補を計算し、描画用の線と比較情報を返す。
-5. UI が候補を選択し、出発操作時だけ Google マップの URL へ遷移する。
+4. WASM が入口アクセス地点を選び、首都高の周回と一般道の往復時間の概算を返す。検証済み課金ペアの商品候補と、道路上の周回を示す参考候補は区別する。
+5. UI は候補の周回を地図に描き、料金と料金表上の距離をテキストで示す。ナビ引き継ぎの条件を満たす候補で出発操作をしたときのみ、Google マップの URL へ遷移する。
 
 同期 WASM が動作中の場合、キャンセルは Web Worker を終了して実現する。UI は再検索時に新しい Web Worker を起動する。古い request ID の応答は無視する。
 
@@ -95,7 +95,7 @@ Git 連携ビルドは Root directory `/`、Build command `bash scripts/cloudfla
 
 Workers Builds は Rust/WASM を生成せず、本番 R2 へ seed しない。R2 の更新は CI/CD と分離し、新しい versioned release ID の配下へ WASM・graph・manifest・engine の全成果物を先に投入・検証してから、Worker と Web が参照する release を切り替える。CI/CD は既存 release を上書きしない。
 
-release ID はリリースごとに新しく発行し、公開済み ID を再利用しない。同じ ID に seed するとオブジェクトを1件ずつ上書きする非原子的な更新となり、投入中に `manifest.json`、`engine.json`、graph、WASM の新旧が一時的に混在しうる。このため、同じ ID への remote seed を自動デプロイへ組み込まず、remote seed は単一の Manager プロセスだけで実行する。`all-real-v1` / `all-real-v2` と C1 旧版は旧クライアント向けに保持し、現在の versioned release は `all-real-v5` で、rollback 先の `all-real-v4` と、その前の `all-real-v3` を許可リストに残す。本番 R2 への投入（`--remote`）は cf CLI を `CF_BIN` → PATH の順で解決して（`npx` フォールバックは無い）実行し、`cf --version` の結果を必ずログへ出す（npm パッケージ `cf` を `1.0.0-beta.14` に固定。初回実測版は `docs/delivery.md` の runbook に記録）。ローカル投入は wrangler を `WRANGLER_BIN` → PATH の順で解決し、`wrangler --version` を `workers/package-lock.json` の固定版（4.149.0）と照合してから実行する（Issue #98）。
+release ID はリリースごとに新しく発行し、公開済み ID を再利用しない。同じ ID に seed するとオブジェクトを1件ずつ上書きする非原子的な更新となり、投入中に `manifest.json`、`engine.json`、graph、WASM の新旧が一時的に混在しうる。このため、同じ ID への remote seed を自動デプロイへ組み込まず、remote seed は単一の Manager プロセスだけで実行する。`all-real-v1` / `all-real-v2` と C1 旧版は旧クライアント向けに保持し、公開中の `all-real-v5` は graph schema 4 で、同名のローカル生成物は schema 5。次の公開は旧版の許可を残したまま未使用 ID を使う。確認値と手順は[実装・検証計画](delivery.md#公開版とローカル生成物を区別する)を参照。本番 R2 への投入（`--remote`）は cf CLI を `CF_BIN` → PATH の順で解決して（`npx` フォールバックは無い）実行し、`cf --version` の結果を必ずログへ出す（npm パッケージ `cf` を `1.0.0-beta.14` に固定。初回実測版は `docs/delivery.md` の runbook に記録）。ローカル投入は wrangler を `WRANGLER_BIN` → PATH の順で解決し、`wrangler --version` を `workers/package-lock.json` の固定版（4.149.0）と照合してから実行する（Issue #98）。
 
 R2 は非公開バケットとし、Workers が配信用の許可パスだけ公開する。データはクライアントが取得できる公開情報として扱い、秘密を格納しない。WASM は `application/wasm`、JSON は `application/json; charset=utf-8`、JS は `text/javascript; charset=utf-8`、型定義は `text/plain; charset=utf-8` で返す。Cache-Control は `manifest.json` と `engine.json` に `public, max-age=300, stale-while-revalidate=60`、その他成果物に `public, max-age=31536000, immutable` を設定し、`ETag` および `If-None-Match`（304 Not Modified）に対応する。失敗時はアプリの参照 release を直前の正常版に戻す。キャッシュ済み旧クライアント向けに旧成果物を最低30日保持する。
 
@@ -146,7 +146,7 @@ Cloudflare Workers 公式の Rate Limiting binding（`[[ratelimits]]`）を採�
 
 ## 実走行経路と課金対象の分離
 
-原案の「一周して1区間先で降りれば1区間分の料金」という前提を中核に置く。OSM グラフは実際に走る経路の生成に使い、別の検証済み入出口ペアデータで課金対象1区間を定義する。実走行距離からそのまま通行料金を計算しない。ペアの進行方向、対応車両・支払い条件、根拠と確認日を保持する。首都高を単に長く走る経路は、このペアと一周条件が成立しない限り候補にしない。
+OSM グラフで周回経路を生成し、公式料金は別の入出口ペアデータから引く。料金表上の距離から地図の線を推定せず、地図の周回距離から料金を計算しない。ペアには進行方向、対応車両・支払い条件、根拠を保持する。接続と周回が成立してもペアの根拠を確認できない経路は、料金付きの商品候補ではなく参考候補とする。実際の ETC 請求は公式料金の照合からはわからない。
 
 ## 提示する料金の前提
 
